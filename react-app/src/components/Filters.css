@@ -1,0 +1,88 @@
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5em;
+}
+
+.filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5em;
+}
+
+.filters-header h2 {
+  font-size: 1.1em;
+  margin: 0;
+}
+
+.reset-btn {
+  padding: 0.4em 0.8em;
+  font-size: 0.85em;
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+.reset-btn:hover {
+  background: #e0e0e0;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.filter-group label {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: #333;
+  display: block;
+}
+
+.filter-group input,
+.filter-group select {
+  width: 100%;
+  padding: 0.6em;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.filter-group small {
+  font-size: 0.8em;
+  color: #888;
+  display: block;
+  margin-top: 0.25em;
+}
+
+.range-inputs {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.range-inputs input {
+  flex: 1;
+  margin: 0;
+}
+
+.range-inputs span {
+  color: #888;
+  font-size: 0.9em;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1200px) {
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1em;
+    margin-bottom: 1em;
+  }
+
+  .filters-header {
+    grid-column: 1 / -1;
+  }
+}
