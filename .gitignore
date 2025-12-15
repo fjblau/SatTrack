@@ -1,0 +1,10 @@
+United Nations_Outer Space Objects Index_Retrieved*.csv
+node_modules/
+.env
+.env.local
+*.pyc
+__pycache__/
+.DS_Store
+.vscode/
+.venv/
+venv/
