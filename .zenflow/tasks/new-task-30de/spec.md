@@ -82,7 +82,23 @@ This task involves replacing the locally installed MongoDB instance with a Docke
 - If Docker not available, print helpful error message
 - Document how to use local MongoDB as alternative
 
-### 4. Helper Scripts (Optional but Recommended)
+### 4. Data Migration from Local MongoDB
+
+**Export from local installation**:
+```bash
+mongodump --uri="mongodb://localhost:27017" --db=kessler --out=./mongodb_backup
+```
+
+**Import to Docker MongoDB**:
+```bash
+docker compose up -d mongodb
+mongorestore --uri="mongodb://localhost:27017" --db=kessler ./mongodb_backup/kessler
+```
+
+**Add to `.gitignore`**:
+- `mongodb_backup/` (contains exported data snapshots)
+
+### 5. Helper Scripts (Optional but Recommended)
 
 **Create `scripts/mongodb.sh`** for common operations:
 - Start MongoDB: `./scripts/mongodb.sh start`
@@ -90,6 +106,11 @@ This task involves replacing the locally installed MongoDB instance with a Docke
 - Reset data: `./scripts/mongodb.sh reset`
 - View logs: `./scripts/mongodb.sh logs`
 - Shell access: `./scripts/mongodb.sh shell`
+
+**Create `scripts/migrate_data.sh`** (optional):
+- Automates export from local and import to Docker
+- Validates successful migration
+- Provides rollback instructions
 
 ---
 
@@ -99,11 +120,12 @@ This task involves replacing the locally installed MongoDB instance with a Docke
 1. **`docker-compose.yml`** - MongoDB service definition
 2. **`.env.example`** - Environment variable template
 3. **`scripts/mongodb.sh`** (optional) - MongoDB management utilities
+4. **`scripts/migrate_data.sh`** (optional) - Data migration automation
 
 ### Modified Files
-1. **`.gitignore`** - Add Docker-specific entries
+1. **`.gitignore`** - Add Docker-specific entries (`docker-compose.override.yml`, `mongodb_backup/`)
 2. **`start.sh`** - Integrate Docker Compose MongoDB startup
-3. **`docs/MONGODB_SETUP.md`** - Update installation instructions for Docker
+3. **`docs/MONGODB_SETUP.md`** - Update installation instructions for Docker and data migration
 
 ### Unchanged Files
 - `db.py` - Already uses `MONGO_URI` env var, no changes needed
@@ -161,9 +183,25 @@ curl http://localhost:8000/v2/search?q=ISS
 # Check logs show "Connected to MongoDB: kessler.satellites"
 ```
 
-### 4. Data Persistence Testing
+### 4. Data Migration Testing
 ```bash
-# Import data
+# If local MongoDB has existing data, export it first
+mongodump --uri="mongodb://localhost:27017" --db=kessler --out=./mongodb_backup
+
+# Start Docker MongoDB
+docker compose up -d mongodb
+
+# Import the exported data
+mongorestore --uri="mongodb://localhost:27017" --db=kessler ./mongodb_backup/kessler
+
+# Verify data was imported successfully
+docker compose exec mongodb mongosh kessler --eval "db.satellites.countDocuments({})"
+curl http://localhost:8000/v2/stats
+```
+
+### 5. Data Persistence Testing
+```bash
+# Import data (or use migrated data from step 4)
 python3 import_to_mongodb.py --clear
 
 # Stop MongoDB
@@ -176,7 +214,7 @@ docker compose up -d mongodb
 curl http://localhost:8000/v2/stats
 ```
 
-### 5. Cleanup and Reset Testing
+### 6. Cleanup and Reset Testing
 ```bash
 # Full cleanup (including volumes)
 docker compose down -v
@@ -219,10 +257,12 @@ python3 import_to_mongodb.py --clear
 1. ✅ MongoDB runs in Docker container via `docker compose up -d`
 2. ✅ `start.sh` successfully orchestrates MongoDB, API, and React
 3. ✅ Data persists across container restarts
-4. ✅ All existing API endpoints work identically
-5. ✅ Documentation updated with Docker-based setup instructions
-6. ✅ Clean teardown via `docker compose down`
-7. ✅ `.env.example` provides clear configuration template
+4. ✅ Existing local MongoDB data can be exported and imported to Docker MongoDB
+5. ✅ All existing API endpoints work identically
+6. ✅ Documentation updated with Docker-based setup and migration instructions
+7. ✅ Clean teardown via `docker compose down`
+8. ✅ `.env.example` provides clear configuration template
+9. ✅ `.gitignore` includes Docker and backup artifacts
 
 ---
 

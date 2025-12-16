@@ -55,11 +55,13 @@ Create `.env.example` with:
 
 Update `.gitignore` with Docker-specific entries:
 - `docker-compose.override.yml`
+- `mongodb_backup/` (for exported data)
 
 **Verification**:
 ```bash
 # Verify .gitignore includes new entries
 cat .gitignore | grep docker-compose.override.yml
+cat .gitignore | grep mongodb_backup
 ```
 
 ---
@@ -105,10 +107,46 @@ Update `docs/MONGODB_SETUP.md`:
 - Add Docker prerequisites
 - Add troubleshooting section for Docker-specific issues
 - Document data persistence and volume management
+- Add data migration instructions for existing local MongoDB users
 
 **Verification**:
 - Review updated documentation for accuracy
 - Follow installation steps in a fresh environment if possible
+
+---
+
+### [ ] Step: Import Data from Exported Local MongoDB
+
+Create migration path for existing local MongoDB data:
+
+1. **Document export process** (if not already exported):
+   ```bash
+   # Export from local MongoDB
+   mongodump --uri="mongodb://localhost:27017" --db=kessler --out=./mongodb_backup
+   ```
+
+2. **Import to Docker MongoDB**:
+   ```bash
+   # Ensure Docker MongoDB is running
+   docker compose up -d mongodb
+   
+   # Import the exported data
+   mongorestore --uri="mongodb://localhost:27017" --db=kessler ./mongodb_backup/kessler
+   ```
+
+3. **Create helper script** `scripts/migrate_data.sh` (optional):
+   - Automates export from local and import to Docker
+   - Validates data migration
+   - Provides rollback instructions
+
+**Verification**:
+```bash
+# After import, verify data exists
+docker compose exec mongodb mongosh kessler --eval "db.satellites.countDocuments({})"
+
+# Test API can access migrated data
+curl http://localhost:8000/v2/stats
+```
 
 ---
 
