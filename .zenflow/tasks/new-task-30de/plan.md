@@ -33,10 +33,11 @@ Do not make assumptions on important decisions — get clarification first.
 ### [ ] Step: Create Docker Compose Configuration
 
 Create `docker-compose.yml` with MongoDB 7.0 service:
-- Port mapping: `27017:27017`
+- Port mapping: `27018:27017` (host:container) - **avoids conflict with local MongoDB on port 27017**
 - Named volume `mongodb_data` for persistence
 - Health check for service readiness
 - Container name: `kessler-mongodb`
+- Restart policy: `unless-stopped`
 
 **Verification**:
 ```bash
@@ -50,8 +51,9 @@ docker compose ps
 ### [ ] Step: Create Environment Configuration Template
 
 Create `.env.example` with:
-- `MONGO_URI=mongodb://localhost:27017` (default)
-- Documentation comments
+- `MONGO_URI=mongodb://localhost:27018` (Docker MongoDB port - avoids conflict with local)
+- Documentation comments explaining port selection
+- Instructions for switching between local and Docker MongoDB
 
 Update `.gitignore` with Docker-specific entries:
 - `docker-compose.override.yml`
@@ -121,28 +123,35 @@ Create migration path for existing local MongoDB data:
 
 1. **Document export process** (if not already exported):
    ```bash
-   # Export from local MongoDB
+   # Export from local MongoDB (port 27017)
    mongodump --uri="mongodb://localhost:27017" --db=kessler --out=./mongodb_backup
    ```
 
 2. **Import to Docker MongoDB**:
    ```bash
-   # Ensure Docker MongoDB is running
+   # Ensure Docker MongoDB is running (port 27018)
    docker compose up -d mongodb
    
-   # Import the exported data
-   mongorestore --uri="mongodb://localhost:27017" --db=kessler ./mongodb_backup/kessler
+   # Import the exported data to Docker MongoDB
+   mongorestore --uri="mongodb://localhost:27018" --db=kessler ./mongodb_backup/kessler
    ```
 
 3. **Create helper script** `scripts/migrate_data.sh` (optional):
-   - Automates export from local and import to Docker
+   - Automates export from local (27017) and import to Docker (27018)
    - Validates data migration
    - Provides rollback instructions
+
+**Port Strategy**:
+- Local MongoDB: `localhost:27017` (unchanged)
+- Docker MongoDB: `localhost:27018` (no conflicts, both can run simultaneously)
 
 **Verification**:
 ```bash
 # After import, verify data exists
 docker compose exec mongodb mongosh kessler --eval "db.satellites.countDocuments({})"
+
+# Create .env file to point API to Docker MongoDB
+echo "MONGO_URI=mongodb://localhost:27018" > .env
 
 # Test API can access migrated data
 curl http://localhost:8000/v2/stats
@@ -154,16 +163,18 @@ curl http://localhost:8000/v2/stats
 
 Comprehensive testing of the Docker-based setup:
 1. Start from clean state: `docker compose down -v`
-2. Start all services: `./start.sh`
-3. Import test data: `python3 import_to_mongodb.py --clear`
-4. Test API endpoints: `/v2/health`, `/v2/search?q=ISS`, `/v2/stats`
-5. Verify data persistence: stop and restart MongoDB, check data still exists
-6. Test cleanup: `docker compose down -v`
+2. Ensure `.env` file exists: `echo "MONGO_URI=mongodb://localhost:27018" > .env`
+3. Start all services: `./start.sh`
+4. Import test data: `MONGO_URI=mongodb://localhost:27018 python3 import_to_mongodb.py --clear`
+5. Test API endpoints: `/v2/health`, `/v2/search?q=ISS`, `/v2/stats`
+6. Verify data persistence: stop and restart MongoDB, check data still exists
+7. Test cleanup: `docker compose down -v`
 
 **Verification**:
 - All API endpoints return expected results
 - Data persists across container restarts
 - Clean startup and shutdown work correctly
+- Docker MongoDB runs on port 27018 without conflicts
 
 ---
 

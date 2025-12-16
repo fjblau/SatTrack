@@ -39,7 +39,9 @@ This task involves replacing the locally installed MongoDB instance with a Docke
 
 **Create `docker-compose.yml`** in project root with:
 - MongoDB 7.0 service (latest stable)
-- Port mapping: `27017:27017`
+- Port mapping: `27018:27017` (host:container)
+  - **Rationale**: Avoids conflict with local MongoDB on default port 27017
+  - Docker MongoDB accessible at `localhost:27018`
 - Named volume for data persistence: `mongodb_data`
 - Health check to ensure service readiness
 - Container name: `kessler-mongodb`
@@ -48,25 +50,28 @@ This task involves replacing the locally installed MongoDB instance with a Docke
 **Benefits**:
 - Single command to start MongoDB (`docker compose up -d`)
 - Version-controlled MongoDB version
-- Isolated environment
+- Isolated environment - no port conflicts with local MongoDB
 - Automatic data persistence
 - Easy cleanup and reset
+- Can run both local and Docker MongoDB simultaneously during migration
 
 ### 2. Environment Configuration
 
 **Create `.env.example`** template with:
-- `MONGO_URI=mongodb://localhost:27017` (default for Docker setup)
+- `MONGO_URI=mongodb://localhost:27018` (default for Docker setup on port 27018)
 - Comments explaining purpose and customization options
+- Note about port selection to avoid conflicts with local MongoDB
 
 **Update `.gitignore`** to ensure:
 - `.env` already ignored (confirmed)
 - Add Docker-specific ignores:
   - `docker-compose.override.yml` (for local customization)
-  - Any Docker volume data paths if needed
+  - `mongodb_backup/` (for exported data)
 
 **Connection Strategy**:
 - Keep existing `db.py` logic unchanged (already uses `MONGO_URI` env var)
-- Docker MongoDB accessible at `localhost:27017` (same as current setup)
+- Docker MongoDB accessible at `localhost:27018` (avoids conflict with local port 27017)
+- Create `.env` file with `MONGO_URI=mongodb://localhost:27018` to connect to Docker instance
 - No code changes required for connection logic
 
 ### 3. Startup Script Enhancement
@@ -84,16 +89,22 @@ This task involves replacing the locally installed MongoDB instance with a Docke
 
 ### 4. Data Migration from Local MongoDB
 
-**Export from local installation**:
+**Export from local installation** (running on port 27017):
 ```bash
 mongodump --uri="mongodb://localhost:27017" --db=kessler --out=./mongodb_backup
 ```
 
-**Import to Docker MongoDB**:
+**Import to Docker MongoDB** (running on port 27018):
 ```bash
 docker compose up -d mongodb
-mongorestore --uri="mongodb://localhost:27017" --db=kessler ./mongodb_backup/kessler
+mongorestore --uri="mongodb://localhost:27018" --db=kessler ./mongodb_backup/kessler
 ```
+
+**Port Strategy**:
+- Local MongoDB: `localhost:27017` (unchanged)
+- Docker MongoDB: `localhost:27018` (new, no conflicts)
+- During migration, both can run simultaneously
+- After migration is verified, local MongoDB can be stopped/uninstalled
 
 **Add to `.gitignore`**:
 - `mongodb_backup/` (contains exported data snapshots)
@@ -105,10 +116,11 @@ mongorestore --uri="mongodb://localhost:27017" --db=kessler ./mongodb_backup/kes
 - Stop MongoDB: `./scripts/mongodb.sh stop`
 - Reset data: `./scripts/mongodb.sh reset`
 - View logs: `./scripts/mongodb.sh logs`
-- Shell access: `./scripts/mongodb.sh shell`
+- Shell access: `./scripts/mongodb.sh shell` (connects to port 27018)
 
 **Create `scripts/migrate_data.sh`** (optional):
-- Automates export from local and import to Docker
+- Automates export from local MongoDB (port 27017)
+- Imports to Docker MongoDB (port 27018)
 - Validates successful migration
 - Provides rollback instructions
 
@@ -161,15 +173,18 @@ docker compose logs mongodb
 
 ### 2. Connection Testing
 ```bash
-# Test MongoDB connection from Python
-python3 -c "from pymongo import MongoClient; MongoClient('mongodb://localhost:27017').admin.command('ping'); print('✓ Connected')"
+# Test Docker MongoDB connection from Python
+MONGO_URI=mongodb://localhost:27018 python3 -c "from pymongo import MongoClient; import os; MongoClient(os.getenv('MONGO_URI')).admin.command('ping'); print('✓ Connected')"
 
 # Import test data
-python3 import_to_mongodb.py --clear
+MONGO_URI=mongodb://localhost:27018 python3 import_to_mongodb.py --clear
 ```
 
 ### 3. API Integration Testing
 ```bash
+# Ensure .env file exists with correct URI
+echo "MONGO_URI=mongodb://localhost:27018" > .env
+
 # Start all services (MongoDB + API + React)
 ./start.sh
 
@@ -185,24 +200,27 @@ curl http://localhost:8000/v2/search?q=ISS
 
 ### 4. Data Migration Testing
 ```bash
-# If local MongoDB has existing data, export it first
+# Export from local MongoDB (port 27017)
 mongodump --uri="mongodb://localhost:27017" --db=kessler --out=./mongodb_backup
 
-# Start Docker MongoDB
+# Start Docker MongoDB (port 27018)
 docker compose up -d mongodb
 
-# Import the exported data
-mongorestore --uri="mongodb://localhost:27017" --db=kessler ./mongodb_backup/kessler
+# Import to Docker MongoDB
+mongorestore --uri="mongodb://localhost:27018" --db=kessler ./mongodb_backup/kessler
 
 # Verify data was imported successfully
 docker compose exec mongodb mongosh kessler --eval "db.satellites.countDocuments({})"
+
+# Test API with migrated data (ensure .env has MONGO_URI=mongodb://localhost:27018)
+echo "MONGO_URI=mongodb://localhost:27018" > .env
 curl http://localhost:8000/v2/stats
 ```
 
 ### 5. Data Persistence Testing
 ```bash
 # Import data (or use migrated data from step 4)
-python3 import_to_mongodb.py --clear
+MONGO_URI=mongodb://localhost:27018 python3 import_to_mongodb.py --clear
 
 # Stop MongoDB
 docker compose down
@@ -237,11 +255,14 @@ python3 import_to_mongodb.py --clear
 - **Docker availability**: Users must have Docker installed
   - **Mitigation**: Document Docker installation, provide fallback instructions for local MongoDB
   
-- **Port conflicts**: Port 27017 might be in use
-  - **Mitigation**: Document how to customize port via `docker-compose.override.yml`
+- **Port conflicts**: Port 27018 might be in use (unlikely but possible)
+  - **Mitigation**: Use port 27018 instead of 27017 to avoid conflict with local MongoDB. Document how to customize port via `docker-compose.override.yml`
 
 - **Startup script complexity**: Adding Docker orchestration to shell script
   - **Mitigation**: Keep changes minimal, add clear error messages, test on multiple shells (bash/zsh)
+  
+- **Environment variable confusion**: Users must remember to create `.env` file
+  - **Mitigation**: Provide clear `.env.example` template, document in setup guide, add error message in API if connection fails
 
 ### Considerations
 - **Performance**: Docker adds minimal overhead for database operations
@@ -269,8 +290,10 @@ python3 import_to_mongodb.py --clear
 ## Post-Implementation Benefits
 
 - **Portability**: Works on any system with Docker (macOS, Linux, Windows)
-- **Consistency**: All developers use same MongoDB version
+- **Consistency**: All developers use same MongoDB version (7.0)
 - **Isolation**: MongoDB isolated from host system
+- **No port conflicts**: Uses port 27018, allowing local MongoDB to coexist during migration
 - **Easy reset**: Quick database reset via `docker compose down -v`
 - **Production parity**: Similar to containerized production deployments
 - **Onboarding**: New developers need fewer manual installation steps
+- **Clean migration path**: Can verify Docker setup before removing local MongoDB installation
