@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './DetailPanel.css'
+import DataRecordModal from './DataRecordModal'
 
 export default function DetailPanel({ object }) {
   const [orbitalState, setOrbitalState] = useState(null)
@@ -9,6 +10,8 @@ export default function DetailPanel({ object }) {
   const [docLoading, setDocLoading] = useState(false)
   const [docMetadata, setDocMetadata] = useState(null)
   const [metadataLoading, setMetadataLoading] = useState(false)
+  const [showDataRecord, setShowDataRecord] = useState(false)
+  const [fullDocument, setFullDocument] = useState(null)
 
   useEffect(() => {
     if (!object) {
@@ -18,6 +21,8 @@ export default function DetailPanel({ object }) {
       setDocLoading(false)
       setDocMetadata(null)
       setMetadataLoading(false)
+      setShowDataRecord(false)
+      setFullDocument(null)
       return
     }
 
@@ -61,6 +66,8 @@ export default function DetailPanel({ object }) {
         const data = await response.json()
         
         if (data.data) {
+          setFullDocument(data.data)
+          
           const canonical = data.data.canonical || {}
           const orbit = canonical.orbit || {}
           
@@ -129,6 +136,14 @@ export default function DetailPanel({ object }) {
       <div className="detail-header">
         <h2>{object['Object Name'] || object['Registration Number']}</h2>
         <p className="detail-reg">{object['Registration Number']}</p>
+        {fullDocument && (
+          <button 
+            className="show-data-record-button"
+            onClick={() => setShowDataRecord(true)}
+          >
+            Show Data Record
+          </button>
+        )}
       </div>
 
       <div className="detail-grid">
@@ -364,6 +379,13 @@ export default function DetailPanel({ object }) {
           </div>
         )}
       </div>
+
+      {showDataRecord && (
+        <DataRecordModal 
+          data={fullDocument}
+          onClose={() => setShowDataRecord(false)}
+        />
+      )}
     </div>
   )
 }
