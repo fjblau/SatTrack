@@ -48,6 +48,100 @@ def get_satellites_collection():
     return satellites_collection
 
 
+def get_nested_field(obj: Dict[str, Any], path: str) -> Any:
+    """
+    Safely access nested dictionary fields using dot notation.
+    
+    Args:
+        obj: Dictionary to access
+        path: Dot-separated path (e.g., "kaggle.orbital_band" or "canonical.orbit.apogee_km")
+    
+    Returns:
+        Value at the path, or None if path doesn't exist
+    
+    Examples:
+        get_nested_field({"a": {"b": {"c": 1}}}, "a.b.c") -> 1
+        get_nested_field({"a": {"b": 2}}, "a.x.y") -> None
+    """
+    keys = path.split(".")
+    current = obj
+    
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return None
+        current = current[key]
+    
+    return current
+
+
+def set_nested_field(obj: Dict[str, Any], path: str, value: Any) -> bool:
+    """
+    Safely set nested dictionary fields using dot notation.
+    Creates intermediate dictionaries if they don't exist.
+    
+    Args:
+        obj: Dictionary to modify
+        path: Dot-separated path (e.g., "canonical.orbital_band")
+        value: Value to set
+    
+    Returns:
+        True if successful, False otherwise
+    
+    Examples:
+        set_nested_field({}, "a.b.c", 1) -> {"a": {"b": {"c": 1}}}
+        set_nested_field({"a": {}}, "a.b", 2) -> {"a": {"b": 2}}
+    """
+    keys = path.split(".")
+    current = obj
+    
+    for i, key in enumerate(keys[:-1]):
+        if key not in current:
+            current[key] = {}
+        elif not isinstance(current[key], dict):
+            return False
+        current = current[key]
+    
+    current[keys[-1]] = value
+    return True
+
+
+def record_transformation(
+    doc: Dict[str, Any],
+    source_field: str,
+    target_field: str,
+    value: Any,
+    reason: Optional[str] = None
+) -> None:
+    """
+    Record a field promotion in the document's transformation history.
+    
+    Args:
+        doc: Document to update
+        source_field: Source field path (e.g., "kaggle.orbital_band")
+        target_field: Target field path (e.g., "canonical.orbital_band")
+        value: The promoted value
+        reason: Optional reason for the transformation
+    """
+    if "metadata" not in doc:
+        doc["metadata"] = {}
+    
+    if "transformations" not in doc["metadata"]:
+        doc["metadata"]["transformations"] = []
+    
+    transformation = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_field": source_field,
+        "target_field": target_field,
+        "value": value,
+        "promoted_by": "manual_script"
+    }
+    
+    if reason:
+        transformation["reason"] = reason
+    
+    doc["metadata"]["transformations"].append(transformation)
+
+
 def create_satellite_document(
     identifier: str,
     source: str,
