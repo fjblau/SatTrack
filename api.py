@@ -14,7 +14,7 @@ import pdfplumber
 import io
 from db import (
     connect_mongodb, disconnect_mongodb, find_satellite, search_satellites,
-    count_satellites, get_all_countries, get_all_statuses, create_satellite_document
+    count_satellites, get_all_countries, get_all_statuses, get_all_orbital_bands, create_satellite_document
 )
 
 try:
@@ -420,17 +420,19 @@ def search_satellites_v2(
     q: Optional[str] = Query(None, description="Search query (name, designator, registration number)"),
     country: Optional[str] = Query(None, description="Filter by country"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    orbital_band: Optional[str] = Query(None, description="Filter by orbital band"),
     limit: int = Query(100, ge=1, le=1000),
     skip: int = Query(0, ge=0)
 ):
     """
     Search satellites in MongoDB.
-    Supports filtering by country and status.
+    Supports filtering by country, status, and orbital band.
     """
     results = search_satellites(
         query=q or "",
         country=country,
         status=status,
+        orbital_band=orbital_band,
         limit=limit,
         skip=skip
     )
@@ -438,7 +440,8 @@ def search_satellites_v2(
     total_count = count_satellites(
         query=q or "",
         country=country,
-        status=status
+        status=status,
+        orbital_band=orbital_band
     )
     
     # Convert MongoDB documents to JSON-safe format
@@ -528,6 +531,16 @@ def get_statuses_v2():
     return {
         "count": len(statuses),
         "statuses": sorted([s for s in statuses if s and s.strip()])
+    }
+
+
+@app.get("/v2/orbital-bands")
+def get_orbital_bands_v2():
+    """Get list of all orbital bands"""
+    orbital_bands = get_all_orbital_bands()
+    return {
+        "count": len(orbital_bands),
+        "orbital_bands": sorted([b for b in orbital_bands if b and b.strip()])
     }
 
 

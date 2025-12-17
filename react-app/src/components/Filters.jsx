@@ -68,6 +68,20 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
         </select>
       </div>
 
+      <div className="filter-group">
+        <label htmlFor="orbital-band">Orbital Band</label>
+        <select
+          id="orbital-band"
+          value={localFilters.orbital_band || ''}
+          onChange={(e) => handleChange('orbital_band', e.target.value)}
+        >
+          <option value="">All Orbital Bands</option>
+          {filterOptions.orbital_bands?.map(band => (
+            <option key={band} value={band}>{band}</option>
+          ))}
+        </select>
+      </div>
+
       {filterOptions.apogee_range && (
         <div className="filter-group">
           <label>Apogee Range (km)</label>

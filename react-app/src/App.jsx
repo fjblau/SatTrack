@@ -26,16 +26,19 @@ function App() {
 
   const fetchFilterOptions = async () => {
     try {
-      const [countriesRes, statusesRes] = await Promise.all([
+      const [countriesRes, statusesRes, orbitalBandsRes] = await Promise.all([
         fetch('/v2/countries'),
-        fetch('/v2/statuses')
+        fetch('/v2/statuses'),
+        fetch('/v2/orbital-bands')
       ])
       const countriesData = await countriesRes.json()
       const statusesData = await statusesRes.json()
+      const orbitalBandsData = await orbitalBandsRes.json()
       
       setFilterOptions({
         countries: countriesData.countries || [],
         statuses: statusesData.statuses || [],
+        orbital_bands: orbitalBandsData.orbital_bands || [],
         apogee_range: [0, 100000],
         perigee_range: [0, 100000],
         inclination_range: [0, 180]
@@ -52,6 +55,7 @@ function App() {
     if (filters.search) params.append('q', filters.search)
     if (filters.country) params.append('country', filters.country)
     if (filters.status) params.append('status', filters.status)
+    if (filters.orbital_band) params.append('orbital_band', filters.orbital_band)
     
     params.append('skip', pageNum * limit)
     params.append('limit', limit)
