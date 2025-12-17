@@ -110,7 +110,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>UNOOSA Space Object Registry</h1>
+        <h1>Space Object Registry</h1>
         <p>{total} objects</p>
       </header>
       

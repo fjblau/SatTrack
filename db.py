@@ -97,7 +97,7 @@ def create_satellite_document(
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "last_updated_at": datetime.now(timezone.utc).isoformat(),
                 "sources_available": [source],
-                "source_priority": ["unoosa", "celestrak", "spacetrack"]
+                "source_priority": ["unoosa", "celestrak", "spacetrack", "kaggle"]
             }
         }
         
@@ -110,10 +110,12 @@ def create_satellite_document(
 def update_canonical(doc: Dict[str, Any]):
     """
     Update canonical section from source nodes based on priority.
-    Source priority: UNOOSA > CelesTrak > Space-Track
+    Source priority: UNOOSA > CelesTrak > Space-Track > Kaggle
     """
-    source_priority = doc["metadata"].get("source_priority", ["unoosa", "celestrak", "spacetrack"])
+    source_priority = doc["metadata"].get("source_priority", ["unoosa", "celestrak", "spacetrack", "kaggle"])
     sources = doc["sources"]
+    
+    source_priority = [s for s in source_priority if s in sources] + [s for s in sources if s not in source_priority]
     
     canonical = {}
     
@@ -212,6 +214,7 @@ def search_satellites(
 
 
 def count_satellites(
+    query: Optional[str] = None,
     country: Optional[str] = None,
     status: Optional[str] = None
 ) -> int:
@@ -219,6 +222,14 @@ def count_satellites(
     collection = get_satellites_collection()
     
     filters = {}
+    
+    if query:
+        filters["$or"] = [
+            {"canonical.name": {"$regex": query, "$options": "i"}},
+            {"canonical.object_name": {"$regex": query, "$options": "i"}},
+            {"canonical.international_designator": {"$regex": query, "$options": "i"}},
+            {"canonical.registration_number": {"$regex": query, "$options": "i"}}
+        ]
     
     if country:
         filters["canonical.country_of_origin"] = {"$regex": country, "$options": "i"}

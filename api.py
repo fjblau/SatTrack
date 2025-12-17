@@ -435,6 +435,12 @@ def search_satellites_v2(
         skip=skip
     )
     
+    total_count = count_satellites(
+        query=q or "",
+        country=country,
+        status=status
+    )
+    
     # Convert MongoDB documents to JSON-safe format
     data = []
     for r in results:
@@ -452,7 +458,7 @@ def search_satellites_v2(
         })
     
     return {
-        "count": len(results),
+        "count": total_count,
         "skip": skip,
         "limit": limit,
         "data": data

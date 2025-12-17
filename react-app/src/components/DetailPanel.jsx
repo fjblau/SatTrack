@@ -214,6 +214,12 @@ export default function DetailPanel({ object }) {
             <span className="detail-label">Status</span>
             <span className="detail-value">{formatValue(object['Status'])}</span>
           </div>
+          {object['Secretariat Remarks'] && (
+            <div className="detail-row remarks-row">
+              <span className="detail-label">Remarks</span>
+              <span className="detail-value detail-remarks">{object['Secretariat Remarks']}</span>
+            </div>
+          )}
         </div>
 
         <div className="detail-section">
@@ -309,13 +315,6 @@ export default function DetailPanel({ object }) {
           )}
           {error && <p className="detail-error">{error}</p>}
         </div>
-
-        {object['Secretariat Remarks'] && (
-          <div className="detail-section">
-            <h3>Remarks</h3>
-            <p className="detail-remarks">{object['Secretariat Remarks']}</p>
-          </div>
-        )}
 
         {fullDocument?.canonical?.norad_cat_id && (
           <div className="detail-section">
