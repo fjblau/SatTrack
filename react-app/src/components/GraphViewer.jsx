@@ -215,10 +215,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         const elements = {
           nodes: data.data.nodes.map(node => ({
             data: {
+              ...node,
               id: node.id,
               label: node.name || node.identifier,
-              congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : null,
-              ...node
+              congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : null
             }
           })),
           edges: data.data.edges.map(edge => ({
