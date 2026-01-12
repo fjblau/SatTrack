@@ -10,7 +10,7 @@ case "$1" in
         echo "Waiting for MongoDB to be ready..."
         for i in {1..30}; do
             if docker compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" --quiet &> /dev/null; then
-                echo "✅ MongoDB is ready on port 27018"
+                echo "✅ MongoDB is ready on port 27019"
                 exit 0
             fi
             sleep 1
@@ -44,7 +44,7 @@ case "$1" in
     
     shell)
         echo "Opening MongoDB shell (mongosh)..."
-        echo "Connected to: localhost:27018/kessler"
+        echo "Connected to: localhost:27019/kessler"
         docker compose exec mongodb mongosh kessler
         ;;
     

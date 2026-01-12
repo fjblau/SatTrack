@@ -49,8 +49,8 @@ For each field, the system uses the value from the highest-priority source that 
    # Copy the example environment file
    cp .env.example .env
    
-   # The default configuration uses Docker MongoDB on port 27018
-   # MONGO_URI=mongodb://localhost:27018
+   # The default configuration uses Docker MongoDB on port 27019
+   # MONGO_URI=mongodb://localhost:27019
    ```
 
 3. **Start all services** (MongoDB, API, React):
@@ -60,7 +60,7 @@ For each field, the system uses the value from the highest-priority source that 
    
    This script will:
    - Check Docker is installed and running
-   - Start MongoDB container on port 27018
+   - Start MongoDB container on port 27019
    - Wait for MongoDB to be ready
    - Start the API server
    - Start the React development server
@@ -129,12 +129,12 @@ If you have an existing local MongoDB installation with data, you can migrate to
 
 This script will:
 1. Export data from local MongoDB (port 27017)
-2. Start Docker MongoDB (port 27018)
+2. Start Docker MongoDB (port 27019)
 3. Import the data to Docker MongoDB
 4. Verify the migration
 
 After successful migration:
-1. Create `.env` file: `echo "MONGO_URI=mongodb://localhost:27018" > .env`
+1. Create `.env` file: `echo "MONGO_URI=mongodb://localhost:27019" > .env`
 2. Test the API to verify everything works
 3. Optionally stop/uninstall local MongoDB
 
@@ -150,19 +150,19 @@ mongodump --uri="mongodb://localhost:27017" --db=kessler --out=./mongodb_backup
 docker compose up -d mongodb
 
 # 3. Import to Docker MongoDB
-mongorestore --uri="mongodb://localhost:27018" --db=kessler ./mongodb_backup/kessler
+mongorestore --uri="mongodb://localhost:27019" --db=kessler ./mongodb_backup/kessler
 
 # 4. Verify the data
 docker compose exec mongodb mongosh kessler --eval "db.satellites.countDocuments({})"
 
 # 5. Update your .env file
-echo "MONGO_URI=mongodb://localhost:27018" > .env
+echo "MONGO_URI=mongodb://localhost:27019" > .env
 ```
 
 ### Port Strategy
 
 - **Local MongoDB**: Runs on default port `27017`
-- **Docker MongoDB**: Runs on port `27018`
+- **Docker MongoDB**: Runs on port `27019`
 - Both can run simultaneously during migration
 - No conflicts, allowing safe testing before switching
 
@@ -427,15 +427,15 @@ docker info
 # - Linux: sudo systemctl start docker
 ```
 
-**Port 27018 already in use:**
+**Port 27019 already in use:**
 ```bash
-# Check what's using port 27018
-lsof -i:27018
+# Check what's using port 27019
+lsof -i:27019
 
 # Option 1: Stop the conflicting service
 # Option 2: Change Docker port in docker-compose.yml
 #   ports:
-#     - "27019:27017"  # Use different port
+#     - "27020:27017"  # Use different port
 #   Then update MONGO_URI in .env
 ```
 
@@ -469,7 +469,7 @@ cat .env
 **Wrong MongoDB URI:**
 ```bash
 # For Docker MongoDB (default)
-echo "MONGO_URI=mongodb://localhost:27018" > .env
+echo "MONGO_URI=mongodb://localhost:27019" > .env
 
 # For local MongoDB (if not using Docker)
 echo "MONGO_URI=mongodb://localhost:27017" > .env
@@ -485,7 +485,7 @@ ls -lh data/unoosa_registry.csv
 python3 -c "import pandas as pd; df = pd.read_csv('data/unoosa_registry.csv'); print(f'{len(df)} rows')"
 
 # Import with environment variable
-MONGO_URI=mongodb://localhost:27018 python3 import_to_mongodb.py --clear
+MONGO_URI=mongodb://localhost:27019 python3 import_to_mongodb.py --clear
 ```
 
 ### API Falls Back to CSV

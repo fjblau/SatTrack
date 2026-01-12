@@ -31,7 +31,7 @@ lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 sleep 1
 
 # Start MongoDB via Docker Compose
-echo "🗄️  Starting MongoDB (Docker) on port 27018..."
+echo "🗄️  Starting MongoDB (Docker) on port 27019..."
 cd "$SCRIPT_DIR"
 docker compose up -d mongodb
 
@@ -87,7 +87,7 @@ echo "=========================================="
 echo ""
 echo "Access the app at: http://localhost:3000"
 echo ""
-echo "MongoDB: localhost:27018"
+echo "MongoDB: localhost:27019"
 echo "API server: http://localhost:8000"
 echo "API docs: http://localhost:8000/docs"
 echo ""

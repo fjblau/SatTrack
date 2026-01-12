@@ -5,7 +5,7 @@ cd "$SCRIPT_DIR"
 
 BACKUP_DIR="./mongodb_backup"
 LOCAL_URI="mongodb://localhost:27017"
-DOCKER_URI="mongodb://localhost:27018"
+DOCKER_URI="mongodb://localhost:27019"
 
 echo "=========================================="
 echo "MongoDB Data Migration Script"
