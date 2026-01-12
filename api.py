@@ -12,10 +12,13 @@ import re
 from bs4 import BeautifulSoup
 import pdfplumber
 import io
+import db as db_module
 from db import (
     connect_mongodb, disconnect_mongodb, find_satellite, search_satellites,
     count_satellites, get_all_countries, get_all_statuses, get_all_orbital_bands, 
-    get_all_congestion_risks, create_satellite_document
+    get_all_congestion_risks, create_satellite_document,
+    COLLECTION_NAME, COLLECTION_REG_DOCS, EDGE_COLLECTION_CONSTELLATION,
+    EDGE_COLLECTION_REGISTRATION, GRAPH_NAME
 )
 
 try:
@@ -635,3 +638,265 @@ def get_current_tle(norad_id: str):
             "message": f"TLE data not found for NORAD ID {norad_id}.",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }, 200
+
+
+@app.get("/v2/graphs/constellation/{constellation_name}")
+def get_constellation_graph(
+    constellation_name: str,
+    limit: Optional[int] = Query(default=None, description="Limit number of satellites returned")
+):
+    """
+    Get constellation membership graph for a specific constellation.
+    
+    Returns nodes (satellites) and edges (constellation membership) in graph format.
+    Uses star topology where all satellites connect to a constellation hub.
+    """
+    query = f"""
+    LET hub = FIRST(
+        FOR edge IN {EDGE_COLLECTION_CONSTELLATION}
+            FILTER edge.constellation_name == @constellation_name
+            LIMIT 1
+            RETURN edge._to
+    )
+    
+    LET members = (
+        FOR v, e IN 1..1 INBOUND hub
+        {EDGE_COLLECTION_CONSTELLATION}
+        FILTER e.constellation_name == @constellation_name
+        {f"LIMIT {limit}" if limit else ""}
+        RETURN {{
+            id: v._id,
+            key: v._key,
+            identifier: v.identifier,
+            name: v.canonical.name,
+            country: v.canonical.country_of_origin,
+            orbital_band: v.canonical.orbital_band,
+            status: v.canonical.status,
+            launch_date: v.canonical.date_of_launch
+        }}
+    )
+    
+    LET hub_doc = hub ? DOCUMENT(hub) : null
+    
+    LET hub_node = hub_doc ? {{
+        id: hub_doc._id,
+        key: hub_doc._key,
+        identifier: hub_doc.identifier,
+        name: hub_doc.canonical.name,
+        country: hub_doc.canonical.country_of_origin,
+        orbital_band: hub_doc.canonical.orbital_band,
+        status: hub_doc.canonical.status,
+        launch_date: hub_doc.canonical.date_of_launch,
+        is_hub: true
+    }} : null
+    
+    LET edges = (
+        FOR v IN members
+            RETURN {{
+                id: CONCAT(v.id, "_to_hub"),
+                source: v.id,
+                target: hub,
+                constellation: @constellation_name,
+                relationship: "member_to_hub"
+            }}
+    )
+    
+    RETURN {{
+        constellation: @constellation_name,
+        hub: hub_node,
+        nodes: hub_node ? APPEND(members, [hub_node]) : members,
+        edges: edges,
+        stats: {{
+            total_satellites: hub_node ? LENGTH(members) + 1 : LENGTH(members),
+            members: LENGTH(members),
+            has_hub: hub_node != null
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(
+        query,
+        bind_vars={'constellation_name': constellation_name}
+    )
+    
+    results = list(cursor)
+    
+    if results and results[0]['nodes']:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "constellation": constellation_name,
+                "hub": None,
+                "nodes": [],
+                "edges": [],
+                "stats": {
+                    "total_satellites": 0,
+                    "members": 0,
+                    "has_hub": False
+                }
+            },
+            "message": f"No satellites found for constellation '{constellation_name}'",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+
+@app.get("/v2/graphs/registration-document/{doc_key}")
+def get_registration_document_graph(
+    doc_key: str,
+    limit: Optional[int] = Query(default=None, description="Limit number of satellites returned")
+):
+    """
+    Get satellites linked to a specific registration document.
+    
+    Returns nodes (satellites + registration document) and edges in graph format.
+    """
+    doc_id = f"{COLLECTION_REG_DOCS}/{doc_key}"
+    
+    limit_clause = f"LIMIT {limit}" if limit else ""
+    
+    query = f"""
+    LET reg_doc = DOCUMENT(@doc_id)
+    
+    LET satellites = reg_doc ? (
+        FOR v, e IN 1..1 INBOUND @doc_id
+        {EDGE_COLLECTION_REGISTRATION}
+        {limit_clause}
+        RETURN {{
+            id: v._id,
+            key: v._key,
+            identifier: v.identifier,
+            name: v.canonical.name,
+            country: v.canonical.country_of_origin,
+            orbital_band: v.canonical.orbital_band,
+            status: v.canonical.status,
+            registration_number: v.canonical.registration_number
+        }}
+    ) : []
+    
+    LET reg_doc_node = reg_doc ? {{
+        id: reg_doc._id,
+        key: reg_doc._key,
+        url: reg_doc.url,
+        satellite_count: reg_doc.satellite_count,
+        countries: reg_doc.countries,
+        type: "registration_document"
+    }} : null
+    
+    LET edges = (
+        FOR sat IN satellites
+            RETURN {{
+                id: CONCAT(sat.id, "_to_", reg_doc._id),
+                source: sat.id,
+                target: reg_doc._id,
+                relationship: "registered_in"
+            }}
+    )
+    
+    RETURN {{
+        registration_document: reg_doc_node,
+        nodes: reg_doc_node ? APPEND(satellites, [reg_doc_node]) : satellites,
+        edges: edges,
+        stats: {{
+            total_nodes: reg_doc_node ? LENGTH(satellites) + 1 : LENGTH(satellites),
+            satellites: LENGTH(satellites),
+            has_document: reg_doc_node != null
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(
+        query,
+        bind_vars={'doc_id': doc_id}
+    )
+    
+    results = list(cursor)
+    
+    if results and results[0]['registration_document']:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "registration_document": None,
+                "nodes": [],
+                "edges": [],
+                "stats": {
+                    "total_nodes": 0,
+                    "satellites": 0,
+                    "has_document": False
+                }
+            },
+            "message": f"Registration document not found: {doc_key}",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+
+@app.get("/v2/graphs/stats")
+def get_graph_stats():
+    """
+    Get overall graph statistics including node and edge counts.
+    """
+    query = f"""
+    LET satellite_count = LENGTH({COLLECTION_NAME})
+    LET reg_doc_count = LENGTH({COLLECTION_REG_DOCS})
+    LET constellation_edges = LENGTH({EDGE_COLLECTION_CONSTELLATION})
+    LET registration_edges = LENGTH({EDGE_COLLECTION_REGISTRATION})
+    
+    LET constellations = (
+        FOR edge IN {EDGE_COLLECTION_CONSTELLATION}
+            COLLECT constellation = edge.constellation_name WITH COUNT INTO count
+            SORT count DESC
+            RETURN {{
+                name: constellation,
+                member_count: count
+            }}
+    )
+    
+    LET top_reg_docs = (
+        FOR doc IN {COLLECTION_REG_DOCS}
+            SORT doc.satellite_count DESC
+            LIMIT 10
+            RETURN {{
+                key: doc._key,
+                url: doc.url,
+                satellite_count: doc.satellite_count,
+                countries: doc.countries
+            }}
+    )
+    
+    RETURN {{
+        nodes: {{
+            satellites: satellite_count,
+            registration_documents: reg_doc_count,
+            total: satellite_count + reg_doc_count
+        }},
+        edges: {{
+            constellation_membership: constellation_edges,
+            registration_links: registration_edges,
+            total: constellation_edges + registration_edges
+        }},
+        constellations: constellations,
+        top_registration_documents: top_reg_docs,
+        graph_name: '{GRAPH_NAME}',
+        collections: {{
+            satellites: '{COLLECTION_NAME}',
+            registration_documents: '{COLLECTION_REG_DOCS}',
+            constellation_edges: '{EDGE_COLLECTION_CONSTELLATION}',
+            registration_edges: '{EDGE_COLLECTION_REGISTRATION}'
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(query)
+    results = list(cursor)
+    
+    return {
+        "data": results[0] if results else {},
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }

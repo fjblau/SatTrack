@@ -3,8 +3,10 @@ import './App.css'
 import DataTable from './components/DataTable'
 import DetailPanel from './components/DetailPanel'
 import Filters from './components/Filters'
+import GraphExplorer from './components/GraphExplorer'
 
 function App() {
+  const [activeTab, setActiveTab] = useState('table')
   const [objects, setObjects] = useState([])
   const [filters, setFilters] = useState({})
   const [selectedObject, setSelectedObject] = useState(null)
@@ -121,48 +123,68 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>Space Object Registry</h1>
-        <p>{total} objects</p>
+        <nav className="app-nav">
+          <button 
+            className={activeTab === 'table' ? 'active' : ''}
+            onClick={() => setActiveTab('table')}
+          >
+            Table View
+          </button>
+          <button 
+            className={activeTab === 'graphs' ? 'active' : ''}
+            onClick={() => setActiveTab('graphs')}
+          >
+            Graph View
+          </button>
+        </nav>
+        {activeTab === 'table' && <p>{total} objects</p>}
       </header>
       
-      <div className="app-container">
-        <aside className="sidebar">
-          <Filters 
-            filters={filters}
-            filterOptions={filterOptions}
-            onFilterChange={handleFilterChange}
-          />
-        </aside>
-        
-        <main className="main-content">
-          <div className="table-container">
-            <DataTable 
-              objects={objects}
-              selectedObject={selectedObject}
-              onRowClick={handleRowClick}
-              loading={loading}
+      {activeTab === 'table' ? (
+        <div className="app-container">
+          <aside className="sidebar">
+            <Filters 
+              filters={filters}
+              filterOptions={filterOptions}
+              onFilterChange={handleFilterChange}
             />
-            {total > limit && (
-              <div className="pagination">
-                <button 
-                  onClick={() => fetchObjects(page - 1)}
-                  disabled={page === 0}
-                >
-                  Previous
-                </button>
-                <span>Page {page + 1} of {Math.ceil(total / limit)}</span>
-                <button 
-                  onClick={() => fetchObjects(page + 1)}
-                  disabled={(page + 1) * limit >= total}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
+          </aside>
           
-          <DetailPanel object={selectedObject} />
-        </main>
-      </div>
+          <main className="main-content">
+            <div className="table-container">
+              <DataTable 
+                objects={objects}
+                selectedObject={selectedObject}
+                onRowClick={handleRowClick}
+                loading={loading}
+              />
+              {total > limit && (
+                <div className="pagination">
+                  <button 
+                    onClick={() => fetchObjects(page - 1)}
+                    disabled={page === 0}
+                  >
+                    Previous
+                  </button>
+                  <span>Page {page + 1} of {Math.ceil(total / limit)}</span>
+                  <button 
+                    onClick={() => fetchObjects(page + 1)}
+                    disabled={(page + 1) * limit >= total}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <DetailPanel object={selectedObject} />
+          </main>
+        </div>
+      ) : (
+        <div className="graph-view-container">
+          <GraphExplorer />
+        </div>
+      )}
     </div>
   )
 }

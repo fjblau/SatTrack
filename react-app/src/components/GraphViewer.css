@@ -1,0 +1,151 @@
+.graph-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.graph-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.control-group select {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: white;
+}
+
+.graph-controls button {
+  padding: 0.4rem 1rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.graph-controls button:hover {
+  background: #2980b9;
+}
+
+.graph-stats {
+  display: flex;
+  gap: 1rem;
+  margin-left: auto;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.graph-stats span {
+  padding: 0.3rem 0.8rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.graph-container {
+  flex: 1;
+  position: relative;
+  background: white;
+  border: 1px solid #dee2e6;
+  margin: 0;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 2rem 3rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  font-size: 1.1rem;
+  color: #495057;
+  z-index: 1000;
+}
+
+.graph-legend {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+}
+
+.graph-legend h4 {
+  margin: 0 0 0.8rem 0;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.legend-node {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-node.satellite {
+  background-color: #3498db;
+}
+
+.legend-node.hub {
+  background-color: #e74c3c;
+  width: 28px;
+  height: 28px;
+}
+
+.legend-node.document {
+  background-color: #2ecc71;
+  border-radius: 4px;
+  width: 30px;
+  height: 20px;
+}
+
+.legend-edge {
+  width: 30px;
+  height: 2px;
+  background-color: #95a5a6;
+  display: inline-block;
+  position: relative;
+}
+
+.legend-edge::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid #95a5a6;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}

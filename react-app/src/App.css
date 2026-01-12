@@ -10,16 +10,49 @@
   padding: 2em;
   border-bottom: 1px solid #ddd;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 2rem;
 }
 
 .app-header h1 {
-  margin-bottom: 0.25em;
+  margin: 0;
   font-size: 2em;
+}
+
+.app-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.app-nav button {
+  padding: 0.6rem 1.5rem;
+  background: transparent;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6c757d;
+  transition: all 0.2s;
+}
+
+.app-nav button:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+
+.app-nav button.active {
+  background: #3498db;
+  border-color: #3498db;
+  color: white;
 }
 
 .app-header p {
   color: #666;
   font-size: 0.9em;
+  margin: 0;
 }
 
 .app-container {
@@ -66,6 +99,13 @@
 .pagination button:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.graph-view-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: white;
 }
 
 @media (max-width: 1200px) {
