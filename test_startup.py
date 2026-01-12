@@ -30,7 +30,7 @@ class StartupValidator:
         required_modules = [
             'fastapi',
             'uvicorn',
-            'pymongo',
+            'arango',
             'pandas',
             'numpy',
             'requests',
@@ -125,7 +125,7 @@ class StartupValidator:
         ports = {
             8000: "API server",
             3000: "React dev server",
-            27019: "MongoDB"
+            8529: "ArangoDB"
         }
         
         busy_ports = []
