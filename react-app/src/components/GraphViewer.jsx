@@ -81,7 +81,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               'width': 2,
               'line-color': '#95a5a6',
               'target-arrow-color': '#95a5a6',
-              'target-arrow-shape': 'triangle',
+              'target-arrow-shape': 'none',
               'curve-style': 'bezier',
               'label': 'data(edge_label)',
               'font-size': '8px',
@@ -263,26 +263,28 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               inclination_degrees: node.inclination_degrees
             }
           })),
-          edges: data.data.edges.map(edge => {
-            const maxDiff = Math.max(
-              edge.apogee_diff_km || 0,
-              edge.perigee_diff_km || 0
-            )
-            const edgeLabel = `${maxDiff.toFixed(1)}km`
-            
-            return {
-              data: {
-                id: edge.id,
-                source: edge.source,
-                target: edge.target,
-                proximity_score: edge.proximity_score,
-                edge_label: edgeLabel,
-                apogee_diff_km: edge.apogee_diff_km,
-                perigee_diff_km: edge.perigee_diff_km,
-                inclination_diff_degrees: edge.inclination_diff_degrees
+          edges: data.data.edges
+            .filter(edge => edge.source < edge.target)
+            .map(edge => {
+              const maxDiff = Math.max(
+                edge.apogee_diff_km || 0,
+                edge.perigee_diff_km || 0
+              )
+              const edgeLabel = `${maxDiff.toFixed(1)}km`
+              
+              return {
+                data: {
+                  id: edge.id,
+                  source: edge.source,
+                  target: edge.target,
+                  proximity_score: edge.proximity_score,
+                  edge_label: edgeLabel,
+                  apogee_diff_km: edge.apogee_diff_km,
+                  perigee_diff_km: edge.perigee_diff_km,
+                  inclination_diff_degrees: edge.inclination_diff_degrees
+                }
               }
-            }
-          })
+            })
         }
         
         cyRef.current.elements().remove()
