@@ -12,8 +12,22 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Check if venv exists but is broken (directory exists but Python binary doesn't)
+if [ -d "venv" ] && [ ! -f "venv/bin/python" ]; then
+    echo "⚠️  Found broken venv directory (missing Python binary), removing..."
+    rm -rf venv
+fi
+
+# Check if venv has required packages installed
+if [ -f "venv/bin/python" ]; then
+    if ! venv/bin/python -c "import fastapi" 2>/dev/null; then
+        echo "⚠️  Found venv with missing packages, recreating..."
+        rm -rf venv
+    fi
+fi
+
 # Setup Python virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
+if [ ! -f "venv/bin/python" ]; then
     echo "📦 Creating Python virtual environment..."
     
     # Try to find Python 3.11 or higher
