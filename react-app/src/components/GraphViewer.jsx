@@ -22,8 +22,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             style: {
               'background-color': '#3498db',
               'label': 'data(label)',
-              'width': 30,
-              'height': 30,
+              'width': 'data(node_size)',
+              'height': 'data(node_size)',
               'font-size': '10px',
               'text-valign': 'center',
               'text-halign': 'center',
@@ -54,25 +54,46 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           {
             selector: 'node[congestion_risk="low"]',
             style: {
-              'background-color': '#27ae60'
+              'background-color': '#27ae60',
+              'border-width': 2,
+              'border-color': '#1e8449'
             }
           },
           {
             selector: 'node[congestion_risk="medium"]',
             style: {
-              'background-color': '#f39c12'
+              'background-color': '#f39c12',
+              'border-width': 2,
+              'border-color': '#d68910'
             }
           },
           {
             selector: 'node[congestion_risk="high"]',
             style: {
-              'background-color': '#e74c3c'
+              'background-color': '#e74c3c',
+              'border-width': 2,
+              'border-color': '#cb4335'
             }
           },
           {
             selector: 'node[congestion_risk="critical"]',
             style: {
-              'background-color': '#c0392b'
+              'background-color': '#c0392b',
+              'border-width': 2,
+              'border-color': '#922b21'
+            }
+          },
+          {
+            selector: 'node[edge_count >= 8]',
+            style: {
+              'border-width': 4,
+              'border-style': 'double'
+            }
+          },
+          {
+            selector: 'node[edge_count >= 5][edge_count < 8]',
+            style: {
+              'border-width': 3
             }
           },
           {
@@ -249,23 +270,38 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       const data = await response.json()
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
+        const filteredEdges = data.data.edges.filter(edge => edge.source < edge.target)
+        
+        const edgeCounts = {}
+        filteredEdges.forEach(edge => {
+          edgeCounts[edge.source] = (edgeCounts[edge.source] || 0) + 1
+          edgeCounts[edge.target] = (edgeCounts[edge.target] || 0) + 1
+        })
+        
+        const maxEdgeCount = Math.max(...Object.values(edgeCounts), 1)
+        
         const elements = {
-          nodes: data.data.nodes.map(node => ({
-            data: {
-              id: node.id,
-              label: node.name || node.identifier,
-              congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : 'unknown',
-              identifier: node.identifier,
-              name: node.name,
-              orbital_band: node.orbital_band,
-              apogee_km: node.apogee_km,
-              perigee_km: node.perigee_km,
-              inclination_degrees: node.inclination_degrees
+          nodes: data.data.nodes.map(node => {
+            const edgeCount = edgeCounts[node.id] || 0
+            const nodeSize = 25 + (edgeCount / maxEdgeCount) * 40
+            
+            return {
+              data: {
+                id: node.id,
+                label: node.name || node.identifier,
+                congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : 'unknown',
+                edge_count: edgeCount,
+                node_size: nodeSize,
+                identifier: node.identifier,
+                name: node.name,
+                orbital_band: node.orbital_band,
+                apogee_km: node.apogee_km,
+                perigee_km: node.perigee_km,
+                inclination_degrees: node.inclination_degrees
+              }
             }
-          })),
-          edges: data.data.edges
-            .filter(edge => edge.source < edge.target)
-            .map(edge => {
+          }),
+          edges: filteredEdges.map(edge => {
               const maxDiff = Math.max(
                 edge.apogee_diff_km || 0,
                 edge.perigee_diff_km || 0
@@ -386,7 +422,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         {graphType === 'proximity' ? (
           <>
             <div className="legend-section">
-              <h5>Satellites</h5>
+              <h5>Satellites (size = # neighbors)</h5>
               <div className="legend-item">
                 <span className="legend-node low-risk"></span>
                 <span>Low Congestion</span>
@@ -402,6 +438,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               <div className="legend-item">
                 <span className="legend-node critical-risk"></span>
                 <span>Critical Congestion</span>
+              </div>
+              <div className="legend-note">
+                Larger nodes = more proximity connections
               </div>
             </div>
             <div className="legend-section">

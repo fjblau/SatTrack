@@ -165,6 +165,14 @@
   text-transform: uppercase;
 }
 
+.legend-note {
+  font-size: 0.75rem;
+  color: #95a5a6;
+  font-style: italic;
+  margin-top: 0.5rem;
+  padding-left: 0;
+}
+
 .legend-edge {
   width: 30px;
   height: 2px;
