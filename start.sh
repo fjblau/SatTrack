@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start script for UNOOSA Registry application
-# Starts MongoDB (Docker), Python API backend, and React frontend
+# Starts ArangoDB (Docker), Python API backend, and React frontend
 
 set -e
 
@@ -82,8 +82,8 @@ lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# Start MongoDB (check if container exists first)
-echo "🗄️  Starting MongoDB (Docker) on port 27019..."
+# Start ArangoDB (check if container exists first)
+echo "🗄️  Starting ArangoDB (Docker) on port 8529..."
 cd "$SCRIPT_DIR"
 
 if docker ps -a --format '{{.Names}}' | grep -q '^sattrack$'; then
@@ -93,21 +93,22 @@ else
     echo "Creating new sattrack container..."
     docker run -d \
         --name sattrack \
-        -p 27019:27017 \
-        -v import-data-from-other-instance-5b0d_mongodb_data:/data/db \
+        -p 8529:8529 \
+        -e ARANGO_ROOT_PASSWORD=kessler_dev_password \
+        -v sattrack_arangodb_data:/var/lib/arangodb3 \
         --restart unless-stopped \
-        mongo:7.0
+        arangodb/enterprise:3.12.7.1
 fi
 
-# Wait for MongoDB to be healthy
-echo "Waiting for MongoDB to be ready..."
+# Wait for ArangoDB to be healthy
+echo "Waiting for ArangoDB to be ready..."
 for i in {1..30}; do
-    if docker exec sattrack mongosh --eval "db.adminCommand('ping')" --quiet &> /dev/null; then
-        echo "✅ MongoDB is ready"
+    if curl -s -u root:kessler_dev_password http://localhost:8529/_api/version &> /dev/null; then
+        echo "✅ ArangoDB is ready"
         break
     fi
     if [ $i -eq 30 ]; then
-        echo "❌ MongoDB failed to start within 30 seconds"
+        echo "❌ ArangoDB failed to start within 30 seconds"
         docker logs sattrack
         exit 1
     fi
@@ -161,7 +162,7 @@ echo "=========================================="
 echo ""
 echo "Access the app at: http://localhost:3000"
 echo ""
-echo "MongoDB: localhost:27019"
+echo "ArangoDB: http://localhost:8529"
 echo "API server: http://localhost:8000"
 echo "API docs: http://localhost:8000/docs"
 echo ""
