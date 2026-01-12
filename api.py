@@ -578,27 +578,44 @@ def get_stats_v2(country: Optional[str] = Query(None), status: Optional[str] = Q
 
 def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:
     """Fetch fresh TLE data by NORAD ID from TLE API"""
-    try:
-        url = f"https://tle.ivanstanojevic.me/api/tle/{norad_id}"
-        response = requests.get(url, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            return {
-                "name": data.get("name", f"NORAD {norad_id}"),
-                "line1": data.get("line1"),
-                "line2": data.get("line2"),
-                "source": "tle-api",
-                "date": data.get("date")
-            }
-        elif response.status_code == 404:
+    url = f"https://tle.ivanstanojevic.me/api/tle/{norad_id}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
+    # Retry logic for transient failures
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "name": data.get("name", f"NORAD {norad_id}"),
+                    "line1": data.get("line1"),
+                    "line2": data.get("line2"),
+                    "source": "tle-api",
+                    "date": data.get("date")
+                }
+            elif response.status_code == 404:
+                return None
+            else:
+                print(f"Error fetching from TLE API: {response.status_code}")
+                return None
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if attempt < max_retries - 1:
+                wait_time = 0.5 * (2 ** attempt)  # Exponential backoff: 0.5s, 1s, 2s
+                print(f"Connection error fetching TLE for NORAD {norad_id}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                print(f"Error fetching from TLE API after {max_retries} attempts: {e}")
+                return None
+        except Exception as e:
+            print(f"Error fetching from TLE API: {e}")
             return None
-        else:
-            print(f"Error fetching from TLE API: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"Error fetching from TLE API: {e}")
-        return None
+    
+    return None
 
 
 @app.get("/v2/tle/{norad_id}")
