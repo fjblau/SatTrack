@@ -215,10 +215,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         const elements = {
           nodes: data.data.nodes.map(node => ({
             data: {
-              ...node,
               id: node.id,
               label: node.name || node.identifier,
-              congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : null
+              congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : 'unknown',
+              identifier: node.identifier,
+              name: node.name,
+              orbital_band: node.orbital_band,
+              apogee_km: node.apogee_km,
+              perigee_km: node.perigee_km,
+              inclination_degrees: node.inclination_degrees
             }
           })),
           edges: data.data.edges.map(edge => ({
@@ -226,7 +231,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               id: edge.id,
               source: edge.source,
               target: edge.target,
-              ...edge
+              proximity_score: edge.proximity_score,
+              apogee_diff_km: edge.apogee_diff_km,
+              perigee_diff_km: edge.perigee_diff_km,
+              inclination_diff_degrees: edge.inclination_diff_degrees
             }
           }))
         }
