@@ -711,3 +711,39 @@ def get_graph():
     except Exception as e:
         print(f"Failed to get graph {GRAPH_NAME}: {e}")
         return None
+
+
+def add_edge_indexes(edge_collection_name: str) -> bool:
+    """
+    Add standard indexes to an edge collection for better traversal performance.
+    
+    Note: ArangoDB automatically creates a combined edge index on ['_from', '_to']
+    when an edge collection is created. This function verifies the index exists.
+    
+    Args:
+        edge_collection_name: Name of the edge collection
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        if not db.has_collection(edge_collection_name):
+            print(f"❌ Collection not found: {edge_collection_name}")
+            return False
+        
+        edge_collection = db.collection(edge_collection_name)
+        existing_indexes = edge_collection.indexes()
+        
+        edge_index_exists = any(
+            idx.get('type') == 'edge' for idx in existing_indexes
+        )
+        
+        if edge_index_exists:
+            print(f"✓ Edge index exists on {edge_collection_name} (_from, _to)")
+        else:
+            print(f"⚠ No edge index found on {edge_collection_name}")
+        
+        return True
+    except Exception as e:
+        print(f"Failed to check indexes on {edge_collection_name}: {e}")
+        return False
