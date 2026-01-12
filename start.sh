@@ -10,6 +10,44 @@ echo ""
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Setup Python virtual environment if it doesn't exist
+if [ ! -d "venv" ]; then
+    echo "📦 Creating Python virtual environment..."
+    
+    # Try to find Python 3.11 or higher
+    PYTHON_CMD=""
+    for py in python3.13 python3.12 python3.11 python3; do
+        if command -v $py &> /dev/null; then
+            VERSION=$($py -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -ge 11 ]; then
+                PYTHON_CMD=$py
+                echo "Found $py (version $VERSION)"
+                break
+            fi
+        fi
+    done
+    
+    if [ -z "$PYTHON_CMD" ]; then
+        echo "❌ Error: Python 3.11 or higher is required"
+        echo "Please install Python 3.11+ and try again"
+        exit 1
+    fi
+    
+    $PYTHON_CMD -m venv venv
+    echo "✅ Virtual environment created"
+    
+    echo "📥 Installing Python dependencies..."
+    venv/bin/pip install --upgrade pip setuptools wheel > /dev/null
+    venv/bin/pip install -r requirements.txt
+    echo "✅ Dependencies installed"
+fi
+
+# Use Python from virtual environment
+PYTHON="$SCRIPT_DIR/venv/bin/python"
 
 # Check if Docker is installed and running
 if ! command -v docker &> /dev/null; then
@@ -51,10 +89,21 @@ for i in {1..30}; do
     sleep 1
 done
 
+# Run startup validation (optional - set SKIP_VALIDATION=1 to skip)
+if [ -z "$SKIP_VALIDATION" ]; then
+    echo "🔍 Validating startup requirements..."
+    if ! $PYTHON test_startup.py; then
+        echo ""
+        echo "💡 Tip: Set SKIP_VALIDATION=1 to bypass validation"
+        exit 1
+    fi
+    echo ""
+fi
+
 # Start the API server
 echo "📡 Starting API server on http://127.0.0.1:8000..."
 cd "$SCRIPT_DIR"
-python3 -m uvicorn api:app --host 127.0.0.1 --port 8000 &
+$PYTHON -m uvicorn api:app --host 127.0.0.1 --port 8000 &
 API_PID=$!
 sleep 2
 

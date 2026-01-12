@@ -93,3 +93,114 @@ This script can be called at the beginning of `start.sh` to fail fast with helpf
 - Multiple Python versions installed via different package managers
 - System vs user Python installations
 - Python installed via pyenv, asdf, or other version managers
+
+---
+
+## Implementation Notes
+
+### Changes Made
+
+#### 1. Created `test_startup.py` - Startup Validation Script
+A comprehensive validation script that checks all startup requirements:
+- Python version (≥3.11)
+- Required Python modules (uvicorn, fastapi, etc.)
+- Docker availability and status
+- Node.js and npm availability
+- Port availability (8000, 3000, 27019)
+- Data files presence
+
+The script provides clear error messages and warnings to help users quickly identify and fix startup issues.
+
+#### 2. Updated `start.sh` - Virtual Environment Support
+Modified the startup script to:
+- Automatically detect and create a Python virtual environment if it doesn't exist
+- Search for Python 3.11+ in order of preference: 3.13 → 3.12 → 3.11 → 3.x
+- Install all dependencies in the virtual environment
+- Use the virtual environment's Python for all operations
+- Run startup validation before launching services (can be skipped with `SKIP_VALIDATION=1`)
+
+**Key improvements:**
+- Lines 15-50: Virtual environment creation and dependency installation
+- Line 50: `PYTHON` variable pointing to venv Python
+- Lines 92-101: Startup validation check
+- Line 106: Use `$PYTHON` instead of `python3`
+
+#### 3. Created `test_startup_validation.py` - Unit Tests
+Comprehensive test suite covering:
+- **12 unit tests** for individual validation functions
+- **2 integration tests** for common startup scenarios (missing uvicorn, old Python)
+- Tests for both success and failure paths
+- Mocking of external dependencies (Docker, Node.js, file system)
+
+**Test Coverage:**
+- Python version validation
+- Module availability checks
+- Docker installation and runtime status
+- Node.js and npm availability
+- Port availability warnings
+- Data file warnings
+- End-to-end validation scenarios
+
+All 13 tests pass successfully.
+
+### Test Results
+
+```bash
+$ python3.11 test_startup_validation.py
+test_python_too_old_scenario ... ok
+test_uvicorn_missing_scenario ... ok
+test_data_files_warning ... ok
+test_docker_not_installed ... ok
+test_docker_not_running ... ok
+test_nodejs_not_installed ... ok
+test_port_availability_warning ... ok
+test_python_version_check_failure ... ok
+test_python_version_check_success ... ok
+test_required_modules_check_failure ... ok
+test_required_modules_check_success ... ok
+test_validate_all_failure ... ok
+test_validate_all_success ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.005s
+
+OK
+```
+
+### How to Use
+
+**Normal startup (with validation):**
+```bash
+./start.sh
+```
+
+**Skip validation (if needed):**
+```bash
+SKIP_VALIDATION=1 ./start.sh
+```
+
+**Run validation standalone:**
+```bash
+python3 test_startup.py
+```
+
+**Run unit tests:**
+```bash
+python3 test_startup_validation.py
+```
+
+### Benefits
+
+1. **Fixes the original bug**: Virtual environment ensures dependencies are always available
+2. **Portable**: Works across different Python installations and environments
+3. **Automatic setup**: Creates venv and installs dependencies on first run
+4. **Early detection**: Validates requirements before attempting to start services
+5. **Clear error messages**: Users know exactly what's wrong and how to fix it
+6. **Comprehensive testing**: 13 unit tests ensure validation works correctly
+
+### Future Improvements
+
+- Add `requirements-dev.txt` for development dependencies
+- Consider adding a `setup.py` or `pyproject.toml` for proper package management
+- Add CI/CD integration to run startup tests automatically
+- Create a `Makefile` for common tasks (setup, test, run, clean)
