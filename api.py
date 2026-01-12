@@ -27,7 +27,7 @@ except ImportError:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not connect_mongodb():
-        raise RuntimeError("Failed to connect to MongoDB. MongoDB is required.")
+        raise RuntimeError("Failed to connect to ArangoDB. ArangoDB is required.")
     yield
     disconnect_mongodb()
 

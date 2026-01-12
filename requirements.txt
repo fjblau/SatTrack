@@ -1,6 +1,6 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
-pymongo>=4.0.0
+python-arango>=7.8.0
 pandas>=2.2.2
 numpy>=2.1.0
 requests>=2.32.3
