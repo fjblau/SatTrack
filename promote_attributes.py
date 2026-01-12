@@ -160,7 +160,8 @@ def normalize_field_path(field_path: str) -> str:
         return field_path
     
     if field_path.startswith("kaggle.") or field_path.startswith("unoosa.") or \
-       field_path.startswith("celestrak.") or field_path.startswith("spacetrack."):
+       field_path.startswith("celestrak.") or field_path.startswith("spacetrack.") or \
+       field_path.startswith("tleapi."):
         return f"sources.{field_path}"
     
     return field_path

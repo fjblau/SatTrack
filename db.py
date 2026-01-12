@@ -191,7 +191,7 @@ def create_satellite_document(
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "last_updated_at": datetime.now(timezone.utc).isoformat(),
                 "sources_available": [source],
-                "source_priority": ["unoosa", "celestrak", "spacetrack", "kaggle"]
+                "source_priority": ["unoosa", "celestrak", "tleapi", "kaggle"]
             }
         }
         
@@ -204,9 +204,9 @@ def create_satellite_document(
 def update_canonical(doc: Dict[str, Any]):
     """
     Update canonical section from source nodes based on priority.
-    Source priority: UNOOSA > CelesTrak > Space-Track > Kaggle
+    Source priority: UNOOSA > CelesTrak > TLE API > Kaggle
     """
-    source_priority = doc["metadata"].get("source_priority", ["unoosa", "celestrak", "spacetrack", "kaggle"])
+    source_priority = doc["metadata"].get("source_priority", ["unoosa", "celestrak", "tleapi", "kaggle"])
     sources = doc["sources"]
     
     source_priority = [s for s in source_priority if s in sources] + [s for s in sources if s not in source_priority]
