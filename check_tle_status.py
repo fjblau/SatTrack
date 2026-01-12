@@ -19,5 +19,8 @@ if sample:
     print(f'TLE updated: {tle.get("updated_at", "N/A")}')
     print(f'Sources: {list(sample.get("sources", {}).keys())}')
     
-sources_with_tle = target_col.count_documents({'sources.spacetrack.tle_line1': {'$exists': True}})
-print(f'\nSatellites with spacetrack TLE source: {sources_with_tle}')
+sources_with_tle = target_col.count_documents({'sources.tleapi.tle_line1': {'$exists': True}})
+print(f'\nSatellites with tleapi TLE source: {sources_with_tle}')
+
+sources_with_tle_legacy = target_col.count_documents({'sources.spacetrack.tle_line1': {'$exists': True}})
+print(f'Satellites with spacetrack TLE source (legacy): {sources_with_tle_legacy}')

@@ -577,58 +577,44 @@ def get_stats_v2(country: Optional[str] = Query(None), status: Optional[str] = Q
 
 
 def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:
-    """Fetch fresh TLE data by NORAD ID from Space-Track"""
-    
-    space_track_user = os.getenv("SPACE_TRACK_USER")
-    space_track_pass = os.getenv("SPACE_TRACK_PASS")
-    
-    if space_track_user and space_track_pass:
-        try:
-            session = requests.Session()
-            
-            login_url = "https://www.space-track.org/ajaxauth/login"
-            login_payload = {"identity": space_track_user, "password": space_track_pass}
-            
-            login_response = session.post(login_url, data=login_payload, timeout=10)
-            
-            if login_response.status_code == 200:
-                space_track_url = f"https://www.space-track.org/basicspacedata/query/class/gp/NORAD_CAT_ID/{norad_id}/orderby/TLE_LINE1%20ASC/format/tle"
-                response = session.get(space_track_url, timeout=10)
-                
-                if response.status_code == 200 and response.text.strip():
-                    lines = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
-                    
-                    if len(lines) >= 2:
-                        tle_line1 = lines[0]
-                        tle_line2 = lines[1] if len(lines) > 1 else ""
-                        
-                        if tle_line1.startswith('1 ') and len(tle_line1) >= 69:
-                            return {
-                                "name": f"NORAD {norad_id}",
-                                "line1": tle_line1,
-                                "line2": tle_line2,
-                                "source": "space-track"
-                            }
-        except Exception as e:
-            print(f"Error fetching from Space-Track: {e}")
-    
-    return None
+    """Fetch fresh TLE data by NORAD ID from TLE API"""
+    try:
+        url = f"https://tle.ivanstanojevic.me/api/tle/{norad_id}"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "name": data.get("name", f"NORAD {norad_id}"),
+                "line1": data.get("line1"),
+                "line2": data.get("line2"),
+                "source": "tle-api",
+                "date": data.get("date")
+            }
+        elif response.status_code == 404:
+            return None
+        else:
+            print(f"Error fetching from TLE API: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"Error fetching from TLE API: {e}")
+        return None
 
 
 @app.get("/v2/tle/{norad_id}")
 def get_current_tle(norad_id: str):
-    """Get current TLE data from CelesTrak for a satellite by NORAD ID"""
+    """Get current TLE data from TLE API for a satellite by NORAD ID"""
     tle = fetch_tle_by_norad_id(norad_id)
     
     if tle:
         return {
             "data": tle,
-            "source": tle.get("source", "celestrak"),
+            "source": tle.get("source", "tle-api"),
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     else:
         return {
             "data": None,
-            "message": f"TLE data not found for NORAD ID {norad_id}. Recent satellites may require Space-Track API authentication.",
+            "message": f"TLE data not found for NORAD ID {norad_id}.",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }, 200

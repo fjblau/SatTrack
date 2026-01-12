@@ -61,3 +61,9 @@ Write a summary report to `{@artifacts_path}/report.md` describing:
 - Key locations where the API is used
 - Configuration requirements
 - Recommendations (if any)
+
+### [x] Step: Implement the migration
+<!-- chat-id: 59e146ef-1b93-45bd-b602-e8aa6ebf03dd -->
+<!-- agent: ZEN_CLI -->
+
+Do the migration to https://tle.ivanstanojevic.me API
