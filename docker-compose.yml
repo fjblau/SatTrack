@@ -3,7 +3,7 @@ version: '3.8'
 services:
   mongodb:
     image: mongo:7.0
-    container_name: kessler-mongodb
+    container_name: sattrack
     restart: unless-stopped
     ports:
       - "27018:27017"
