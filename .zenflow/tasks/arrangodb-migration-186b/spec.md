@@ -23,7 +23,8 @@ However, the scope is contained within the database layer with no UI changes req
 - **Collection**: `satellites`
 
 ### Target Stack
-- **Database**: ArangoDB Community Edition (latest stable: 3.11+)
+- **Database**: ArangoDB Enterprise Edition 3.12.7.1
+- **Docker Image**: `arangodb/enterprise:3.12.7.1`
 - **Driver**: `python-arango` (Python driver for ArangoDB)
 - **Connection**: `http://localhost:8529` (ArangoDB default)
 - **Database Name**: `kessler`
@@ -319,7 +320,7 @@ Compare query performance:
 
 ### New Dependencies
 - `python-arango>=7.8.0` - Official Python driver for ArangoDB
-- ArangoDB Community Edition 3.11+ (Docker image: `arangodb:latest`)
+- ArangoDB Enterprise Edition 3.12.7.1 (Docker image: `arangodb/enterprise:3.12.7.1`)
 
 ### Removed Dependencies
 - `pymongo>=4.0.0`

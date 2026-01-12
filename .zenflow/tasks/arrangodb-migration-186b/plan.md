@@ -35,7 +35,7 @@ Do not make assumptions on important decisions — get clarification first.
 ### [ ] Step 1: Infrastructure Setup - Docker & Configuration
 
 Update Docker and configuration files for ArangoDB:
-1. Update `docker-compose.yml`: Replace MongoDB service with ArangoDB Community Edition
+1. Update `docker-compose.yml`: Replace MongoDB service with ArangoDB Enterprise 3.12.7.1 (`arangodb/enterprise:3.12.7.1`)
 2. Update `.env.example`: Replace MONGO_URI with ARANGO_HOST, ARANGO_USER, ARANGO_PASSWORD
 3. Create `.env` file with local credentials
 4. Test: `docker-compose up -d` and verify ArangoDB Web UI accessible at http://localhost:8529
