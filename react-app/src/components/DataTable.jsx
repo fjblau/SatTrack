@@ -33,7 +33,7 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
             if (selectedObject?.['Registration Number'] === obj['Registration Number']) {
               classNames.push('selected')
             }
-            if (obj['Status'] === 'decayed') {
+            if (obj['Status'] === 'decayed' || obj['Status'] === 'deorbited') {
               classNames.push('decayed')
             }
             return (
