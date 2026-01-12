@@ -5,7 +5,7 @@
 }
 
 .graph-sidebar {
-  width: 320px;
+  width: 380px;
   background: #f8f9fa;
   border-right: 1px solid #dee2e6;
   display: flex;
@@ -21,15 +21,16 @@
 
 .graph-type-selector button {
   flex: 1;
-  padding: 1rem;
+  padding: 0.75rem 0.5rem;
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 500;
   color: #6c757d;
   transition: all 0.2s;
   border-bottom: 3px solid transparent;
+  white-space: nowrap;
 }
 
 .graph-type-selector button:hover {

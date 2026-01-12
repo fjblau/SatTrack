@@ -217,7 +217,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             data: {
               id: node.id,
               label: node.name || node.identifier,
-              congestion_risk: node.congestion_risk,
+              congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : null,
               ...node
             }
           })),
