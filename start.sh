@@ -82,22 +82,33 @@ lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# Start MongoDB via Docker Compose
+# Start MongoDB (check if container exists first)
 echo "🗄️  Starting MongoDB (Docker) on port 27019..."
 cd "$SCRIPT_DIR"
-docker compose up -d mongodb
+
+if docker ps -a --format '{{.Names}}' | grep -q '^sattrack$'; then
+    echo "Starting existing sattrack container..."
+    docker start sattrack 2>/dev/null || true
+else
+    echo "Creating new sattrack container..."
+    docker run -d \
+        --name sattrack \
+        -p 27019:27017 \
+        -v import-data-from-other-instance-5b0d_mongodb_data:/data/db \
+        --restart unless-stopped \
+        mongo:7.0
+fi
 
 # Wait for MongoDB to be healthy
 echo "Waiting for MongoDB to be ready..."
 for i in {1..30}; do
-    if docker compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" --quiet &> /dev/null; then
+    if docker exec sattrack mongosh --eval "db.adminCommand('ping')" --quiet &> /dev/null; then
         echo "✅ MongoDB is ready"
         break
     fi
     if [ $i -eq 30 ]; then
         echo "❌ MongoDB failed to start within 30 seconds"
-        docker compose logs mongodb
-        docker compose down
+        docker logs sattrack
         exit 1
     fi
     sleep 1
@@ -162,8 +173,7 @@ cleanup() {
     echo ""
     echo "Stopping services..."
     kill $API_PID $REACT_PID 2>/dev/null || true
-    cd "$SCRIPT_DIR"
-    docker compose down
+    docker stop sattrack 2>/dev/null || true
     exit 0
 }
 
