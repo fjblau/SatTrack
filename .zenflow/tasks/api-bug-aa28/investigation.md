@@ -16,13 +16,17 @@ Error fetching from TLE API: ('Connection aborted.', RemoteDisconnected('Remote 
 - **Endpoint**: `/v2/tle/{norad_id}` (lines 604-620)
 
 ### Problem
-The external TLE API (`https://tle.ivanstanojevic.me/api/tle/{norad_id}`) is unreliable and intermittently closes connections without responding. This causes `requests.exceptions.ConnectionError` with the specific error: `RemoteDisconnected('Remote end closed connection without response')`.
+**The TLE API server blocks requests with Python's default User-Agent header.** The external TLE API (`https://tle.ivanstanojevic.me/api/tle/{norad_id}`) closes connections when requests are made without a browser User-Agent, causing `requests.exceptions.ConnectionError` with `RemoteDisconnected('Remote end closed connection without response')`.
+
+**Verification:**
+- ✓ curl works (uses curl/X.X User-Agent)
+- ✗ `requests.get()` without headers fails
+- ✓ `requests.get()` with browser User-Agent works
 
 ### Current Implementation Issues
-1. **No retry mechanism**: Single request attempt without retries for transient failures
-2. **No connection pooling**: Each request creates a new connection instead of reusing sessions
+1. **Missing User-Agent header**: Requests use default Python-requests User-Agent which the server blocks
+2. **No retry mechanism**: Single request attempt without retries for transient failures
 3. **Generic error handling**: All exceptions caught and logged, but no distinction between transient (retryable) and permanent errors
-4. **Silent failure**: Errors are only printed to stdout/logs, endpoint returns 200 OK even on failure
 
 ### Affected Components
 - **Primary**: `/v2/tle/{norad_id}` endpoint in `api.py:604-620`
@@ -30,28 +34,25 @@ The external TLE API (`https://tle.ivanstanojevic.me/api/tle/{norad_id}`) is unr
 
 ## Proposed Solution
 
-### 1. Add Retry Logic with Exponential Backoff
-Implement retry mechanism for transient network errors:
-- Use `requests` with retry adapter or manual retry loop
-- 3 retry attempts with exponential backoff (0.5s, 1s, 2s)
+### 1. Add User-Agent Header (PRIMARY FIX)
+Set a browser User-Agent header in all requests to TLE API:
+```python
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
+```
+
+### 2. Add Retry Logic (SECONDARY - DEFENSE IN DEPTH)
+Implement retry mechanism for remaining transient failures:
+- 2-3 retry attempts with exponential backoff
 - Only retry on connection errors and 5xx server errors
 - Do not retry on 404 (not found) or 400 (bad request)
-
-### 2. Implement Session Reuse
-Use a shared `requests.Session` object:
-- Connection pooling reduces overhead
-- Better handling of keep-alive connections
-- Can configure default timeout and retry behavior
 
 ### 3. Improve Error Handling
 - Distinguish between:
   - **404**: Satellite TLE not available (expected, return None)
-  - **Connection errors**: Transient, retry
-  - **Timeout errors**: Transient, retry
+  - **Connection errors**: Retry with headers
   - **Other errors**: Log and return None
-
-### 4. Optional: Add Circuit Breaker (Future Enhancement)
-If TLE API continues to fail frequently, implement circuit breaker pattern to avoid overwhelming the failing service.
 
 ## Implementation Plan
 
@@ -79,3 +80,20 @@ Apply same fix to maintain consistency, though this is a background import scrip
 1. **Unit test**: Mock `requests.get` to simulate connection errors and verify retry behavior
 2. **Integration test**: Test against actual TLE API (may be flaky)
 3. **Manual test**: Verify endpoint still works for valid NORAD IDs after fix
+
+## Implementation Notes
+
+### Changes Made
+1. **api.py:579-618**: Updated `fetch_tle_by_norad_id` 
+   - Added User-Agent header with browser signature
+   - Implemented retry logic with exponential backoff (3 attempts: 0.5s, 1s, 2s)
+   - Improved error handling to distinguish connection errors from other errors
+
+2. **import_tle_api.py:22-40**: Updated `fetch_tle_from_api`
+   - Added User-Agent header for consistency
+
+### Test Results
+✓ Test with NORAD ID 58023 (PRETTY): Success  
+✓ Test with NORAD ID 25544 (ISS): Success  
+✓ Test with invalid NORAD ID 99999999: Correctly returns None  
+✓ No more "Remote end closed connection" errors

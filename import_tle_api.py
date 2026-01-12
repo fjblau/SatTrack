@@ -21,9 +21,13 @@ except ImportError:
 
 def fetch_tle_from_api(norad_id):
     """Fetch TLE data from TLE API."""
+    url = f"https://tle.ivanstanojevic.me/api/tle/{norad_id}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
     try:
-        url = f"https://tle.ivanstanojevic.me/api/tle/{norad_id}"
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
