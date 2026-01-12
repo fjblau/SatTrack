@@ -52,7 +52,6 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 ---
 
 ### [x] Step: Phase 1 - Foundation: Database Graph Structure
-<!-- chat-id: CURRENT -->
 
 Create ArangoDB graph collections and infrastructure:
 1. ✓ Create edge collections: `constellation_membership`, `registration_links`, `orbital_proximity`
@@ -75,7 +74,6 @@ Create ArangoDB graph collections and infrastructure:
 ---
 
 ### [x] Step: Phase 1 - Foundation: Build Registration Document Network
-<!-- chat-id: CURRENT -->
 
 Populate registration document graph:
 1. ✓ Extract unique registration documents from satellite data (746 unique docs)
@@ -98,7 +96,6 @@ Populate registration document graph:
 ---
 
 ### [x] Step: Phase 1 - Foundation: Build Constellation Membership Graph
-<!-- chat-id: CURRENT -->
 
 Create constellation network edges:
 1. ✓ Extract constellation data from `sources.kaggle.satellite_constellation` (14,890 satellites, 6 constellations)
@@ -125,6 +122,7 @@ Create constellation network edges:
 ---
 
 ### [ ] Step: Phase 1 - Foundation: Basic Graph API Endpoints
+<!-- chat-id: CURRENT -->
 
 Create initial FastAPI endpoints for graphs:
 1. `GET /api/graphs/constellation/{name}` - Get constellation members
