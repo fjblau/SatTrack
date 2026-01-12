@@ -82,7 +82,44 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               'line-color': '#95a5a6',
               'target-arrow-color': '#95a5a6',
               'target-arrow-shape': 'triangle',
-              'curve-style': 'bezier'
+              'curve-style': 'bezier',
+              'label': 'data(edge_label)',
+              'font-size': '8px',
+              'text-background-color': '#fff',
+              'text-background-opacity': 0.8,
+              'text-background-padding': '2px'
+            }
+          },
+          {
+            selector: 'edge[proximity_score < 0.1]',
+            style: {
+              'line-color': '#c0392b',
+              'target-arrow-color': '#c0392b',
+              'width': 4
+            }
+          },
+          {
+            selector: 'edge[proximity_score >= 0.1][proximity_score < 0.5]',
+            style: {
+              'line-color': '#e74c3c',
+              'target-arrow-color': '#e74c3c',
+              'width': 3
+            }
+          },
+          {
+            selector: 'edge[proximity_score >= 0.5][proximity_score < 1.5]',
+            style: {
+              'line-color': '#f39c12',
+              'target-arrow-color': '#f39c12',
+              'width': 2.5
+            }
+          },
+          {
+            selector: 'edge[proximity_score >= 1.5]',
+            style: {
+              'line-color': '#95a5a6',
+              'target-arrow-color': '#95a5a6',
+              'width': 2
             }
           },
           {
@@ -226,17 +263,26 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               inclination_degrees: node.inclination_degrees
             }
           })),
-          edges: data.data.edges.map(edge => ({
-            data: {
-              id: edge.id,
-              source: edge.source,
-              target: edge.target,
-              proximity_score: edge.proximity_score,
-              apogee_diff_km: edge.apogee_diff_km,
-              perigee_diff_km: edge.perigee_diff_km,
-              inclination_diff_degrees: edge.inclination_diff_degrees
+          edges: data.data.edges.map(edge => {
+            const maxDiff = Math.max(
+              edge.apogee_diff_km || 0,
+              edge.perigee_diff_km || 0
+            )
+            const edgeLabel = `${maxDiff.toFixed(1)}km`
+            
+            return {
+              data: {
+                id: edge.id,
+                source: edge.source,
+                target: edge.target,
+                proximity_score: edge.proximity_score,
+                edge_label: edgeLabel,
+                apogee_diff_km: edge.apogee_diff_km,
+                perigee_diff_km: edge.perigee_diff_km,
+                inclination_diff_degrees: edge.inclination_diff_degrees
+              }
             }
-          }))
+          })
         }
         
         cyRef.current.elements().remove()
@@ -337,25 +383,43 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         <h4>Legend</h4>
         {graphType === 'proximity' ? (
           <>
-            <div className="legend-item">
-              <span className="legend-node low-risk"></span>
-              <span>Low Congestion</span>
+            <div className="legend-section">
+              <h5>Satellites</h5>
+              <div className="legend-item">
+                <span className="legend-node low-risk"></span>
+                <span>Low Congestion</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node medium-risk"></span>
+                <span>Medium Congestion</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node high-risk"></span>
+                <span>High Congestion</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node critical-risk"></span>
+                <span>Critical Congestion</span>
+              </div>
             </div>
-            <div className="legend-item">
-              <span className="legend-node medium-risk"></span>
-              <span>Medium Congestion</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-node high-risk"></span>
-              <span>High Congestion</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-node critical-risk"></span>
-              <span>Critical Congestion</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-edge"></span>
-              <span>Proximity Link</span>
+            <div className="legend-section">
+              <h5>Proximity (separation)</h5>
+              <div className="legend-item">
+                <span className="legend-edge-thick critical"></span>
+                <span>Very Close (&lt;5km)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick high"></span>
+                <span>Close (5-15km)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-medium"></span>
+                <span>Moderate (15-30km)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge"></span>
+                <span>Distant (30-50km)</span>
+              </div>
             </div>
           </>
         ) : (

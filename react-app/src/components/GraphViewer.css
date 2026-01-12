@@ -146,6 +146,25 @@
   background-color: #c0392b;
 }
 
+.legend-section {
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.legend-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.legend-section h5 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
 .legend-edge {
   width: 30px;
   height: 2px;
@@ -164,4 +183,60 @@
   border-left: 6px solid #95a5a6;
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
+}
+
+.legend-edge-medium {
+  width: 30px;
+  height: 2.5px;
+  background-color: #f39c12;
+  display: inline-block;
+  position: relative;
+}
+
+.legend-edge-medium::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: -3.5px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid #f39c12;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.legend-edge-thick {
+  width: 30px;
+  height: 3px;
+  display: inline-block;
+  position: relative;
+}
+
+.legend-edge-thick.high {
+  background-color: #e74c3c;
+}
+
+.legend-edge-thick.critical {
+  background-color: #c0392b;
+  height: 4px;
+}
+
+.legend-edge-thick::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: -3.5px;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.legend-edge-thick.high::after {
+  border-left: 6px solid #e74c3c;
+}
+
+.legend-edge-thick.critical::after {
+  border-left: 6px solid #c0392b;
+  top: -3px;
 }
