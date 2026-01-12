@@ -6,8 +6,10 @@ function GraphExplorer() {
   const [graphType, setGraphType] = useState('constellation')
   const [constellations, setConstellations] = useState([])
   const [documents, setDocuments] = useState([])
+  const [orbitalBands, setOrbitalBands] = useState([])
   const [selectedConstellation, setSelectedConstellation] = useState('')
   const [selectedDocument, setSelectedDocument] = useState('')
+  const [selectedOrbitalBand, setSelectedOrbitalBand] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -23,12 +25,16 @@ function GraphExplorer() {
       if (data.data) {
         setConstellations(data.data.constellations || [])
         setDocuments(data.data.top_registration_documents || [])
+        setOrbitalBands(data.data.proximity_by_orbital_band || [])
         
         if (data.data.constellations && data.data.constellations.length > 0) {
           setSelectedConstellation(data.data.constellations[0].name)
         }
         if (data.data.top_registration_documents && data.data.top_registration_documents.length > 0) {
           setSelectedDocument(data.data.top_registration_documents[0].key)
+        }
+        if (data.data.proximity_by_orbital_band && data.data.proximity_by_orbital_band.length > 0) {
+          setSelectedOrbitalBand(data.data.proximity_by_orbital_band[0].orbital_band)
         }
       }
     } catch (error) {
@@ -53,6 +59,12 @@ function GraphExplorer() {
             onClick={() => setGraphType('registration')}
           >
             Registration Docs
+          </button>
+          <button 
+            className={graphType === 'proximity' ? 'active' : ''}
+            onClick={() => setGraphType('proximity')}
+          >
+            Orbital Proximity
           </button>
         </div>
 
@@ -100,6 +112,29 @@ function GraphExplorer() {
             )}
           </div>
         )}
+
+        {graphType === 'proximity' && (
+          <div className="selector-content">
+            <h3>Orbital Proximity</h3>
+            <p className="section-description">Satellites with similar orbits (within ±50km apogee/perigee, ±5° inclination)</p>
+            {loading ? (
+              <p>Loading...</p>
+            ) : (
+              <div className="item-list">
+                {orbitalBands.map((band) => (
+                  <div
+                    key={band.orbital_band}
+                    className={`list-item ${selectedOrbitalBand === band.orbital_band ? 'selected' : ''}`}
+                    onClick={() => setSelectedOrbitalBand(band.orbital_band)}
+                  >
+                    <div className="item-name">{band.orbital_band}</div>
+                    <div className="item-count">{band.edge_count.toLocaleString()} proximity edges</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="graph-main">
@@ -107,6 +142,7 @@ function GraphExplorer() {
           graphType={graphType}
           selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
           selectedDocument={graphType === 'registration' ? selectedDocument : null}
+          selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
         />
       </div>
     </div>

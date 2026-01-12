@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -52,6 +52,30 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument }) {
             }
           },
           {
+            selector: 'node[congestion_risk="low"]',
+            style: {
+              'background-color': '#27ae60'
+            }
+          },
+          {
+            selector: 'node[congestion_risk="medium"]',
+            style: {
+              'background-color': '#f39c12'
+            }
+          },
+          {
+            selector: 'node[congestion_risk="high"]',
+            style: {
+              'background-color': '#e74c3c'
+            }
+          },
+          {
+            selector: 'node[congestion_risk="critical"]',
+            style: {
+              'background-color': '#c0392b'
+            }
+          },
+          {
             selector: 'edge',
             style: {
               'width': 2,
@@ -94,8 +118,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument }) {
       loadConstellationGraph(selectedConstellation)
     } else if (graphType === 'registration' && selectedDocument) {
       loadRegistrationGraph(selectedDocument)
+    } else if (graphType === 'proximity' && selectedOrbitalBand) {
+      loadProximityGraph(selectedOrbitalBand)
     }
-  }, [graphType, selectedConstellation, selectedDocument])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -177,6 +203,46 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument }) {
     }
   }
 
+  const loadProximityGraph = async (orbitalBand) => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const response = await fetch(`/v2/graphs/orbital-proximity/${encodeURIComponent(orbitalBand)}?limit=100`)
+      const data = await response.json()
+      
+      if (data.data && data.data.nodes && data.data.nodes.length > 0) {
+        const elements = {
+          nodes: data.data.nodes.map(node => ({
+            data: {
+              id: node.id,
+              label: node.name || node.identifier,
+              congestion_risk: node.congestion_risk,
+              ...node
+            }
+          })),
+          edges: data.data.edges.map(edge => ({
+            data: {
+              id: edge.id,
+              source: edge.source,
+              target: edge.target,
+              ...edge
+            }
+          }))
+        }
+        
+        cyRef.current.elements().remove()
+        cyRef.current.add(elements)
+        applyLayout(layout)
+        setStats(data.data.stats)
+      }
+    } catch (error) {
+      console.error('Error loading proximity graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const applyLayout = (layoutName) => {
     if (!cyRef.current) return
     
@@ -249,6 +315,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument }) {
             {stats.satellites && <span>Satellites: {stats.satellites}</span>}
             {stats.members !== undefined && <span>Members: {stats.members}</span>}
             {stats.has_hub && <span>⭐ Has Hub</span>}
+            {stats.total_proximity_edges !== undefined && <span>Total Proximity Edges: {stats.total_proximity_edges.toLocaleString()}</span>}
+            {stats.edges_shown !== undefined && <span>Showing: {stats.edges_shown} edges</span>}
           </div>
         )}
       </div>
@@ -259,22 +327,49 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument }) {
       
       <div className="graph-legend">
         <h4>Legend</h4>
-        <div className="legend-item">
-          <span className="legend-node satellite"></span>
-          <span>Satellite</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-node hub"></span>
-          <span>Hub Satellite</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-node document"></span>
-          <span>Registration Document</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-edge"></span>
-          <span>Relationship</span>
-        </div>
+        {graphType === 'proximity' ? (
+          <>
+            <div className="legend-item">
+              <span className="legend-node low-risk"></span>
+              <span>Low Congestion</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node medium-risk"></span>
+              <span>Medium Congestion</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node high-risk"></span>
+              <span>High Congestion</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node critical-risk"></span>
+              <span>Critical Congestion</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-edge"></span>
+              <span>Proximity Link</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="legend-item">
+              <span className="legend-node satellite"></span>
+              <span>Satellite</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node hub"></span>
+              <span>Hub Satellite</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node document"></span>
+              <span>Registration Document</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-edge"></span>
+              <span>Relationship</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

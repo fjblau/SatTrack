@@ -130,6 +130,22 @@
   height: 20px;
 }
 
+.legend-node.low-risk {
+  background-color: #27ae60;
+}
+
+.legend-node.medium-risk {
+  background-color: #f39c12;
+}
+
+.legend-node.high-risk {
+  background-color: #e74c3c;
+}
+
+.legend-node.critical-risk {
+  background-color: #c0392b;
+}
+
 .legend-edge {
   width: 30px;
   height: 2px;

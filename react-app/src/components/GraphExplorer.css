@@ -55,6 +55,13 @@
   color: #495057;
 }
 
+.section-description {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin: -0.5rem 0 1rem 0;
+  line-height: 1.4;
+}
+
 .item-list {
   display: flex;
   flex-direction: column;

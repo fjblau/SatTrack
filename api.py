@@ -18,7 +18,7 @@ from db import (
     count_satellites, get_all_countries, get_all_statuses, get_all_orbital_bands, 
     get_all_congestion_risks, create_satellite_document,
     COLLECTION_NAME, COLLECTION_REG_DOCS, EDGE_COLLECTION_CONSTELLATION,
-    EDGE_COLLECTION_REGISTRATION, GRAPH_NAME
+    EDGE_COLLECTION_REGISTRATION, EDGE_COLLECTION_PROXIMITY, GRAPH_NAME
 )
 
 try:
@@ -847,6 +847,7 @@ def get_graph_stats():
     LET reg_doc_count = LENGTH({COLLECTION_REG_DOCS})
     LET constellation_edges = LENGTH({EDGE_COLLECTION_CONSTELLATION})
     LET registration_edges = LENGTH({EDGE_COLLECTION_REGISTRATION})
+    LET proximity_edges = LENGTH({EDGE_COLLECTION_PROXIMITY})
     
     LET constellations = (
         FOR edge IN {EDGE_COLLECTION_CONSTELLATION}
@@ -870,6 +871,16 @@ def get_graph_stats():
             }}
     )
     
+    LET proximity_by_band = (
+        FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+            COLLECT band = edge.orbital_band WITH COUNT INTO count
+            SORT count DESC
+            RETURN {{
+                orbital_band: band,
+                edge_count: count
+            }}
+    )
+    
     RETURN {{
         nodes: {{
             satellites: satellite_count,
@@ -879,16 +890,19 @@ def get_graph_stats():
         edges: {{
             constellation_membership: constellation_edges,
             registration_links: registration_edges,
-            total: constellation_edges + registration_edges
+            orbital_proximity: proximity_edges,
+            total: constellation_edges + registration_edges + proximity_edges
         }},
         constellations: constellations,
         top_registration_documents: top_reg_docs,
+        proximity_by_orbital_band: proximity_by_band,
         graph_name: '{GRAPH_NAME}',
         collections: {{
             satellites: '{COLLECTION_NAME}',
             registration_documents: '{COLLECTION_REG_DOCS}',
             constellation_edges: '{EDGE_COLLECTION_CONSTELLATION}',
-            registration_edges: '{EDGE_COLLECTION_REGISTRATION}'
+            registration_edges: '{EDGE_COLLECTION_REGISTRATION}',
+            proximity_edges: '{EDGE_COLLECTION_PROXIMITY}'
         }}
     }}
     """
@@ -900,3 +914,102 @@ def get_graph_stats():
         "data": results[0] if results else {},
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+@app.get("/v2/graphs/orbital-proximity/{orbital_band}")
+def get_orbital_proximity_graph(
+    orbital_band: str,
+    limit: Optional[int] = Query(default=50, description="Limit number of satellites returned")
+):
+    """
+    Get orbital proximity graph for a specific orbital band.
+    
+    Returns satellites and their proximity relationships (satellites with similar orbits).
+    """
+    query = f"""
+    LET proximity_edges = (
+        FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+            FILTER edge.orbital_band == @orbital_band
+            LIMIT @limit
+            RETURN edge
+    )
+    
+    LET satellite_ids = UNIQUE(FLATTEN(
+        FOR edge IN proximity_edges
+            RETURN [edge._from, edge._to]
+    ))
+    
+    LET satellites = (
+        FOR sat_id IN satellite_ids
+            LET sat = DOCUMENT(sat_id)
+            RETURN {{
+                id: sat._id,
+                key: sat._key,
+                identifier: sat.identifier,
+                name: sat.canonical.name,
+                orbital_band: sat.canonical.orbital_band,
+                apogee_km: sat.canonical.orbit.apogee_km,
+                perigee_km: sat.canonical.orbit.perigee_km,
+                inclination_degrees: sat.canonical.orbit.inclination_degrees,
+                congestion_risk: sat.canonical.congestion_risk
+            }}
+    )
+    
+    LET edges = (
+        FOR edge IN proximity_edges
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                proximity_score: edge.proximity_score,
+                apogee_diff_km: edge.apogee_diff_km,
+                perigee_diff_km: edge.perigee_diff_km,
+                inclination_diff_degrees: edge.inclination_diff_degrees
+            }}
+    )
+    
+    LET total_proximity_edges = LENGTH(
+        FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+            FILTER edge.orbital_band == @orbital_band
+            RETURN 1
+    )
+    
+    RETURN {{
+        orbital_band: @orbital_band,
+        nodes: satellites,
+        edges: edges,
+        stats: {{
+            total_satellites: LENGTH(satellites),
+            total_proximity_edges: total_proximity_edges,
+            edges_shown: LENGTH(edges)
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(
+        query,
+        bind_vars={'orbital_band': orbital_band, 'limit': limit}
+    )
+    
+    results = list(cursor)
+    
+    if results and results[0]['nodes']:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "orbital_band": orbital_band,
+                "nodes": [],
+                "edges": [],
+                "stats": {
+                    "total_satellites": 0,
+                    "total_proximity_edges": 0,
+                    "edges_shown": 0
+                }
+            },
+            "message": f"No proximity data found for orbital band '{orbital_band}'",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
