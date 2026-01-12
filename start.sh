@@ -54,7 +54,7 @@ done
 # Start the API server
 echo "📡 Starting API server on http://127.0.0.1:8000..."
 cd "$SCRIPT_DIR"
-/usr/local/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -m uvicorn api:app --host 127.0.0.1 --port 8000 &
+python3 -m uvicorn api:app --host 127.0.0.1 --port 8000 &
 API_PID=$!
 sleep 2
 
