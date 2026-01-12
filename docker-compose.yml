@@ -1,23 +1,27 @@
 version: '3.8'
 
 services:
-  mongodb:
-    image: mongo:7.0
+  arangodb:
+    image: arangodb/enterprise:3.12.7.1
     container_name: sattrack
     restart: unless-stopped
     ports:
-      - "27019:27017"
+      - "8529:8529"
     volumes:
-      - mongodb_data:/data/db
+      - arangodb_data:/var/lib/arangodb3
+      - arangodb_apps:/var/lib/arangodb3-apps
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     environment:
-      - MONGO_INITDB_DATABASE=kessler
+      - ARANGO_ROOT_PASSWORD=kessler_dev_password
+      - ARANGO_NO_AUTH=0
 
 volumes:
-  mongodb_data:
+  arangodb_data:
+    driver: local
+  arangodb_apps:
     driver: local

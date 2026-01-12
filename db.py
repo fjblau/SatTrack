@@ -1,10 +1,12 @@
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure
+from arango import ArangoClient
+from arango.exceptions import DatabaseCreateError, CollectionCreateError, DocumentInsertError, ArangoServerError
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 import os
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27019")
+ARANGO_HOST = os.getenv("ARANGO_HOST", "http://localhost:8529")
+ARANGO_USER = os.getenv("ARANGO_USER", "root")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "kessler_dev_password")
 DB_NAME = "kessler"
 COLLECTION_NAME = "satellites"
 
@@ -14,27 +16,36 @@ satellites_collection = None
 
 
 def connect_mongodb():
-    """Initialize MongoDB connection"""
+    """Initialize ArangoDB connection (kept name for backward compatibility)"""
     global client, db, satellites_collection
     try:
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
-        client.admin.command('ping')
-        db = client[DB_NAME]
-        satellites_collection = db[COLLECTION_NAME]
+        client = ArangoClient(hosts=ARANGO_HOST)
         
-        satellites_collection.create_index("canonical.international_designator", unique=False)
-        satellites_collection.create_index("canonical.registration_number", unique=False)
-        satellites_collection.create_index("identifier", unique=True)
+        sys_db = client.db('_system', username=ARANGO_USER, password=ARANGO_PASSWORD)
         
-        print(f"Connected to MongoDB: {DB_NAME}.{COLLECTION_NAME}")
+        if not sys_db.has_database(DB_NAME):
+            sys_db.create_database(DB_NAME)
+        
+        db = client.db(DB_NAME, username=ARANGO_USER, password=ARANGO_PASSWORD)
+        
+        if not db.has_collection(COLLECTION_NAME):
+            satellites_collection = db.create_collection(COLLECTION_NAME)
+        else:
+            satellites_collection = db.collection(COLLECTION_NAME)
+        
+        satellites_collection.add_persistent_index(fields=['canonical.international_designator'], unique=False)
+        satellites_collection.add_persistent_index(fields=['canonical.registration_number'], unique=False)
+        satellites_collection.add_persistent_index(fields=['identifier'], unique=True)
+        
+        print(f"Connected to ArangoDB: {DB_NAME}.{COLLECTION_NAME}")
         return True
-    except ConnectionFailure as e:
-        print(f"Failed to connect to MongoDB: {e}")
+    except Exception as e:
+        print(f"Failed to connect to ArangoDB: {e}")
         return False
 
 
 def disconnect_mongodb():
-    """Close MongoDB connection"""
+    """Close ArangoDB connection (kept name for backward compatibility)"""
     global client
     if client:
         client.close()
@@ -160,7 +171,18 @@ def create_satellite_document(
     """
     collection = get_satellites_collection()
     
-    existing = collection.find_one({"identifier": identifier})
+    aql = """
+    FOR doc IN @@collection
+        FILTER doc.identifier == @identifier
+        LIMIT 1
+        RETURN doc
+    """
+    cursor = db.aql.execute(
+        aql,
+        bind_vars={'@collection': COLLECTION_NAME, 'identifier': identifier}
+    )
+    existing = list(cursor)
+    existing = existing[0] if existing else None
     
     if existing:
         existing["sources"][source] = {
@@ -172,13 +194,18 @@ def create_satellite_document(
         
         update_canonical(existing)
         
-        collection.replace_one(
-            {"identifier": identifier},
-            existing
-        )
+        collection.update(existing)
         return existing
     else:
         doc = {
+            "_key": (identifier
+                     .replace('/', '_')
+                     .replace(':', '_')
+                     .replace('.', '_')
+                     .replace('*', '_STAR_')
+                     .replace(' ', '_')
+                     .replace('(', '_')
+                     .replace(')', '_')),
             "identifier": identifier,
             "canonical": {},
             "sources": {
@@ -196,8 +223,8 @@ def create_satellite_document(
         }
         
         update_canonical(doc)
-        result = collection.insert_one(doc)
-        doc["_id"] = result.inserted_id
+        result = collection.insert(doc)
+        doc["_key"] = result["_key"]
         return doc
 
 
@@ -266,13 +293,35 @@ def find_satellite(
     collection = get_satellites_collection()
     
     if international_designator:
-        return collection.find_one({"canonical.international_designator": international_designator})
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.canonical.international_designator == @value
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'value': international_designator}
     elif registration_number:
-        return collection.find_one({"canonical.registration_number": registration_number})
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.canonical.registration_number == @value
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'value': registration_number}
     elif name:
-        return collection.find_one({"canonical.name": {"$regex": name, "$options": "i"}})
+        aql = """
+        FOR doc IN @@collection
+            FILTER LIKE(doc.canonical.name, @pattern, true)
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'pattern': f'%{name}%'}
+    else:
+        return None
     
-    return None
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    results = list(cursor)
+    return results[0] if results else None
 
 
 def search_satellites(
@@ -287,33 +336,47 @@ def search_satellites(
     """Search satellites with optional filters"""
     collection = get_satellites_collection()
     
-    filters = {}
+    filters = []
+    bind_vars = {'@collection': COLLECTION_NAME, 'limit': limit, 'skip': skip}
     
     if query:
-        filters["$or"] = [
-            {"canonical.name": {"$regex": query, "$options": "i"}},
-            {"canonical.object_name": {"$regex": query, "$options": "i"}},
-            {"canonical.international_designator": {"$regex": query, "$options": "i"}},
-            {"canonical.registration_number": {"$regex": query, "$options": "i"}}
-        ]
+        filters.append("""
+            (LIKE(doc.canonical.name, @query_pattern, true) OR
+             LIKE(doc.canonical.object_name, @query_pattern, true) OR
+             LIKE(doc.canonical.international_designator, @query_pattern, true) OR
+             LIKE(doc.canonical.registration_number, @query_pattern, true))
+        """)
+        bind_vars['query_pattern'] = f'%{query}%'
     
     if country:
-        filters["canonical.country_of_origin"] = {"$regex": country, "$options": "i"}
+        filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
+        bind_vars['country_pattern'] = f'%{country}%'
     
     if status:
-        filters["canonical.status"] = {"$regex": status, "$options": "i"}
+        filters.append("LIKE(doc.canonical.status, @status_pattern, true)")
+        bind_vars['status_pattern'] = f'%{status}%'
     
     if orbital_band:
-        filters["canonical.orbital_band"] = {"$regex": orbital_band, "$options": "i"}
+        filters.append("LIKE(doc.canonical.orbital_band, @orbital_band_pattern, true)")
+        bind_vars['orbital_band_pattern'] = f'%{orbital_band}%'
     
     if congestion_risk:
-        filters["canonical.congestion_risk"] = {"$regex": congestion_risk, "$options": "i"}
+        filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
+        bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
     
-    return list(
-        collection.find(filters)
-        .skip(skip)
-        .limit(limit)
-    )
+    filter_clause = ""
+    if filters:
+        filter_clause = "FILTER " + " AND ".join(filters)
+    
+    aql = f"""
+    FOR doc IN @@collection
+        {filter_clause}
+        LIMIT @skip, @limit
+        RETURN doc
+    """
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    return list(cursor)
 
 
 def count_satellites(
@@ -326,56 +389,112 @@ def count_satellites(
     """Count satellites with optional filters"""
     collection = get_satellites_collection()
     
-    filters = {}
+    filters = []
+    bind_vars = {'@collection': COLLECTION_NAME}
     
     if query:
-        filters["$or"] = [
-            {"canonical.name": {"$regex": query, "$options": "i"}},
-            {"canonical.object_name": {"$regex": query, "$options": "i"}},
-            {"canonical.international_designator": {"$regex": query, "$options": "i"}},
-            {"canonical.registration_number": {"$regex": query, "$options": "i"}}
-        ]
+        filters.append("""
+            (LIKE(doc.canonical.name, @query_pattern, true) OR
+             LIKE(doc.canonical.object_name, @query_pattern, true) OR
+             LIKE(doc.canonical.international_designator, @query_pattern, true) OR
+             LIKE(doc.canonical.registration_number, @query_pattern, true))
+        """)
+        bind_vars['query_pattern'] = f'%{query}%'
     
     if country:
-        filters["canonical.country_of_origin"] = {"$regex": country, "$options": "i"}
+        filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
+        bind_vars['country_pattern'] = f'%{country}%'
     
     if status:
-        filters["canonical.status"] = {"$regex": status, "$options": "i"}
+        filters.append("LIKE(doc.canonical.status, @status_pattern, true)")
+        bind_vars['status_pattern'] = f'%{status}%'
     
     if orbital_band:
-        filters["canonical.orbital_band"] = {"$regex": orbital_band, "$options": "i"}
+        filters.append("LIKE(doc.canonical.orbital_band, @orbital_band_pattern, true)")
+        bind_vars['orbital_band_pattern'] = f'%{orbital_band}%'
     
     if congestion_risk:
-        filters["canonical.congestion_risk"] = {"$regex": congestion_risk, "$options": "i"}
+        filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
+        bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
     
-    return collection.count_documents(filters)
+    filter_clause = ""
+    if filters:
+        filter_clause = "FILTER " + " AND ".join(filters)
+    
+    aql = f"""
+    RETURN COUNT(
+        FOR doc IN @@collection
+            {filter_clause}
+            RETURN 1
+    )
+    """
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    result = list(cursor)
+    return result[0] if result else 0
 
 
 def get_all_countries() -> List[str]:
     """Get list of unique countries"""
     collection = get_satellites_collection()
-    return collection.distinct("canonical.country_of_origin")
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.country_of_origin != null
+            RETURN doc.canonical.country_of_origin
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
 
 
 def get_all_statuses() -> List[str]:
     """Get list of unique statuses"""
     collection = get_satellites_collection()
-    return collection.distinct("canonical.status")
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.status != null
+            RETURN doc.canonical.status
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
 
 
 def get_all_orbital_bands() -> List[str]:
     """Get list of unique orbital bands"""
     collection = get_satellites_collection()
-    return collection.distinct("canonical.orbital_band")
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.orbital_band != null
+            RETURN doc.canonical.orbital_band
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
 
 
 def get_all_congestion_risks() -> List[str]:
     """Get list of unique congestion risks"""
     collection = get_satellites_collection()
-    return collection.distinct("canonical.congestion_risk")
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.congestion_risk != null
+            RETURN doc.canonical.congestion_risk
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
 
 
 def clear_collection():
     """Clear all documents from satellites collection"""
     collection = get_satellites_collection()
-    collection.delete_many({})
+    collection.truncate()
