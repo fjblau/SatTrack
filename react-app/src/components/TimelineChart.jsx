@@ -10,11 +10,22 @@ function TimelineChart({ selectedTimePeriod }) {
   const [viewMode, setViewMode] = useState('years')
   const [selectedYear, setSelectedYear] = useState(null)
   const [monthlyData, setMonthlyData] = useState([])
+  const [monthlyBreakdown, setMonthlyBreakdown] = useState(null)
   const svgRef = useRef(null)
+  
+  const [filterCountry, setFilterCountry] = useState('')
+  const [filterOrbitalBand, setFilterOrbitalBand] = useState('')
+  const [availableCountries, setAvailableCountries] = useState([])
+  const [availableOrbitalBands, setAvailableOrbitalBands] = useState([])
 
   useEffect(() => {
     loadTimelineData()
+    loadFilterOptions()
   }, [])
+
+  useEffect(() => {
+    loadTimelineData()
+  }, [filterCountry, filterOrbitalBand])
 
   useEffect(() => {
     if (selectedTimePeriod) {
@@ -22,10 +33,32 @@ function TimelineChart({ selectedTimePeriod }) {
     }
   }, [selectedTimePeriod])
 
+  const loadFilterOptions = async () => {
+    try {
+      const response = await fetch('/v2/graphs/timeline/filter-options')
+      const result = await response.json()
+      
+      if (result.data) {
+        setAvailableCountries(result.data.countries || [])
+        setAvailableOrbitalBands(result.data.orbital_bands || [])
+      }
+    } catch (error) {
+      console.error('Error loading filter options:', error)
+    }
+  }
+
   const loadTimelineData = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/v2/graphs/stats')
+      const params = new URLSearchParams()
+      if (filterCountry) params.append('country', filterCountry)
+      if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
+      
+      const url = params.toString() 
+        ? `/v2/graphs/timeline/yearly?${params.toString()}`
+        : '/v2/graphs/stats'
+      
+      const response = await fetch(url)
       const result = await response.json()
       
       if (result.data && result.data.recent_launch_years) {
@@ -42,7 +75,15 @@ function TimelineChart({ selectedTimePeriod }) {
   const loadBreakdown = async (year) => {
     setLoadingBreakdown(true)
     try {
-      const response = await fetch(`/v2/graphs/launch-timeline/breakdown/${year}`)
+      const params = new URLSearchParams()
+      if (filterCountry) params.append('country', filterCountry)
+      if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
+      
+      const url = params.toString()
+        ? `/v2/graphs/launch-timeline/breakdown/${year}?${params.toString()}`
+        : `/v2/graphs/launch-timeline/breakdown/${year}`
+      
+      const response = await fetch(url)
       const result = await response.json()
       
       if (result.data) {
@@ -58,7 +99,15 @@ function TimelineChart({ selectedTimePeriod }) {
   const loadMonthlyData = async (year) => {
     setLoading(true)
     try {
-      const response = await fetch(`/v2/graphs/launch-timeline/monthly/${year}`)
+      const params = new URLSearchParams()
+      if (filterCountry) params.append('country', filterCountry)
+      if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
+      
+      const url = params.toString()
+        ? `/v2/graphs/launch-timeline/monthly/${year}?${params.toString()}`
+        : `/v2/graphs/launch-timeline/monthly/${year}`
+      
+      const response = await fetch(url)
       const result = await response.json()
       
       if (result.data && result.data.monthly_data) {
@@ -72,15 +121,46 @@ function TimelineChart({ selectedTimePeriod }) {
       setLoading(false)
     }
   }
+  
+  const loadMonthlyBreakdown = async (year, month) => {
+    setLoadingBreakdown(true)
+    try {
+      const params = new URLSearchParams()
+      if (filterCountry) params.append('country', filterCountry)
+      if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
+      
+      const url = params.toString()
+        ? `/v2/graphs/launch-timeline/breakdown/monthly/${year}/${month}?${params.toString()}`
+        : `/v2/graphs/launch-timeline/breakdown/monthly/${year}/${month}`
+      
+      const response = await fetch(url)
+      const result = await response.json()
+      
+      if (result.data) {
+        setMonthlyBreakdown(result.data)
+      }
+    } catch (error) {
+      console.error('Error loading monthly breakdown data:', error)
+    } finally {
+      setLoadingBreakdown(false)
+    }
+  }
 
   const handleYearClick = (year) => {
     loadMonthlyData(year)
+  }
+  
+  const handleMonthClick = (month) => {
+    if (selectedYear) {
+      loadMonthlyBreakdown(selectedYear, month)
+    }
   }
 
   const handleBackToYears = () => {
     setViewMode('years')
     setSelectedYear(null)
     setMonthlyData([])
+    setMonthlyBreakdown(null)
   }
 
   if (loading) {
@@ -143,6 +223,50 @@ function TimelineChart({ selectedTimePeriod }) {
             : `Total satellites tracked: ${data.reduce((sum, d) => sum + d.satellite_count, 0).toLocaleString()}`
           }
         </p>
+      </div>
+      
+      <div className="timeline-filters">
+        <div className="filter-group">
+          <label htmlFor="country-filter">Country:</label>
+          <select 
+            id="country-filter"
+            value={filterCountry} 
+            onChange={(e) => setFilterCountry(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">All Countries</option>
+            {availableCountries.map(country => (
+              <option key={country} value={country}>{country}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="filter-group">
+          <label htmlFor="orbital-band-filter">Orbital Band:</label>
+          <select 
+            id="orbital-band-filter"
+            value={filterOrbitalBand} 
+            onChange={(e) => setFilterOrbitalBand(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">All Orbital Bands</option>
+            {availableOrbitalBands.map(band => (
+              <option key={band} value={band}>{band}</option>
+            ))}
+          </select>
+        </div>
+        
+        {(filterCountry || filterOrbitalBand) && (
+          <button 
+            className="clear-filters-button" 
+            onClick={() => {
+              setFilterCountry('')
+              setFilterOrbitalBand('')
+            }}
+          >
+            Clear Filters
+          </button>
+        )}
       </div>
 
       <svg 
@@ -291,10 +415,10 @@ function TimelineChart({ selectedTimePeriod }) {
                   fill={isSelected ? "#e74c3c" : "#3498db"}
                   stroke="white"
                   strokeWidth="2"
-                  style={{ cursor: viewMode === 'years' ? 'pointer' : 'default' }}
+                  style={{ cursor: 'pointer' }}
                   onMouseEnter={() => setHoveredYear(xValue)}
                   onMouseLeave={() => setHoveredYear(null)}
-                  onClick={() => viewMode === 'years' && handleYearClick(d.year)}
+                  onClick={() => viewMode === 'years' ? handleYearClick(d.year) : handleMonthClick(d.month)}
                 />
                 {(isHovered || isSelected) && (
                   <g>
@@ -451,6 +575,81 @@ function TimelineChart({ selectedTimePeriod }) {
                           <div 
                             className="breakdown-bar breakdown-bar-constellation" 
                             style={{ width: `${(constellation.count / breakdown.total_satellites) * 100}%` }}
+                          />
+                        </div>
+                        <span className="breakdown-count">{constellation.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {monthlyBreakdown && viewMode === 'months' && (
+        <div className="timeline-breakdown">
+          <h4>Launch Breakdown for {monthNames[monthlyBreakdown.month - 1]} {monthlyBreakdown.year}</h4>
+          <div className="breakdown-sections">
+            <div className="breakdown-section">
+              <h5>Orbital Bands</h5>
+              {loadingBreakdown ? (
+                <p className="breakdown-loading">Loading...</p>
+              ) : (
+                <div className="breakdown-items">
+                  {monthlyBreakdown.by_orbital_band.filter(b => b.orbital_band).map((band, idx) => (
+                    <div key={idx} className="breakdown-item">
+                      <span className="breakdown-name">{band.orbital_band}</span>
+                      <div className="breakdown-bar-container">
+                        <div 
+                          className="breakdown-bar" 
+                          style={{ width: `${(band.count / monthlyBreakdown.total_satellites) * 100}%` }}
+                        />
+                      </div>
+                      <span className="breakdown-count">{band.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="breakdown-section">
+              <h5>Top Countries</h5>
+              {loadingBreakdown ? (
+                <p className="breakdown-loading">Loading...</p>
+              ) : (
+                <div className="breakdown-items">
+                  {monthlyBreakdown.by_country.slice(0, 5).map((country, idx) => (
+                    <div key={idx} className="breakdown-item">
+                      <span className="breakdown-name">{country.country}</span>
+                      <div className="breakdown-bar-container">
+                        <div 
+                          className="breakdown-bar breakdown-bar-country" 
+                          style={{ width: `${(country.count / monthlyBreakdown.total_satellites) * 100}%` }}
+                        />
+                      </div>
+                      <span className="breakdown-count">{country.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {monthlyBreakdown.by_constellation && monthlyBreakdown.by_constellation.length > 0 && (
+              <div className="breakdown-section">
+                <h5>Top Constellations</h5>
+                {loadingBreakdown ? (
+                  <p className="breakdown-loading">Loading...</p>
+                ) : (
+                  <div className="breakdown-items">
+                    {monthlyBreakdown.by_constellation.slice(0, 5).map((constellation, idx) => (
+                      <div key={idx} className="breakdown-item">
+                        <span className="breakdown-name">{constellation.constellation}</span>
+                        <div className="breakdown-bar-container">
+                          <div 
+                            className="breakdown-bar breakdown-bar-constellation" 
+                            style={{ width: `${(constellation.count / monthlyBreakdown.total_satellites) * 100}%` }}
                           />
                         </div>
                         <span className="breakdown-count">{constellation.count}</span>

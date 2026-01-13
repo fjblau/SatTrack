@@ -1028,16 +1028,129 @@ def get_orbital_proximity_graph(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
-@app.get("/v2/graphs/launch-timeline/monthly/{year}")
-def get_monthly_launch_data(year: int):
+@app.get("/v2/graphs/timeline/filter-options")
+def get_timeline_filter_options():
     """
-    Get monthly launch data for a specific year.
-    Returns satellite counts grouped by month.
+    Get available filter options for timeline view (countries and orbital bands).
     """
+    
+    query = f"""
+    LET countries = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.country != null
+            COLLECT country = doc.canonical.country WITH COUNT INTO count
+            FILTER count >= 10
+            SORT country ASC
+            RETURN country
+    )
+    
+    LET orbital_bands = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.orbital_band != null
+            COLLECT band = doc.canonical.orbital_band WITH COUNT INTO count
+            FILTER count >= 10
+            SORT band ASC
+            RETURN band
+    )
+    
+    RETURN {{
+        countries: countries,
+        orbital_bands: orbital_bands
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(query)
+    results = list(cursor)
+    
+    if results:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "countries": [],
+                "orbital_bands": []
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/v2/graphs/timeline/yearly")
+def get_yearly_launch_data_filtered(
+    country: Optional[str] = Query(default=None, description="Filter by country"),
+    orbital_band: Optional[str] = Query(default=None, description="Filter by orbital band")
+):
+    """
+    Get yearly launch data with optional filters.
+    Returns satellite counts grouped by year.
+    """
+    
+    filters = []
+    bind_vars = {}
+    
+    if country:
+        filters.append("doc.canonical.country == @country")
+        bind_vars['country'] = country
+    
+    if orbital_band:
+        filters.append("doc.canonical.orbital_band == @orbital_band")
+        bind_vars['orbital_band'] = orbital_band
+    
+    filter_clause = " AND ".join(filters) if filters else "true"
     
     query = f"""
     FOR doc IN {db_module.COLLECTION_NAME}
         FILTER doc.canonical.launch_date != null
+        FILTER {filter_clause}
+        LET launch_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+        FILTER launch_year != null AND launch_year >= 1957
+        COLLECT year = launch_year WITH COUNT INTO sat_count
+        SORT year ASC
+        RETURN {{
+            year: year,
+            satellite_count: sat_count
+        }}
+    """
+    
+    cursor = db_module.db.aql.execute(query, bind_vars=bind_vars)
+    results = list(cursor)
+    
+    return {
+        "data": {
+            "recent_launch_years": results
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+@app.get("/v2/graphs/launch-timeline/monthly/{year}")
+def get_monthly_launch_data(
+    year: int,
+    country: Optional[str] = Query(default=None, description="Filter by country"),
+    orbital_band: Optional[str] = Query(default=None, description="Filter by orbital band")
+):
+    """
+    Get monthly launch data for a specific year with optional filters.
+    Returns satellite counts grouped by month.
+    """
+    
+    filters = []
+    bind_vars = {'year': year}
+    
+    if country:
+        filters.append("doc.canonical.country == @country")
+        bind_vars['country'] = country
+    
+    if orbital_band:
+        filters.append("doc.canonical.orbital_band == @orbital_band")
+        bind_vars['orbital_band'] = orbital_band
+    
+    filter_clause = " AND ".join(filters) if filters else "true"
+    
+    query = f"""
+    FOR doc IN {db_module.COLLECTION_NAME}
+        FILTER doc.canonical.launch_date != null
+        FILTER {filter_clause}
         LET launch_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
         FILTER launch_year == @year
         LET launch_month = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 5, 2))
@@ -1049,7 +1162,7 @@ def get_monthly_launch_data(year: int):
         }}
     """
     
-    cursor = db_module.db.aql.execute(query, bind_vars={'year': year})
+    cursor = db_module.db.aql.execute(query, bind_vars=bind_vars)
     results = list(cursor)
     
     return {
@@ -1062,13 +1175,30 @@ def get_monthly_launch_data(year: int):
     }
 
 @app.get("/v2/graphs/launch-timeline/breakdown/{year}")
-def get_launch_timeline_breakdown(year: int):
+def get_launch_timeline_breakdown(
+    year: int,
+    country: Optional[str] = Query(default=None, description="Filter by country"),
+    orbital_band: Optional[str] = Query(default=None, description="Filter by orbital band")
+):
     """
     Get breakdown statistics for a specific year including:
     - Orbital band distribution
     - Country distribution  
     - Constellation distribution
     """
+    
+    filters = []
+    bind_vars = {'year': year}
+    
+    if country:
+        filters.append("sat.canonical.country == @country")
+        bind_vars['country'] = country
+    
+    if orbital_band:
+        filters.append("sat.canonical.orbital_band == @orbital_band")
+        bind_vars['orbital_band'] = orbital_band
+    
+    filter_clause = " AND ".join(filters) if filters else "true"
     
     query = f"""
     LET year_satellites = (
@@ -1079,15 +1209,21 @@ def get_launch_timeline_breakdown(year: int):
             RETURN doc
     )
     
-    LET by_orbital_band = (
+    LET filtered_satellites = (
         FOR sat IN year_satellites
+            FILTER {filter_clause}
+            RETURN sat
+    )
+    
+    LET by_orbital_band = (
+        FOR sat IN filtered_satellites
             COLLECT band = sat.canonical.orbital_band WITH COUNT INTO band_count
             SORT band_count DESC
             RETURN {{orbital_band: band, count: band_count}}
     )
     
     LET by_country = (
-        FOR sat IN year_satellites
+        FOR sat IN filtered_satellites
             COLLECT country = sat.canonical.country WITH COUNT INTO country_count
             SORT country_count DESC
             LIMIT 10
@@ -1095,7 +1231,7 @@ def get_launch_timeline_breakdown(year: int):
     )
     
     LET by_constellation = (
-        FOR sat IN year_satellites
+        FOR sat IN filtered_satellites
             FILTER sat.canonical.constellation != null
             COLLECT constellation = sat.canonical.constellation WITH COUNT INTO const_count
             SORT const_count DESC
@@ -1105,14 +1241,14 @@ def get_launch_timeline_breakdown(year: int):
     
     RETURN {{
         year: @year,
-        total_satellites: LENGTH(year_satellites),
+        total_satellites: LENGTH(filtered_satellites),
         by_orbital_band: by_orbital_band,
         by_country: by_country,
         by_constellation: by_constellation
     }}
     """
     
-    cursor = db_module.db.aql.execute(query, bind_vars={'year': year})
+    cursor = db_module.db.aql.execute(query, bind_vars=bind_vars)
     results = list(cursor)
     
     if results:
@@ -1124,6 +1260,104 @@ def get_launch_timeline_breakdown(year: int):
         return {
             "data": {
                 "year": year,
+                "total_satellites": 0,
+                "by_orbital_band": [],
+                "by_country": [],
+                "by_constellation": []
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/v2/graphs/launch-timeline/breakdown/monthly/{year}/{month}")
+def get_monthly_launch_breakdown(
+    year: int,
+    month: int,
+    country: Optional[str] = Query(default=None, description="Filter by country"),
+    orbital_band: Optional[str] = Query(default=None, description="Filter by orbital band")
+):
+    """
+    Get breakdown statistics for a specific month including:
+    - Orbital band distribution
+    - Country distribution  
+    - Constellation distribution
+    """
+    
+    filters = []
+    bind_vars = {'year': year, 'month': month}
+    
+    if country:
+        filters.append("sat.canonical.country == @country")
+        bind_vars['country'] = country
+    
+    if orbital_band:
+        filters.append("sat.canonical.orbital_band == @orbital_band")
+        bind_vars['orbital_band'] = orbital_band
+    
+    filter_clause = " AND ".join(filters) if filters else "true"
+    
+    query = f"""
+    LET month_satellites = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.launch_date != null
+            LET sat_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            LET sat_month = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 5, 2))
+            FILTER sat_year == @year AND sat_month == @month
+            RETURN doc
+    )
+    
+    LET filtered_satellites = (
+        FOR sat IN month_satellites
+            FILTER {filter_clause}
+            RETURN sat
+    )
+    
+    LET by_orbital_band = (
+        FOR sat IN filtered_satellites
+            COLLECT band = sat.canonical.orbital_band WITH COUNT INTO band_count
+            SORT band_count DESC
+            RETURN {{orbital_band: band, count: band_count}}
+    )
+    
+    LET by_country = (
+        FOR sat IN filtered_satellites
+            COLLECT country = sat.canonical.country WITH COUNT INTO country_count
+            SORT country_count DESC
+            LIMIT 10
+            RETURN {{country: country, count: country_count}}
+    )
+    
+    LET by_constellation = (
+        FOR sat IN filtered_satellites
+            FILTER sat.canonical.constellation != null
+            COLLECT constellation = sat.canonical.constellation WITH COUNT INTO const_count
+            SORT const_count DESC
+            LIMIT 10
+            RETURN {{constellation: constellation, count: const_count}}
+    )
+    
+    RETURN {{
+        year: @year,
+        month: @month,
+        total_satellites: LENGTH(filtered_satellites),
+        by_orbital_band: by_orbital_band,
+        by_country: by_country,
+        by_constellation: by_constellation
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(query, bind_vars=bind_vars)
+    results = list(cursor)
+    
+    if results:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "year": year,
+                "month": month,
                 "total_satellites": 0,
                 "by_orbital_band": [],
                 "by_country": [],
