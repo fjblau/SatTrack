@@ -14,7 +14,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const [layout, setLayout] = useState('cola')
 
   useEffect(() => {
-    if (containerRef.current && !cyRef.current) {
+    if (graphType !== 'timeline' && containerRef.current && !cyRef.current) {
       cyRef.current = cytoscape({
         container: containerRef.current,
         style: [
@@ -164,13 +164,18 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       })
     }
 
+    if (graphType === 'timeline' && cyRef.current) {
+      cyRef.current.destroy()
+      cyRef.current = null
+    }
+
     return () => {
       if (cyRef.current) {
         cyRef.current.destroy()
         cyRef.current = null
       }
     }
-  }, [])
+  }, [graphType])
 
   useEffect(() => {
     if (graphType === 'constellation' && selectedConstellation) {
