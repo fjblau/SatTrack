@@ -881,6 +881,19 @@ def get_graph_stats():
             }}
     )
     
+    LET launches_by_year = (
+        FOR doc IN {COLLECTION_NAME}
+            FILTER doc.canonical.launch_date != null
+            LET year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            COLLECT launch_year = year WITH COUNT INTO sat_count
+            SORT launch_year DESC
+            LIMIT 10
+            RETURN {{
+                year: launch_year,
+                satellite_count: sat_count
+            }}
+    )
+    
     RETURN {{
         nodes: {{
             satellites: satellite_count,
@@ -896,6 +909,7 @@ def get_graph_stats():
         constellations: constellations,
         top_registration_documents: top_reg_docs,
         proximity_by_orbital_band: proximity_by_band,
+        recent_launch_years: launches_by_year,
         graph_name: '{GRAPH_NAME}',
         collections: {{
             satellites: '{COLLECTION_NAME}',
@@ -1011,5 +1025,122 @@ def get_orbital_proximity_graph(
                 }
             },
             "message": f"No proximity data found for orbital band '{orbital_band}'",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/v2/graphs/launch-timeline/{time_period}")
+def get_launch_timeline_graph(
+    time_period: str,
+    limit: Optional[int] = Query(default=50, description="Limit number of satellites returned")
+):
+    """
+    Get launch timeline graph for a specific time period.
+    
+    Returns satellites grouped by launch time period (year, decade, era).
+    Time periods can be specific years (e.g., "2024") or ranges (e.g., "2020-2024").
+    """
+    
+    start_year = None
+    end_year = None
+    
+    if '-' in time_period:
+        try:
+            parts = time_period.split('-')
+            start_year = int(parts[0])
+            end_year = int(parts[1])
+        except (ValueError, IndexError):
+            raise HTTPException(status_code=400, detail=f"Invalid time period format: {time_period}")
+    else:
+        try:
+            start_year = int(time_period)
+            end_year = start_year
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid time period format: {time_period}")
+    
+    query = f"""
+    LET satellites_in_period = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.launch_date != null
+            LET year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            FILTER year >= @start_year AND year <= @end_year
+            LIMIT @limit
+            RETURN {{
+                _key: doc._key,
+                _id: doc._id,
+                identifier: doc.identifier,
+                name: doc.canonical.name,
+                launch_date: doc.canonical.launch_date,
+                launch_year: year,
+                country: doc.canonical.country,
+                constellation: doc.canonical.constellation,
+                orbital_band: doc.canonical.orbital_band,
+                congestion_risk: doc.canonical.congestion_risk
+            }}
+    )
+    
+    LET year_groups = (
+        FOR sat IN satellites_in_period
+            COLLECT year = sat.launch_year INTO year_sats
+            RETURN {{
+                year: year,
+                satellite_count: LENGTH(year_sats),
+                satellites: year_sats[*].sat
+            }}
+    )
+    
+    LET total_in_period = LENGTH(
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.launch_date != null
+            LET year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            FILTER year >= @start_year AND year <= @end_year
+            RETURN 1
+    )
+    
+    RETURN {{
+        time_period: @time_period,
+        start_year: @start_year,
+        end_year: @end_year,
+        year_groups: year_groups,
+        nodes: satellites_in_period,
+        stats: {{
+            total_in_period: total_in_period,
+            satellites_shown: LENGTH(satellites_in_period),
+            years_covered: LENGTH(year_groups)
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(
+        query,
+        bind_vars={
+            'time_period': time_period,
+            'start_year': start_year,
+            'end_year': end_year,
+            'limit': limit
+        }
+    )
+    
+    results = list(cursor)
+    
+    if results and results[0]['nodes']:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "time_period": time_period,
+                "start_year": start_year,
+                "end_year": end_year,
+                "year_groups": [],
+                "nodes": [],
+                "stats": {
+                    "total_in_period": 0,
+                    "satellites_shown": 0,
+                    "years_covered": 0
+                }
+            },
+            "message": f"No satellites found for time period '{time_period}'",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
