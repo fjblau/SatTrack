@@ -13,7 +13,7 @@ function GraphExplorer() {
   const [selectedDocument, setSelectedDocument] = useState('')
   const [selectedOrbitalBand, setSelectedOrbitalBand] = useState('')
   const [selectedFunctionCategory, setSelectedFunctionCategory] = useState('')
-  const [selectedCountry, setSelectedCountry] = useState('')
+  const [selectedCountries, setSelectedCountries] = useState([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -74,13 +74,20 @@ function GraphExplorer() {
       
       if (data.data && data.data.nodes) {
         setCountries(data.data.nodes)
-        if (data.data.nodes.length > 0) {
-          setSelectedCountry(data.data.nodes[0].country)
-        }
       }
     } catch (error) {
       console.error('Error loading country relations:', error)
     }
+  }
+
+  const handleCountryClick = (country) => {
+    setSelectedCountries(prev => {
+      if (prev.includes(country)) {
+        return prev.filter(c => c !== country)
+      } else {
+        return [...prev, country]
+      }
+    })
   }
 
   return (
@@ -213,7 +220,7 @@ function GraphExplorer() {
         {graphType === 'country' && (
           <div className="selector-content">
             <h3>Country Relations</h3>
-            <p className="section-description">International cooperation and shared orbital interests</p>
+            <p className="section-description">Shift-click to select multiple countries</p>
             {loading ? (
               <p>Loading...</p>
             ) : (
@@ -221,8 +228,8 @@ function GraphExplorer() {
                 {countries.map((country) => (
                   <div
                     key={country.country}
-                    className={`list-item ${selectedCountry === country.country ? 'selected' : ''}`}
-                    onClick={() => setSelectedCountry(country.country)}
+                    className={`list-item ${selectedCountries.includes(country.country) ? 'selected' : ''}`}
+                    onClick={() => handleCountryClick(country.country)}
                   >
                     <div className="item-name">{country.country}</div>
                     <div className="item-count">{country.satellite_count.toLocaleString()} satellites</div>
@@ -242,7 +249,7 @@ function GraphExplorer() {
           selectedDocument={graphType === 'registration' ? selectedDocument : null}
           selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
           selectedFunctionCategory={graphType === 'function' ? selectedFunctionCategory : null}
-          selectedCountry={graphType === 'country' ? selectedCountry : null}
+          selectedCountries={graphType === 'country' ? selectedCountries : null}
         />
       </div>
     </div>
