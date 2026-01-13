@@ -7,11 +7,9 @@ function GraphExplorer() {
   const [constellations, setConstellations] = useState([])
   const [documents, setDocuments] = useState([])
   const [orbitalBands, setOrbitalBands] = useState([])
-  const [launchYears, setLaunchYears] = useState([])
   const [selectedConstellation, setSelectedConstellation] = useState('')
   const [selectedDocument, setSelectedDocument] = useState('')
   const [selectedOrbitalBand, setSelectedOrbitalBand] = useState('')
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -29,7 +27,6 @@ function GraphExplorer() {
         setConstellations(filteredConstellations)
         setDocuments(data.data.top_registration_documents || [])
         setOrbitalBands(data.data.proximity_by_orbital_band || [])
-        setLaunchYears(data.data.recent_launch_years || [])
         
         if (filteredConstellations.length > 0) {
           setSelectedConstellation(filteredConstellations[0].name)
@@ -39,9 +36,6 @@ function GraphExplorer() {
         }
         if (data.data.proximity_by_orbital_band && data.data.proximity_by_orbital_band.length > 0) {
           setSelectedOrbitalBand(data.data.proximity_by_orbital_band[0].orbital_band)
-        }
-        if (data.data.recent_launch_years && data.data.recent_launch_years.length > 0) {
-          setSelectedTimePeriod(data.data.recent_launch_years[0].year.toString())
         }
       }
     } catch (error) {
@@ -72,12 +66,6 @@ function GraphExplorer() {
             onClick={() => setGraphType('proximity')}
           >
             Orbital Proximity
-          </button>
-          <button 
-            className={graphType === 'timeline' ? 'active' : ''}
-            onClick={() => setGraphType('timeline')}
-          >
-            Launch Timeline
           </button>
         </div>
 
@@ -149,28 +137,6 @@ function GraphExplorer() {
           </div>
         )}
 
-        {graphType === 'timeline' && (
-          <div className="selector-content">
-            <h3>Launch Timeline</h3>
-            <p className="section-description">Satellites grouped by launch year (98.6% coverage)</p>
-            {loading ? (
-              <p>Loading...</p>
-            ) : (
-              <div className="item-list">
-                {launchYears.map((yearData) => (
-                  <div
-                    key={yearData.year}
-                    className={`list-item ${selectedTimePeriod === yearData.year.toString() ? 'selected' : ''}`}
-                    onClick={() => setSelectedTimePeriod(yearData.year.toString())}
-                  >
-                    <div className="item-name">{yearData.year}</div>
-                    <div className="item-count">{yearData.satellite_count.toLocaleString()} satellites</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="graph-main">
@@ -179,7 +145,6 @@ function GraphExplorer() {
           selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
           selectedDocument={graphType === 'registration' ? selectedDocument : null}
           selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
-          selectedTimePeriod={graphType === 'timeline' ? selectedTimePeriod : null}
         />
       </div>
     </div>

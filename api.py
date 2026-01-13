@@ -1028,6 +1028,39 @@ def get_orbital_proximity_graph(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
+@app.get("/v2/graphs/launch-timeline/monthly/{year}")
+def get_monthly_launch_data(year: int):
+    """
+    Get monthly launch data for a specific year.
+    Returns satellite counts grouped by month.
+    """
+    
+    query = f"""
+    FOR doc IN {db_module.COLLECTION_NAME}
+        FILTER doc.canonical.launch_date != null
+        LET launch_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+        FILTER launch_year == @year
+        LET launch_month = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 5, 2))
+        COLLECT month = launch_month WITH COUNT INTO sat_count
+        SORT month ASC
+        RETURN {{
+            month: month,
+            satellite_count: sat_count
+        }}
+    """
+    
+    cursor = db_module.db.aql.execute(query, bind_vars={'year': year})
+    results = list(cursor)
+    
+    return {
+        "data": {
+            "year": year,
+            "monthly_data": results,
+            "total_satellites": sum(r['satellite_count'] for r in results)
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
 @app.get("/v2/graphs/launch-timeline/breakdown/{year}")
 def get_launch_timeline_breakdown(year: int):
     """

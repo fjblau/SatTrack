@@ -7,6 +7,9 @@ function TimelineChart({ selectedTimePeriod }) {
   const [hoveredYear, setHoveredYear] = useState(null)
   const [breakdown, setBreakdown] = useState(null)
   const [loadingBreakdown, setLoadingBreakdown] = useState(false)
+  const [viewMode, setViewMode] = useState('years')
+  const [selectedYear, setSelectedYear] = useState(null)
+  const [monthlyData, setMonthlyData] = useState([])
   const svgRef = useRef(null)
 
   useEffect(() => {
@@ -52,11 +55,39 @@ function TimelineChart({ selectedTimePeriod }) {
     }
   }
 
+  const loadMonthlyData = async (year) => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/v2/graphs/launch-timeline/monthly/${year}`)
+      const result = await response.json()
+      
+      if (result.data && result.data.monthly_data) {
+        setMonthlyData(result.data.monthly_data)
+        setSelectedYear(year)
+        setViewMode('months')
+      }
+    } catch (error) {
+      console.error('Error loading monthly data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleYearClick = (year) => {
+    loadMonthlyData(year)
+  }
+
+  const handleBackToYears = () => {
+    setViewMode('years')
+    setSelectedYear(null)
+    setMonthlyData([])
+  }
+
   if (loading) {
     return <div className="timeline-loading">Loading timeline data...</div>
   }
 
-  if (data.length === 0) {
+  if (data.length === 0 && viewMode === 'years') {
     return <div className="timeline-empty">No timeline data available</div>
   }
 
@@ -66,25 +97,29 @@ function TimelineChart({ selectedTimePeriod }) {
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
 
-  const maxCount = Math.max(...data.map(d => d.satellite_count))
-  const minYear = Math.min(...data.map(d => d.year))
-  const maxYear = Math.max(...data.map(d => d.year))
+  const displayData = viewMode === 'months' ? monthlyData : data
+  const maxCount = Math.max(...displayData.map(d => d.satellite_count))
+  const minValue = viewMode === 'months' ? 1 : Math.min(...data.map(d => d.year))
+  const maxValue = viewMode === 'months' ? 12 : Math.max(...data.map(d => d.year))
 
-  const xScale = (year) => {
-    return padding.left + ((year - minYear) / (maxYear - minYear)) * chartWidth
+  const xScale = (value) => {
+    return padding.left + ((value - minValue) / (maxValue - minValue)) * chartWidth
   }
 
   const yScale = (count) => {
     return padding.top + chartHeight - (count / maxCount) * chartHeight
   }
 
-  const pathData = data.map((d, i) => {
-    const x = xScale(d.year)
+  const pathData = displayData.map((d, i) => {
+    const xValue = viewMode === 'months' ? d.month : d.year
+    const x = xScale(xValue)
     const y = yScale(d.satellite_count)
     return `${i === 0 ? 'M' : 'L'} ${x} ${y}`
   }).join(' ')
 
-  const areaData = `M ${xScale(minYear)} ${padding.top + chartHeight} ${pathData} L ${xScale(maxYear)} ${padding.top + chartHeight} Z`
+  const areaData = `M ${xScale(minValue)} ${padding.top + chartHeight} ${pathData} L ${xScale(maxValue)} ${padding.top + chartHeight} Z`
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
   const yTicks = 5
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => 
@@ -94,9 +129,19 @@ function TimelineChart({ selectedTimePeriod }) {
   return (
     <div className="timeline-chart-container">
       <div className="timeline-header">
-        <h3>Satellite Launches Over Time</h3>
+        <h3>
+          {viewMode === 'months' ? `Satellite Launches in ${selectedYear}` : 'Satellite Launches Over Time'}
+          {viewMode === 'months' && (
+            <button className="back-button" onClick={handleBackToYears}>
+              ← Back to Years
+            </button>
+          )}
+        </h3>
         <p className="timeline-subtitle">
-          Total satellites tracked: {data.reduce((sum, d) => sum + d.satellite_count, 0).toLocaleString()}
+          {viewMode === 'months' 
+            ? `${monthlyData.reduce((sum, d) => sum + d.satellite_count, 0).toLocaleString()} satellites launched in ${selectedYear}`
+            : `Total satellites tracked: ${data.reduce((sum, d) => sum + d.satellite_count, 0).toLocaleString()}`
+          }
         </p>
       </div>
 
@@ -180,27 +225,31 @@ function TimelineChart({ selectedTimePeriod }) {
             stroke="#333"
             strokeWidth="2"
           />
-          {data.map(d => (
-            <g key={d.year}>
-              <line
-                x1={xScale(d.year)}
-                y1={padding.top + chartHeight}
-                x2={xScale(d.year)}
-                y2={padding.top + chartHeight + 5}
-                stroke="#333"
-                strokeWidth="2"
-              />
-              <text
-                x={xScale(d.year)}
-                y={padding.top + chartHeight + 20}
-                textAnchor="middle"
-                fontSize="12"
-                fill="#666"
-              >
-                {d.year}
-              </text>
-            </g>
-          ))}
+          {displayData.map(d => {
+            const xValue = viewMode === 'months' ? d.month : d.year
+            const label = viewMode === 'months' ? monthNames[d.month - 1] : d.year
+            return (
+              <g key={xValue}>
+                <line
+                  x1={xScale(xValue)}
+                  y1={padding.top + chartHeight}
+                  x2={xScale(xValue)}
+                  y2={padding.top + chartHeight + 5}
+                  stroke="#333"
+                  strokeWidth="2"
+                />
+                <text
+                  x={xScale(xValue)}
+                  y={padding.top + chartHeight + 20}
+                  textAnchor="middle"
+                  fontSize="12"
+                  fill="#666"
+                >
+                  {label}
+                </text>
+              </g>
+            )
+          })}
           <text
             x={padding.left + chartWidth / 2}
             y={height - 10}
@@ -209,7 +258,7 @@ function TimelineChart({ selectedTimePeriod }) {
             fill="#333"
             fontWeight="600"
           >
-            Launch Year
+            {viewMode === 'months' ? 'Launch Month' : 'Launch Year'}
           </text>
         </g>
 
@@ -228,26 +277,29 @@ function TimelineChart({ selectedTimePeriod }) {
         />
 
         <g className="data-points">
-          {data.map(d => {
-            const isSelected = selectedTimePeriod === d.year.toString()
-            const isHovered = hoveredYear === d.year
+          {displayData.map(d => {
+            const xValue = viewMode === 'months' ? d.month : d.year
+            const label = viewMode === 'months' ? monthNames[d.month - 1] : d.year
+            const isSelected = viewMode === 'years' && selectedTimePeriod === d.year?.toString()
+            const isHovered = hoveredYear === xValue
             return (
-              <g key={d.year}>
+              <g key={xValue}>
                 <circle
-                  cx={xScale(d.year)}
+                  cx={xScale(xValue)}
                   cy={yScale(d.satellite_count)}
                   r={isSelected || isHovered ? 6 : 4}
                   fill={isSelected ? "#e74c3c" : "#3498db"}
                   stroke="white"
                   strokeWidth="2"
-                  style={{ cursor: 'pointer' }}
-                  onMouseEnter={() => setHoveredYear(d.year)}
+                  style={{ cursor: viewMode === 'years' ? 'pointer' : 'default' }}
+                  onMouseEnter={() => setHoveredYear(xValue)}
                   onMouseLeave={() => setHoveredYear(null)}
+                  onClick={() => viewMode === 'years' && handleYearClick(d.year)}
                 />
                 {(isHovered || isSelected) && (
                   <g>
                     <rect
-                      x={xScale(d.year) - 50}
+                      x={xScale(xValue) - 50}
                       y={yScale(d.satellite_count) - 40}
                       width="100"
                       height="30"
@@ -255,17 +307,17 @@ function TimelineChart({ selectedTimePeriod }) {
                       rx="4"
                     />
                     <text
-                      x={xScale(d.year)}
+                      x={xScale(xValue)}
                       y={yScale(d.satellite_count) - 30}
                       textAnchor="middle"
                       fontSize="11"
                       fill="white"
                       fontWeight="600"
                     >
-                      {d.year}
+                      {label}
                     </text>
                     <text
-                      x={xScale(d.year)}
+                      x={xScale(xValue)}
                       y={yScale(d.satellite_count) - 17}
                       textAnchor="middle"
                       fontSize="11"
@@ -282,31 +334,62 @@ function TimelineChart({ selectedTimePeriod }) {
       </svg>
 
       <div className="timeline-stats">
-        <div className="stat-card">
-          <div className="stat-label">Peak Year</div>
-          <div className="stat-value">
-            {data.reduce((max, d) => d.satellite_count > max.satellite_count ? d : max, data[0])?.year}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Peak Launches</div>
-          <div className="stat-value">
-            {Math.max(...data.map(d => d.satellite_count)).toLocaleString()}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Years Tracked</div>
-          <div className="stat-value">{data.length}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Avg per Year</div>
-          <div className="stat-value">
-            {Math.round(data.reduce((sum, d) => sum + d.satellite_count, 0) / data.length).toLocaleString()}
-          </div>
-        </div>
+        {viewMode === 'years' ? (
+          <>
+            <div className="stat-card">
+              <div className="stat-label">Peak Year</div>
+              <div className="stat-value">
+                {data.reduce((max, d) => d.satellite_count > max.satellite_count ? d : max, data[0])?.year}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Peak Launches</div>
+              <div className="stat-value">
+                {Math.max(...data.map(d => d.satellite_count)).toLocaleString()}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Years Tracked</div>
+              <div className="stat-value">{data.length}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Avg per Year</div>
+              <div className="stat-value">
+                {Math.round(data.reduce((sum, d) => sum + d.satellite_count, 0) / data.length).toLocaleString()}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="stat-card">
+              <div className="stat-label">Peak Month</div>
+              <div className="stat-value">
+                {monthNames[monthlyData.reduce((max, d) => d.satellite_count > max.satellite_count ? d : max, monthlyData[0])?.month - 1]}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Peak Launches</div>
+              <div className="stat-value">
+                {Math.max(...monthlyData.map(d => d.satellite_count)).toLocaleString()}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Total Year</div>
+              <div className="stat-value">
+                {monthlyData.reduce((sum, d) => sum + d.satellite_count, 0).toLocaleString()}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Avg per Month</div>
+              <div className="stat-value">
+                {Math.round(monthlyData.reduce((sum, d) => sum + d.satellite_count, 0) / monthlyData.length).toLocaleString()}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {breakdown && (
+      {breakdown && viewMode === 'years' && (
         <div className="timeline-breakdown">
           <h4>Launch Breakdown for {breakdown.year}</h4>
           <div className="breakdown-sections">
