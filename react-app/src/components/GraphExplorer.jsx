@@ -23,12 +23,13 @@ function GraphExplorer() {
       const data = await response.json()
       
       if (data.data) {
-        setConstellations(data.data.constellations || [])
+        const filteredConstellations = (data.data.constellations || []).filter(c => c.name !== 'Other')
+        setConstellations(filteredConstellations)
         setDocuments(data.data.top_registration_documents || [])
         setOrbitalBands(data.data.proximity_by_orbital_band || [])
         
-        if (data.data.constellations && data.data.constellations.length > 0) {
-          setSelectedConstellation(data.data.constellations[0].name)
+        if (filteredConstellations.length > 0) {
+          setSelectedConstellation(filteredConstellations[0].name)
         }
         if (data.data.top_registration_documents && data.data.top_registration_documents.length > 0) {
           setSelectedDocument(data.data.top_registration_documents[0].key)
