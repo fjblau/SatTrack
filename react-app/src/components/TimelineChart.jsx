@@ -24,7 +24,11 @@ function TimelineChart({ selectedTimePeriod }) {
   }, [])
 
   useEffect(() => {
-    loadTimelineData()
+    if (viewMode === 'months' && selectedYear) {
+      loadMonthlyData(selectedYear)
+    } else {
+      loadTimelineData()
+    }
     if (selectedTimePeriod) {
       loadBreakdown(selectedTimePeriod)
     }
