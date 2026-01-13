@@ -25,6 +25,9 @@ function TimelineChart({ selectedTimePeriod }) {
 
   useEffect(() => {
     loadTimelineData()
+    if (selectedTimePeriod) {
+      loadBreakdown(selectedTimePeriod)
+    }
   }, [filterCountry, filterOrbitalBand])
 
   useEffect(() => {
@@ -58,12 +61,18 @@ function TimelineChart({ selectedTimePeriod }) {
         ? `/v2/graphs/timeline/yearly?${params.toString()}`
         : '/v2/graphs/stats'
       
+      console.log('Loading timeline data from:', url)
+      
       const response = await fetch(url)
       const result = await response.json()
       
       if (result.data && result.data.recent_launch_years) {
         const allYears = result.data.recent_launch_years
+        console.log(`Loaded ${allYears.length} years of data`)
         setData(allYears.sort((a, b) => a.year - b.year))
+      } else {
+        console.log('No data received')
+        setData([])
       }
     } catch (error) {
       console.error('Error loading timeline data:', error)
@@ -171,8 +180,8 @@ function TimelineChart({ selectedTimePeriod }) {
     return <div className="timeline-empty">No timeline data available</div>
   }
 
-  const width = 900
-  const height = 400
+  const width = 1400
+  const height = 500
   const padding = { top: 40, right: 40, bottom: 60, left: 80 }
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
@@ -222,6 +231,14 @@ function TimelineChart({ selectedTimePeriod }) {
             ? `${monthlyData.reduce((sum, d) => sum + d.satellite_count, 0).toLocaleString()} satellites launched in ${selectedYear}`
             : `Total satellites tracked: ${data.reduce((sum, d) => sum + d.satellite_count, 0).toLocaleString()}`
           }
+          {(filterCountry || filterOrbitalBand) && (
+            <span className="active-filters">
+              {' • Filtered by: '}
+              {filterCountry && <span className="filter-tag">{filterCountry}</span>}
+              {filterCountry && filterOrbitalBand && ' + '}
+              {filterOrbitalBand && <span className="filter-tag">{filterOrbitalBand}</span>}
+            </span>
+          )}
         </p>
       </div>
       

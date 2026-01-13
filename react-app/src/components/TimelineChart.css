@@ -44,6 +44,20 @@
   color: #6c757d;
 }
 
+.active-filters {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.filter-tag {
+  background: #e74c3c;
+  color: white;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin: 0 0.25rem;
+}
+
 .timeline-header p.timeline-subtitle::after {
   content: " • Click any year to view monthly breakdown";
   color: #3498db;
@@ -163,7 +177,7 @@
 
 .timeline-breakdown {
   width: 100%;
-  max-width: 900px;
+  max-width: 1400px;
   margin-top: 3rem;
   padding: 2rem;
   background: #f8f9fa;
