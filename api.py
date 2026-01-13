@@ -1259,9 +1259,9 @@ def get_function_similarity_graph(limit: Optional[int] = Query(default=100, desc
     - Earth Observation: remote sensing, earth resources
     - Scientific Research: space/atmosphere investigation
     - Navigation: GPS, GLONASS, positioning
-    - Military/Defense: defense, military assignments
+    - Military-Defense: defense, military assignments
     - Space Station: ISS, Mir supply and operations
-    - Technology/Testing: tech demonstration, experimental
+    - Technology-Testing: tech demonstration, experimental
     """
     
     query = f"""
@@ -1274,9 +1274,9 @@ def get_function_similarity_graph(limit: Optional[int] = Query(default=100, desc
                 func_lower LIKE '%earth%' OR func_lower LIKE '%observation%' OR func_lower LIKE '%remote sens%' OR func_lower LIKE '%resources%' ? 'Earth Observation' :
                 func_lower LIKE '%investigation%' OR func_lower LIKE '%scientific%' OR func_lower LIKE '%atmosphere%' OR func_lower LIKE '%space%' ? 'Scientific Research' :
                 func_lower LIKE '%navigation%' OR func_lower LIKE '%glonass%' OR func_lower LIKE '%gps%' OR func_lower LIKE '%position%' ? 'Navigation' :
-                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military/Defense' :
+                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military-Defense' :
                 func_lower LIKE '%station%' OR func_lower LIKE '%mir%' OR func_lower LIKE '%iss%' OR func_lower LIKE '%delivery%' ? 'Space Station' :
-                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology/Testing' :
+                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology-Testing' :
                 'Other'
             )
             RETURN {{
@@ -1382,9 +1382,9 @@ def get_function_category_graph(
                 func_lower LIKE '%earth%' OR func_lower LIKE '%observation%' OR func_lower LIKE '%remote sens%' OR func_lower LIKE '%resources%' ? 'Earth Observation' :
                 func_lower LIKE '%investigation%' OR func_lower LIKE '%scientific%' OR func_lower LIKE '%atmosphere%' OR func_lower LIKE '%space%' ? 'Scientific Research' :
                 func_lower LIKE '%navigation%' OR func_lower LIKE '%glonass%' OR func_lower LIKE '%gps%' OR func_lower LIKE '%position%' ? 'Navigation' :
-                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military/Defense' :
+                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military-Defense' :
                 func_lower LIKE '%station%' OR func_lower LIKE '%mir%' OR func_lower LIKE '%iss%' OR func_lower LIKE '%delivery%' ? 'Space Station' :
-                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology/Testing' :
+                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology-Testing' :
                 'Other'
             )
             FILTER detected_category == @category
