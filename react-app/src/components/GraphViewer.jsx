@@ -5,13 +5,14 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategory, selectedCountries }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState(null)
   const [layout, setLayout] = useState('cola')
   const [countryGraphData, setCountryGraphData] = useState(null)
+  const [functionGraphData, setFunctionGraphData] = useState(null)
 
   useEffect(() => {
     if (containerRef.current && !cyRef.current) {
@@ -212,14 +213,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       loadRegistrationGraph(selectedDocument)
     } else if (graphType === 'proximity' && selectedOrbitalBand) {
       loadProximityGraph(selectedOrbitalBand)
-    } else if (graphType === 'function' && selectedFunctionCategory) {
-      loadFunctionGraph(selectedFunctionCategory)
+    } else if (graphType === 'function' && !functionGraphData) {
+      loadAllFunctionCategories()
+    } else if (graphType === 'function' && functionGraphData) {
+      filterFunctionGraph(selectedFunctionCategories)
     } else if (graphType === 'country' && !countryGraphData) {
       loadCountryGraph()
     } else if (graphType === 'country' && countryGraphData) {
       filterCountryGraph(selectedCountries)
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategory, selectedCountries, countryGraphData])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -375,15 +378,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     }
   }
 
-  const loadFunctionGraph = async (category) => {
+  const loadAllFunctionCategories = async () => {
     if (!cyRef.current) return
     
     setLoading(true)
     try {
-      const response = await fetch(`/v2/graphs/function-similarity/category/${encodeURIComponent(category)}?limit=50`)
+      const response = await fetch('/v2/graphs/function-similarity?limit=50')
       const data = await response.json()
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
+        setFunctionGraphData(data.data)
+        
         const elements = {
           nodes: data.data.nodes.map(node => ({
             data: {
@@ -414,6 +419,77 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
     } catch (error) {
       console.error('Error loading function graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filterFunctionGraph = (categories) => {
+    if (!cyRef.current || !functionGraphData) return
+    
+    setLoading(true)
+    try {
+      let filteredNodes, filteredEdges
+      
+      if (!categories || categories.length === 0) {
+        filteredNodes = functionGraphData.nodes
+        filteredEdges = functionGraphData.edges
+      } else {
+        const selectedSet = new Set(categories)
+        
+        filteredNodes = functionGraphData.nodes.filter(node => 
+          selectedSet.has(node.function_category)
+        )
+        
+        const nodeIds = new Set(filteredNodes.map(n => n._id))
+        filteredEdges = functionGraphData.edges.filter(edge =>
+          nodeIds.has(edge.source) && nodeIds.has(edge.target)
+        )
+      }
+      
+      const elements = {
+        nodes: filteredNodes.map(node => {
+          const isSelected = categories && categories.includes(node.function_category)
+          return {
+            data: {
+              id: node._id,
+              label: node.name || node.identifier,
+              function: node.function,
+              function_category: node.function_category,
+              country: node.country,
+              orbital_band: node.orbital_band,
+              congestion_risk: node.congestion_risk,
+              node_size: isSelected ? 25 : 20,
+              is_selected: isSelected ? true : undefined
+            }
+          }
+        }),
+        edges: filteredEdges.map(edge => ({
+          data: {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            relationship: edge.relationship
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      const newStats = {
+        satellites_shown: filteredNodes.length,
+        edges_shown: filteredEdges.length
+      }
+      
+      if (categories && categories.length > 0) {
+        newStats.selected_categories = categories.join(', ')
+      }
+      
+      setStats(newStats)
+    } catch (error) {
+      console.error('Error filtering function graph:', error)
     } finally {
       setLoading(false)
     }
@@ -605,6 +681,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         </div>
         
         <button onClick={handleFitToView}>Fit to View</button>
+        {graphType === 'function' && stats?.selected_categories && (
+          <button onClick={() => filterFunctionGraph([])}>Show All Categories</button>
+        )}
         {graphType === 'country' && stats?.selected_countries && (
           <button onClick={() => filterCountryGraph([])}>Show All Countries</button>
         )}
@@ -620,6 +699,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             {stats.edges_shown !== undefined && <span>Showing: {stats.edges_shown} edges</span>}
             {stats.countries_shown !== undefined && <span>Countries: {stats.countries_shown}</span>}
             {stats.relationships_found !== undefined && <span>Relationships: {stats.relationships_found}</span>}
+            {stats.selected_categories && <span>🔍 Categories: {stats.selected_categories}</span>}
             {stats.selected_countries && <span>🔍 Selected: {stats.selected_countries}</span>}
             {stats.satellites_shown !== undefined && <span>Satellites: {stats.satellites_shown}</span>}
           </div>

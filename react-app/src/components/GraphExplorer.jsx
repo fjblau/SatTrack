@@ -12,7 +12,7 @@ function GraphExplorer() {
   const [selectedConstellation, setSelectedConstellation] = useState('')
   const [selectedDocument, setSelectedDocument] = useState('')
   const [selectedOrbitalBand, setSelectedOrbitalBand] = useState('')
-  const [selectedFunctionCategory, setSelectedFunctionCategory] = useState('')
+  const [selectedFunctionCategories, setSelectedFunctionCategories] = useState([])
   const [selectedCountries, setSelectedCountries] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -58,13 +58,20 @@ function GraphExplorer() {
       
       if (data.data && data.data.categories) {
         setFunctionCategories(data.data.categories)
-        if (data.data.categories.length > 0) {
-          setSelectedFunctionCategory(data.data.categories[0].category)
-        }
       }
     } catch (error) {
       console.error('Error loading function categories:', error)
     }
+  }
+
+  const handleFunctionCategoryClick = (category) => {
+    setSelectedFunctionCategories(prev => {
+      if (prev.includes(category)) {
+        return prev.filter(c => c !== category)
+      } else {
+        return [...prev, category]
+      }
+    })
   }
 
   const loadCountryRelations = async () => {
@@ -197,7 +204,7 @@ function GraphExplorer() {
         {graphType === 'function' && (
           <div className="selector-content">
             <h3>Function Categories</h3>
-            <p className="section-description">Satellites grouped by mission function (27% coverage)</p>
+            <p className="section-description">Click to select multiple categories</p>
             {loading ? (
               <p>Loading...</p>
             ) : (
@@ -205,8 +212,8 @@ function GraphExplorer() {
                 {functionCategories.map((category) => (
                   <div
                     key={category.category}
-                    className={`list-item ${selectedFunctionCategory === category.category ? 'selected' : ''}`}
-                    onClick={() => setSelectedFunctionCategory(category.category)}
+                    className={`list-item ${selectedFunctionCategories.includes(category.category) ? 'selected' : ''}`}
+                    onClick={() => handleFunctionCategoryClick(category.category)}
                   >
                     <div className="item-name">{category.category}</div>
                     <div className="item-count">{category.satellite_count.toLocaleString()} satellites</div>
@@ -248,7 +255,7 @@ function GraphExplorer() {
           selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
           selectedDocument={graphType === 'registration' ? selectedDocument : null}
           selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
-          selectedFunctionCategory={graphType === 'function' ? selectedFunctionCategory : null}
+          selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
           selectedCountries={graphType === 'country' ? selectedCountries : null}
         />
       </div>
