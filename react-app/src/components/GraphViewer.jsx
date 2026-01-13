@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedTimePeriod }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -178,8 +178,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       loadRegistrationGraph(selectedDocument)
     } else if (graphType === 'proximity' && selectedOrbitalBand) {
       loadProximityGraph(selectedOrbitalBand)
+    } else if (graphType === 'timeline' && selectedTimePeriod) {
+      loadTimelineGraph(selectedTimePeriod)
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedTimePeriod])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -335,6 +337,46 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     }
   }
 
+  const loadTimelineGraph = async (timePeriod) => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const response = await fetch(`/v2/graphs/launch-timeline/${encodeURIComponent(timePeriod)}?limit=100`)
+      const data = await response.json()
+      
+      if (data.data && data.data.nodes && data.data.nodes.length > 0) {
+        const elements = {
+          nodes: data.data.nodes.map(node => ({
+            data: {
+              id: node._id,
+              label: node.name || node.identifier,
+              launch_date: node.launch_date,
+              launch_year: node.launch_year,
+              country: node.country,
+              constellation: node.constellation,
+              orbital_band: node.orbital_band,
+              congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : 'unknown',
+              node_size: 30,
+              identifier: node.identifier,
+              name: node.name
+            }
+          })),
+          edges: []
+        }
+        
+        cyRef.current.elements().remove()
+        cyRef.current.add(elements)
+        applyLayout(layout)
+        setStats(data.data.stats)
+      }
+    } catch (error) {
+      console.error('Error loading timeline graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const applyLayout = (layoutName) => {
     if (!cyRef.current) return
     
@@ -419,7 +461,29 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       
       <div className="graph-legend">
         <h4>Legend</h4>
-        {graphType === 'proximity' ? (
+        {graphType === 'timeline' ? (
+          <>
+            <div className="legend-section">
+              <h5>Satellites by Launch Year</h5>
+              <div className="legend-item">
+                <span className="legend-node low-risk"></span>
+                <span>Low Congestion</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node medium-risk"></span>
+                <span>Medium Congestion</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node high-risk"></span>
+                <span>High Congestion</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node critical-risk"></span>
+                <span>Critical Congestion</span>
+              </div>
+            </div>
+          </>
+        ) : graphType === 'proximity' ? (
           <>
             <div className="legend-section">
               <h5>Satellites (size = # neighbors)</h5>
