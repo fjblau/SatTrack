@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategory, selectedCountry }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -144,6 +144,31 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
+            selector: 'node[type="country"]',
+            style: {
+              'background-color': '#9b59b6',
+              'shape': 'hexagon',
+              'font-size': '12px',
+              'font-weight': 'bold'
+            }
+          },
+          {
+            selector: 'edge[relationship_type="collaboration"]',
+            style: {
+              'line-color': '#27ae60',
+              'width': 4,
+              'line-style': 'solid'
+            }
+          },
+          {
+            selector: 'edge[relationship_type="shared_orbital_band"]',
+            style: {
+              'line-color': '#3498db',
+              'width': 2,
+              'line-style': 'dashed'
+            }
+          },
+          {
             selector: ':selected',
             style: {
               'background-color': '#f39c12',
@@ -178,8 +203,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       loadRegistrationGraph(selectedDocument)
     } else if (graphType === 'proximity' && selectedOrbitalBand) {
       loadProximityGraph(selectedOrbitalBand)
+    } else if (graphType === 'function' && selectedFunctionCategory) {
+      loadFunctionGraph(selectedFunctionCategory)
+    } else if (graphType === 'country') {
+      loadCountryGraph()
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategory, selectedCountry])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -335,6 +364,98 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     }
   }
 
+  const loadFunctionGraph = async (category) => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const response = await fetch(`/v2/graphs/function-similarity/category/${encodeURIComponent(category)}?limit=50`)
+      const data = await response.json()
+      
+      if (data.data && data.data.nodes && data.data.nodes.length > 0) {
+        const elements = {
+          nodes: data.data.nodes.map(node => ({
+            data: {
+              id: node._id,
+              label: node.name || node.identifier,
+              function: node.function,
+              function_category: node.function_category,
+              country: node.country,
+              orbital_band: node.orbital_band,
+              congestion_risk: node.congestion_risk,
+              node_size: 20
+            }
+          })),
+          edges: data.data.edges.map(edge => ({
+            data: {
+              id: edge.id,
+              source: edge.source,
+              target: edge.target,
+              relationship: edge.relationship
+            }
+          }))
+        }
+        
+        cyRef.current.elements().remove()
+        cyRef.current.add(elements)
+        applyLayout(layout)
+        setStats(data.data.stats)
+      }
+    } catch (error) {
+      console.error('Error loading function graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadCountryGraph = async () => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const response = await fetch('/v2/graphs/country-relations?min_satellites=100&limit_countries=15')
+      const data = await response.json()
+      
+      if (data.data && data.data.nodes && data.data.nodes.length > 0) {
+        const elements = {
+          nodes: data.data.nodes.map(node => {
+            const nodeSize = Math.log(node.satellite_count + 1) * 15
+            return {
+              data: {
+                id: node.country,
+                label: node.country,
+                satellite_count: node.satellite_count,
+                node_size: nodeSize,
+                type: 'country'
+              }
+            }
+          }),
+          edges: data.data.edges.map(edge => ({
+            data: {
+              id: edge.id,
+              source: edge.source,
+              target: edge.target,
+              relationship_type: edge.relationship_type,
+              strength: edge.strength,
+              weight: edge.weight,
+              orbital_band: edge.orbital_band,
+              edge_label: edge.relationship_type === 'collaboration' ? 'Collab' : edge.orbital_band
+            }
+          }))
+        }
+        
+        cyRef.current.elements().remove()
+        cyRef.current.add(elements)
+        applyLayout(layout)
+        setStats(data.data.stats)
+      }
+    } catch (error) {
+      console.error('Error loading country graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const applyLayout = (layoutName) => {
     if (!cyRef.current) return
     
@@ -461,6 +582,32 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
                 <span className="legend-edge"></span>
                 <span>Distant (30-50km)</span>
               </div>
+            </div>
+          </>
+        ) : graphType === 'country' ? (
+          <>
+            <div className="legend-item">
+              <span className="legend-node country"></span>
+              <span>Country (size = satellites)</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-edge-thick collaboration"></span>
+              <span>Direct Collaboration</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-edge-dashed"></span>
+              <span>Shared Orbital Band</span>
+            </div>
+          </>
+        ) : graphType === 'function' ? (
+          <>
+            <div className="legend-item">
+              <span className="legend-node satellite"></span>
+              <span>Satellite</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-edge"></span>
+              <span>Similar Function</span>
             </div>
           </>
         ) : (

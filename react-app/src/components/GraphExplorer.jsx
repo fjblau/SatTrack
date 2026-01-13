@@ -7,13 +7,19 @@ function GraphExplorer() {
   const [constellations, setConstellations] = useState([])
   const [documents, setDocuments] = useState([])
   const [orbitalBands, setOrbitalBands] = useState([])
+  const [functionCategories, setFunctionCategories] = useState([])
+  const [countries, setCountries] = useState([])
   const [selectedConstellation, setSelectedConstellation] = useState('')
   const [selectedDocument, setSelectedDocument] = useState('')
   const [selectedOrbitalBand, setSelectedOrbitalBand] = useState('')
+  const [selectedFunctionCategory, setSelectedFunctionCategory] = useState('')
+  const [selectedCountry, setSelectedCountry] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     loadGraphStats()
+    loadFunctionCategories()
+    loadCountryRelations()
   }, [])
 
   const loadGraphStats = async () => {
@@ -45,6 +51,38 @@ function GraphExplorer() {
     }
   }
 
+  const loadFunctionCategories = async () => {
+    try {
+      const response = await fetch('/v2/graphs/function-similarity?limit=10')
+      const data = await response.json()
+      
+      if (data.data && data.data.categories) {
+        setFunctionCategories(data.data.categories)
+        if (data.data.categories.length > 0) {
+          setSelectedFunctionCategory(data.data.categories[0].category)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading function categories:', error)
+    }
+  }
+
+  const loadCountryRelations = async () => {
+    try {
+      const response = await fetch('/v2/graphs/country-relations?min_satellites=100&limit_countries=15')
+      const data = await response.json()
+      
+      if (data.data && data.data.nodes) {
+        setCountries(data.data.nodes)
+        if (data.data.nodes.length > 0) {
+          setSelectedCountry(data.data.nodes[0].country)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading country relations:', error)
+    }
+  }
+
   return (
     <div className="graph-explorer">
       <div className="graph-sidebar">
@@ -66,6 +104,18 @@ function GraphExplorer() {
             onClick={() => setGraphType('proximity')}
           >
             Orbital Proximity
+          </button>
+          <button 
+            className={graphType === 'function' ? 'active' : ''}
+            onClick={() => setGraphType('function')}
+          >
+            Function Similarity
+          </button>
+          <button 
+            className={graphType === 'country' ? 'active' : ''}
+            onClick={() => setGraphType('country')}
+          >
+            Country Relations
           </button>
         </div>
 
@@ -137,6 +187,52 @@ function GraphExplorer() {
           </div>
         )}
 
+        {graphType === 'function' && (
+          <div className="selector-content">
+            <h3>Function Categories</h3>
+            <p className="section-description">Satellites grouped by mission function (27% coverage)</p>
+            {loading ? (
+              <p>Loading...</p>
+            ) : (
+              <div className="item-list">
+                {functionCategories.map((category) => (
+                  <div
+                    key={category.category}
+                    className={`list-item ${selectedFunctionCategory === category.category ? 'selected' : ''}`}
+                    onClick={() => setSelectedFunctionCategory(category.category)}
+                  >
+                    <div className="item-name">{category.category}</div>
+                    <div className="item-count">{category.satellite_count.toLocaleString()} satellites</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {graphType === 'country' && (
+          <div className="selector-content">
+            <h3>Country Relations</h3>
+            <p className="section-description">International cooperation and shared orbital interests</p>
+            {loading ? (
+              <p>Loading...</p>
+            ) : (
+              <div className="item-list">
+                {countries.map((country) => (
+                  <div
+                    key={country.country}
+                    className={`list-item ${selectedCountry === country.country ? 'selected' : ''}`}
+                    onClick={() => setSelectedCountry(country.country)}
+                  >
+                    <div className="item-name">{country.country}</div>
+                    <div className="item-count">{country.satellite_count.toLocaleString()} satellites</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
       <div className="graph-main">
@@ -145,6 +241,8 @@ function GraphExplorer() {
           selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
           selectedDocument={graphType === 'registration' ? selectedDocument : null}
           selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
+          selectedFunctionCategory={graphType === 'function' ? selectedFunctionCategory : null}
+          selectedCountry={graphType === 'country' ? selectedCountry : null}
         />
       </div>
     </div>

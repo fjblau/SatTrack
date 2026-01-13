@@ -248,3 +248,46 @@
   border-left: 6px solid #c0392b;
   top: -3px;
 }
+
+.legend-node.country {
+  background-color: #9b59b6;
+  width: 24px;
+  height: 24px;
+  clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%);
+}
+
+.legend-edge-thick.collaboration {
+  background-color: #27ae60;
+  height: 4px;
+}
+
+.legend-edge-thick.collaboration::after {
+  border-left: 6px solid #27ae60;
+  top: -2.5px;
+}
+
+.legend-edge-dashed {
+  width: 30px;
+  height: 2px;
+  background: repeating-linear-gradient(
+    to right,
+    #3498db 0,
+    #3498db 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  display: inline-block;
+  position: relative;
+}
+
+.legend-edge-dashed::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid #3498db;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}

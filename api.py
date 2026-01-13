@@ -1248,3 +1248,339 @@ def get_launch_timeline_graph(
             "message": f"No satellites found for time period '{time_period}'",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+@app.get("/v2/graphs/function-similarity")
+def get_function_similarity_graph(limit: Optional[int] = Query(default=100, description="Limit satellites per category")):
+    """
+    Get function similarity graph showing satellites grouped by function categories.
+    
+    Categories are derived from function keywords:
+    - Communications: satellites for telecommunications
+    - Earth Observation: remote sensing, earth resources
+    - Scientific Research: space/atmosphere investigation
+    - Navigation: GPS, GLONASS, positioning
+    - Military/Defense: defense, military assignments
+    - Space Station: ISS, Mir supply and operations
+    - Technology/Testing: tech demonstration, experimental
+    """
+    
+    query = f"""
+    LET satellites_with_function = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.function != null
+            LET func_lower = LOWER(doc.canonical.function)
+            LET category = (
+                func_lower LIKE '%communicat%' OR func_lower LIKE '%telecom%' ? 'Communications' :
+                func_lower LIKE '%earth%' OR func_lower LIKE '%observation%' OR func_lower LIKE '%remote sens%' OR func_lower LIKE '%resources%' ? 'Earth Observation' :
+                func_lower LIKE '%investigation%' OR func_lower LIKE '%scientific%' OR func_lower LIKE '%atmosphere%' OR func_lower LIKE '%space%' ? 'Scientific Research' :
+                func_lower LIKE '%navigation%' OR func_lower LIKE '%glonass%' OR func_lower LIKE '%gps%' OR func_lower LIKE '%position%' ? 'Navigation' :
+                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military/Defense' :
+                func_lower LIKE '%station%' OR func_lower LIKE '%mir%' OR func_lower LIKE '%iss%' OR func_lower LIKE '%delivery%' ? 'Space Station' :
+                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology/Testing' :
+                'Other'
+            )
+            RETURN {{
+                _id: doc._id,
+                _key: doc._key,
+                identifier: doc.identifier,
+                name: doc.canonical.name,
+                function: doc.canonical.function,
+                function_category: category,
+                country: doc.canonical.country,
+                launch_date: doc.canonical.launch_date,
+                orbital_band: doc.canonical.orbital_band,
+                congestion_risk: doc.canonical.congestion_risk
+            }}
+    )
+    
+    LET category_stats = (
+        FOR sat IN satellites_with_function
+            COLLECT category = sat.function_category WITH COUNT INTO count
+            SORT count DESC
+            RETURN {{
+                category: category,
+                satellite_count: count
+            }}
+    )
+    
+    LET limited_satellites = (
+        FOR sat IN satellites_with_function
+            COLLECT category = sat.function_category INTO category_sats
+            LET limited_sats = SLICE(category_sats[*].sat, 0, @limit)
+            FOR s IN limited_sats
+                RETURN s
+    )
+    
+    LET edges = (
+        FOR sat1 IN limited_satellites
+            FOR sat2 IN limited_satellites
+                FILTER sat1.function_category == sat2.function_category
+                FILTER sat1._key < sat2._key
+                LIMIT 500
+                RETURN {{
+                    id: CONCAT(sat1._key, '_', sat2._key),
+                    source: sat1._id,
+                    target: sat2._id,
+                    function_category: sat1.function_category,
+                    relationship: 'similar_function'
+                }}
+    )
+    
+    RETURN {{
+        nodes: limited_satellites,
+        edges: edges,
+        categories: category_stats,
+        stats: {{
+            total_with_function: LENGTH(satellites_with_function),
+            nodes_shown: LENGTH(limited_satellites),
+            edges_shown: LENGTH(edges),
+            categories_count: LENGTH(category_stats)
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(query, bind_vars={'limit': limit})
+    results = list(cursor)
+    
+    if results:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "nodes": [],
+                "edges": [],
+                "categories": [],
+                "stats": {
+                    "total_with_function": 0,
+                    "nodes_shown": 0,
+                    "edges_shown": 0,
+                    "categories_count": 0
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/v2/graphs/function-similarity/category/{category}")
+def get_function_category_graph(
+    category: str,
+    limit: Optional[int] = Query(default=100, description="Limit number of satellites")
+):
+    """
+    Get satellites for a specific function category.
+    """
+    
+    query = f"""
+    LET satellites_with_function = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.function != null
+            LET func_lower = LOWER(doc.canonical.function)
+            LET detected_category = (
+                func_lower LIKE '%communicat%' OR func_lower LIKE '%telecom%' ? 'Communications' :
+                func_lower LIKE '%earth%' OR func_lower LIKE '%observation%' OR func_lower LIKE '%remote sens%' OR func_lower LIKE '%resources%' ? 'Earth Observation' :
+                func_lower LIKE '%investigation%' OR func_lower LIKE '%scientific%' OR func_lower LIKE '%atmosphere%' OR func_lower LIKE '%space%' ? 'Scientific Research' :
+                func_lower LIKE '%navigation%' OR func_lower LIKE '%glonass%' OR func_lower LIKE '%gps%' OR func_lower LIKE '%position%' ? 'Navigation' :
+                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military/Defense' :
+                func_lower LIKE '%station%' OR func_lower LIKE '%mir%' OR func_lower LIKE '%iss%' OR func_lower LIKE '%delivery%' ? 'Space Station' :
+                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology/Testing' :
+                'Other'
+            )
+            FILTER detected_category == @category
+            LIMIT @limit
+            RETURN {{
+                _id: doc._id,
+                _key: doc._key,
+                identifier: doc.identifier,
+                name: doc.canonical.name,
+                function: doc.canonical.function,
+                function_category: detected_category,
+                country: doc.canonical.country,
+                launch_date: doc.canonical.launch_date,
+                orbital_band: doc.canonical.orbital_band,
+                congestion_risk: doc.canonical.congestion_risk,
+                norad_cat_id: doc.canonical.norad_cat_id
+            }}
+    )
+    
+    LET edges = (
+        FOR sat1 IN satellites_with_function
+            FOR sat2 IN satellites_with_function
+                FILTER sat1._key < sat2._key
+                LIMIT 300
+                RETURN {{
+                    id: CONCAT(sat1._key, '_', sat2._key),
+                    source: sat1._id,
+                    target: sat2._id,
+                    relationship: 'similar_function'
+                }}
+    )
+    
+    RETURN {{
+        category: @category,
+        nodes: satellites_with_function,
+        edges: edges,
+        stats: {{
+            satellites_shown: LENGTH(satellites_with_function),
+            edges_shown: LENGTH(edges)
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(query, bind_vars={'category': category, 'limit': limit})
+    results = list(cursor)
+    
+    if results:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "category": category,
+                "nodes": [],
+                "edges": [],
+                "stats": {
+                    "satellites_shown": 0,
+                    "edges_shown": 0
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/v2/graphs/country-relations")
+def get_country_relations_graph(
+    min_satellites: Optional[int] = Query(default=50, description="Minimum satellites per country"),
+    limit_countries: Optional[int] = Query(default=20, description="Limit number of countries")
+):
+    """
+    Get country relations graph showing international cooperation and shared interests.
+    
+    Relationships are based on:
+    - Shared registration documents (direct collaboration)
+    - Satellites in similar orbital bands (coordination)
+    - Similar launch timeframes (parallel programs)
+    """
+    
+    query = f"""
+    LET countries_with_sats = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            LET country = doc.canonical.country != null ? doc.canonical.country : doc.canonical.country_of_origin
+            FILTER country != null
+            COLLECT c = country WITH COUNT INTO count
+            FILTER count >= @min_satellites
+            SORT count DESC
+            LIMIT @limit_countries
+            RETURN {{
+                country: c,
+                satellite_count: count
+            }}
+    )
+    
+    LET country_names = countries_with_sats[*].country
+    
+    LET country_satellites = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            LET country = doc.canonical.country != null ? doc.canonical.country : doc.canonical.country_of_origin
+            FILTER country IN country_names
+            RETURN {{
+                country: country,
+                orbital_band: doc.canonical.orbital_band,
+                registration_document: doc.canonical.registration_document,
+                launch_year: doc.canonical.launch_date != null ? TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4)) : null
+            }}
+    )
+    
+    LET shared_orbital_bands = (
+        FOR sat1 IN country_satellites
+            FILTER sat1.orbital_band != null
+            FOR sat2 IN country_satellites
+                FILTER sat2.orbital_band != null
+                FILTER sat1.country < sat2.country
+                FILTER sat1.orbital_band == sat2.orbital_band
+                COLLECT country1 = sat1.country, country2 = sat2.country, band = sat1.orbital_band WITH COUNT INTO shared_count
+                RETURN {{
+                    country1: country1,
+                    country2: country2,
+                    orbital_band: band,
+                    shared_count: shared_count
+                }}
+    )
+    
+    LET shared_registration_docs = (
+        FOR sat1 IN country_satellites
+            FILTER sat1.registration_document != null
+            FOR sat2 IN country_satellites
+                FILTER sat2.registration_document != null
+                FILTER sat1.country < sat2.country
+                FILTER sat1.registration_document == sat2.registration_document
+                COLLECT country1 = sat1.country, country2 = sat2.country WITH COUNT INTO collab_count
+                RETURN {{
+                    country1: country1,
+                    country2: country2,
+                    collaboration_count: collab_count
+                }}
+    )
+    
+    LET edges = (
+        FOR relation IN UNION_DISTINCT(
+            (FOR edge IN shared_orbital_bands
+                FILTER edge.shared_count >= 5
+                RETURN {{
+                    id: CONCAT(edge.country1, '_', edge.country2, '_orbital'),
+                    source: edge.country1,
+                    target: edge.country2,
+                    relationship_type: 'shared_orbital_band',
+                    orbital_band: edge.orbital_band,
+                    strength: edge.shared_count,
+                    weight: edge.shared_count
+                }}),
+            (FOR edge IN shared_registration_docs
+                FILTER edge.collaboration_count >= 1
+                RETURN {{
+                    id: CONCAT(edge.country1, '_', edge.country2, '_collab'),
+                    source: edge.country1,
+                    target: edge.country2,
+                    relationship_type: 'collaboration',
+                    strength: edge.collaboration_count * 10,
+                    weight: edge.collaboration_count * 10
+                }})
+        )
+        RETURN relation
+    )
+    
+    RETURN {{
+        nodes: countries_with_sats,
+        edges: edges,
+        stats: {{
+            countries_shown: LENGTH(countries_with_sats),
+            relationships_found: LENGTH(edges)
+        }}
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(
+        query,
+        bind_vars={'min_satellites': min_satellites, 'limit_countries': limit_countries}
+    )
+    results = list(cursor)
+    
+    if results:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "nodes": [],
+                "edges": [],
+                "stats": {
+                    "countries_shown": 0,
+                    "relationships_found": 0
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
