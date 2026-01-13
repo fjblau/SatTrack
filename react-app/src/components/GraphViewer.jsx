@@ -11,6 +11,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState(null)
   const [layout, setLayout] = useState('cola')
+  const [countryGraphData, setCountryGraphData] = useState(null)
 
   useEffect(() => {
     if (containerRef.current && !cyRef.current) {
@@ -153,6 +154,14 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
+            selector: 'node[is_selected]',
+            style: {
+              'background-color': '#e74c3c',
+              'border-width': 4,
+              'border-color': '#c0392b'
+            }
+          },
+          {
             selector: 'edge[relationship_type="collaboration"]',
             style: {
               'line-color': '#27ae60',
@@ -205,10 +214,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       loadProximityGraph(selectedOrbitalBand)
     } else if (graphType === 'function' && selectedFunctionCategory) {
       loadFunctionGraph(selectedFunctionCategory)
-    } else if (graphType === 'country') {
+    } else if (graphType === 'country' && !countryGraphData) {
       loadCountryGraph()
+    } else if (graphType === 'country' && countryGraphData && selectedCountry) {
+      filterCountryGraph(selectedCountry)
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategory, selectedCountry])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategory, selectedCountry, countryGraphData])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -417,6 +428,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       const data = await response.json()
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
+        setCountryGraphData(data.data)
+        
         const elements = {
           nodes: data.data.nodes.map(node => {
             const nodeSize = Math.log(node.satellite_count + 1) * 15
@@ -451,6 +464,86 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
     } catch (error) {
       console.error('Error loading country graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filterCountryGraph = (country) => {
+    if (!cyRef.current || !countryGraphData) return
+    
+    setLoading(true)
+    try {
+      let filteredNodes, filteredEdges
+      
+      if (!country) {
+        filteredNodes = countryGraphData.nodes
+        filteredEdges = countryGraphData.edges
+      } else {
+        const connectedCountries = new Set([country])
+        
+        countryGraphData.edges.forEach(edge => {
+          if (edge.source === country) {
+            connectedCountries.add(edge.target)
+          } else if (edge.target === country) {
+            connectedCountries.add(edge.source)
+          }
+        })
+        
+        filteredNodes = countryGraphData.nodes.filter(node => 
+          connectedCountries.has(node.country)
+        )
+        
+        filteredEdges = countryGraphData.edges.filter(edge =>
+          connectedCountries.has(edge.source) && connectedCountries.has(edge.target)
+        )
+      }
+      
+      const elements = {
+        nodes: filteredNodes.map(node => {
+          const nodeSize = Math.log(node.satellite_count + 1) * 15
+          const isSelected = country && node.country === country
+          return {
+            data: {
+              id: node.country,
+              label: node.country,
+              satellite_count: node.satellite_count,
+              node_size: isSelected ? nodeSize * 1.3 : nodeSize,
+              type: 'country',
+              is_selected: isSelected ? true : undefined
+            }
+          }
+        }),
+        edges: filteredEdges.map(edge => ({
+          data: {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            relationship_type: edge.relationship_type,
+            strength: edge.strength,
+            weight: edge.weight,
+            orbital_band: edge.orbital_band,
+            edge_label: edge.relationship_type === 'collaboration' ? 'Collab' : edge.orbital_band
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      const newStats = {
+        countries_shown: filteredNodes.length,
+        relationships_found: filteredEdges.length
+      }
+      
+      if (country) {
+        newStats.focused_country = country
+      }
+      
+      setStats(newStats)
+    } catch (error) {
+      console.error('Error filtering country graph:', error)
     } finally {
       setLoading(false)
     }
@@ -520,6 +613,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         </div>
         
         <button onClick={handleFitToView}>Fit to View</button>
+        {graphType === 'country' && stats?.focused_country && (
+          <button onClick={() => filterCountryGraph(null)}>Show All Countries</button>
+        )}
         <button onClick={handleReset}>Clear Graph</button>
         
         {stats && (
@@ -530,6 +626,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             {stats.has_hub && <span>⭐ Has Hub</span>}
             {stats.total_proximity_edges !== undefined && <span>Total Proximity Edges: {stats.total_proximity_edges.toLocaleString()}</span>}
             {stats.edges_shown !== undefined && <span>Showing: {stats.edges_shown} edges</span>}
+            {stats.countries_shown !== undefined && <span>Countries: {stats.countries_shown}</span>}
+            {stats.relationships_found !== undefined && <span>Relationships: {stats.relationships_found}</span>}
+            {stats.focused_country && <span>🔍 Focused: {stats.focused_country}</span>}
+            {stats.satellites_shown !== undefined && <span>Satellites: {stats.satellites_shown}</span>}
           </div>
         )}
       </div>
