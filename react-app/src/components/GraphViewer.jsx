@@ -146,6 +146,30 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
+            selector: 'edge[relationship_type="constellation_membership"]',
+            style: {
+              'line-color': '#3498db',
+              'width': 3,
+              'line-style': 'solid'
+            }
+          },
+          {
+            selector: 'edge[relationship_type="registration_link"]',
+            style: {
+              'line-color': '#9b59b6',
+              'width': 2,
+              'line-style': 'dashed'
+            }
+          },
+          {
+            selector: 'edge[relationship_type="orbital_proximity"]',
+            style: {
+              'line-color': '#e67e22',
+              'width': 2,
+              'line-style': 'dotted'
+            }
+          },
+          {
             selector: 'node[type="country"]',
             style: {
               'background-color': '#9b59b6',
@@ -407,7 +431,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               id: edge.id,
               source: edge.source,
               target: edge.target,
-              relationship: edge.relationship
+              relationship_type: edge.relationship_type,
+              constellation_name: edge.constellation_name,
+              registration_document: edge.registration_document,
+              proximity_score: edge.proximity_score,
+              orbital_band: edge.orbital_band
             }
           }))
         }
@@ -469,7 +497,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             id: edge.id,
             source: edge.source,
             target: edge.target,
-            relationship: edge.relationship
+            relationship_type: edge.relationship_type,
+            constellation_name: edge.constellation_name,
+            registration_document: edge.registration_document,
+            proximity_score: edge.proximity_score,
+            orbital_band: edge.orbital_band
           }
         }))
       }

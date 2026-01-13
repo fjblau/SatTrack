@@ -1311,20 +1311,47 @@ def get_function_similarity_graph(limit: Optional[int] = Query(default=100, desc
                 RETURN s
     )
     
-    LET edges = (
-        FOR sat1 IN limited_satellites
-            FOR sat2 IN limited_satellites
-                FILTER sat1.function_category == sat2.function_category
-                FILTER sat1._key < sat2._key
-                LIMIT 500
-                RETURN {{
-                    id: CONCAT(sat1._key, '_', sat2._key),
-                    source: sat1._id,
-                    target: sat2._id,
-                    function_category: sat1.function_category,
-                    relationship: 'similar_function'
-                }}
+    LET satellite_ids = limited_satellites[*]._id
+    
+    LET constellation_edges = (
+        FOR edge IN {db_module.EDGE_COLLECTION_CONSTELLATION}
+            FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'constellation_membership',
+                constellation_name: edge.constellation_name
+            }}
     )
+    
+    LET registration_edges = (
+        FOR edge IN {db_module.EDGE_COLLECTION_REGISTRATION}
+            FILTER (edge._from IN satellite_ids OR edge._to IN satellite_ids)
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'registration_link',
+                registration_document: edge.registration_document
+            }}
+    )
+    
+    LET proximity_edges = (
+        FOR edge IN {db_module.EDGE_COLLECTION_PROXIMITY}
+            FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+            LIMIT 500
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'orbital_proximity',
+                proximity_score: edge.proximity_score,
+                orbital_band: edge.orbital_band
+            }}
+    )
+    
+    LET edges = UNION(constellation_edges, registration_edges, proximity_edges)
     
     RETURN {{
         nodes: limited_satellites,
@@ -1404,18 +1431,47 @@ def get_function_category_graph(
             }}
     )
     
-    LET edges = (
-        FOR sat1 IN satellites_with_function
-            FOR sat2 IN satellites_with_function
-                FILTER sat1._key < sat2._key
-                LIMIT 300
-                RETURN {{
-                    id: CONCAT(sat1._key, '_', sat2._key),
-                    source: sat1._id,
-                    target: sat2._id,
-                    relationship: 'similar_function'
-                }}
+    LET satellite_ids = satellites_with_function[*]._id
+    
+    LET constellation_edges = (
+        FOR edge IN {db_module.EDGE_COLLECTION_CONSTELLATION}
+            FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'constellation_membership',
+                constellation_name: edge.constellation_name
+            }}
     )
+    
+    LET registration_edges = (
+        FOR edge IN {db_module.EDGE_COLLECTION_REGISTRATION}
+            FILTER (edge._from IN satellite_ids OR edge._to IN satellite_ids)
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'registration_link',
+                registration_document: edge.registration_document
+            }}
+    )
+    
+    LET proximity_edges = (
+        FOR edge IN {db_module.EDGE_COLLECTION_PROXIMITY}
+            FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+            LIMIT 300
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'orbital_proximity',
+                proximity_score: edge.proximity_score,
+                orbital_band: edge.orbital_band
+            }}
+    )
+    
+    LET edges = UNION(constellation_edges, registration_edges, proximity_edges)
     
     RETURN {{
         category: @category,
