@@ -1028,6 +1028,77 @@ def get_orbital_proximity_graph(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
+@app.get("/v2/graphs/launch-timeline/breakdown/{year}")
+def get_launch_timeline_breakdown(year: int):
+    """
+    Get breakdown statistics for a specific year including:
+    - Orbital band distribution
+    - Country distribution  
+    - Constellation distribution
+    """
+    
+    query = f"""
+    LET year_satellites = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            FILTER doc.canonical.launch_date != null
+            LET sat_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            FILTER sat_year == @year
+            RETURN doc
+    )
+    
+    LET by_orbital_band = (
+        FOR sat IN year_satellites
+            COLLECT band = sat.canonical.orbital_band WITH COUNT INTO band_count
+            SORT band_count DESC
+            RETURN {{orbital_band: band, count: band_count}}
+    )
+    
+    LET by_country = (
+        FOR sat IN year_satellites
+            COLLECT country = sat.canonical.country WITH COUNT INTO country_count
+            SORT country_count DESC
+            LIMIT 10
+            RETURN {{country: country, count: country_count}}
+    )
+    
+    LET by_constellation = (
+        FOR sat IN year_satellites
+            FILTER sat.canonical.constellation != null
+            COLLECT constellation = sat.canonical.constellation WITH COUNT INTO const_count
+            SORT const_count DESC
+            LIMIT 10
+            RETURN {{constellation: constellation, count: const_count}}
+    )
+    
+    RETURN {{
+        year: @year,
+        total_satellites: LENGTH(year_satellites),
+        by_orbital_band: by_orbital_band,
+        by_country: by_country,
+        by_constellation: by_constellation
+    }}
+    """
+    
+    cursor = db_module.db.aql.execute(query, bind_vars={'year': year})
+    results = list(cursor)
+    
+    if results:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "year": year,
+                "total_satellites": 0,
+                "by_orbital_band": [],
+                "by_country": [],
+                "by_constellation": []
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
 @app.get("/v2/graphs/launch-timeline/{time_period}")
 def get_launch_timeline_graph(
     time_period: str,

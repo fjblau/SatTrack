@@ -5,11 +5,19 @@ function TimelineChart({ selectedTimePeriod }) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
   const [hoveredYear, setHoveredYear] = useState(null)
+  const [breakdown, setBreakdown] = useState(null)
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false)
   const svgRef = useRef(null)
 
   useEffect(() => {
     loadTimelineData()
   }, [])
+
+  useEffect(() => {
+    if (selectedTimePeriod) {
+      loadBreakdown(selectedTimePeriod)
+    }
+  }, [selectedTimePeriod])
 
   const loadTimelineData = async () => {
     setLoading(true)
@@ -25,6 +33,22 @@ function TimelineChart({ selectedTimePeriod }) {
       console.error('Error loading timeline data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadBreakdown = async (year) => {
+    setLoadingBreakdown(true)
+    try {
+      const response = await fetch(`/v2/graphs/launch-timeline/breakdown/${year}`)
+      const result = await response.json()
+      
+      if (result.data) {
+        setBreakdown(result.data)
+      }
+    } catch (error) {
+      console.error('Error loading breakdown data:', error)
+    } finally {
+      setLoadingBreakdown(false)
     }
   }
 
@@ -281,6 +305,81 @@ function TimelineChart({ selectedTimePeriod }) {
           </div>
         </div>
       </div>
+
+      {breakdown && (
+        <div className="timeline-breakdown">
+          <h4>Launch Breakdown for {breakdown.year}</h4>
+          <div className="breakdown-sections">
+            <div className="breakdown-section">
+              <h5>Orbital Bands</h5>
+              {loadingBreakdown ? (
+                <p className="breakdown-loading">Loading...</p>
+              ) : (
+                <div className="breakdown-items">
+                  {breakdown.by_orbital_band.filter(b => b.orbital_band).map((band, idx) => (
+                    <div key={idx} className="breakdown-item">
+                      <span className="breakdown-name">{band.orbital_band}</span>
+                      <div className="breakdown-bar-container">
+                        <div 
+                          className="breakdown-bar" 
+                          style={{ width: `${(band.count / breakdown.total_satellites) * 100}%` }}
+                        />
+                      </div>
+                      <span className="breakdown-count">{band.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="breakdown-section">
+              <h5>Top Countries</h5>
+              {loadingBreakdown ? (
+                <p className="breakdown-loading">Loading...</p>
+              ) : (
+                <div className="breakdown-items">
+                  {breakdown.by_country.slice(0, 5).map((country, idx) => (
+                    <div key={idx} className="breakdown-item">
+                      <span className="breakdown-name">{country.country}</span>
+                      <div className="breakdown-bar-container">
+                        <div 
+                          className="breakdown-bar breakdown-bar-country" 
+                          style={{ width: `${(country.count / breakdown.total_satellites) * 100}%` }}
+                        />
+                      </div>
+                      <span className="breakdown-count">{country.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {breakdown.by_constellation.length > 0 && (
+              <div className="breakdown-section">
+                <h5>Top Constellations</h5>
+                {loadingBreakdown ? (
+                  <p className="breakdown-loading">Loading...</p>
+                ) : (
+                  <div className="breakdown-items">
+                    {breakdown.by_constellation.slice(0, 5).map((constellation, idx) => (
+                      <div key={idx} className="breakdown-item">
+                        <span className="breakdown-name">{constellation.constellation}</span>
+                        <div className="breakdown-bar-container">
+                          <div 
+                            className="breakdown-bar breakdown-bar-constellation" 
+                            style={{ width: `${(constellation.count / breakdown.total_satellites) * 100}%` }}
+                          />
+                        </div>
+                        <span className="breakdown-count">{constellation.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
