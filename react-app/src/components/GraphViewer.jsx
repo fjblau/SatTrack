@@ -424,7 +424,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     
     setLoading(true)
     try {
-      const response = await fetch('/v2/graphs/country-relations?min_satellites=100&limit_countries=10')
+      const response = await fetch('/v2/graphs/country-relations?min_satellites=10&limit_countries=100')
       const data = await response.json()
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
