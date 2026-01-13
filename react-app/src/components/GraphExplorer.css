@@ -15,22 +15,25 @@
 
 .graph-type-selector {
   display: flex;
+  flex-direction: column;
   background: white;
   border-bottom: 1px solid #dee2e6;
+  padding: 0.5rem;
+  gap: 0.25rem;
 }
 
 .graph-type-selector button {
-  flex: 1;
-  padding: 0.75rem 0.5rem;
+  padding: 0.75rem 1rem;
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: #6c757d;
   transition: all 0.2s;
-  border-bottom: 3px solid transparent;
-  white-space: nowrap;
+  border-radius: 6px;
+  text-align: left;
+  border-left: 3px solid transparent;
 }
 
 .graph-type-selector button:hover {
@@ -40,8 +43,8 @@
 
 .graph-type-selector button.active {
   color: #3498db;
-  border-bottom-color: #3498db;
-  background: white;
+  border-left-color: #3498db;
+  background: #e3f2fd;
 }
 
 .selector-content {

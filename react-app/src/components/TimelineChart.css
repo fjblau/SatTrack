@@ -1,0 +1,73 @@
+.timeline-chart-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  background: white;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.timeline-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.timeline-header h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  color: #2c3e50;
+}
+
+.timeline-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #6c757d;
+}
+
+.timeline-chart {
+  display: block;
+  margin: 0 auto;
+}
+
+.timeline-loading,
+.timeline-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 1rem;
+  color: #6c757d;
+}
+
+.timeline-stats {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.stat-card {
+  background: #f8f9fa;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  min-width: 140px;
+  text-align: center;
+  border: 1px solid #dee2e6;
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  color: #3498db;
+  font-weight: 700;
+}

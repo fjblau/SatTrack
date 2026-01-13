@@ -427,6 +427,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     }
   }
 
+  if (graphType === 'timeline') {
+    return <TimelineChart selectedTimePeriod={selectedTimePeriod} />
+  }
+
   return (
     <div className="graph-viewer">
       <div className="graph-controls">
