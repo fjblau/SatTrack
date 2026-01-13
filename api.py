@@ -1453,7 +1453,7 @@ def get_function_category_graph(
 @app.get("/v2/graphs/country-relations")
 def get_country_relations_graph(
     min_satellites: Optional[int] = Query(default=50, description="Minimum satellites per country"),
-    limit_countries: Optional[int] = Query(default=20, description="Limit number of countries")
+    limit_countries: Optional[int] = Query(default=10, description="Limit number of countries")
 ):
     """
     Get country relations graph showing international cooperation and shared interests.
@@ -1461,7 +1461,6 @@ def get_country_relations_graph(
     Relationships are based on:
     - Shared registration documents (direct collaboration)
     - Satellites in similar orbital bands (coordination)
-    - Similar launch timeframes (parallel programs)
     """
     
     query = f"""
@@ -1481,74 +1480,78 @@ def get_country_relations_graph(
     
     LET country_names = countries_with_sats[*].country
     
-    LET country_satellites = (
+    LET by_orbital_band = (
         FOR doc IN {db_module.COLLECTION_NAME}
             LET country = doc.canonical.country != null ? doc.canonical.country : doc.canonical.country_of_origin
             FILTER country IN country_names
+            FILTER doc.canonical.orbital_band != null
+            COLLECT country_name = country, band = doc.canonical.orbital_band WITH COUNT INTO count
             RETURN {{
-                country: country,
-                orbital_band: doc.canonical.orbital_band,
-                registration_document: doc.canonical.registration_document,
-                launch_year: doc.canonical.launch_date != null ? TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4)) : null
+                country: country_name,
+                orbital_band: band,
+                count: count
             }}
     )
     
-    LET shared_orbital_bands = (
-        FOR sat1 IN country_satellites
-            FILTER sat1.orbital_band != null
-            FOR sat2 IN country_satellites
-                FILTER sat2.orbital_band != null
-                FILTER sat1.country < sat2.country
-                FILTER sat1.orbital_band == sat2.orbital_band
-                COLLECT country1 = sat1.country, country2 = sat2.country, band = sat1.orbital_band WITH COUNT INTO shared_count
+    LET orbital_edges = (
+        FOR b1 IN by_orbital_band
+            FOR b2 IN by_orbital_band
+                FILTER b1.country < b2.country
+                FILTER b1.orbital_band == b2.orbital_band
+                FILTER b1.count + b2.count >= 10
                 RETURN {{
-                    country1: country1,
-                    country2: country2,
-                    orbital_band: band,
-                    shared_count: shared_count
+                    country1: b1.country,
+                    country2: b2.country,
+                    orbital_band: b1.orbital_band,
+                    shared_count: b1.count + b2.count
                 }}
     )
     
-    LET shared_registration_docs = (
-        FOR sat1 IN country_satellites
-            FILTER sat1.registration_document != null
-            FOR sat2 IN country_satellites
-                FILTER sat2.registration_document != null
-                FILTER sat1.country < sat2.country
-                FILTER sat1.registration_document == sat2.registration_document
-                COLLECT country1 = sat1.country, country2 = sat2.country WITH COUNT INTO collab_count
+    LET by_registration_doc = (
+        FOR doc IN {db_module.COLLECTION_NAME}
+            LET country = doc.canonical.country != null ? doc.canonical.country : doc.canonical.country_of_origin
+            FILTER country IN country_names
+            FILTER doc.canonical.registration_document != null
+            COLLECT country_name = country, reg_doc = doc.canonical.registration_document WITH COUNT INTO count
+            RETURN {{
+                country: country_name,
+                reg_doc: reg_doc,
+                count: count
+            }}
+    )
+    
+    LET collab_edges = (
+        FOR r1 IN by_registration_doc
+            FOR r2 IN by_registration_doc
+                FILTER r1.country < r2.country
+                FILTER r1.reg_doc == r2.reg_doc
                 RETURN {{
-                    country1: country1,
-                    country2: country2,
-                    collaboration_count: collab_count
+                    country1: r1.country,
+                    country2: r2.country,
+                    collaboration_count: r1.count + r2.count
                 }}
     )
     
-    LET edges = (
-        FOR relation IN UNION_DISTINCT(
-            (FOR edge IN shared_orbital_bands
-                FILTER edge.shared_count >= 5
-                RETURN {{
-                    id: CONCAT(edge.country1, '_', edge.country2, '_orbital'),
-                    source: edge.country1,
-                    target: edge.country2,
-                    relationship_type: 'shared_orbital_band',
-                    orbital_band: edge.orbital_band,
-                    strength: edge.shared_count,
-                    weight: edge.shared_count
-                }}),
-            (FOR edge IN shared_registration_docs
-                FILTER edge.collaboration_count >= 1
-                RETURN {{
-                    id: CONCAT(edge.country1, '_', edge.country2, '_collab'),
-                    source: edge.country1,
-                    target: edge.country2,
-                    relationship_type: 'collaboration',
-                    strength: edge.collaboration_count * 10,
-                    weight: edge.collaboration_count * 10
-                }})
-        )
-        RETURN relation
+    LET edges = UNION_DISTINCT(
+        (FOR edge IN orbital_edges
+            RETURN {{
+                id: CONCAT(edge.country1, '_', edge.country2, '_', edge.orbital_band),
+                source: edge.country1,
+                target: edge.country2,
+                relationship_type: 'shared_orbital_band',
+                orbital_band: edge.orbital_band,
+                strength: edge.shared_count,
+                weight: edge.shared_count
+            }}),
+        (FOR edge IN collab_edges
+            RETURN {{
+                id: CONCAT(edge.country1, '_', edge.country2, '_collab'),
+                source: edge.country1,
+                target: edge.country2,
+                relationship_type: 'collaboration',
+                strength: edge.collaboration_count * 10,
+                weight: edge.collaboration_count * 10
+            }})
     )
     
     RETURN {{
