@@ -3,8 +3,13 @@ import './App.css'
 import DataTable from './components/DataTable'
 import DetailPanel from './components/DetailPanel'
 import Filters from './components/Filters'
+import GraphExplorer from './components/GraphExplorer'
+import TimelineChart from './components/TimelineChart'
 
 function App() {
+  const [activeTab, setActiveTab] = useState('table')
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
+  const [launchYears, setLaunchYears] = useState([])
   const [objects, setObjects] = useState([])
   const [filters, setFilters] = useState({})
   const [selectedObject, setSelectedObject] = useState(null)
@@ -17,6 +22,7 @@ function App() {
 
   useEffect(() => {
     fetchFilterOptions()
+    fetchLaunchYears()
   }, [])
 
   useEffect(() => {
@@ -48,6 +54,22 @@ function App() {
       })
     } catch (error) {
       console.error('Error fetching filters:', error)
+    }
+  }
+
+  const fetchLaunchYears = async () => {
+    try {
+      const response = await fetch('/v2/graphs/stats')
+      const data = await response.json()
+      
+      if (data.data && data.data.recent_launch_years) {
+        setLaunchYears(data.data.recent_launch_years)
+        if (data.data.recent_launch_years.length > 0) {
+          setSelectedTimePeriod(data.data.recent_launch_years[0].year.toString())
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching launch years:', error)
     }
   }
 
@@ -121,48 +143,100 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>Space Object Registry</h1>
-        <p>{total} objects</p>
+        <nav className="app-nav">
+          <button 
+            className={activeTab === 'table' ? 'active' : ''}
+            onClick={() => setActiveTab('table')}
+          >
+            Table View
+          </button>
+          <button 
+            className={activeTab === 'graphs' ? 'active' : ''}
+            onClick={() => setActiveTab('graphs')}
+          >
+            Graphs
+          </button>
+          <button 
+            className={activeTab === 'timeline' ? 'active' : ''}
+            onClick={() => setActiveTab('timeline')}
+          >
+            Timeline
+          </button>
+        </nav>
+        {activeTab === 'table' && <p>{total} objects</p>}
       </header>
       
-      <div className="app-container">
-        <aside className="sidebar">
-          <Filters 
-            filters={filters}
-            filterOptions={filterOptions}
-            onFilterChange={handleFilterChange}
-          />
-        </aside>
-        
-        <main className="main-content">
-          <div className="table-container">
-            <DataTable 
-              objects={objects}
-              selectedObject={selectedObject}
-              onRowClick={handleRowClick}
-              loading={loading}
+      {activeTab === 'table' && (
+        <div className="app-container">
+          <aside className="sidebar">
+            <Filters 
+              filters={filters}
+              filterOptions={filterOptions}
+              onFilterChange={handleFilterChange}
             />
-            {total > limit && (
-              <div className="pagination">
-                <button 
-                  onClick={() => fetchObjects(page - 1)}
-                  disabled={page === 0}
-                >
-                  Previous
-                </button>
-                <span>Page {page + 1} of {Math.ceil(total / limit)}</span>
-                <button 
-                  onClick={() => fetchObjects(page + 1)}
-                  disabled={(page + 1) * limit >= total}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
+          </aside>
           
-          <DetailPanel object={selectedObject} />
-        </main>
-      </div>
+          <main className="main-content">
+            <div className="table-container">
+              <DataTable 
+                objects={objects}
+                selectedObject={selectedObject}
+                onRowClick={handleRowClick}
+                loading={loading}
+              />
+              {total > limit && (
+                <div className="pagination">
+                  <button 
+                    onClick={() => fetchObjects(page - 1)}
+                    disabled={page === 0}
+                  >
+                    Previous
+                  </button>
+                  <span>Page {page + 1} of {Math.ceil(total / limit)}</span>
+                  <button 
+                    onClick={() => fetchObjects(page + 1)}
+                    disabled={(page + 1) * limit >= total}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <DetailPanel object={selectedObject} />
+          </main>
+        </div>
+      )}
+
+      {activeTab === 'graphs' && (
+        <div className="graph-view-container">
+          <GraphExplorer />
+        </div>
+      )}
+
+      {activeTab === 'timeline' && (
+        <div className="timeline-view-container">
+          <div className="timeline-sidebar">
+            <h3>Launch Years</h3>
+            <p className="section-description">Select a year to view breakdown (98.6% coverage)</p>
+            <div className="item-list">
+              {launchYears.map((yearData) => (
+                <div
+                  key={yearData.year}
+                  className={`list-item ${selectedTimePeriod === yearData.year.toString() ? 'selected' : ''}`}
+                  onClick={() => setSelectedTimePeriod(yearData.year.toString())}
+                >
+                  <div className="item-name">{yearData.year}</div>
+                  <div className="item-count">{yearData.satellite_count.toLocaleString()} satellites</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="timeline-main">
+            <TimelineChart selectedTimePeriod={selectedTimePeriod} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

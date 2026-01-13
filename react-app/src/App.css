@@ -10,16 +10,49 @@
   padding: 2em;
   border-bottom: 1px solid #ddd;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 2rem;
 }
 
 .app-header h1 {
-  margin-bottom: 0.25em;
+  margin: 0;
   font-size: 2em;
+}
+
+.app-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.app-nav button {
+  padding: 0.6rem 1.5rem;
+  background: transparent;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6c757d;
+  transition: all 0.2s;
+}
+
+.app-nav button:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+
+.app-nav button.active {
+  background: #3498db;
+  border-color: #3498db;
+  color: white;
 }
 
 .app-header p {
   color: #666;
   font-size: 0.9em;
+  margin: 0;
 }
 
 .app-container {
@@ -66,6 +99,86 @@
 .pagination button:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.graph-view-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: white;
+}
+
+.timeline-view-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: white;
+}
+
+.timeline-sidebar {
+  width: 420px;
+  background: white;
+  border-right: 1px solid #dee2e6;
+  overflow-y: auto;
+  padding: 1.5rem;
+  flex-shrink: 0;
+}
+
+.timeline-sidebar h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #2c3e50;
+}
+
+.timeline-sidebar .section-description {
+  margin: 0 0 1rem 0;
+  font-size: 0.85rem;
+  color: #6c757d;
+  line-height: 1.4;
+}
+
+.timeline-sidebar .item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.timeline-sidebar .list-item {
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.timeline-sidebar .list-item:hover {
+  background: #e9ecef;
+  border-color: #dee2e6;
+}
+
+.timeline-sidebar .list-item.selected {
+  background: #e3f2fd;
+  border-color: #3498db;
+}
+
+.timeline-sidebar .item-name {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+}
+
+.timeline-sidebar .item-count {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.timeline-main {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 @media (max-width: 1200px) {
