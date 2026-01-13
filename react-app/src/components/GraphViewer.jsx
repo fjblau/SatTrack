@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import cola from 'cytoscape-cola'
+import TimelineChart from './TimelineChart'
 import './GraphViewer.css'
 
 cytoscape.use(cola)
