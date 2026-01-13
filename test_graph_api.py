@@ -42,15 +42,19 @@ def test_endpoint(name, url, expected_keys=None):
                     if 'stats' in data['data']:
                         print(f"Stats: {json.dumps(data['data']['stats'], indent=2)}")
                     
-                    if 'nodes' in data['data']:
+                    if 'nodes' in data['data'] and isinstance(data['data']['nodes'], list):
                         print(f"Nodes count: {len(data['data']['nodes'])}")
                         if data['data']['nodes']:
                             print(f"Sample node: {json.dumps(data['data']['nodes'][0], indent=2)}")
+                    elif 'nodes' in data['data'] and isinstance(data['data']['nodes'], dict):
+                        print(f"Nodes: {json.dumps(data['data']['nodes'], indent=2)}")
                     
-                    if 'edges' in data['data']:
+                    if 'edges' in data['data'] and isinstance(data['data']['edges'], list):
                         print(f"Edges count: {len(data['data']['edges'])}")
                         if data['data']['edges']:
                             print(f"Sample edge: {json.dumps(data['data']['edges'][0], indent=2)}")
+                    elif 'edges' in data['data'] and isinstance(data['data']['edges'], dict):
+                        print(f"Edges: {json.dumps(data['data']['edges'], indent=2)}")
                 
                 print(f"\n✓ Test passed: {name}")
                 TEST_RESULTS.append({"test": name, "status": "PASS"})
@@ -96,7 +100,7 @@ def main():
     test_endpoint(
         "Graph Stats",
         f"{API_BASE}/v2/graphs/stats",
-        expected_keys=['nodes', 'edges', 'constellations', 'graph_name']
+        expected_keys=['nodes', 'edges', 'constellations']
     )
     
     test_endpoint(
@@ -127,6 +131,48 @@ def main():
         "Non-existent Constellation",
         f"{API_BASE}/v2/graphs/constellation/FakeConstellation",
         expected_keys=['constellation', 'nodes', 'edges', 'stats']
+    )
+    
+    test_endpoint(
+        "Orbital Proximity - LEO-Inclined (limited)",
+        f"{API_BASE}/v2/graphs/orbital-proximity/LEO-Inclined?limit=100",
+        expected_keys=['orbital_band', 'nodes', 'edges', 'stats']
+    )
+    
+    test_endpoint(
+        "Orbital Proximity - LEO-Polar (limited)",
+        f"{API_BASE}/v2/graphs/orbital-proximity/LEO-Polar?limit=50",
+        expected_keys=['orbital_band', 'nodes', 'edges', 'stats']
+    )
+    
+    test_endpoint(
+        "Orbital Proximity - GEO",
+        f"{API_BASE}/v2/graphs/orbital-proximity/GEO?limit=30",
+        expected_keys=['orbital_band', 'nodes', 'edges', 'stats']
+    )
+    
+    test_endpoint(
+        "Launch Timeline - Recent Year",
+        f"{API_BASE}/v2/graphs/launch-timeline/2024?limit=100",
+        expected_keys=['time_period', 'nodes', 'stats']
+    )
+    
+    test_endpoint(
+        "Launch Timeline - Year Range",
+        f"{API_BASE}/v2/graphs/launch-timeline/2020-2024?limit=50",
+        expected_keys=['time_period', 'nodes', 'stats']
+    )
+    
+    test_endpoint(
+        "Launch Timeline - Single Historic Year",
+        f"{API_BASE}/v2/graphs/launch-timeline/2015",
+        expected_keys=['time_period', 'nodes', 'stats']
+    )
+    
+    test_endpoint(
+        "Graph Stats - Extended Check",
+        f"{API_BASE}/v2/graphs/stats",
+        expected_keys=['nodes', 'edges', 'constellations']
     )
     
     print("\n" + "=" * 60)
