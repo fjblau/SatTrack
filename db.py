@@ -234,6 +234,243 @@ def create_satellite_document(
         return doc
 
 
+def normalize_country(country: Optional[str]) -> Optional[str]:
+    """
+    Normalize country codes and names to standardized ISO 3166-1 alpha-3 codes.
+    Returns None if country is None or empty.
+    """
+    if not country:
+        return None
+    
+    country_upper = country.strip().upper()
+    
+    country_mapping = {
+        # United States
+        "US": "USA",
+        "USA": "USA",
+        "UNITED STATES": "USA",
+        
+        # Russia/USSR
+        "USSR": "USSR",
+        "RUSSIAN FEDERATION": "RUS",
+        "RUSSIA": "RUS",
+        "CIS": "CIS",
+        
+        # China
+        "PRC": "CHN",
+        "CHINA": "CHN",
+        "CHN": "CHN",
+        
+        # United Kingdom
+        "UK": "GBR",
+        "UNITED KINGDOM": "GBR",
+        "GBR": "GBR",
+        
+        # Japan
+        "JPN": "JPN",
+        "JAPAN": "JPN",
+        
+        # Spain
+        "SPN": "ESP",
+        "SPAIN": "ESP",
+        "ESP": "ESP",
+        
+        # Germany
+        "GER": "DEU",
+        "GERMANY": "DEU",
+        "DEU": "DEU",
+        
+        # France
+        "FR": "FRA",
+        "FRA": "FRA",
+        "FRANCE": "FRA",
+        "FRANCE (FOR EUTELSAT)": "FRA",
+        
+        # Italy
+        "IT": "ITA",
+        "ITA": "ITA",
+        "ITALY": "ITA",
+        
+        # India
+        "IND": "IND",
+        "INDIA": "IND",
+        
+        # South Korea
+        "SKOR": "KOR",
+        "KOR": "KOR",
+        "SOUTH KOREA": "KOR",
+        
+        # Canada
+        "CA": "CAN",
+        "CAN": "CAN",
+        "CANADA": "CAN",
+        
+        # Australia
+        "AUS": "AUS",
+        "AUSTRALIA": "AUS",
+        
+        # Argentina
+        "ARGN": "ARG",
+        "ARG": "ARG",
+        "ARGENTINA": "ARG",
+        
+        # Finland
+        "FIN": "FIN",
+        "FINLAND": "FIN",
+        
+        # Turkey
+        "TURK": "TUR",
+        "TUR": "TUR",
+        "TURKEY": "TUR",
+        "TÜRKIYE": "TUR",
+        
+        # Brazil
+        "BRAZ": "BRA",
+        "BRA": "BRA",
+        "BRAZIL": "BRA",
+        
+        # Norway
+        "NOR": "NOR",
+        "NORWAY": "NOR",
+        
+        # Belgium
+        "BEL": "BEL",
+        "BELGIUM": "BEL",
+        
+        # Switzerland
+        "SWTZ": "CHE",
+        "CHE": "CHE",
+        "SWITZERLAND": "CHE",
+        
+        # Taiwan
+        "TWN": "TWN",
+        "TAIWAN": "TWN",
+        
+        # Saudi Arabia
+        "SAUD": "SAU",
+        "SAU": "SAU",
+        "SAUDI ARABIA": "SAU",
+        
+        # Malaysia
+        "MALAYSIA": "MYS",
+        "MYS": "MYS",
+        
+        # Rwanda
+        "RWA": "RWA",
+        "RWANDA": "RWA",
+        
+        # Singapore
+        "SING": "SGP",
+        "SGP": "SGP",
+        "SINGAPORE": "SGP",
+        
+        # Indonesia
+        "INDO": "IDN",
+        "IDN": "IDN",
+        "INDONESIA": "IDN",
+        
+        # Iran
+        "IRAN": "IRN",
+        "IRN": "IRN",
+        
+        # Israel
+        "ISRA": "ISR",
+        "ISR": "ISR",
+        "ISRAEL": "ISR",
+        
+        # South Africa
+        "SOUTH AFRICA": "ZAF",
+        "ZAF": "ZAF",
+        
+        # Thailand
+        "THAI": "THA",
+        "THA": "THA",
+        "THAILAND": "THA",
+        
+        # Luxembourg
+        "LUXE": "LUX",
+        "LUX": "LUX",
+        "LUXEMBOURG": "LUX",
+        
+        # Egypt
+        "EGYP": "EGY",
+        "EGY": "EGY",
+        "EGYPT": "EGY",
+        
+        # Bulgaria
+        "BGR": "BGR",
+        "BULGARIA": "BGR",
+        
+        # Lithuania
+        "LTU": "LTU",
+        "LITHUANIA": "LTU",
+        
+        # United Arab Emirates
+        "UAE": "ARE",
+        "ARE": "ARE",
+        "UNITED ARAB EMIRATES": "ARE",
+        
+        # Poland
+        "POL": "POL",
+        "POLAND": "POL",
+        
+        # Kazakhstan
+        "KAZ": "KAZ",
+        "KAZAKHSTAN": "KAZ",
+        
+        # Netherlands
+        "NETH": "NLD",
+        "NLD": "NLD",
+        "NETHERLANDS": "NLD",
+        
+        # Denmark
+        "DEN": "DNK",
+        "DNK": "DNK",
+        "DENMARK": "DNK",
+        
+        # Mexico
+        "MEX": "MEX",
+        "MEXICO": "MEX",
+        
+        # Chile
+        "CHILE": "CHL",
+        "CHL": "CHL",
+        
+        # Morocco
+        "MA": "MAR",
+        "MAR": "MAR",
+        "MOROCCO": "MAR",
+        
+        # Uruguay
+        "URUGUAY": "URY",
+        "URY": "URY",
+        
+        # New Zealand
+        "NEW ZEALAND": "NZL",
+        "NZL": "NZL",
+        
+        # Organizations (not countries)
+        "ESA": "ESA",
+        "ITSO": "ITSO",
+        "EUTE": "EUTELSAT",
+        "EUME": "EUMETSAT",
+        "GLOB": "GLOBALSTAR",
+        "O3B": "O3B",
+        "ORB": "ORBCOMM",
+        "SES": "SES",
+        "ABS": "ABS",
+        "IM": "INMARSAT",
+        "AB": "AB",
+        "AC": "AC",
+        "MA": "MA",
+        
+        # Unknown/TBD
+        "TBD": "TBD",
+    }
+    
+    return country_mapping.get(country_upper, country)
+
+
 def update_canonical(doc: Dict[str, Any]):
     """
     Update canonical section from source nodes based on priority.
@@ -286,6 +523,13 @@ def update_canonical(doc: Dict[str, Any]):
     
     canonical["updated_at"] = datetime.now(timezone.utc).isoformat()
     canonical["source_priority"] = source_priority
+    
+    # Normalize country field
+    raw_country = canonical.get("country_of_origin")
+    if raw_country:
+        canonical["country"] = normalize_country(raw_country)
+    else:
+        canonical["country"] = None
     
     doc["canonical"] = canonical
 

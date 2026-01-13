@@ -1466,9 +1466,8 @@ def get_country_relations_graph(
     query = f"""
     LET countries_with_sats = (
         FOR doc IN {db_module.COLLECTION_NAME}
-            LET country = doc.canonical.country != null ? doc.canonical.country : doc.canonical.country_of_origin
-            FILTER country != null
-            COLLECT c = country WITH COUNT INTO count
+            FILTER doc.canonical.country != null
+            COLLECT c = doc.canonical.country WITH COUNT INTO count
             FILTER count >= @min_satellites
             SORT count DESC
             LIMIT @limit_countries
@@ -1482,10 +1481,9 @@ def get_country_relations_graph(
     
     LET by_orbital_band = (
         FOR doc IN {db_module.COLLECTION_NAME}
-            LET country = doc.canonical.country != null ? doc.canonical.country : doc.canonical.country_of_origin
-            FILTER country IN country_names
+            FILTER doc.canonical.country IN country_names
             FILTER doc.canonical.orbital_band != null
-            COLLECT country_name = country, band = doc.canonical.orbital_band WITH COUNT INTO count
+            COLLECT country_name = doc.canonical.country, band = doc.canonical.orbital_band WITH COUNT INTO count
             RETURN {{
                 country: country_name,
                 orbital_band: band,
@@ -1509,10 +1507,9 @@ def get_country_relations_graph(
     
     LET by_registration_doc = (
         FOR doc IN {db_module.COLLECTION_NAME}
-            LET country = doc.canonical.country != null ? doc.canonical.country : doc.canonical.country_of_origin
-            FILTER country IN country_names
+            FILTER doc.canonical.country IN country_names
             FILTER doc.canonical.registration_document != null
-            COLLECT country_name = country, reg_doc = doc.canonical.registration_document WITH COUNT INTO count
+            COLLECT country_name = doc.canonical.country, reg_doc = doc.canonical.registration_document WITH COUNT INTO count
             RETURN {{
                 country: country_name,
                 reg_doc: reg_doc,
