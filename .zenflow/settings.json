@@ -1,0 +1,5 @@
+{
+  "setup_script": "pip install -r requirements.txt && cd react-app && npm install",
+  "dev_script": "./start.sh",
+  "copy_files": [".env"]
+}
