@@ -18,7 +18,8 @@ Do not make assumptions on important decisions — get clarification first.
 
 ## Workflow Steps
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
+<!-- chat-id: b5c101dd-648d-4dcd-8323-e1d16feb4c6f -->
 
 Assess the task's difficulty, as underestimating it leads to poor outcomes.
 - easy: Straightforward implementation, trivial bug fix or feature
@@ -52,16 +53,138 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Implementation
+### [ ] Step: Database and MQTT Publisher Core
 
-Implement the task according to the technical specification and general engineering best practices.
+Implement the database layer and MQTT publishing functionality.
 
-1. Break the task into steps where possible.
-2. Implement the required changes in the codebase
-3. If relevant, write unit tests alongside each change.
-4. Run relevant tests and linters in the end of each step.
-5. Perform basic manual verification if applicable.
-6. After completion, write a report to `{@artifacts_path}/report.md` describing:
-   - What was implemented
-   - How the solution was tested
-   - The biggest issues or challenges encountered
+**Tasks**:
+- Add `paho-mqtt` and `apscheduler` to `requirements.txt`
+- Create MQTT configurations collection in ArangoDB via `db.py`
+  - Add `get_mqtt_configurations_collection()` function
+  - Add `save_mqtt_configuration()`, `get_mqtt_configuration()`, `delete_mqtt_configuration()` functions
+  - Add `get_enabled_mqtt_configurations()`, `update_last_published()` functions
+  - Create indexes: `satellite_id`, `norad_id`, `enabled`, `next_publish`
+- Create `mqtt_publisher.py` module
+  - Implement `convert_tle_to_json()` - convert TLE data to JSON format (as per spec)
+  - Implement `publish_tle_to_mqtt()` - connect to MQTT broker and publish
+  - Implement `test_mqtt_connection()` - validate broker connectivity
+  - Add error handling for connection issues
+
+**Verification**:
+- Manually test database functions in Python REPL or test script
+- Test MQTT publisher against local Mosquitto broker (if available) or public test broker
+- Verify JSON payload structure matches spec
+
+---
+
+### [ ] Step: REST API Endpoints
+
+Add FastAPI endpoints for MQTT configuration management.
+
+**Tasks**:
+- Update `api.py` with new endpoints:
+  - `GET /v2/mqtt/config/{satellite_id}` - retrieve configuration
+  - `POST /v2/mqtt/config` - create/update configuration
+  - `DELETE /v2/mqtt/config/{satellite_id}` - delete configuration
+  - `POST /v2/mqtt/test-connection` - test broker connection
+  - `POST /v2/mqtt/publish-now/{satellite_id}` - manual publish trigger
+- Add input validation for all endpoints
+- Implement password redaction in responses
+- Add proper error responses (404, 400, 500)
+
+**Verification**:
+- Test each endpoint with `curl` or Postman/Insomnia
+- Verify CRUD operations work correctly
+- Test error cases (invalid inputs, missing data, etc.)
+- Verify password redaction in GET responses
+
+---
+
+### [ ] Step: Background Scheduler Integration
+
+Implement periodic TLE publishing using APScheduler.
+
+**Tasks**:
+- Create `mqtt_scheduler.py` module
+  - Implement `initialize_scheduler()` - start BackgroundScheduler
+  - Implement `schedule_mqtt_publish()` - add/update scheduled job
+  - Implement `remove_scheduled_job()` - remove job
+  - Implement `publish_tle_job()` - scheduled job function that fetches TLE, publishes to MQTT, updates timestamps
+- Update `api.py` lifespan context manager
+  - Initialize scheduler on startup
+  - Load enabled configurations and schedule jobs
+  - Gracefully stop scheduler on shutdown
+- Update POST/DELETE config endpoints to schedule/remove jobs
+
+**Verification**:
+- Start the API server and verify scheduler initializes
+- Create MQTT configuration and verify job is scheduled
+- Monitor logs to confirm scheduled job executes at correct interval
+- Verify MQTT messages are published (use MQTT client to subscribe)
+- Test configuration updates reschedule jobs correctly
+- Test delete configuration removes scheduled job
+
+---
+
+### [ ] Step: Frontend MQTT Configuration UI
+
+Create the React components for MQTT configuration.
+
+**Tasks**:
+- Create `MqttConfigModal.jsx` component
+  - Modal dialog with form fields: broker host, port, username, password, topic, frequency
+  - Load existing configuration from API on mount
+  - Validate form inputs (required fields, port range, etc.)
+  - Save configuration via POST `/v2/mqtt/config`
+  - Delete configuration via DELETE endpoint
+  - Display success/error messages
+  - Optional: Test connection button
+- Create `MqttConfigModal.css` following existing CSS patterns
+- Update `DetailPanel.jsx`
+  - Add "MQTT Feed" button next to "Track on N2YO" (visible when TLE data is available)
+  - Add state for modal visibility
+  - Import and render MqttConfigModal
+  - Pass satellite data and TLE data to modal
+
+**Verification**:
+- Start frontend dev server (`npm run dev`)
+- Navigate to satellite with TLE data
+- Verify "MQTT Feed" button appears
+- Click button and verify modal opens
+- Fill form and save configuration
+- Verify configuration persists (reload page, reopen modal)
+- Test editing existing configuration
+- Test deleting configuration
+- Verify error handling for invalid inputs
+
+---
+
+### [ ] Step: End-to-End Testing and Documentation
+
+Perform comprehensive testing and create implementation report.
+
+**Tasks**:
+- **Manual E2E Testing**:
+  - Set up local MQTT broker (Mosquitto or public test broker)
+  - Configure MQTT feed for test satellite
+  - Subscribe to topic and verify JSON payload format
+  - Test both 8-hour and 24-hour frequencies
+  - Test "Publish Now" functionality
+  - Verify scheduler persistence across server restarts
+  - Test error scenarios (invalid credentials, unreachable broker, missing TLE)
+- **Code Quality**:
+  - Run linters if available (check README/package.json for commands)
+  - Check for console errors in browser
+  - Review code for security issues (password handling, input validation)
+- **Report Creation**:
+  - Write `{@artifacts_path}/report.md` with:
+    - Summary of implementation
+    - Testing approach and results
+    - Known issues or limitations
+    - Suggestions for future enhancements
+
+**Verification**:
+- All manual test cases pass
+- No console errors or warnings
+- MQTT messages successfully published to broker
+- Configuration UI is intuitive and error-free
