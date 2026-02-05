@@ -129,7 +129,8 @@ Implement periodic TLE publishing using APScheduler.
 
 ---
 
-### [ ] Step: Frontend MQTT Configuration UI
+### [x] Step: Frontend MQTT Configuration UI
+<!-- chat-id: 44b876bb-34b8-45eb-931e-ce254fdc80c4 -->
 
 Create the React components for MQTT configuration.
 

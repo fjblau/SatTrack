@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './DetailPanel.css'
 import DataRecordModal from './DataRecordModal'
+import MqttConfigModal from './MqttConfigModal'
 
 export default function DetailPanel({ object }) {
   const [orbitalState, setOrbitalState] = useState(null)
@@ -14,6 +15,7 @@ export default function DetailPanel({ object }) {
   const [fullDocument, setFullDocument] = useState(null)
   const [currentTle, setCurrentTle] = useState(null)
   const [tleLoading, setTleLoading] = useState(false)
+  const [showMqttConfig, setShowMqttConfig] = useState(false)
 
   useEffect(() => {
     if (!object) {
@@ -27,6 +29,7 @@ export default function DetailPanel({ object }) {
       setFullDocument(null)
       setCurrentTle(null)
       setTleLoading(false)
+      setShowMqttConfig(false)
       return
     }
 
@@ -191,6 +194,14 @@ export default function DetailPanel({ object }) {
             >
               Track on N2YO
             </a>
+          )}
+          {currentTle && !currentTle._notFound && (currentTle.line1 || currentTle.line2) && (
+            <button 
+              className="mqtt-feed-button"
+              onClick={() => setShowMqttConfig(true)}
+            >
+              MQTT Feed
+            </button>
           )}
         </div>
       </div>
@@ -445,6 +456,14 @@ export default function DetailPanel({ object }) {
         <DataRecordModal 
           data={fullDocument}
           onClose={() => setShowDataRecord(false)}
+        />
+      )}
+
+      {showMqttConfig && (
+        <MqttConfigModal
+          satellite={object}
+          tleData={currentTle}
+          onClose={() => setShowMqttConfig(false)}
         />
       )}
     </div>
