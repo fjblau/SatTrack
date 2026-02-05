@@ -1,10 +1,24 @@
-# Quick Deploy to Vercel
+# Vercel Deployment Guide
+
+## ⚠️ Database Migration Required First
+
+**Before deploying to Vercel**, migrate your local ArangoDB data to the cloud.
+
+👉 **See [MIGRATION.md](./MIGRATION.md) for complete migration guide**
+
+**Quick overview**: 
+- ✅ Data already exported (185,257 docs, 106 MB in `arango_export/`)
+- 📋 Next: Create ArangoDB Oasis account → Import data → Configure Vercel env vars
+
+---
 
 ## Prerequisites Checklist
 
 - [x] Vercel project "sat-track" created
+- [x] **Data exported** (see `arango_export/`)
 - [ ] Vercel CLI installed
-- [ ] ArangoDB cloud instance (get free at https://cloud.arangodb.com)
+- [ ] **ArangoDB Oasis configured** (see [MIGRATION.md](./MIGRATION.md))
+- [ ] **Vercel env vars set** (ARANGO_HOST, ARANGO_USER, ARANGO_PASSWORD)
 
 ## Step 1: Install Vercel CLI
 
@@ -38,13 +52,15 @@ This creates a preview deployment.
 
 ## Step 4: Add Environment Variables
 
+⚠️ **CRITICAL**: Configure these before production deployment!
+
 Go to https://vercel.com/your-username/sat-track/settings/environment-variables
 
 Add these variables for **Production, Preview, and Development**:
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `ARANGO_HOST` | `https://xxx.arangodb.cloud:8529` | From ArangoDB Oasis |
+| `ARANGO_HOST` | `https://xxx.arangodb.cloud:8529` | From ArangoDB Oasis (see [MIGRATION.md](./MIGRATION.md)) |
 | `ARANGO_USER` | `root` | Default user |
 | `ARANGO_PASSWORD` | Your password | From ArangoDB setup |
 | `CORS_ORIGINS` | `https://sat-track.vercel.app` | Your Vercel domain |
@@ -101,142 +117,170 @@ Should return 404 (expected if no config exists)
 curl https://sat-track.vercel.app/api/cron/mqtt-publish
 ```
 
-## Important Notes
+Should return status and results.
 
-### ArangoDB Setup
+---
 
-1. Sign up at https://cloud.arangodb.com
-2. Create a new deployment (Free tier available)
-3. Select region closest to your Vercel region
-4. Create database named `kessler`
-5. Note the connection URL (format: `https://xxx.arangodb.cloud:8529`)
-6. **Important:** Set IP whitelist to `0.0.0.0/0` (allow all) since Vercel IPs change
+## Architecture Notes
 
-### CORS Configuration
+### Serverless Adaptation
 
-After deployment, update CORS to include all Vercel domains:
+The application automatically detects Vercel serverless environment (`VERCEL=1`) and:
 
-```bash
-vercel env add CORS_ORIGINS production
-# Enter: https://sat-track.vercel.app,https://sat-track-*.vercel.app
+1. **Disables APScheduler** - Background schedulers don't work in serverless
+2. **Uses Vercel Cron Jobs** - Configured in `vercel.json` to call `/api/cron/mqtt-publish` every 4 hours
+3. **Maintains state in ArangoDB** - All configuration and timestamps stored in cloud database
+
+### MQTT Publishing Schedule
+
+- **Frequency**: Every 4 hours (0, 4, 8, 12, 16, 20 UTC)
+- **Mechanism**: Vercel Cron Job → `/api/cron/mqtt-publish` endpoint
+- **Configuration**: Individual satellites can still choose 8hr or 24hr frequencies
+  - 8hr configs: Publish every time (6 times/day)
+  - 24hr configs: Publish only if `next_publish` timestamp is due
+
+### File Structure
+
+```
+/
+├── api/
+│   └── index.py          # Serverless function entry point
+├── react-app/
+│   └── dist/             # Frontend build output
+├── api.py                # FastAPI application
+├── vercel.json           # Vercel configuration
+└── requirements.txt      # Python dependencies
 ```
 
-Redeploy:
-```bash
-vercel --prod
-```
-
-### Cron Jobs
-
-- Cron jobs **only work in production** (not preview deployments)
-- Check cron logs: Vercel Dashboard → sat-track → Functions → `/api/cron/mqtt-publish`
-- Schedule: Every 4 hours (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+---
 
 ## Troubleshooting
 
-### Build Fails
+### Build Failures
 
-**Error:** `npm: command not found` in frontend build
+**Issue**: "No Output Directory named 'dist' found"
+- **Solution**: Check `vercel.json` has correct `buildCommand` and `outputDirectory`
 
-**Fix:** Wait for Vercel to install Node.js environment automatically, or check build logs.
+**Issue**: "Function Runtimes must have a valid version"
+- **Solution**: Remove `runtime` specification, let Vercel auto-detect
 
-### Database Connection Fails
+### Runtime Errors
 
-**Error:** `Failed to connect to ArangoDB`
+**Issue**: API returns 500 errors
+- **Check Vercel logs**: `vercel logs --prod`
+- **Verify env vars**: https://vercel.com/your-username/sat-track/settings/environment-variables
+- **Test database connection**: Ensure ArangoDB Oasis allows external connections
 
-**Check:**
-1. Environment variables are set correctly
-2. ArangoDB instance is running
-3. IP whitelist includes `0.0.0.0/0`
-4. Using HTTPS URL (not HTTP)
+**Issue**: No data returned from API
+- **Database not migrated**: See [MIGRATION.md](./MIGRATION.md)
+- **Wrong ARANGO_HOST**: Verify it matches your Oasis deployment endpoint
 
-### CORS Errors
+### MQTT Issues
 
-**Error:** `Access-Control-Allow-Origin` error in browser
+**Issue**: Cron job not executing
+- **Check cron logs**: Vercel Dashboard → Deployments → Functions
+- **Verify cron schedule**: Should see `/api/cron/mqtt-publish` in Functions tab
+- **Manual test**: `curl https://sat-track.vercel.app/api/cron/mqtt-publish`
 
-**Fix:** Update `CORS_ORIGINS` to include your Vercel domain:
+**Issue**: MQTT publish fails
+- **Check broker connectivity**: Test from local machine first
+- **Verify credentials**: Ensure username/password are correct
+- **Check topic permissions**: Some brokers restrict topic patterns
+
+---
+
+## Local Development
+
+To test serverless behavior locally:
 
 ```bash
-vercel env rm CORS_ORIGINS production
-vercel env add CORS_ORIGINS production
-# Enter: https://sat-track.vercel.app,https://sat-track-git-main-yourname.vercel.app
-vercel --prod
+# Set serverless mode
+export VERCEL=1
+
+# Start API server (scheduler will be disabled)
+python -m uvicorn api:app --host 127.0.0.1 --port 8000
+
+# In another terminal, test cron endpoint
+curl http://127.0.0.1:8000/api/cron/mqtt-publish
 ```
 
-### Function Timeout
+To test with scheduler (normal mode):
 
-**Error:** `Task timed out after 10.00 seconds`
+```bash
+# Unset serverless mode
+unset VERCEL
 
-If you have many MQTT configurations, the cron job might timeout.
+# Start API server (scheduler will run)
+python -m uvicorn api:app --host 127.0.0.1 --port 8000
+```
 
-**Solutions:**
-1. Upgrade to Vercel Pro ($20/mo) for 60s timeout
-2. Or batch process: split configs into chunks, process 10 at a time
+---
+
+## Performance Considerations
+
+### Cold Starts
+- **First request**: 2-5 seconds (function initialization)
+- **Subsequent requests**: <1 second (warm function)
+
+### Database Queries
+- **Optimize indexes**: Ensure proper indexes exist (see [MIGRATION.md](./MIGRATION.md))
+- **Limit result sizes**: Use pagination for large datasets
+
+### Frontend
+- **Static assets**: Served via Vercel Edge Network (CDN)
+- **API calls**: Proxied through `/api` and `/v2` routes
+
+---
 
 ## Monitoring
 
-### View Logs
+### Vercel Dashboard
+- **Analytics**: Request counts, error rates, response times
+- **Logs**: Real-time function logs
+- **Cron Jobs**: Execution history and status
 
-```bash
-vercel logs --follow
-```
+### Recommended Monitoring
+1. **Set up Vercel notifications** for failed deployments
+2. **Monitor MQTT broker** for message delivery
+3. **Track ArangoDB Oasis usage** (free tier has limits)
 
-Or in dashboard:
-- https://vercel.com/your-username/sat-track/logs
+---
 
-### Check Cron Job Execution
+## Costs
 
-Dashboard → Deployments → Functions → `/api/cron/mqtt-publish`
+### Free Tier Limits
 
-Shows execution history and logs.
-
-## Updating After Changes
-
-```bash
-# Make code changes locally
-# Commit to git (optional)
-
-# Deploy to production
-vercel --prod
-```
-
-## Rollback
-
-```bash
-# List deployments
-vercel ls
-
-# Promote a previous deployment
-vercel promote [deployment-url]
-```
-
-## Cost
-
-**Vercel Hobby (Free):**
+**Vercel** (Hobby):
 - ✅ Unlimited deployments
-- ✅ 100 GB-hours serverless functions
-- ✅ Unlimited cron jobs (with limits on frequency)
-- ✅ Automatic HTTPS
+- ✅ 100 GB bandwidth/month
+- ✅ 100 GB-hours serverless function execution/month
+- ✅ Cron jobs included
 
-**ArangoDB Oasis Free:**
-- ✅ 1 database
-- ✅ 4 GB storage
-- ✅ Shared instance
+**ArangoDB Oasis** (Free tier):
+- ✅ 4 GB storage (our data: ~106 MB ✅)
+- ✅ Single server
+- ⚠️ No backups (manual export recommended)
 
-**Total: $0/month** 🎉
+### Estimated Usage
+- **API requests**: <1,000/day → Free tier ✅
+- **Cron jobs**: 6/day (4-hour interval) → Free tier ✅
+- **Storage**: 106 MB → Free tier ✅
 
-## Next Steps
+---
 
-1. ✅ Deploy to Vercel
-2. ✅ Set up ArangoDB cloud
-3. ✅ Configure environment variables
-4. ✅ Test frontend at https://sat-track.vercel.app
-5. ✅ Verify cron job executes (check after 4 hours)
-6. ✅ Configure first MQTT feed via UI
-7. ✅ Monitor cron logs for successful publishes
+## Next Steps After Deployment
 
-## Support
+1. ✅ Verify satellite data loads
+2. ✅ Test MQTT configuration flow
+3. ✅ Configure at least one satellite for MQTT publishing
+4. ✅ Monitor first cron job execution (check logs after 4 hours)
+5. ✅ Subscribe to MQTT topic to verify messages
+6. 📋 Set up regular database backups (export script)
+7. 📋 Configure custom domain (optional)
+8. 📋 Set up error alerting (Sentry, etc.)
 
-- Vercel Docs: https://vercel.com/docs
-- ArangoDB Docs: https://www.arangodb.com/docs/
-- Issues: Check deployment logs in Vercel dashboard
+---
+
+**Deployment Status**: ✅ Configured, ⏳ Pending database migration
+
+See [MIGRATION.md](./MIGRATION.md) to complete the setup.

@@ -4,6 +4,8 @@
 
 Successfully implemented a comprehensive MQTT feed feature for the Kessler satellite tracking application. The feature allows users to configure automatic publishing of Two-Line Element (TLE) satellite orbital data to MQTT brokers at configurable intervals (8 or 24 hours).
 
+**Application deployed to Vercel**: https://sat-track.vercel.app (pending database migration)
+
 ### Implementation Status: **Complete** ✓
 
 All planned components have been implemented and tested:
@@ -349,6 +351,60 @@ def find_satellite(
 3. **Data Retention**
    - Store published TLE snapshots for historical analysis
    - Comparison view showing orbital changes over time
+
+---
+
+## Deployment Status
+
+### Vercel Deployment: ✅ Configured
+
+The application has been configured for Vercel serverless deployment:
+
+**Features**:
+- ✅ Serverless FastAPI backend (`/api/index.py`)
+- ✅ React frontend build (`react-app/dist`)
+- ✅ Vercel Cron Jobs for MQTT publishing (every 4 hours)
+- ✅ Environment-aware scheduler (disabled in serverless, uses cron instead)
+
+**Configuration Files**:
+- `vercel.json` - Build config, API rewrites, cron schedule
+- `api/index.py` - Serverless function wrapper
+- `DEPLOY.md` - Deployment instructions
+- `MIGRATION.md` - Database migration guide
+- `README.vercel.md` - Vercel-specific documentation
+
+**Deployment URL**: https://sat-track.vercel.app
+
+### Database Migration: ⏳ Pending
+
+**Status**: Local ArangoDB data exported, ready for cloud import
+
+**Export Summary**:
+- ✅ 185,257 documents exported
+- ✅ 6 collections (3 document, 3 edge)
+- ✅ Total size: ~106 MB
+- 📁 Location: `arango_export/*.jsonl`
+
+**Collections**:
+| Collection | Type | Documents | Size |
+|------------|------|-----------|------|
+| satellites | Document | 18,870 | 66 MB |
+| orbital_proximity | Edge | 145,702 | 35 MB |
+| constellation_membership | Edge | 14,884 | 2.8 MB |
+| registration_links | Edge | 5,054 | 1.2 MB |
+| registration_documents | Document | 745 | 221 KB |
+| mqtt_configurations | Document | 2 | 865 B |
+
+**Next Steps**:
+1. Create ArangoDB Oasis account (free tier)
+2. Import data using web UI or CLI (`arangoimport`)
+3. Configure Vercel environment variables:
+   - `ARANGO_HOST` - Cloud endpoint
+   - `ARANGO_USER` - root
+   - `ARANGO_PASSWORD` - Generated password
+4. Redeploy to Vercel: `vercel --prod`
+
+**See [MIGRATION.md](../../../MIGRATION.md) for complete step-by-step guide**
 
 ---
 

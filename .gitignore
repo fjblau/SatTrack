@@ -11,3 +11,7 @@ venv/
 
 docker-compose.override.yml
 mongodb_backup/
+
+# Data exports
+arango_export/
+mongodb_export.json
