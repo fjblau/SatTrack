@@ -1,15 +1,16 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import math
 import os
 import requests
 import time
 import re
 from bs4 import BeautifulSoup
+from pydantic import BaseModel, Field
 import pdfplumber
 import io
 import db as db_module
@@ -18,8 +19,12 @@ from db import (
     count_satellites, get_all_countries, get_all_statuses, get_all_orbital_bands, 
     get_all_congestion_risks, create_satellite_document,
     COLLECTION_NAME, COLLECTION_REG_DOCS, EDGE_COLLECTION_CONSTELLATION,
-    EDGE_COLLECTION_REGISTRATION, EDGE_COLLECTION_PROXIMITY, GRAPH_NAME
+    EDGE_COLLECTION_REGISTRATION, EDGE_COLLECTION_PROXIMITY, GRAPH_NAME,
+    get_mqtt_configurations_collection, save_mqtt_configuration,
+    get_mqtt_configuration, delete_mqtt_configuration, get_enabled_mqtt_configurations,
+    update_last_published
 )
+import mqtt_publisher
 
 try:
     from dotenv import load_dotenv
@@ -1874,3 +1879,174 @@ def get_country_relations_graph(
             },
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+
+class MqttBrokerConfig(BaseModel):
+    host: str = Field(..., description="MQTT broker hostname or IP")
+    port: int = Field(1883, ge=1, le=65535, description="MQTT broker port")
+    username: Optional[str] = Field(None, description="MQTT username")
+    password: Optional[str] = Field(None, description="MQTT password")
+
+
+class MqttConfiguration(BaseModel):
+    satellite_id: str = Field(..., description="Satellite document ID")
+    norad_id: str = Field(..., description="NORAD catalog ID")
+    mqtt_broker: MqttBrokerConfig
+    topic: str = Field(..., description="MQTT topic for publishing")
+    frequency_hours: int = Field(24, description="Publishing frequency in hours (8 or 24)")
+    enabled: bool = Field(True, description="Enable/disable publishing")
+
+
+class MqttTestConnectionRequest(BaseModel):
+    host: str
+    port: int = 1883
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+def redact_password(config: Dict[str, Any]) -> Dict[str, Any]:
+    result = config.copy()
+    if 'mqtt_broker' in result and isinstance(result['mqtt_broker'], dict):
+        result['mqtt_broker'] = result['mqtt_broker'].copy()
+        if result['mqtt_broker'].get('password'):
+            result['mqtt_broker']['password'] = '[REDACTED]'
+    return result
+
+
+@app.get("/v2/mqtt/config/{satellite_id:path}")
+def get_mqtt_config(satellite_id: str):
+    config = get_mqtt_configuration(satellite_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="MQTT configuration not found")
+    return redact_password(config)
+
+
+@app.post("/v2/mqtt/config")
+def create_or_update_mqtt_config(config: MqttConfiguration):
+    if config.frequency_hours not in [8, 24]:
+        raise HTTPException(
+            status_code=400,
+            detail="Frequency must be either 8 or 24 hours"
+        )
+    
+    if not config.mqtt_broker.host:
+        raise HTTPException(status_code=400, detail="MQTT broker host is required")
+    
+    if not (1 <= config.mqtt_broker.port <= 65535):
+        raise HTTPException(status_code=400, detail="Port must be between 1 and 65535")
+    
+    if not config.topic:
+        raise HTTPException(status_code=400, detail="Topic is required")
+    
+    config_dict = {
+        'satellite_id': config.satellite_id,
+        'norad_id': config.norad_id,
+        'mqtt_broker': {
+            'host': config.mqtt_broker.host,
+            'port': config.mqtt_broker.port,
+            'username': config.mqtt_broker.username,
+            'password': config.mqtt_broker.password
+        },
+        'topic': config.topic,
+        'frequency_hours': config.frequency_hours,
+        'enabled': config.enabled
+    }
+    
+    saved_config = save_mqtt_configuration(config_dict)
+    if not saved_config:
+        raise HTTPException(status_code=500, detail="Failed to save MQTT configuration")
+    
+    return redact_password(saved_config)
+
+
+@app.delete("/v2/mqtt/config/{satellite_id:path}")
+def delete_mqtt_config(satellite_id: str):
+    success = delete_mqtt_configuration(satellite_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="MQTT configuration not found")
+    
+    return {"success": True, "message": "MQTT configuration deleted"}
+
+
+@app.post("/v2/mqtt/test-connection")
+def test_mqtt_connection(request: MqttTestConnectionRequest):
+    if not request.host:
+        raise HTTPException(status_code=400, detail="Host is required")
+    
+    if not (1 <= request.port <= 65535):
+        raise HTTPException(status_code=400, detail="Port must be between 1 and 65535")
+    
+    config = {
+        'host': request.host,
+        'port': request.port,
+        'username': request.username,
+        'password': request.password
+    }
+    
+    success, error_message = mqtt_publisher.test_mqtt_connection(config)
+    
+    if success:
+        return {"success": True, "message": "Connection successful"}
+    else:
+        return {
+            "success": False,
+            "error": error_message or "Unknown error",
+            "details": f"Failed to connect to {request.host}:{request.port}"
+        }
+
+
+@app.post("/v2/mqtt/publish-now/{satellite_id:path}")
+def publish_now(satellite_id: str):
+    config = get_mqtt_configuration(satellite_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="MQTT configuration not found")
+    
+    if not config.get('enabled'):
+        raise HTTPException(status_code=400, detail="MQTT feed is disabled for this satellite")
+    
+    satellite = find_satellite(satellite_id)
+    if not satellite:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+    
+    canonical = satellite.get('canonical', {})
+    intl_desig = canonical.get('international_designator')
+    
+    if not intl_desig:
+        raise HTTPException(status_code=400, detail="Satellite has no international designator")
+    
+    tle_cache = fetch_tle_data()
+    tle_data_tuple = tle_cache.get(intl_desig)
+    
+    if not tle_data_tuple:
+        norad_format = convert_to_norad_format(intl_desig)
+        if norad_format:
+            tle_data_tuple = tle_cache.get(norad_format)
+    
+    if not tle_data_tuple:
+        raise HTTPException(status_code=404, detail="TLE data not found for this satellite")
+    
+    tle_data = {
+        'name': tle_data_tuple[0],
+        'line1': tle_data_tuple[1],
+        'line2': tle_data_tuple[2],
+        'source': 'CelesTrak'
+    }
+    
+    success, error_message = mqtt_publisher.publish_tle_to_mqtt(config, tle_data, satellite)
+    
+    if success:
+        update_last_published(config['_key'], datetime.now(timezone.utc))
+        
+        payload = mqtt_publisher.convert_tle_to_json(satellite, tle_data)
+        
+        return {
+            "success": True,
+            "message": "TLE data published successfully",
+            "topic": config.get('topic'),
+            "payload": json.loads(payload)
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to publish TLE data: {error_message}"
+        )

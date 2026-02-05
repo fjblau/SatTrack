@@ -78,7 +78,8 @@ Implement the database layer and MQTT publishing functionality.
 
 ---
 
-### [ ] Step: REST API Endpoints
+### [x] Step: REST API Endpoints
+<!-- chat-id: e96a9aaa-6400-4d87-94e0-bab4362a5bed -->
 
 Add FastAPI endpoints for MQTT configuration management.
 
