@@ -53,7 +53,8 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Database and MQTT Publisher Core
+### [x] Step: Database and MQTT Publisher Core
+<!-- chat-id: 02933789-ab17-4b5d-9ef5-bf3bf2419841 -->
 
 Implement the database layer and MQTT publishing functionality.
 
