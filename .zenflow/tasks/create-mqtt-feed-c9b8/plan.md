@@ -102,7 +102,8 @@ Add FastAPI endpoints for MQTT configuration management.
 
 ---
 
-### [ ] Step: Background Scheduler Integration
+### [x] Step: Background Scheduler Integration
+<!-- chat-id: aa655d66-b67a-4389-95d6-f2df9b14892f -->
 
 Implement periodic TLE publishing using APScheduler.
 

@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 import pdfplumber
 import io
+import logging
 import db as db_module
 from db import (
     connect_mongodb, disconnect_mongodb, find_satellite, search_satellites,
@@ -25,6 +26,7 @@ from db import (
     update_last_published
 )
 import mqtt_publisher
+import mqtt_scheduler
 
 try:
     from dotenv import load_dotenv
@@ -32,11 +34,22 @@ try:
 except ImportError:
     pass
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not connect_mongodb():
         raise RuntimeError("Failed to connect to ArangoDB. ArangoDB is required.")
+    
+    mqtt_scheduler.initialize_scheduler()
+    mqtt_scheduler.load_and_schedule_all_configs()
+    
     yield
+    
+    mqtt_scheduler.shutdown_scheduler()
     disconnect_mongodb()
 
 app = FastAPI(lifespan=lifespan)
@@ -1956,6 +1969,11 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
     if not saved_config:
         raise HTTPException(status_code=500, detail="Failed to save MQTT configuration")
     
+    if config.enabled:
+        mqtt_scheduler.schedule_mqtt_publish(saved_config)
+    else:
+        mqtt_scheduler.remove_scheduled_job(config.satellite_id)
+    
     return redact_password(saved_config)
 
 
@@ -1964,6 +1982,8 @@ def delete_mqtt_config(satellite_id: str):
     success = delete_mqtt_configuration(satellite_id)
     if not success:
         raise HTTPException(status_code=404, detail="MQTT configuration not found")
+    
+    mqtt_scheduler.remove_scheduled_job(satellite_id)
     
     return {"success": True, "message": "MQTT configuration deleted"}
 
