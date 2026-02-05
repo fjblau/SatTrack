@@ -44,12 +44,18 @@ async def lifespan(app: FastAPI):
     if not connect_mongodb():
         raise RuntimeError("Failed to connect to ArangoDB. ArangoDB is required.")
     
-    mqtt_scheduler.initialize_scheduler()
-    mqtt_scheduler.load_and_schedule_all_configs()
+    # Only initialize scheduler in non-serverless environments
+    # Vercel serverless functions will use cron jobs instead
+    is_serverless = os.getenv("VERCEL", "0") == "1"
+    
+    if not is_serverless:
+        mqtt_scheduler.initialize_scheduler()
+        mqtt_scheduler.load_and_schedule_all_configs()
     
     yield
     
-    mqtt_scheduler.shutdown_scheduler()
+    if not is_serverless:
+        mqtt_scheduler.shutdown_scheduler()
     disconnect_mongodb()
 
 app = FastAPI(lifespan=lifespan)
@@ -2069,4 +2075,102 @@ def publish_now(satellite_id: str):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to publish TLE data: {error_message}"
+        )
+
+
+@app.get("/api/cron/mqtt-publish")
+def cron_mqtt_publish():
+    """
+    Vercel Cron Job endpoint - publishes TLE data for all enabled MQTT configurations.
+    This endpoint is called by Vercel's cron scheduler every 4 hours.
+    
+    For serverless deployment, this replaces APScheduler's background jobs.
+    """
+    try:
+        configs = get_enabled_mqtt_configurations()
+        results = {
+            "total": len(configs),
+            "successful": 0,
+            "failed": 0,
+            "errors": []
+        }
+        
+        for config in configs:
+            satellite_id = config.get('satellite_id')
+            config_id = config.get('_key')
+            
+            try:
+                satellite = find_satellite(satellite_id)
+                if not satellite:
+                    results["errors"].append({
+                        "satellite_id": satellite_id,
+                        "error": "Satellite not found"
+                    })
+                    results["failed"] += 1
+                    continue
+                
+                canonical = satellite.get('canonical', {})
+                intl_desig = canonical.get('international_designator')
+                
+                if not intl_desig:
+                    results["errors"].append({
+                        "satellite_id": satellite_id,
+                        "error": "No international designator"
+                    })
+                    results["failed"] += 1
+                    continue
+                
+                tle_cache = fetch_tle_data()
+                tle_data_tuple = tle_cache.get(intl_desig)
+                
+                if not tle_data_tuple:
+                    norad_format = convert_to_norad_format(intl_desig)
+                    if norad_format:
+                        tle_data_tuple = tle_cache.get(norad_format)
+                
+                if not tle_data_tuple:
+                    results["errors"].append({
+                        "satellite_id": satellite_id,
+                        "error": "TLE data not found"
+                    })
+                    results["failed"] += 1
+                    continue
+                
+                tle_data = {
+                    'name': tle_data_tuple[0],
+                    'line1': tle_data_tuple[1],
+                    'line2': tle_data_tuple[2],
+                    'source': 'CelesTrak'
+                }
+                
+                success, error_message = mqtt_publisher.publish_tle_to_mqtt(config, tle_data, satellite)
+                
+                if success:
+                    update_last_published(config_id, datetime.now(timezone.utc))
+                    results["successful"] += 1
+                else:
+                    results["errors"].append({
+                        "satellite_id": satellite_id,
+                        "error": error_message
+                    })
+                    results["failed"] += 1
+                    
+            except Exception as e:
+                results["errors"].append({
+                    "satellite_id": satellite_id,
+                    "error": str(e)
+                })
+                results["failed"] += 1
+        
+        return {
+            "success": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "results": results
+        }
+        
+    except Exception as e:
+        logging.error(f"Cron job error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Cron job failed: {str(e)}"
         )

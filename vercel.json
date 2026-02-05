@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "react-app/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "react-app/dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api.py"
+    },
+    {
+      "src": "/v2/(.*)",
+      "dest": "/api.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/react-app/dist/$1"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/mqtt-publish",
+      "schedule": "0 */4 * * *"
+    }
+  ]
+}
