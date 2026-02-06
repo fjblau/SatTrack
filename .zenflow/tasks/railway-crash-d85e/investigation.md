@@ -155,12 +155,16 @@ Railway will now:
 ### Additional Fix - Port Configuration
 **Issue**: Railway health checks failing with "service unavailable"
 
-**Root Cause**: ArangoDB was listening on hardcoded port 8529, but Railway assigns a dynamic PORT environment variable and expects services to bind to that port.
+**Root Cause 1**: ArangoDB was listening on hardcoded port 8529, but Railway assigns a dynamic PORT environment variable and expects services to bind to that port.
 
-**Solution**: Modified `Dockerfile.railway` to:
+**Solution 1**: Modified `Dockerfile.railway` to:
 - Bind ArangoDB to `0.0.0.0:${PORT}` using `--server.endpoint` flag
 - Update health check to use `${PORT}` variable
 - Default PORT to 8529 for local compatibility
+
+**Root Cause 2**: `railway.json` had `"startCommand": "arangod"` which **overrode** the Dockerfile's CMD, preventing the PORT binding from taking effect.
+
+**Solution 2**: Removed `startCommand` from `railway.json` to allow Dockerfile CMD to execute with proper port configuration.
 
 ### Next Steps
 1. Deploy to Railway and verify ArangoDB starts successfully
