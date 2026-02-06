@@ -41,10 +41,27 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
               enabled: data.enabled !== false
             })
             setHasExistingConfig(true)
+          } else {
+            // No existing config, set default topic with placeholder
+            setConfig(prev => ({
+              ...prev,
+              topic: prev.topic || 'satellites/tle/{norad_id}'
+            }))
           }
+        } else {
+          // No existing config, set default topic with placeholder
+          setConfig(prev => ({
+            ...prev,
+            topic: prev.topic || 'satellites/tle/{norad_id}'
+          }))
         }
       } catch (err) {
         console.error('Error fetching MQTT config:', err)
+        // On error, set default topic with placeholder
+        setConfig(prev => ({
+          ...prev,
+          topic: prev.topic || 'satellites/tle/{norad_id}'
+        }))
       } finally {
         setLoading(false)
       }

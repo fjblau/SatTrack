@@ -251,6 +251,13 @@ def publish_tle_to_mqtt(
         password = mqtt_broker.get('password')
         topic = config.get('topic', 'satellites/tle')
         
+        # Replace {norad_id} placeholder with actual NORAD catalog ID
+        canonical = satellite_data.get('canonical', {})
+        norad_id = canonical.get('norad_cat_id', '')
+        if norad_id and '{norad_id}' in topic:
+            topic = topic.replace('{norad_id}', str(norad_id))
+            logger.info(f"Replaced {{norad_id}} placeholder with {norad_id}")
+        
         logger.info(f"MQTT Publish: host={host}, port={port}, topic={topic}, has_username={bool(username)}")
         
         if not host:
