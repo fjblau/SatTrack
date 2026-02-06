@@ -1,12 +1,13 @@
 import './DataTable.css'
+import { SATELLITE_STATUS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
 export default function DataTable({ objects, selectedObject, onRowClick, loading }) {
   if (loading) {
-    return <div className="loading">Loading...</div>
+    return <div className="loading">{UI_TEXT.LOADING}</div>
   }
 
   if (objects.length === 0) {
-    return <div className="empty-state">No objects found. Try adjusting your filters.</div>
+    return <div className="empty-state">{UI_TEXT.NO_OBJECTS_FOUND}</div>
   }
 
   return (
@@ -33,7 +34,7 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
             if (selectedObject?.['Registration Number'] === obj['Registration Number']) {
               classNames.push('selected')
             }
-            if (obj['Status'] === 'decayed' || obj['Status'] === 'deorbited') {
+            if (obj['Status'] === SATELLITE_STATUS.DECAYED || obj['Status'] === SATELLITE_STATUS.DEORBITED) {
               classNames.push('decayed')
             }
             return (
@@ -49,10 +50,10 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
               <td>{obj['Status'] || '—'}</td>
               <td>{obj['Orbital Band'] || '—'}</td>
               <td>{obj['Congestion Risk'] || '—'}</td>
-              <td className="cell-number">{obj['Apogee (km)'] ? obj['Apogee (km)'].toFixed(2) : '—'}</td>
-              <td className="cell-number">{obj['Perigee (km)'] ? obj['Perigee (km)'].toFixed(2) : '—'}</td>
-              <td className="cell-number">{obj['Inclination (degrees)'] ? obj['Inclination (degrees)'].toFixed(2) : '—'}</td>
-              <td className="cell-number">{obj['Period (minutes)'] ? obj['Period (minutes)'].toFixed(2) : '—'}</td>
+              <td className="cell-number">{obj['Apogee (km)'] ? obj['Apogee (km)'].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES) : '—'}</td>
+              <td className="cell-number">{obj['Perigee (km)'] ? obj['Perigee (km)'].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES) : '—'}</td>
+              <td className="cell-number">{obj['Inclination (degrees)'] ? obj['Inclination (degrees)'].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES) : '—'}</td>
+              <td className="cell-number">{obj['Period (minutes)'] ? obj['Period (minutes)'].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES) : '—'}</td>
             </tr>
             )
           })}

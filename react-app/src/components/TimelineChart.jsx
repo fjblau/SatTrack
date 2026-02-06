@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './TimelineChart.css'
+import { API_ENDPOINTS, CHART_DIMENSIONS, MONTH_NAMES, FILTER_LABELS } from '../config/constants'
 
 function TimelineChart({ selectedTimePeriod }) {
   const [data, setData] = useState([])
@@ -42,7 +43,7 @@ function TimelineChart({ selectedTimePeriod }) {
 
   const loadFilterOptions = async () => {
     try {
-      const response = await fetch('/v2/graphs/timeline/filter-options')
+      const response = await fetch(API_ENDPOINTS.GRAPHS.TIMELINE_FILTER_OPTIONS)
       const result = await response.json()
       
       if (result.data) {
@@ -62,8 +63,8 @@ function TimelineChart({ selectedTimePeriod }) {
       if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
       
       const url = params.toString() 
-        ? `/v2/graphs/timeline/yearly?${params.toString()}`
-        : '/v2/graphs/stats'
+        ? `${API_ENDPOINTS.GRAPHS.TIMELINE_YEARLY}?${params.toString()}`
+        : API_ENDPOINTS.GRAPHS.STATS
       
       console.log('Loading timeline data from:', url)
       
@@ -93,8 +94,8 @@ function TimelineChart({ selectedTimePeriod }) {
       if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
       
       const url = params.toString()
-        ? `/v2/graphs/launch-timeline/breakdown/${year}?${params.toString()}`
-        : `/v2/graphs/launch-timeline/breakdown/${year}`
+        ? `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN}/${year}?${params.toString()}`
+        : `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN}/${year}`
       
       const response = await fetch(url)
       const result = await response.json()
@@ -117,8 +118,8 @@ function TimelineChart({ selectedTimePeriod }) {
       if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
       
       const url = params.toString()
-        ? `/v2/graphs/launch-timeline/monthly/${year}?${params.toString()}`
-        : `/v2/graphs/launch-timeline/monthly/${year}`
+        ? `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_MONTHLY}/${year}?${params.toString()}`
+        : `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_MONTHLY}/${year}`
       
       const response = await fetch(url)
       const result = await response.json()
@@ -143,8 +144,8 @@ function TimelineChart({ selectedTimePeriod }) {
       if (filterOrbitalBand) params.append('orbital_band', filterOrbitalBand)
       
       const url = params.toString()
-        ? `/v2/graphs/launch-timeline/breakdown/monthly/${year}/${month}?${params.toString()}`
-        : `/v2/graphs/launch-timeline/breakdown/monthly/${year}/${month}`
+        ? `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN_MONTHLY}/${year}/${month}?${params.toString()}`
+        : `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN_MONTHLY}/${year}/${month}`
       
       const response = await fetch(url)
       const result = await response.json()
@@ -184,9 +185,7 @@ function TimelineChart({ selectedTimePeriod }) {
     return <div className="timeline-empty">No timeline data available</div>
   }
 
-  const width = 1400
-  const height = 500
-  const padding = { top: 40, right: 40, bottom: 60, left: 80 }
+  const { WIDTH: width, HEIGHT: height, PADDING: padding } = CHART_DIMENSIONS.TIMELINE
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
 
@@ -211,8 +210,6 @@ function TimelineChart({ selectedTimePeriod }) {
   }).join(' ')
 
   const areaData = `M ${xScale(minValue)} ${padding.top + chartHeight} ${pathData} L ${xScale(maxValue)} ${padding.top + chartHeight} Z`
-
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
   const yTicks = 5
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => 
@@ -255,7 +252,7 @@ function TimelineChart({ selectedTimePeriod }) {
             onChange={(e) => setFilterCountry(e.target.value)}
             className="filter-select"
           >
-            <option value="">All Countries</option>
+            <option value="">{FILTER_LABELS.ALL_COUNTRIES}</option>
             {availableCountries.map(country => (
               <option key={country} value={country}>{country}</option>
             ))}
@@ -270,7 +267,7 @@ function TimelineChart({ selectedTimePeriod }) {
             onChange={(e) => setFilterOrbitalBand(e.target.value)}
             className="filter-select"
           >
-            <option value="">All Orbital Bands</option>
+            <option value="">{FILTER_LABELS.ALL_ORBITAL_BANDS}</option>
             {availableOrbitalBands.map(band => (
               <option key={band} value={band}>{band}</option>
             ))}
@@ -372,7 +369,7 @@ function TimelineChart({ selectedTimePeriod }) {
           />
           {displayData.map(d => {
             const xValue = viewMode === 'months' ? d.month : d.year
-            const label = viewMode === 'months' ? monthNames[d.month - 1] : d.year
+            const label = viewMode === 'months' ? MONTH_NAMES[d.month - 1] : d.year
             return (
               <g key={xValue}>
                 <line

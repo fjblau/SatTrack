@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import GraphViewer from './GraphViewer'
 import './GraphExplorer.css'
+import { API_ENDPOINTS, GRAPH_SETTINGS, UI_TEXT } from '../config/constants'
 
 function GraphExplorer() {
   const [graphType, setGraphType] = useState('constellation')
@@ -25,11 +26,11 @@ function GraphExplorer() {
   const loadGraphStats = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/v2/graphs/stats')
+      const response = await fetch(API_ENDPOINTS.GRAPHS.STATS)
       const data = await response.json()
       
       if (data.data) {
-        const filteredConstellations = (data.data.constellations || []).filter(c => c.name !== 'Other')
+        const filteredConstellations = (data.data.constellations || []).filter(c => !GRAPH_SETTINGS.EXCLUDED_CONSTELLATIONS.includes(c.name))
         setConstellations(filteredConstellations)
         setDocuments(data.data.top_registration_documents || [])
         setOrbitalBands(data.data.proximity_by_orbital_band || [])
@@ -53,7 +54,7 @@ function GraphExplorer() {
 
   const loadFunctionCategories = async () => {
     try {
-      const response = await fetch('/v2/graphs/function-similarity?limit=10')
+      const response = await fetch(`${API_ENDPOINTS.GRAPHS.FUNCTION_SIMILARITY}?limit=${GRAPH_SETTINGS.FUNCTION_SIMILARITY_LIMIT}`)
       const data = await response.json()
       
       if (data.data && data.data.categories) {
@@ -76,7 +77,7 @@ function GraphExplorer() {
 
   const loadCountryRelations = async () => {
     try {
-      const response = await fetch('/v2/graphs/country-relations?min_satellites=10&limit_countries=100')
+      const response = await fetch(`${API_ENDPOINTS.GRAPHS.COUNTRY_RELATIONS}?min_satellites=${GRAPH_SETTINGS.COUNTRY_RELATIONS_MIN_SATELLITES}&limit_countries=${GRAPH_SETTINGS.COUNTRY_RELATIONS_LIMIT}`)
       const data = await response.json()
       
       if (data.data && data.data.nodes) {
@@ -137,7 +138,7 @@ function GraphExplorer() {
           <div className="selector-content">
             <h3>Constellations</h3>
             {loading ? (
-              <p>Loading...</p>
+              <p>{UI_TEXT.LOADING}</p>
             ) : (
               <div className="item-list">
                 {constellations.map((constellation) => (
@@ -159,7 +160,7 @@ function GraphExplorer() {
           <div className="selector-content">
             <h3>Top Registration Documents</h3>
             {loading ? (
-              <p>Loading...</p>
+              <p>{UI_TEXT.LOADING}</p>
             ) : (
               <div className="item-list">
                 {documents.map((doc) => (
@@ -181,9 +182,9 @@ function GraphExplorer() {
         {graphType === 'proximity' && (
           <div className="selector-content">
             <h3>Orbital Proximity</h3>
-            <p className="section-description">Satellites with similar orbits (within ±50km apogee/perigee, ±5° inclination)</p>
+            <p className="section-description">{UI_TEXT.PROXIMITY_DESCRIPTION}</p>
             {loading ? (
-              <p>Loading...</p>
+              <p>{UI_TEXT.LOADING}</p>
             ) : (
               <div className="item-list">
                 {orbitalBands.map((band) => (
@@ -204,9 +205,9 @@ function GraphExplorer() {
         {graphType === 'function' && (
           <div className="selector-content">
             <h3>Function Categories</h3>
-            <p className="section-description">Click to select multiple categories</p>
+            <p className="section-description">{UI_TEXT.SELECT_MULTIPLE_CATEGORIES}</p>
             {loading ? (
-              <p>Loading...</p>
+              <p>{UI_TEXT.LOADING}</p>
             ) : (
               <div className="item-list">
                 {functionCategories.map((category) => (
@@ -227,9 +228,9 @@ function GraphExplorer() {
         {graphType === 'country' && (
           <div className="selector-content">
             <h3>Country Relations</h3>
-            <p className="section-description">Shift-click to select multiple countries</p>
+            <p className="section-description">{UI_TEXT.SHIFT_SELECT_COUNTRIES}</p>
             {loading ? (
-              <p>Loading...</p>
+              <p>{UI_TEXT.LOADING}</p>
             ) : (
               <div className="item-list">
                 {countries.map((country) => (
