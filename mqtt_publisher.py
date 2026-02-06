@@ -141,6 +141,9 @@ def publish_tle_to_mqtt(
     Returns:
         Tuple of (success: bool, error_message: Optional[str])
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         mqtt_broker = config.get('mqtt_broker', {})
         host = mqtt_broker.get('host')
@@ -149,64 +152,87 @@ def publish_tle_to_mqtt(
         password = mqtt_broker.get('password')
         topic = config.get('topic', 'satellites/tle')
         
+        logger.info(f"MQTT Publish: host={host}, port={port}, topic={topic}, has_username={bool(username)}")
+        
         if not host:
+            logger.error("MQTT broker host not configured")
             return False, "MQTT broker host not configured"
         
         json_payload = convert_tle_to_json(satellite_data, tle_data)
+        logger.info(f"Generated JSON payload, length={len(json_payload)} bytes")
+        
+        client_id = f"kessler_{config.get('satellite_id', 'unknown').replace('/', '_')}"
+        logger.info(f"Creating MQTT client with id: {client_id}")
         
         client = mqtt.Client(
-            client_id=f"kessler_{config.get('satellite_id', 'unknown')}",
+            client_id=client_id,
             protocol=mqtt.MQTTv311
         )
         
         if username and password:
+            logger.info(f"Setting MQTT credentials for user: {username}")
             client.username_pw_set(username, password)
         
         connection_result = {'success': False, 'error': None}
         
         def on_connect(client, userdata, flags, rc):
+            logger.info(f"MQTT on_connect callback: rc={rc}")
             if rc == 0:
                 connection_result['success'] = True
             else:
                 connection_result['error'] = f"Connection failed with code {rc}"
         
         def on_publish(client, userdata, mid):
-            pass
+            logger.info(f"MQTT on_publish callback: mid={mid}")
         
         client.on_connect = on_connect
         client.on_publish = on_publish
         
+        logger.info(f"Connecting to MQTT broker {host}:{port}")
         client.connect(host, port, keepalive=60)
         client.loop_start()
+        logger.info("MQTT loop started")
         
         import time
         timeout = 10
         start_time = time.time()
         while not connection_result['success'] and not connection_result['error']:
-            if time.time() - start_time > timeout:
+            elapsed = time.time() - start_time
+            if elapsed > timeout:
+                logger.error(f"MQTT connection timeout after {elapsed:.2f} seconds")
                 client.loop_stop()
                 client.disconnect()
                 return False, "Connection timeout"
             time.sleep(0.1)
         
+        logger.info(f"Connection result: success={connection_result['success']}, error={connection_result['error']}")
+        
         if not connection_result['success']:
             client.loop_stop()
             client.disconnect()
+            logger.error(f"MQTT connection failed: {connection_result['error']}")
             return False, connection_result['error']
         
+        logger.info(f"Publishing to topic: {topic}")
         result = client.publish(topic, json_payload, qos=1)
+        logger.info(f"Publish initiated: rc={result.rc}, mid={result.mid}")
         
         result.wait_for_publish(timeout=5)
+        logger.info("Publish wait completed")
         
         client.loop_stop()
         client.disconnect()
+        logger.info("MQTT client disconnected")
         
         if result.rc == mqtt.MQTT_ERR_SUCCESS:
+            logger.info("MQTT publish successful")
             return True, None
         else:
+            logger.error(f"MQTT publish failed with code {result.rc}")
             return False, f"Publish failed with code {result.rc}"
         
     except Exception as e:
+        logger.error(f"MQTT publish exception: {str(e)}", exc_info=True)
         return False, f"MQTT publish error: {str(e)}"
 
 
