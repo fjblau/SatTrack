@@ -1,6 +1,8 @@
 {
+  "framework": null,
   "buildCommand": "cd react-app && npm install && npm run build",
   "outputDirectory": "react-app/dist",
+  "installCommand": "pip install -r requirements.txt",
   "rewrites": [
     {
       "source": "/api/:path*",
