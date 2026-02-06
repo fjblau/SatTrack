@@ -2064,14 +2064,33 @@ def test_mqtt_connection(request: MqttTestConnectionRequest):
         }
 
 
+@app.get("/v2/mqtt/debug/{satellite_id:path}")
+def debug_mqtt_config(satellite_id: str):
+    """Debug endpoint to check MQTT configuration and satellite data."""
+    config = get_mqtt_configuration(satellite_id)
+    
+    intl_desig_from_id = satellite_id.split('/')[-1] if '/' in satellite_id else satellite_id
+    satellite = find_satellite(international_designator=intl_desig_from_id)
+    
+    return {
+        "satellite_id": satellite_id,
+        "intl_desig_extracted": intl_desig_from_id,
+        "config_exists": config is not None,
+        "config_key": config.get('_key') if config else None,
+        "satellite_exists": satellite is not None,
+        "satellite_id_in_db": satellite.get('_id') if satellite else None,
+        "satellite_intl_desig": satellite.get('canonical', {}).get('international_designator') if satellite else None
+    }
+
+
 @app.post("/v2/mqtt/publish-now/{satellite_id:path}")
 def publish_now(satellite_id: str):
-    logging.info(f"Publish now requested for satellite_id: {satellite_id}")
+    logging.info(f"=== PUBLISH NOW START === satellite_id: {satellite_id}")
     
     config = get_mqtt_configuration(satellite_id)
     if not config:
         logging.error(f"MQTT configuration not found for satellite_id: {satellite_id}")
-        raise HTTPException(status_code=404, detail="MQTT configuration not found")
+        raise HTTPException(status_code=404, detail=f"MQTT configuration not found for {satellite_id}")
     
     logging.info(f"Found config: {config.get('_key')}")
     
