@@ -104,11 +104,15 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       console.log('Full satellite object:', JSON.stringify(satellite, null, 2))
       console.log('satellite._id:', satellite._id)
       console.log('satellite._mongodb_id:', satellite._mongodb_id)
+      console.log('satellite.identifier:', satellite.identifier)
       console.log('satellite.canonical:', satellite.canonical)
+      console.log('Object.keys(satellite):', Object.keys(satellite))
       
-      let satelliteId = satellite._id || satellite._mongodb_id
+      let satelliteId = satellite._id || 
+                        satellite._mongodb_id || 
+                        (satellite.identifier ? `satellites/${satellite.identifier}` : null)
       
-      // Additional fallbacks if still no ID
+      // Additional fallbacks
       if (!satelliteId && satellite['International Designator']) {
         satelliteId = `satellites/${satellite['International Designator']}`
       }
@@ -119,7 +123,9 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       console.log('Extracted noradId:', noradId)
       
       if (!satelliteId) {
-        console.error('No satellite ID found! Object keys:', Object.keys(satellite))
+        console.error('FAILED: No satellite ID found!')
+        console.error('Available fields:', Object.keys(satellite))
+        console.error('Full object:', satellite)
         throw new Error('Satellite ID is required')
       }
       

@@ -461,7 +461,11 @@ export default function DetailPanel({ object }) {
 
       {showMqttConfig && (() => {
         const satelliteData = fullDocument || object
-        const mongoId = satelliteData._mongodb_id || object._mongodb_id || object['International Designator']
+        const mongoId = satelliteData._mongodb_id || 
+                        satelliteData.identifier || 
+                        object._mongodb_id || 
+                        object.identifier ||
+                        object['International Designator']
         const fullId = satelliteData._id || (mongoId ? `satellites/${mongoId}` : null)
         
         console.log('MQTT Modal - satelliteData:', satelliteData)
