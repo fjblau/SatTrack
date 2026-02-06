@@ -152,6 +152,16 @@ Railway will now:
 3. Expose health check at `/_api/version` endpoint
 4. No longer attempt to run the Python FastAPI application
 
+### Additional Fix - Port Configuration
+**Issue**: Railway health checks failing with "service unavailable"
+
+**Root Cause**: ArangoDB was listening on hardcoded port 8529, but Railway assigns a dynamic PORT environment variable and expects services to bind to that port.
+
+**Solution**: Modified `Dockerfile.railway` to:
+- Bind ArangoDB to `0.0.0.0:${PORT}` using `--server.endpoint` flag
+- Update health check to use `${PORT}` variable
+- Default PORT to 8529 for local compatibility
+
 ### Next Steps
 1. Deploy to Railway and verify ArangoDB starts successfully
 2. Check Railway deployment logs for `arangod` startup messages
