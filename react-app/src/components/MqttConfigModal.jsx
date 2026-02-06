@@ -102,7 +102,6 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       const payload = {
         satellite_id: satellite._mongodb_id,
         norad_id: satellite._norad_id,
-        satellite_name: satellite['Object Name'],
         mqtt_broker: {
           host: config.broker_host.trim(),
           port: parseInt(config.broker_port),
