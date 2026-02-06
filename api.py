@@ -2115,17 +2115,36 @@ def publish_now(satellite_id: str):
         logging.error(f"Satellite {satellite_id} has no international designator")
         raise HTTPException(status_code=400, detail="Satellite has no international designator")
     
-    tle_cache = fetch_tle_data()
-    tle_data_tuple = tle_cache.get(intl_desig)
+    # First try to get TLE from database (satellite sources)
+    tle_data_tuple = None
+    satellite_sources = satellite.get('sources', {})
+    
+    for source_key, source_data in satellite_sources.items():
+        if isinstance(source_data, dict) and 'tle' in source_data:
+            tle_info = source_data['tle']
+            if isinstance(tle_info, dict) and 'line1' in tle_info and 'line2' in tle_info:
+                tle_data_tuple = (
+                    satellite.get('canonical', {}).get('name', 'UNKNOWN'),
+                    tle_info['line1'],
+                    tle_info['line2']
+                )
+                logging.info(f"Using TLE from database source: {source_key}")
+                break
+    
+    # Fallback to CelesTrak if not in database
+    if not tle_data_tuple:
+        logging.info(f"TLE not in database, checking CelesTrak")
+        tle_cache = fetch_tle_data()
+        tle_data_tuple = tle_cache.get(intl_desig)
+        
+        if not tle_data_tuple:
+            norad_format = convert_to_norad_format(intl_desig)
+            logging.info(f"TLE not found for {intl_desig}, trying NORAD format: {norad_format}")
+            if norad_format:
+                tle_data_tuple = tle_cache.get(norad_format)
     
     if not tle_data_tuple:
-        norad_format = convert_to_norad_format(intl_desig)
-        logging.info(f"TLE not found for {intl_desig}, trying NORAD format: {norad_format}")
-        if norad_format:
-            tle_data_tuple = tle_cache.get(norad_format)
-    
-    if not tle_data_tuple:
-        logging.error(f"TLE data not found for satellite {satellite_id} (intl_desig: {intl_desig})")
+        logging.error(f"TLE data not found in database or CelesTrak for satellite {satellite_id} (intl_desig: {intl_desig})")
         raise HTTPException(status_code=404, detail="TLE data not found for this satellite")
     
     tle_data = {
