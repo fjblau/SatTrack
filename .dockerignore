@@ -1,0 +1,7 @@
+*.py
+api/
+database/
+scripts/
+tests/
+requirements.txt
+vercel.json
