@@ -101,11 +101,15 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
 
     try {
       const satelliteId = satellite._id || satellite._mongodb_id
-      const noradId = satellite.canonical?.norad_cat_id || satellite._norad_id || ''
+      const noradId = satellite.canonical?.norad_cat_id || satellite._norad_id || 'N/A'
+      
+      if (!satelliteId) {
+        throw new Error('Satellite ID is required')
+      }
       
       const payload = {
         satellite_id: satelliteId,
-        norad_id: noradId,
+        norad_id: String(noradId),
         mqtt_broker: {
           host: config.broker_host.trim(),
           port: parseInt(config.broker_port),
