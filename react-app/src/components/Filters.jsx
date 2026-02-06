@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './Filters.css'
+import { FILTER_LABELS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
 export default function Filters({ filters, filterOptions, onFilterChange }) {
   const [localFilters, setLocalFilters] = useState(filters)
@@ -34,7 +35,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
         <input
           id="search"
           type="text"
-          placeholder="Registration or name..."
+          placeholder={UI_TEXT.SEARCH_PLACEHOLDER}
           value={localFilters.search || ''}
           onChange={(e) => handleChange('search', e.target.value)}
         />
@@ -47,7 +48,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
           value={localFilters.country || ''}
           onChange={(e) => handleChange('country', e.target.value)}
         >
-          <option value="">All Countries</option>
+          <option value="">{FILTER_LABELS.ALL_COUNTRIES}</option>
           {filterOptions.countries?.map(country => (
             <option key={country} value={country}>{country}</option>
           ))}
@@ -61,7 +62,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
           value={localFilters.status || ''}
           onChange={(e) => handleChange('status', e.target.value)}
         >
-          <option value="">All Statuses</option>
+          <option value="">{FILTER_LABELS.ALL_STATUSES}</option>
           {filterOptions.statuses?.map(status => (
             <option key={status} value={status}>{status}</option>
           ))}
@@ -75,7 +76,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
           value={localFilters.orbital_band || ''}
           onChange={(e) => handleChange('orbital_band', e.target.value)}
         >
-          <option value="">All Orbital Bands</option>
+          <option value="">{FILTER_LABELS.ALL_ORBITAL_BANDS}</option>
           {filterOptions.orbital_bands?.map(band => (
             <option key={band} value={band}>{band}</option>
           ))}
@@ -89,7 +90,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
           value={localFilters.congestion_risk || ''}
           onChange={(e) => handleChange('congestion_risk', e.target.value)}
         >
-          <option value="">All Congestion Risks</option>
+          <option value="">{FILTER_LABELS.ALL_CONGESTION_RISKS}</option>
           {filterOptions.congestion_risks?.map(risk => (
             <option key={risk} value={risk}>{risk}</option>
           ))}
@@ -114,7 +115,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
               onChange={(e) => handleRangeChange('apogee_max', e.target.value)}
             />
           </div>
-          <small>{filterOptions.apogee_range[0].toFixed(0)} — {filterOptions.apogee_range[1].toFixed(0)} km</small>
+          <small>{filterOptions.apogee_range[0].toFixed(NUMBER_FORMATS.LARGE_NUMBERS_DECIMAL_PLACES)} — {filterOptions.apogee_range[1].toFixed(NUMBER_FORMATS.LARGE_NUMBERS_DECIMAL_PLACES)} km</small>
         </div>
       )}
 
@@ -136,7 +137,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
               onChange={(e) => handleRangeChange('perigee_max', e.target.value)}
             />
           </div>
-          <small>{filterOptions.perigee_range[0].toFixed(0)} — {filterOptions.perigee_range[1].toFixed(0)} km</small>
+          <small>{filterOptions.perigee_range[0].toFixed(NUMBER_FORMATS.LARGE_NUMBERS_DECIMAL_PLACES)} — {filterOptions.perigee_range[1].toFixed(NUMBER_FORMATS.LARGE_NUMBERS_DECIMAL_PLACES)} km</small>
         </div>
       )}
 
@@ -158,7 +159,7 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
               onChange={(e) => handleRangeChange('inclination_max', e.target.value)}
             />
           </div>
-          <small>{filterOptions.inclination_range[0].toFixed(2)}° — {filterOptions.inclination_range[1].toFixed(2)}°</small>
+          <small>{filterOptions.inclination_range[0].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES)}° — {filterOptions.inclination_range[1].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES)}°</small>
         </div>
       )}
     </div>

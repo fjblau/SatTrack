@@ -129,7 +129,7 @@ fi
 # Start the API server
 echo "📡 Starting API server on http://127.0.0.1:8000..."
 cd "$SCRIPT_DIR"
-$PYTHON -m uvicorn api:app --host 127.0.0.1 --port 8000 &
+$PYTHON -m uvicorn api.main:app --host 127.0.0.1 --port 8000 &
 API_PID=$!
 sleep 2
 
