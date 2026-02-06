@@ -1055,13 +1055,19 @@ def save_mqtt_configuration(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     Returns:
         Saved configuration with generated fields or None on error
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info(f"Saving MQTT config for satellite_id: {config.get('satellite_id')}")
         mqtt_collection = get_mqtt_configurations_collection()
         if not mqtt_collection:
+            logger.error("MQTT collection not available")
             return None
         
         satellite_id = config.get('satellite_id')
         if not satellite_id:
+            logger.error("satellite_id is required but not provided")
             raise ValueError("satellite_id is required")
         
         # Check if configuration exists
@@ -1132,9 +1138,14 @@ def get_mqtt_configuration(satellite_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Configuration document or None if not found
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info(f"Getting MQTT config for satellite_id: {satellite_id}")
         mqtt_collection = get_mqtt_configurations_collection()
         if not mqtt_collection:
+            logger.error("MQTT collection not available")
             return None
         
         aql = """
@@ -1148,10 +1159,16 @@ def get_mqtt_configuration(satellite_id: str) -> Optional[Dict[str, Any]]:
             bind_vars={'@collection': MQTT_CONFIG_COLLECTION, 'satellite_id': satellite_id}
         )
         results = list(cursor)
+        
+        if results:
+            logger.info(f"Found MQTT config: {results[0].get('_key')}")
+        else:
+            logger.warning(f"No MQTT config found for satellite_id: {satellite_id}")
+            
         return results[0] if results else None
         
     except Exception as e:
-        print(f"Failed to get MQTT configuration: {e}")
+        logger.error(f"Failed to get MQTT configuration: {e}", exc_info=True)
         return None
 
 
