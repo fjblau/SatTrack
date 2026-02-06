@@ -5,7 +5,6 @@
     "dockerfilePath": "Dockerfile.railway"
   },
   "deploy": {
-    "startCommand": "sh -c 'arangod --server.endpoint tcp://0.0.0.0:${PORT}'",
     "healthcheckPath": "/_api/version",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",

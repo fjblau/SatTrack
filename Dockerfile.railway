@@ -1,10 +1,9 @@
 FROM arangodb:3.11
 
-# Disable authentication for Railway deployment
+# Disable authentication
 ENV ARANGO_NO_AUTH=1
 
-# Railway provides PORT environment variable
 EXPOSE 8529
 
-# Start ArangoDB on Railway's assigned PORT
-CMD ["sh", "-c", "arangod --server.endpoint tcp://0.0.0.0:${PORT:-8529}"]
+# Use default ArangoDB startup
+CMD ["arangod", "--server.endpoint", "tcp://0.0.0.0:8529"]
