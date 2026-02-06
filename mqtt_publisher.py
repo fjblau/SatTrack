@@ -5,99 +5,14 @@ This module handles MQTT publishing of TLE data to configured brokers.
 """
 
 import json
-import math
 from datetime import datetime, timezone
 from typing import Dict, Optional, Any
 import paho.mqtt.client as mqtt
 
-
-def calculate_orbital_parameters(tle_line2: str) -> Dict[str, Any]:
-    """
-    Calculate orbital parameters from TLE line 2.
-    
-    Args:
-        tle_line2: TLE line 2 string
-    
-    Returns:
-        Dictionary with orbital parameters
-    """
-    try:
-        inclination = float(tle_line2[8:16])
-        eccentricity = float('0.' + tle_line2[26:33])
-        mean_motion_rev_day = float(tle_line2[52:63])
-        
-        period_minutes = 1440.0 / mean_motion_rev_day
-        
-        GM = 398600.4418
-        n_rad_per_sec = (mean_motion_rev_day * 2 * math.pi) / 86400.0
-        a = (GM / (n_rad_per_sec * n_rad_per_sec)) ** (1.0/3.0)
-        
-        earth_radius = 6378.137
-        apogee = a * (1 + eccentricity) - earth_radius
-        perigee = a * (1 - eccentricity) - earth_radius
-        
-        return {
-            'apogee_km': round(apogee, 2),
-            'perigee_km': round(perigee, 2),
-            'inclination_degrees': round(inclination, 2),
-            'period_minutes': round(period_minutes, 2),
-            'semi_major_axis_km': round(a, 2),
-            'eccentricity': round(eccentricity, 6),
-            'mean_motion_rev_day': round(mean_motion_rev_day, 6)
-        }
-    except Exception as e:
-        return {'error': str(e)}
+from api.services.orbital_service import OrbitalService
 
 
-def extract_tle_epoch(tle_line1: str) -> Optional[str]:
-    """
-    Extract epoch from TLE line 1 and convert to ISO8601 timestamp.
-    
-    Args:
-        tle_line1: TLE line 1 string
-    
-    Returns:
-        ISO8601 formatted timestamp or None on error
-    """
-    try:
-        epoch_year = int(tle_line1[18:20])
-        epoch_day = float(tle_line1[20:32])
-        
-        year = 2000 + epoch_year if epoch_year < 57 else 1900 + epoch_year
-        
-        from datetime import timedelta
-        epoch_date = datetime(year, 1, 1, tzinfo=timezone.utc) + timedelta(days=epoch_day - 1)
-        
-        return epoch_date.isoformat()
-    except Exception:
-        return None
 
-
-def parse_scientific_notation(field: str) -> float:
-    """
-    Parse TLE scientific notation format (assumed decimal point).
-    Format: ±.NNNNN±N where the first ± is sign, NNNNN is mantissa, and ±N is exponent
-    Example: " 10270-3" = 0.10270 x 10^-3 = 0.00010270
-    """
-    field = field.strip()
-    if not field or field == '00000-0' or field == '00000+0':
-        return 0.0
-    
-    try:
-        if '-' in field[1:]:
-            parts = field.split('-')
-            mantissa = float('0.' + parts[0].strip())
-            exponent = -int(parts[1])
-        elif '+' in field[1:]:
-            parts = field.split('+')
-            mantissa = float('0.' + parts[0].strip())
-            exponent = int(parts[1])
-        else:
-            return float(field)
-        
-        return mantissa * (10 ** exponent)
-    except Exception:
-        return 0.0
 
 
 def parse_tle_line1(line1: str) -> Dict[str, Any]:
@@ -114,6 +29,9 @@ def parse_tle_line1(line1: str) -> Dict[str, Any]:
         mean_motion_second_deriv_str = line1[44:52].strip()
         bstar_str = line1[53:61].strip()
         
+        epoch_datetime = OrbitalService.extract_tle_epoch(line1)
+        epoch_iso = epoch_datetime.isoformat() if epoch_datetime else None
+        
         return {
             'line_number': int(line1[0:1]),
             'satellite_number': int(line1[2:7]),
@@ -126,10 +44,10 @@ def parse_tle_line1(line1: str) -> Dict[str, Any]:
             },
             'epoch_year': int(line1[18:20]),
             'epoch_day': float(line1[20:32]),
-            'epoch_iso': extract_tle_epoch(line1),
+            'epoch_iso': epoch_iso,
             'mean_motion_first_derivative': float(line1[33:43]),
-            'mean_motion_second_derivative': parse_scientific_notation(mean_motion_second_deriv_str),
-            'bstar_drag': parse_scientific_notation(bstar_str),
+            'mean_motion_second_derivative': OrbitalService.parse_scientific_notation(mean_motion_second_deriv_str),
+            'bstar_drag': OrbitalService.parse_scientific_notation(bstar_str),
             'ephemeris_type': int(line1[62:63]) if line1[62:63].strip() else 0,
             'element_number': int(line1[64:68]),
             'checksum': int(line1[68:69])
@@ -191,7 +109,7 @@ def convert_tle_to_json(satellite_data: Dict[str, Any], tle_data: Dict[str, Any]
     classification = line1_parsed.get('classification', 'U')
     epoch = line1_parsed.get('epoch_iso')
     
-    orbital_params = calculate_orbital_parameters(tle_line2) if tle_line2 else {}
+    orbital_params = OrbitalService.calculate_orbital_parameters(tle_line2) if tle_line2 else {}
     
     payload = {
         "satellite": {

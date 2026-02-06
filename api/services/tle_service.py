@@ -1,14 +1,19 @@
 from typing import Optional, Dict
 import requests
 import time
+import logging
+
+from api.services.cache_service import get_tle_cache
+
+logger = logging.getLogger(__name__)
+
+_tle_cache_instance = get_tle_cache()
 
 
-def fetch_tle_data():
+def _fetch_tle_data_uncached():
     """
-    Fetch TLE data from CelesTrak.
-    
-    Note: This function returns raw TLE data without caching.
-    Caching should be handled at the router level using CacheService.
+    Internal function to fetch fresh TLE data from CelesTrak.
+    Use fetch_tle_data() instead for cached results.
     """
     tle_urls = [
         "https://celestrak.org/NORAD/elements/stations.txt",
@@ -20,7 +25,7 @@ def fetch_tle_data():
         "https://celestrak.org/NORAD/elements/iss.txt",
     ]
     
-    tle_cache = {}
+    tle_data = {}
     
     for tle_url in tle_urls:
         try:
@@ -36,19 +41,36 @@ def fetch_tle_data():
                     if tle_line1.startswith('1 ') and len(tle_line1) >= 69:
                         try:
                             intl_desig = tle_line1[9:17].strip()
-                            tle_cache[intl_desig] = (sat_name, tle_line1, tle_line2)
+                            tle_data[intl_desig] = (sat_name, tle_line1, tle_line2)
                         except:
                             pass
                     i += 3
         except Exception as e:
-            print(f"Error fetching {tle_url}: {e}")
+            logger.warning(f"Error fetching {tle_url}: {e}")
     
-    return tle_cache
+    logger.info(f"Fetched TLE data for {len(tle_data)} satellites from CelesTrak")
+    return tle_data
 
 
-def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:
+def fetch_tle_data():
     """
-    Fetch fresh TLE data by NORAD ID from TLE API.
+    Fetch TLE data from CelesTrak with caching.
+    
+    Returns a dictionary mapping international designator to (name, line1, line2) tuples.
+    Results are cached for the configured TTL (default 1 hour).
+    """
+    cache_key = "celestrak_tle_data"
+    
+    def fetch_func():
+        return _fetch_tle_data_uncached()
+    
+    return _tle_cache_instance.get_or_fetch(cache_key, fetch_func)
+
+
+def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
+    """
+    Internal function to fetch fresh TLE data by NORAD ID from TLE API.
+    Use fetch_tle_by_norad_id() instead for cached results.
     """
     url = f"https://tle.ivanstanojevic.me/api/tle/{norad_id}"
     headers = {
@@ -62,28 +84,50 @@ def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:
             
             if response.status_code == 200:
                 data = response.json()
-                return {
+                result = {
                     "name": data.get("name", f"NORAD {norad_id}"),
                     "line1": data.get("line1"),
                     "line2": data.get("line2"),
                     "source": "tle-api",
                     "date": data.get("date")
                 }
+                logger.info(f"Successfully fetched TLE for NORAD ID {norad_id}")
+                return result
             elif response.status_code == 404:
+                logger.info(f"TLE not found for NORAD ID {norad_id}")
                 return None
             else:
-                print(f"Error fetching from TLE API: {response.status_code}")
+                logger.warning(f"Error fetching from TLE API: {response.status_code}")
                 return None
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if attempt < max_retries - 1:
                 wait_time = 0.5 * (2 ** attempt)
-                print(f"Connection error fetching TLE for NORAD {norad_id}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                logger.warning(f"Connection error fetching TLE for NORAD {norad_id}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
                 time.sleep(wait_time)
             else:
-                print(f"Error fetching from TLE API after {max_retries} attempts: {e}")
+                logger.error(f"Error fetching from TLE API after {max_retries} attempts: {e}")
                 return None
         except Exception as e:
-            print(f"Error fetching from TLE API: {e}")
+            logger.error(f"Error fetching from TLE API: {e}")
             return None
     
     return None
+
+
+def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:
+    """
+    Fetch TLE data by NORAD ID from TLE API with caching.
+    
+    Args:
+        norad_id: NORAD catalog ID
+        
+    Returns:
+        Dictionary with TLE data (name, line1, line2, source, date) or None if not found.
+        Results are cached for the configured TTL (default 1 hour).
+    """
+    cache_key = f"tle_norad_{norad_id}"
+    
+    def fetch_func():
+        return _fetch_tle_by_norad_id_uncached(norad_id)
+    
+    return _tle_cache_instance.get_or_fetch(cache_key, fetch_func)

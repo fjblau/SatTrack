@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 import logging
+import json
 
 import database as db_module
 from database import (
@@ -13,6 +14,9 @@ from database import (
     get_enabled_mqtt_configurations,
     update_last_published
 )
+from database.operations import find_satellite
+from api.services.tle_service import fetch_tle_data, fetch_tle_by_norad_id
+from api.utils.converters import convert_to_norad_format
 import mqtt_publisher
 import mqtt_scheduler
 
