@@ -28,16 +28,16 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
         const response = await fetch(`/v2/mqtt/config/${encodeURIComponent(satellite._mongodb_id)}`)
         if (response.ok) {
           const data = await response.json()
-          if (data.data) {
-            const broker = data.data.mqtt_broker || {}
+          if (data) {
+            const broker = data.mqtt_broker || {}
             setConfig({
               broker_host: broker.host || '',
               broker_port: broker.port || 1883,
               username: broker.username || '',
               password: '',
-              topic: data.data.topic || '',
-              frequency_hours: data.data.frequency_hours || 24,
-              enabled: data.data.enabled !== false
+              topic: data.topic || '',
+              frequency_hours: data.frequency_hours || 24,
+              enabled: data.enabled !== false
             })
             setHasExistingConfig(true)
           }
@@ -122,8 +122,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Failed to save configuration')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}: Failed to save configuration`)
       }
 
       const result = await response.json()
@@ -131,6 +131,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       setHasExistingConfig(true)
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
+      console.error('Save error:', err)
       setError(err.message || 'Failed to save configuration')
     } finally {
       setSaving(false)
