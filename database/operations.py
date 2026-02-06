@@ -1,0 +1,295 @@
+from datetime import datetime, timezone
+from typing import Optional, Dict, List, Any
+from database.connection import get_satellites_collection, db, COLLECTION_NAME
+from database.transformations import update_canonical
+
+
+def create_satellite_document(
+    identifier: str,
+    source: str,
+    data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Create or update a satellite document with envelope structure.
+    
+    Args:
+        identifier: Unique identifier (e.g., international_designator or registration_number)
+        source: Source name (e.g., 'unoosa', 'celestrak', 'spacetrack')
+        data: Source-specific satellite data
+    
+    Returns:
+        Created/updated document
+    """
+    collection = get_satellites_collection()
+    
+    aql = """
+    FOR doc IN @@collection
+        FILTER doc.identifier == @identifier
+        LIMIT 1
+        RETURN doc
+    """
+    cursor = db.aql.execute(
+        aql,
+        bind_vars={'@collection': COLLECTION_NAME, 'identifier': identifier}
+    )
+    existing = list(cursor)
+    existing = existing[0] if existing else None
+    
+    if existing:
+        existing["sources"][source] = {
+            **data,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        existing["metadata"]["sources_available"] = list(existing["sources"].keys())
+        existing["metadata"]["last_updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        update_canonical(existing)
+        
+        collection.update(existing)
+        return existing
+    else:
+        doc = {
+            "_key": (identifier
+                     .replace('/', '_')
+                     .replace(':', '_')
+                     .replace('.', '_')
+                     .replace('*', '_STAR_')
+                     .replace(' ', '_')
+                     .replace('(', '_')
+                     .replace(')', '_')),
+            "identifier": identifier,
+            "canonical": {},
+            "sources": {
+                source: {
+                    **data,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            "metadata": {
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_updated_at": datetime.now(timezone.utc).isoformat(),
+                "sources_available": [source],
+                "source_priority": ["unoosa", "celestrak", "tleapi", "kaggle"]
+            }
+        }
+        
+        update_canonical(doc)
+        result = collection.insert(doc)
+        doc["_key"] = result["_key"]
+        return doc
+
+
+def find_satellite(
+    international_designator: Optional[str] = None,
+    registration_number: Optional[str] = None,
+    name: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Find a satellite document"""
+    collection = get_satellites_collection()
+    
+    if international_designator:
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.canonical.international_designator == @value
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'value': international_designator}
+    elif registration_number:
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.canonical.registration_number == @value
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'value': registration_number}
+    elif name:
+        aql = """
+        FOR doc IN @@collection
+            FILTER LIKE(doc.canonical.name, @pattern, true)
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'pattern': f'%{name}%'}
+    else:
+        return None
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    results = list(cursor)
+    return results[0] if results else None
+
+
+def search_satellites(
+    query: str = "",
+    country: Optional[str] = None,
+    status: Optional[str] = None,
+    orbital_band: Optional[str] = None,
+    congestion_risk: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0
+) -> List[Dict[str, Any]]:
+    """Search satellites with optional filters"""
+    collection = get_satellites_collection()
+    
+    filters = []
+    bind_vars = {'@collection': COLLECTION_NAME, 'limit': limit, 'skip': skip}
+    
+    if query:
+        filters.append("""
+            (LIKE(doc.canonical.name, @query_pattern, true) OR
+             LIKE(doc.canonical.object_name, @query_pattern, true) OR
+             LIKE(doc.canonical.international_designator, @query_pattern, true) OR
+             LIKE(doc.canonical.registration_number, @query_pattern, true))
+        """)
+        bind_vars['query_pattern'] = f'%{query}%'
+    
+    if country:
+        filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
+        bind_vars['country_pattern'] = f'%{country}%'
+    
+    if status:
+        filters.append("LIKE(doc.canonical.status, @status_pattern, true)")
+        bind_vars['status_pattern'] = f'%{status}%'
+    
+    if orbital_band:
+        filters.append("LIKE(doc.canonical.orbital_band, @orbital_band_pattern, true)")
+        bind_vars['orbital_band_pattern'] = f'%{orbital_band}%'
+    
+    if congestion_risk:
+        filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
+        bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
+    
+    filter_clause = ""
+    if filters:
+        filter_clause = "FILTER " + " AND ".join(filters)
+    
+    aql = f"""
+    FOR doc IN @@collection
+        {filter_clause}
+        LIMIT @skip, @limit
+        RETURN doc
+    """
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    return list(cursor)
+
+
+def count_satellites(
+    query: Optional[str] = None,
+    country: Optional[str] = None,
+    status: Optional[str] = None,
+    orbital_band: Optional[str] = None,
+    congestion_risk: Optional[str] = None
+) -> int:
+    """Count satellites with optional filters"""
+    collection = get_satellites_collection()
+    
+    filters = []
+    bind_vars = {'@collection': COLLECTION_NAME}
+    
+    if query:
+        filters.append("""
+            (LIKE(doc.canonical.name, @query_pattern, true) OR
+             LIKE(doc.canonical.object_name, @query_pattern, true) OR
+             LIKE(doc.canonical.international_designator, @query_pattern, true) OR
+             LIKE(doc.canonical.registration_number, @query_pattern, true))
+        """)
+        bind_vars['query_pattern'] = f'%{query}%'
+    
+    if country:
+        filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
+        bind_vars['country_pattern'] = f'%{country}%'
+    
+    if status:
+        filters.append("LIKE(doc.canonical.status, @status_pattern, true)")
+        bind_vars['status_pattern'] = f'%{status}%'
+    
+    if orbital_band:
+        filters.append("LIKE(doc.canonical.orbital_band, @orbital_band_pattern, true)")
+        bind_vars['orbital_band_pattern'] = f'%{orbital_band}%'
+    
+    if congestion_risk:
+        filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
+        bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
+    
+    filter_clause = ""
+    if filters:
+        filter_clause = "FILTER " + " AND ".join(filters)
+    
+    aql = f"""
+    RETURN COUNT(
+        FOR doc IN @@collection
+            {filter_clause}
+            RETURN 1
+    )
+    """
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    result = list(cursor)
+    return result[0] if result else 0
+
+
+def get_all_countries() -> List[str]:
+    """Get list of unique countries"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.country_of_origin != null
+            RETURN doc.canonical.country_of_origin
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def get_all_statuses() -> List[str]:
+    """Get list of unique statuses"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.status != null
+            RETURN doc.canonical.status
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def get_all_orbital_bands() -> List[str]:
+    """Get list of unique orbital bands"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.orbital_band != null
+            RETURN doc.canonical.orbital_band
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def get_all_congestion_risks() -> List[str]:
+    """Get list of unique congestion risks"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.congestion_risk != null
+            RETURN doc.canonical.congestion_risk
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def clear_collection():
+    """Clear all documents from satellites collection"""
+    collection = get_satellites_collection()
+    collection.truncate()

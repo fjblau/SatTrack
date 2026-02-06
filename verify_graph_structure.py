@@ -9,7 +9,7 @@ Tests:
 - Basic graph traversal queries work
 """
 import sys
-import db as db_module
+import database as db_module
 
 def verify_graph_structure():
     """Verify graph collections and structure"""

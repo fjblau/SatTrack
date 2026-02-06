@@ -3,7 +3,7 @@
 Add indexes to edge collections for better graph traversal performance.
 """
 import sys
-import db as db_module
+import database as db_module
 
 def add_graph_indexes():
     """Add indexes to all edge collections"""

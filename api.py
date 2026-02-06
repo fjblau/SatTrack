@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field
 import pdfplumber
 import io
 import logging
-import db as db_module
-from db import (
+import database as db_module
+from database import (
     connect_mongodb, disconnect_mongodb, find_satellite, search_satellites,
     count_satellites, get_all_countries, get_all_statuses, get_all_orbital_bands, 
     get_all_congestion_risks, create_satellite_document,

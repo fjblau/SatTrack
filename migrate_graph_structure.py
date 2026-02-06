@@ -8,7 +8,7 @@ Creates:
 - Named graph: satellite_relationships
 """
 import sys
-import db as db_module
+import database as db_module
 
 def migrate_graph_structure():
     """Create graph collections and named graph"""

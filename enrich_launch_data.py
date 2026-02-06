@@ -12,7 +12,7 @@ Promotes data to canonical.launch_date and canonical.country fields.
 import sys
 from datetime import datetime, timezone
 from collections import defaultdict
-import db as db_module
+import database as db_module
 
 def parse_gcat_date(date_str):
     """Parse GCAT date format: 'YYYY MMM DD' or 'YYYY MMM  D' to ISO date string"""

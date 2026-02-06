@@ -4,7 +4,7 @@ Direct test of graph API endpoints (without HTTP server).
 """
 import sys
 from api import get_graph_stats, get_constellation_graph, get_registration_document_graph
-import db as db_module
+import database as db_module
 
 def test_direct():
     """Test endpoints by calling functions directly"""

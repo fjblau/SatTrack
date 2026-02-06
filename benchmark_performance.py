@@ -22,7 +22,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import db
+import database as db
 
 API_BASE = "http://localhost:8000"
 BENCHMARK_RESULTS = []

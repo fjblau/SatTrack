@@ -8,7 +8,7 @@ Creates:
 """
 import sys
 from collections import defaultdict
-import db as db_module
+import database as db_module
 
 def populate_registration_network(dry_run=False):
     """Create registration document nodes and edges"""

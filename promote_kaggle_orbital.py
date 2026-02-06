@@ -22,7 +22,7 @@ Note: altitude_km in Kaggle is average altitude, so:
 import sys
 import math
 from datetime import datetime, timezone
-import db as db_module
+import database as db_module
 
 EARTH_RADIUS_KM = 6378.137
 

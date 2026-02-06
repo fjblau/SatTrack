@@ -5,7 +5,7 @@ This script adds launch site data to canonical.launch_site.
 """
 import sys
 from datetime import datetime, timezone
-import db as db_module
+import database as db_module
 
 def promote_launch_site(dry_run=False):
     """Promote Space-Track launch_site to canonical.launch_site"""

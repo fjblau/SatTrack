@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, '.')
 
-from db import get_mqtt_configuration, find_satellite
+from database import get_mqtt_configuration, find_satellite
 
 # Test with the satellite ID from the error
 satellite_id = "satellites/2018-040E"

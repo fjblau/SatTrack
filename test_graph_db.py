@@ -16,7 +16,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import db
+import database as db
 
 TEST_RESULTS = []
 TEST_EDGE_COLLECTION = "test_edges"

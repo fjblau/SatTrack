@@ -9,7 +9,7 @@ Creates a star topology for each constellation:
 """
 import sys
 from collections import defaultdict
-import db as db_module
+import database as db_module
 
 def populate_constellation_network(dry_run=False):
     """Create constellation membership edges"""

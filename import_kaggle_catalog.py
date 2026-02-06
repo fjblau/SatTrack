@@ -8,7 +8,7 @@ import os
 import csv
 import sys
 from datetime import datetime, timezone
-from db import connect_mongodb, get_satellites_collection, create_satellite_document, update_canonical
+from database import connect_mongodb, get_satellites_collection, create_satellite_document, update_canonical
 
 try:
     from dotenv import load_dotenv

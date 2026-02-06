@@ -3,7 +3,7 @@
 Analyze registration document data in the satellite collection.
 """
 import sys
-import db as db_module
+import database as db_module
 from collections import Counter
 
 def analyze_registration_docs():

@@ -70,7 +70,7 @@ TRANSFORMATION HISTORY:
 import argparse
 import sys
 from typing import Dict, Any, Optional, List
-from db import (
+from database import (
     connect_mongodb,
     disconnect_mongodb,
     get_satellites_collection,

@@ -3,7 +3,7 @@
 Test script for field promotion logic
 """
 
-from db import (
+from database import (
     connect_mongodb,
     disconnect_mongodb,
     get_satellites_collection,

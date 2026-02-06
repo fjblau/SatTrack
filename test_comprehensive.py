@@ -11,7 +11,7 @@ Tests all edge cases mentioned in the implementation plan:
 """
 
 import sys
-from db import connect_mongodb, get_satellites_collection, disconnect_mongodb
+from database import connect_mongodb, get_satellites_collection, disconnect_mongodb
 from promote_attributes import (
     validate_field_path,
     normalize_field_path,

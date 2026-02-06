@@ -4,7 +4,7 @@ Test batch processing and progress reporting features
 """
 
 import sys
-from db import connect_mongodb, disconnect_mongodb, get_satellites_collection
+from database import connect_mongodb, disconnect_mongodb, get_satellites_collection
 from promote_attributes import (
     normalize_field_path,
     build_query,

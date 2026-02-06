@@ -3,7 +3,7 @@
 Test script for helper functions in db.py
 """
 
-from db import get_nested_field, set_nested_field, record_transformation
+from database import get_nested_field, set_nested_field, record_transformation
 
 
 def test_get_nested_field():

@@ -12,7 +12,7 @@ Limits to top N closest satellites per node to keep graph manageable.
 """
 import sys
 from collections import defaultdict
-import db as db_module
+import database as db_module
 
 APOGEE_THRESHOLD_KM = 50
 PERIGEE_THRESHOLD_KM = 50

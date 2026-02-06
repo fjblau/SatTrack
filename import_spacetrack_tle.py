@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from db import connect_mongodb, get_satellites_collection, update_canonical
+from database import connect_mongodb, get_satellites_collection, update_canonical
 
 try:
     from dotenv import load_dotenv

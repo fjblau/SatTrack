@@ -3,7 +3,7 @@
 Verify that the document was updated correctly in MongoDB
 """
 
-from db import connect_mongodb, disconnect_mongodb, get_satellites_collection
+from database import connect_mongodb, disconnect_mongodb, get_satellites_collection
 import json
 
 

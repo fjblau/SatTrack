@@ -3,7 +3,7 @@
 Verify constellation membership network with graph traversal queries.
 """
 import sys
-import db as db_module
+import database as db_module
 
 def verify_constellation_network():
     """Verify constellation membership network"""

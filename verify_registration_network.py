@@ -3,7 +3,7 @@
 Verify registration document network with graph traversal queries.
 """
 import sys
-import db as db_module
+import database as db_module
 
 def verify_registration_network():
     """Verify registration document network"""
