@@ -132,7 +132,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       console.error('Save error:', err)
-      setError(err.message || 'Failed to save configuration')
+      const errorMessage = typeof err === 'string' ? err : (err?.message || String(err) || 'Failed to save configuration')
+      setError(errorMessage)
     } finally {
       setSaving(false)
     }
