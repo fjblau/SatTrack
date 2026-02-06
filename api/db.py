@@ -1,0 +1,1257 @@
+from arango import ArangoClient
+from arango.exceptions import DatabaseCreateError, CollectionCreateError, DocumentInsertError, ArangoServerError
+from datetime import datetime, timezone
+from typing import Optional, Dict, List, Any
+import os
+
+ARANGO_HOST = os.getenv("ARANGO_HOST", "http://localhost:8529")
+ARANGO_USER = os.getenv("ARANGO_USER", "root")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "kessler_dev_password")
+DB_NAME = "kessler"
+COLLECTION_NAME = "satellites"
+
+GRAPH_NAME = "satellite_relationships"
+EDGE_COLLECTION_CONSTELLATION = "constellation_membership"
+EDGE_COLLECTION_REGISTRATION = "registration_links"
+EDGE_COLLECTION_PROXIMITY = "orbital_proximity"
+COLLECTION_REG_DOCS = "registration_documents"
+
+client = None
+db = None
+satellites_collection = None
+
+
+def connect_mongodb():
+    """Initialize ArangoDB connection (kept name for backward compatibility)"""
+    global client, db, satellites_collection
+    try:
+        client = ArangoClient(hosts=ARANGO_HOST)
+        
+        sys_db = client.db('_system', username=ARANGO_USER, password=ARANGO_PASSWORD)
+        
+        if not sys_db.has_database(DB_NAME):
+            sys_db.create_database(DB_NAME)
+        
+        db = client.db(DB_NAME, username=ARANGO_USER, password=ARANGO_PASSWORD)
+        
+        if not db.has_collection(COLLECTION_NAME):
+            satellites_collection = db.create_collection(COLLECTION_NAME)
+        else:
+            satellites_collection = db.collection(COLLECTION_NAME)
+        
+        satellites_collection.add_persistent_index(fields=['canonical.international_designator'], unique=False)
+        satellites_collection.add_persistent_index(fields=['canonical.registration_number'], unique=False)
+        satellites_collection.add_persistent_index(fields=['identifier'], unique=True)
+        
+        print(f"Connected to ArangoDB: {DB_NAME}.{COLLECTION_NAME}")
+        return True
+    except Exception as e:
+        print(f"Failed to connect to ArangoDB: {e}")
+        return False
+
+
+def disconnect_mongodb():
+    """Close ArangoDB connection (kept name for backward compatibility)"""
+    global client
+    if client:
+        client.close()
+
+
+def get_satellites_collection():
+    """Get satellites collection (lazy initialization)"""
+    global satellites_collection
+    if satellites_collection is None:
+        connect_mongodb()
+    return satellites_collection
+
+
+def get_nested_field(obj: Dict[str, Any], path: str) -> Any:
+    """
+    Safely access nested dictionary fields using dot notation.
+    
+    Args:
+        obj: Dictionary to access
+        path: Dot-separated path (e.g., "kaggle.orbital_band" or "canonical.orbit.apogee_km")
+    
+    Returns:
+        Value at the path, or None if path doesn't exist
+    
+    Examples:
+        get_nested_field({"a": {"b": {"c": 1}}}, "a.b.c") -> 1
+        get_nested_field({"a": {"b": 2}}, "a.x.y") -> None
+    """
+    keys = path.split(".")
+    current = obj
+    
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return None
+        current = current[key]
+    
+    return current
+
+
+def set_nested_field(obj: Dict[str, Any], path: str, value: Any) -> bool:
+    """
+    Safely set nested dictionary fields using dot notation.
+    Creates intermediate dictionaries if they don't exist.
+    
+    Args:
+        obj: Dictionary to modify
+        path: Dot-separated path (e.g., "canonical.orbital_band")
+        value: Value to set
+    
+    Returns:
+        True if successful, False otherwise
+    
+    Examples:
+        set_nested_field({}, "a.b.c", 1) -> {"a": {"b": {"c": 1}}}
+        set_nested_field({"a": {}}, "a.b", 2) -> {"a": {"b": 2}}
+    """
+    keys = path.split(".")
+    current = obj
+    
+    for i, key in enumerate(keys[:-1]):
+        if key not in current:
+            current[key] = {}
+        elif not isinstance(current[key], dict):
+            return False
+        current = current[key]
+    
+    current[keys[-1]] = value
+    return True
+
+
+def record_transformation(
+    doc: Dict[str, Any],
+    source_field: str,
+    target_field: str,
+    value: Any,
+    reason: Optional[str] = None
+) -> None:
+    """
+    Record a field promotion in the document's transformation history.
+    
+    Args:
+        doc: Document to update
+        source_field: Source field path (e.g., "kaggle.orbital_band")
+        target_field: Target field path (e.g., "canonical.orbital_band")
+        value: The promoted value
+        reason: Optional reason for the transformation
+    """
+    if "metadata" not in doc:
+        doc["metadata"] = {}
+    
+    if "transformations" not in doc["metadata"]:
+        doc["metadata"]["transformations"] = []
+    
+    transformation = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_field": source_field,
+        "target_field": target_field,
+        "value": value,
+        "promoted_by": "manual_script"
+    }
+    
+    if reason:
+        transformation["reason"] = reason
+    
+    doc["metadata"]["transformations"].append(transformation)
+
+
+def create_satellite_document(
+    identifier: str,
+    source: str,
+    data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Create or update a satellite document with envelope structure.
+    
+    Args:
+        identifier: Unique identifier (e.g., international_designator or registration_number)
+        source: Source name (e.g., 'unoosa', 'celestrak', 'spacetrack')
+        data: Source-specific satellite data
+    
+    Returns:
+        Created/updated document
+    """
+    collection = get_satellites_collection()
+    
+    aql = """
+    FOR doc IN @@collection
+        FILTER doc.identifier == @identifier
+        LIMIT 1
+        RETURN doc
+    """
+    cursor = db.aql.execute(
+        aql,
+        bind_vars={'@collection': COLLECTION_NAME, 'identifier': identifier}
+    )
+    existing = list(cursor)
+    existing = existing[0] if existing else None
+    
+    if existing:
+        existing["sources"][source] = {
+            **data,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        existing["metadata"]["sources_available"] = list(existing["sources"].keys())
+        existing["metadata"]["last_updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        update_canonical(existing)
+        
+        collection.update(existing)
+        return existing
+    else:
+        doc = {
+            "_key": (identifier
+                     .replace('/', '_')
+                     .replace(':', '_')
+                     .replace('.', '_')
+                     .replace('*', '_STAR_')
+                     .replace(' ', '_')
+                     .replace('(', '_')
+                     .replace(')', '_')),
+            "identifier": identifier,
+            "canonical": {},
+            "sources": {
+                source: {
+                    **data,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            "metadata": {
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_updated_at": datetime.now(timezone.utc).isoformat(),
+                "sources_available": [source],
+                "source_priority": ["unoosa", "celestrak", "tleapi", "kaggle"]
+            }
+        }
+        
+        update_canonical(doc)
+        result = collection.insert(doc)
+        doc["_key"] = result["_key"]
+        return doc
+
+
+def normalize_country(country: Optional[str]) -> Optional[str]:
+    """
+    Normalize country codes and names to standardized ISO 3166-1 alpha-3 codes.
+    Returns None if country is None or empty.
+    """
+    if not country:
+        return None
+    
+    country_upper = country.strip().upper()
+    
+    country_mapping = {
+        # United States
+        "US": "USA",
+        "USA": "USA",
+        "UNITED STATES": "USA",
+        
+        # Russia/USSR
+        "USSR": "USSR",
+        "RUSSIAN FEDERATION": "RUS",
+        "RUSSIA": "RUS",
+        "CIS": "CIS",
+        
+        # China
+        "PRC": "CHN",
+        "CHINA": "CHN",
+        "CHN": "CHN",
+        
+        # United Kingdom
+        "UK": "GBR",
+        "UNITED KINGDOM": "GBR",
+        "GBR": "GBR",
+        
+        # Japan
+        "JPN": "JPN",
+        "JAPAN": "JPN",
+        
+        # Spain
+        "SPN": "ESP",
+        "SPAIN": "ESP",
+        "ESP": "ESP",
+        
+        # Germany
+        "GER": "DEU",
+        "GERMANY": "DEU",
+        "DEU": "DEU",
+        
+        # France
+        "FR": "FRA",
+        "FRA": "FRA",
+        "FRANCE": "FRA",
+        "FRANCE (FOR EUTELSAT)": "FRA",
+        
+        # Italy
+        "IT": "ITA",
+        "ITA": "ITA",
+        "ITALY": "ITA",
+        
+        # India
+        "IND": "IND",
+        "INDIA": "IND",
+        
+        # South Korea
+        "SKOR": "KOR",
+        "KOR": "KOR",
+        "SOUTH KOREA": "KOR",
+        
+        # Canada
+        "CA": "CAN",
+        "CAN": "CAN",
+        "CANADA": "CAN",
+        
+        # Australia
+        "AUS": "AUS",
+        "AUSTRALIA": "AUS",
+        
+        # Argentina
+        "ARGN": "ARG",
+        "ARG": "ARG",
+        "ARGENTINA": "ARG",
+        
+        # Finland
+        "FIN": "FIN",
+        "FINLAND": "FIN",
+        
+        # Turkey
+        "TURK": "TUR",
+        "TUR": "TUR",
+        "TURKEY": "TUR",
+        "TÜRKIYE": "TUR",
+        
+        # Brazil
+        "BRAZ": "BRA",
+        "BRA": "BRA",
+        "BRAZIL": "BRA",
+        
+        # Norway
+        "NOR": "NOR",
+        "NORWAY": "NOR",
+        
+        # Belgium
+        "BEL": "BEL",
+        "BELGIUM": "BEL",
+        
+        # Switzerland
+        "SWTZ": "CHE",
+        "CHE": "CHE",
+        "SWITZERLAND": "CHE",
+        
+        # Taiwan
+        "TWN": "TWN",
+        "TAIWAN": "TWN",
+        
+        # Saudi Arabia
+        "SAUD": "SAU",
+        "SAU": "SAU",
+        "SAUDI ARABIA": "SAU",
+        
+        # Malaysia
+        "MALAYSIA": "MYS",
+        "MYS": "MYS",
+        
+        # Rwanda
+        "RWA": "RWA",
+        "RWANDA": "RWA",
+        
+        # Singapore
+        "SING": "SGP",
+        "SGP": "SGP",
+        "SINGAPORE": "SGP",
+        
+        # Indonesia
+        "INDO": "IDN",
+        "IDN": "IDN",
+        "INDONESIA": "IDN",
+        
+        # Iran
+        "IRAN": "IRN",
+        "IRN": "IRN",
+        
+        # Israel
+        "ISRA": "ISR",
+        "ISR": "ISR",
+        "ISRAEL": "ISR",
+        
+        # South Africa
+        "SOUTH AFRICA": "ZAF",
+        "ZAF": "ZAF",
+        
+        # Thailand
+        "THAI": "THA",
+        "THA": "THA",
+        "THAILAND": "THA",
+        
+        # Luxembourg
+        "LUXE": "LUX",
+        "LUX": "LUX",
+        "LUXEMBOURG": "LUX",
+        
+        # Egypt
+        "EGYP": "EGY",
+        "EGY": "EGY",
+        "EGYPT": "EGY",
+        
+        # Bulgaria
+        "BGR": "BGR",
+        "BULGARIA": "BGR",
+        
+        # Lithuania
+        "LTU": "LTU",
+        "LITHUANIA": "LTU",
+        
+        # United Arab Emirates
+        "UAE": "ARE",
+        "ARE": "ARE",
+        "UNITED ARAB EMIRATES": "ARE",
+        
+        # Poland
+        "POL": "POL",
+        "POLAND": "POL",
+        
+        # Kazakhstan
+        "KAZ": "KAZ",
+        "KAZAKHSTAN": "KAZ",
+        
+        # Netherlands
+        "NETH": "NLD",
+        "NLD": "NLD",
+        "NETHERLANDS": "NLD",
+        
+        # Denmark
+        "DEN": "DNK",
+        "DNK": "DNK",
+        "DENMARK": "DNK",
+        
+        # Mexico
+        "MEX": "MEX",
+        "MEXICO": "MEX",
+        
+        # Chile
+        "CHILE": "CHL",
+        "CHL": "CHL",
+        
+        # Morocco
+        "MA": "MAR",
+        "MAR": "MAR",
+        "MOROCCO": "MAR",
+        
+        # Uruguay
+        "URUGUAY": "URY",
+        "URY": "URY",
+        
+        # New Zealand
+        "NEW ZEALAND": "NZL",
+        "NZL": "NZL",
+        
+        # Organizations (not countries)
+        "ESA": "ESA",
+        "ITSO": "ITSO",
+        "EUTE": "EUTELSAT",
+        "EUME": "EUMETSAT",
+        "GLOB": "GLOBALSTAR",
+        "O3B": "O3B",
+        "ORB": "ORBCOMM",
+        "SES": "SES",
+        "ABS": "ABS",
+        "IM": "INMARSAT",
+        "AB": "AB",
+        "AC": "AC",
+        "MA": "MA",
+        
+        # Unknown/TBD
+        "TBD": "TBD",
+    }
+    
+    return country_mapping.get(country_upper, country)
+
+
+def update_canonical(doc: Dict[str, Any]):
+    """
+    Update canonical section from source nodes based on priority.
+    Source priority: UNOOSA > CelesTrak > TLE API > Kaggle
+    """
+    source_priority = doc["metadata"].get("source_priority", ["unoosa", "celestrak", "tleapi", "kaggle"])
+    sources = doc["sources"]
+    
+    source_priority = [s for s in source_priority if s in sources] + [s for s in sources if s not in source_priority]
+    
+    canonical = {}
+    
+    canonical_fields = [
+        "name", "object_name", "country_of_origin", "international_designator",
+        "registration_number", "norad_cat_id", "date_of_launch", "function", "status",
+        "registration_document", "un_registered", "gso_location",
+        "date_of_decay_or_change", "secretariat_remarks", "external_website",
+        "launch_vehicle", "place_of_launch", "object_type", "rcs", "orbital_band",
+        "congestion_risk"
+    ]
+    
+    for field in canonical_fields:
+        for source_name in source_priority:
+            if source_name in sources:
+                value = sources[source_name].get(field)
+                if value is not None and value != "":
+                    canonical[field] = value
+                    break
+    
+    orbital_fields = ["apogee_km", "perigee_km", "inclination_degrees", "period_minutes"]
+    canonical["orbit"] = {}
+    for field in orbital_fields:
+        for source_name in source_priority:
+            if source_name in sources:
+                value = sources[source_name].get(field)
+                if value is not None:
+                    canonical["orbit"][field] = value
+                    break
+    
+    tle_fields = ["tle_line1", "tle_line2"]
+    canonical["tle"] = {}
+    for field in tle_fields:
+        for source_name in source_priority:
+            if source_name in sources:
+                value = sources[source_name].get(field)
+                if value is not None:
+                    canonical_field = "line1" if field == "tle_line1" else "line2"
+                    canonical["tle"][canonical_field] = value
+                    break
+    
+    canonical["updated_at"] = datetime.now(timezone.utc).isoformat()
+    canonical["source_priority"] = source_priority
+    
+    # Normalize country field
+    raw_country = canonical.get("country_of_origin")
+    if raw_country:
+        canonical["country"] = normalize_country(raw_country)
+    else:
+        canonical["country"] = None
+    
+    doc["canonical"] = canonical
+
+
+def find_satellite(
+    international_designator: Optional[str] = None,
+    registration_number: Optional[str] = None,
+    name: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Find a satellite document"""
+    collection = get_satellites_collection()
+    
+    if international_designator:
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.canonical.international_designator == @value
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'value': international_designator}
+    elif registration_number:
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.canonical.registration_number == @value
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'value': registration_number}
+    elif name:
+        aql = """
+        FOR doc IN @@collection
+            FILTER LIKE(doc.canonical.name, @pattern, true)
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'pattern': f'%{name}%'}
+    else:
+        return None
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    results = list(cursor)
+    return results[0] if results else None
+
+
+def search_satellites(
+    query: str = "",
+    country: Optional[str] = None,
+    status: Optional[str] = None,
+    orbital_band: Optional[str] = None,
+    congestion_risk: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0
+) -> List[Dict[str, Any]]:
+    """Search satellites with optional filters"""
+    collection = get_satellites_collection()
+    
+    filters = []
+    bind_vars = {'@collection': COLLECTION_NAME, 'limit': limit, 'skip': skip}
+    
+    if query:
+        filters.append("""
+            (LIKE(doc.canonical.name, @query_pattern, true) OR
+             LIKE(doc.canonical.object_name, @query_pattern, true) OR
+             LIKE(doc.canonical.international_designator, @query_pattern, true) OR
+             LIKE(doc.canonical.registration_number, @query_pattern, true))
+        """)
+        bind_vars['query_pattern'] = f'%{query}%'
+    
+    if country:
+        filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
+        bind_vars['country_pattern'] = f'%{country}%'
+    
+    if status:
+        filters.append("LIKE(doc.canonical.status, @status_pattern, true)")
+        bind_vars['status_pattern'] = f'%{status}%'
+    
+    if orbital_band:
+        filters.append("LIKE(doc.canonical.orbital_band, @orbital_band_pattern, true)")
+        bind_vars['orbital_band_pattern'] = f'%{orbital_band}%'
+    
+    if congestion_risk:
+        filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
+        bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
+    
+    filter_clause = ""
+    if filters:
+        filter_clause = "FILTER " + " AND ".join(filters)
+    
+    aql = f"""
+    FOR doc IN @@collection
+        {filter_clause}
+        LIMIT @skip, @limit
+        RETURN doc
+    """
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    return list(cursor)
+
+
+def count_satellites(
+    query: Optional[str] = None,
+    country: Optional[str] = None,
+    status: Optional[str] = None,
+    orbital_band: Optional[str] = None,
+    congestion_risk: Optional[str] = None
+) -> int:
+    """Count satellites with optional filters"""
+    collection = get_satellites_collection()
+    
+    filters = []
+    bind_vars = {'@collection': COLLECTION_NAME}
+    
+    if query:
+        filters.append("""
+            (LIKE(doc.canonical.name, @query_pattern, true) OR
+             LIKE(doc.canonical.object_name, @query_pattern, true) OR
+             LIKE(doc.canonical.international_designator, @query_pattern, true) OR
+             LIKE(doc.canonical.registration_number, @query_pattern, true))
+        """)
+        bind_vars['query_pattern'] = f'%{query}%'
+    
+    if country:
+        filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
+        bind_vars['country_pattern'] = f'%{country}%'
+    
+    if status:
+        filters.append("LIKE(doc.canonical.status, @status_pattern, true)")
+        bind_vars['status_pattern'] = f'%{status}%'
+    
+    if orbital_band:
+        filters.append("LIKE(doc.canonical.orbital_band, @orbital_band_pattern, true)")
+        bind_vars['orbital_band_pattern'] = f'%{orbital_band}%'
+    
+    if congestion_risk:
+        filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
+        bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
+    
+    filter_clause = ""
+    if filters:
+        filter_clause = "FILTER " + " AND ".join(filters)
+    
+    aql = f"""
+    RETURN COUNT(
+        FOR doc IN @@collection
+            {filter_clause}
+            RETURN 1
+    )
+    """
+    
+    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    result = list(cursor)
+    return result[0] if result else 0
+
+
+def get_all_countries() -> List[str]:
+    """Get list of unique countries"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.country_of_origin != null
+            RETURN doc.canonical.country_of_origin
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def get_all_statuses() -> List[str]:
+    """Get list of unique statuses"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.status != null
+            RETURN doc.canonical.status
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def get_all_orbital_bands() -> List[str]:
+    """Get list of unique orbital bands"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.orbital_band != null
+            RETURN doc.canonical.orbital_band
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def get_all_congestion_risks() -> List[str]:
+    """Get list of unique congestion risks"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.congestion_risk != null
+            RETURN doc.canonical.congestion_risk
+    )
+    """
+    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def clear_collection():
+    """Clear all documents from satellites collection"""
+    collection = get_satellites_collection()
+    collection.truncate()
+
+
+def create_edge_collection(edge_collection_name: str) -> bool:
+    """
+    Create an edge collection if it doesn't exist.
+    
+    Args:
+        edge_collection_name: Name of the edge collection to create
+    
+    Returns:
+        True if created or already exists, False on error
+    """
+    try:
+        if not db.has_collection(edge_collection_name):
+            db.create_collection(edge_collection_name, edge=True)
+            print(f"Created edge collection: {edge_collection_name}")
+        else:
+            print(f"Edge collection already exists: {edge_collection_name}")
+        return True
+    except Exception as e:
+        print(f"Failed to create edge collection {edge_collection_name}: {e}")
+        return False
+
+
+def create_document_collection(collection_name: str) -> bool:
+    """
+    Create a document collection if it doesn't exist.
+    
+    Args:
+        collection_name: Name of the document collection to create
+    
+    Returns:
+        True if created or already exists, False on error
+    """
+    try:
+        if not db.has_collection(collection_name):
+            db.create_collection(collection_name, edge=False)
+            print(f"Created document collection: {collection_name}")
+        else:
+            print(f"Document collection already exists: {collection_name}")
+        return True
+    except Exception as e:
+        print(f"Failed to create document collection {collection_name}: {e}")
+        return False
+
+
+def create_graph(
+    graph_name: str,
+    edge_definitions: List[Dict[str, Any]]
+) -> bool:
+    """
+    Create a named graph in ArangoDB.
+    
+    Args:
+        graph_name: Name of the graph to create
+        edge_definitions: List of edge definitions with structure:
+            [{
+                "edge_collection": "edge_collection_name",
+                "from_vertex_collections": ["collection1"],
+                "to_vertex_collections": ["collection2"]
+            }]
+    
+    Returns:
+        True if created or already exists, False on error
+    """
+    try:
+        if db.has_graph(graph_name):
+            print(f"Graph already exists: {graph_name}")
+            return True
+        
+        db.create_graph(
+            name=graph_name,
+            edge_definitions=edge_definitions
+        )
+        print(f"Created graph: {graph_name}")
+        return True
+    except Exception as e:
+        print(f"Failed to create graph {graph_name}: {e}")
+        return False
+
+
+def get_edge_collection(edge_collection_name: str):
+    """
+    Get an edge collection.
+    
+    Args:
+        edge_collection_name: Name of the edge collection
+    
+    Returns:
+        Edge collection object or None
+    """
+    try:
+        if db.has_collection(edge_collection_name):
+            return db.collection(edge_collection_name)
+        else:
+            print(f"Edge collection not found: {edge_collection_name}")
+            return None
+    except Exception as e:
+        print(f"Failed to get edge collection {edge_collection_name}: {e}")
+        return None
+
+
+def insert_edge(
+    edge_collection_name: str,
+    from_id: str,
+    to_id: str,
+    properties: Optional[Dict[str, Any]] = None
+) -> bool:
+    """
+    Insert an edge into an edge collection.
+    
+    Args:
+        edge_collection_name: Name of the edge collection
+        from_id: Full document ID of source vertex (e.g., "satellites/2025-206B")
+        to_id: Full document ID of target vertex
+        properties: Optional edge properties
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        edge_collection = get_edge_collection(edge_collection_name)
+        if not edge_collection:
+            return False
+        
+        edge_doc = {
+            "_from": from_id,
+            "_to": to_id,
+            **(properties or {})
+        }
+        
+        edge_collection.insert(edge_doc)
+        return True
+    except Exception as e:
+        print(f"Failed to insert edge: {e}")
+        return False
+
+
+def bulk_insert_edges(
+    edge_collection_name: str,
+    edges: List[Dict[str, Any]]
+) -> Dict[str, int]:
+    """
+    Bulk insert edges into an edge collection.
+    
+    Args:
+        edge_collection_name: Name of the edge collection
+        edges: List of edge documents with _from, _to, and optional properties
+    
+    Returns:
+        Dictionary with 'inserted' and 'errors' counts
+    """
+    try:
+        edge_collection = get_edge_collection(edge_collection_name)
+        if not edge_collection:
+            return {"inserted": 0, "errors": len(edges)}
+        
+        results = edge_collection.insert_many(edges, return_new=False)
+        
+        inserted = sum(1 for r in results if not isinstance(r, Exception))
+        errors = sum(1 for r in results if isinstance(r, Exception))
+        
+        return {"inserted": inserted, "errors": errors}
+    except Exception as e:
+        print(f"Failed to bulk insert edges: {e}")
+        return {"inserted": 0, "errors": len(edges)}
+
+
+def clear_edge_collection(edge_collection_name: str) -> bool:
+    """
+    Clear all edges from an edge collection.
+    
+    Args:
+        edge_collection_name: Name of the edge collection to clear
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        edge_collection = get_edge_collection(edge_collection_name)
+        if not edge_collection:
+            return False
+        
+        edge_collection.truncate()
+        print(f"Cleared edge collection: {edge_collection_name}")
+        return True
+    except Exception as e:
+        print(f"Failed to clear edge collection {edge_collection_name}: {e}")
+        return False
+
+
+def get_graph():
+    """
+    Get the satellite_relationships graph.
+    
+    Returns:
+        Graph object or None
+    """
+    try:
+        if db.has_graph(GRAPH_NAME):
+            return db.graph(GRAPH_NAME)
+        else:
+            print(f"Graph not found: {GRAPH_NAME}")
+            return None
+    except Exception as e:
+        print(f"Failed to get graph {GRAPH_NAME}: {e}")
+        return None
+
+
+def add_edge_indexes(edge_collection_name: str) -> bool:
+    """
+    Add standard indexes to an edge collection for better traversal performance.
+    
+    Note: ArangoDB automatically creates a combined edge index on ['_from', '_to']
+    when an edge collection is created. This function verifies the index exists.
+    
+    Args:
+        edge_collection_name: Name of the edge collection
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        if not db.has_collection(edge_collection_name):
+            print(f"❌ Collection not found: {edge_collection_name}")
+            return False
+        
+        edge_collection = db.collection(edge_collection_name)
+        existing_indexes = edge_collection.indexes()
+        
+        edge_index_exists = any(
+            idx.get('type') == 'edge' for idx in existing_indexes
+        )
+        
+        if edge_index_exists:
+            print(f"✓ Edge index exists on {edge_collection_name} (_from, _to)")
+        else:
+            print(f"⚠ No edge index found on {edge_collection_name}")
+        
+        return True
+    except Exception as e:
+        print(f"Failed to check indexes on {edge_collection_name}: {e}")
+        return False
+
+
+# MQTT Configuration Functions
+
+MQTT_CONFIG_COLLECTION = "mqtt_configurations"
+
+
+def get_mqtt_configurations_collection():
+    """
+    Get or create the MQTT configurations collection with indexes.
+    
+    Returns:
+        Collection object or None on error
+    """
+    try:
+        if not db.has_collection(MQTT_CONFIG_COLLECTION):
+            mqtt_collection = db.create_collection(MQTT_CONFIG_COLLECTION)
+            print(f"Created collection: {MQTT_CONFIG_COLLECTION}")
+        else:
+            mqtt_collection = db.collection(MQTT_CONFIG_COLLECTION)
+        
+        # Add indexes for efficient queries (ignore if they already exist)
+        try:
+            mqtt_collection.add_persistent_index(fields=['satellite_id'], unique=True)
+        except Exception:
+            pass
+        
+        try:
+            mqtt_collection.add_persistent_index(fields=['norad_id'], unique=False)
+        except Exception:
+            pass
+        
+        try:
+            mqtt_collection.add_persistent_index(fields=['enabled'], unique=False)
+        except Exception:
+            pass
+        
+        try:
+            mqtt_collection.add_persistent_index(fields=['next_publish'], unique=False)
+        except Exception:
+            pass
+        
+        return mqtt_collection
+    except Exception as e:
+        print(f"Failed to get/create MQTT configurations collection: {e}")
+        return None
+
+
+def save_mqtt_configuration(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Create or update MQTT configuration for a satellite.
+    
+    Args:
+        config: Configuration dictionary containing:
+            - satellite_id (required)
+            - norad_id (required)
+            - mqtt_broker (dict with host, port, username, password)
+            - topic (required)
+            - frequency_hours (required, 8 or 24)
+            - enabled (boolean)
+    
+    Returns:
+        Saved configuration with generated fields or None on error
+    """
+    try:
+        mqtt_collection = get_mqtt_configurations_collection()
+        if not mqtt_collection:
+            return None
+        
+        satellite_id = config.get('satellite_id')
+        if not satellite_id:
+            raise ValueError("satellite_id is required")
+        
+        # Check if configuration exists
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.satellite_id == @satellite_id
+            LIMIT 1
+            RETURN doc
+        """
+        cursor = db.aql.execute(
+            aql,
+            bind_vars={'@collection': MQTT_CONFIG_COLLECTION, 'satellite_id': satellite_id}
+        )
+        existing = list(cursor)
+        existing_doc = existing[0] if existing else None
+        
+        # Calculate next_publish based on frequency
+        frequency_hours = config.get('frequency_hours', 24)
+        from datetime import timedelta
+        next_publish = datetime.now(timezone.utc) + timedelta(hours=frequency_hours)
+        
+        if existing_doc:
+            # Update existing
+            existing_doc.update({
+                'norad_id': config.get('norad_id'),
+                'mqtt_broker': config.get('mqtt_broker'),
+                'topic': config.get('topic'),
+                'frequency_hours': frequency_hours,
+                'enabled': config.get('enabled', True),
+                'next_publish': next_publish.isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            })
+            
+            mqtt_collection.update(existing_doc)
+            return existing_doc
+        else:
+            # Create new
+            new_doc = {
+                'satellite_id': satellite_id,
+                'norad_id': config.get('norad_id'),
+                'mqtt_broker': config.get('mqtt_broker'),
+                'topic': config.get('topic'),
+                'frequency_hours': frequency_hours,
+                'enabled': config.get('enabled', True),
+                'last_published': None,
+                'next_publish': next_publish.isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            result = mqtt_collection.insert(new_doc)
+            new_doc['_key'] = result['_key']
+            new_doc['_id'] = result['_id']
+            return new_doc
+            
+    except Exception as e:
+        print(f"Failed to save MQTT configuration: {e}")
+        return None
+
+
+def get_mqtt_configuration(satellite_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve MQTT configuration for a satellite.
+    
+    Args:
+        satellite_id: Satellite identifier
+    
+    Returns:
+        Configuration document or None if not found
+    """
+    try:
+        mqtt_collection = get_mqtt_configurations_collection()
+        if not mqtt_collection:
+            return None
+        
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.satellite_id == @satellite_id
+            LIMIT 1
+            RETURN doc
+        """
+        cursor = db.aql.execute(
+            aql,
+            bind_vars={'@collection': MQTT_CONFIG_COLLECTION, 'satellite_id': satellite_id}
+        )
+        results = list(cursor)
+        return results[0] if results else None
+        
+    except Exception as e:
+        print(f"Failed to get MQTT configuration: {e}")
+        return None
+
+
+def delete_mqtt_configuration(satellite_id: str) -> bool:
+    """
+    Delete MQTT configuration for a satellite.
+    
+    Args:
+        satellite_id: Satellite identifier
+    
+    Returns:
+        True if deleted, False otherwise
+    """
+    try:
+        mqtt_collection = get_mqtt_configurations_collection()
+        if not mqtt_collection:
+            return False
+        
+        config = get_mqtt_configuration(satellite_id)
+        if not config:
+            return False
+        
+        mqtt_collection.delete(config['_key'])
+        return True
+        
+    except Exception as e:
+        print(f"Failed to delete MQTT configuration: {e}")
+        return False
+
+
+def get_enabled_mqtt_configurations() -> List[Dict[str, Any]]:
+    """
+    Get all enabled MQTT configurations.
+    
+    Returns:
+        List of enabled configuration documents
+    """
+    try:
+        mqtt_collection = get_mqtt_configurations_collection()
+        if not mqtt_collection:
+            return []
+        
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.enabled == true
+            RETURN doc
+        """
+        cursor = db.aql.execute(
+            aql,
+            bind_vars={'@collection': MQTT_CONFIG_COLLECTION}
+        )
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Failed to get enabled MQTT configurations: {e}")
+        return []
+
+
+def update_last_published(config_id: str, timestamp: datetime) -> bool:
+    """
+    Update the last_published timestamp and calculate next_publish for a configuration.
+    
+    Args:
+        config_id: Configuration _key or _id
+        timestamp: Publication timestamp
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        mqtt_collection = get_mqtt_configurations_collection()
+        if not mqtt_collection:
+            return False
+        
+        # Get the config to determine frequency
+        if '/' in config_id:
+            # Full _id provided
+            key = config_id.split('/')[-1]
+        else:
+            key = config_id
+        
+        config = mqtt_collection.get(key)
+        if not config:
+            return False
+        
+        # Calculate next publish time
+        from datetime import timedelta
+        frequency_hours = config.get('frequency_hours', 24)
+        next_publish = timestamp + timedelta(hours=frequency_hours)
+        
+        # Update the document
+        mqtt_collection.update({
+            '_key': key,
+            'last_published': timestamp.isoformat(),
+            'next_publish': next_publish.isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        })
+        
+        return True
+        
+    except Exception as e:
+        print(f"Failed to update last_published: {e}")
+        return False
