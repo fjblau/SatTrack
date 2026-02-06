@@ -1,6 +1,9 @@
 {
   "buildCommand": "cd react-app && npm install && npm run build",
   "outputDirectory": "react-app/dist",
+  "framework": "vite",
+  "installCommand": "cd react-app && npm install",
+  "devCommand": "cd react-app && npm run dev",
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -9,6 +12,17 @@
     {
       "source": "/v2/:path*",
       "destination": "https://web-production-e283.up.railway.app/v2/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
     }
   ]
 }
