@@ -459,17 +459,27 @@ export default function DetailPanel({ object }) {
         />
       )}
 
-      {showMqttConfig && (
-        <MqttConfigModal
-          satellite={fullDocument || { 
-            ...object, 
-            _id: object._id || `satellites/${object._mongodb_id}`,
-            _mongodb_id: object._mongodb_id
-          }}
-          tleData={currentTle}
-          onClose={() => setShowMqttConfig(false)}
-        />
-      )}
+      {showMqttConfig && (() => {
+        const satelliteData = fullDocument || object
+        const mongoId = satelliteData._mongodb_id || object._mongodb_id || object['International Designator']
+        const fullId = satelliteData._id || (mongoId ? `satellites/${mongoId}` : null)
+        
+        console.log('MQTT Modal - satelliteData:', satelliteData)
+        console.log('MQTT Modal - mongoId:', mongoId)
+        console.log('MQTT Modal - fullId:', fullId)
+        
+        return (
+          <MqttConfigModal
+            satellite={{
+              ...satelliteData,
+              _id: fullId,
+              _mongodb_id: mongoId
+            }}
+            tleData={currentTle}
+            onClose={() => setShowMqttConfig(false)}
+          />
+        )
+      })()}
     </div>
   )
 }
