@@ -1,33 +1,47 @@
-# MQTT Send - Implementation Report
+# MQTT Configuration Validation Fixes
 
-## Task
-When a user successfully configures an MQTT feed for a satellite, send one MQTT message immediately instead of waiting 24 hours for the first scheduled message.
+## Problem
+User reported validation errors when saving MQTT configuration:
+- Error: "Field required, Input should be a valid string"  
+- MQTT configuration not persisting (parameters had to be re-entered every time)
+- Error messages showing as "[object Object]" instead of readable text
 
-## Implementation
+## Root Cause
+Two issues identified:
+1. **Backend**: No minimum length validation on required string fields, allowing confusing validation errors
+2. **Frontend**: Poor error message handling that didn't show which specific fields were failing validation
 
-Modified the `create_or_update_mqtt_config` endpoint in `api.py` (line 1943) to send an immediate MQTT message when a new MQTT configuration is successfully saved and enabled.
+## Changes Made
 
-### Changes Made
+### Backend (`api.py`)
+Added `min_length=1` validation to all required string fields in Pydantic models:
+- `MqttBrokerConfig.host`: Now requires at least 1 character
+- `MqttConfiguration.satellite_id`: Now requires at least 1 character  
+- `MqttConfiguration.norad_id`: Now requires at least 1 character
+- `MqttConfiguration.topic`: Now requires at least 1 character
 
-**File**: `api.py`
+### Frontend (`MqttConfigModal.jsx`)
+1. **Added client-side validation** before API submission:
+   - Check broker_host is not empty
+   - Check topic is not empty
+   - Show clear error messages immediately
 
-- Added logic after line 1979 (after `mqtt_scheduler.schedule_mqtt_publish(saved_config)`)
-- Fetches satellite data and TLE information
-- Publishes TLE data to MQTT broker using existing `mqtt_publisher.publish_tle_to_mqtt` function
-- Updates `last_published` timestamp if successful
-- Logs success or failure for debugging
-- Wrapped in try-except to ensure configuration still saves even if immediate publish fails
+2. **Improved error message parsing**:
+   - Extract field names from Pydantic validation error objects (`error.loc`)
+   - Format as: `"field.name: error message"` instead of `"[object Object]"`
+   - Example: `"mqtt_broker.host: String should have at least 1 character"`
 
-### Key Features
+## Testing Required
+User should:
+1. Redeploy on Vercel to get updated code
+2. Try saving MQTT config with empty fields - should see clear error messages
+3. Try saving with all required fields filled - should persist correctly
+4. Reload satellite detail - config should load from database
 
-1. **Immediate Feedback**: Users receive their first MQTT message immediately upon configuration
-2. **Non-Blocking**: If immediate publish fails, it logs a warning but doesn't prevent configuration from being saved
-3. **Reuses Existing Code**: Uses the same TLE fetching and publishing logic as the scheduled jobs and manual publish endpoint
-4. **Updates Timestamp**: Sets `last_published` timestamp so the scheduler knows when the last message was sent
+## Files Changed
+- `api.py`: Lines 1903-1916 (Pydantic models)
+- `react-app/src/components/MqttConfigModal.jsx`: Lines 110-116 (validation), Lines 141-146 (error handling)
 
-### Testing Recommendations
-
-1. Configure a new MQTT feed with valid broker credentials
-2. Verify immediate MQTT message is received on the configured topic
-3. Verify scheduled messages continue to work at the configured interval (8 or 24 hours)
-4. Test with invalid TLE data or missing satellite to ensure graceful failure
+## Git
+- Committed and pushed to `mqtt-send-4a28` branch
+- Merged to `main` branch

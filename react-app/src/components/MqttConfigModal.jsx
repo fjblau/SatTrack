@@ -103,7 +103,12 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       const satelliteId = satellite._id || satellite._mongodb_id
       const noradId = satellite.canonical?.norad_cat_id || satellite._norad_id || 'N/A'
       
+      console.log('Satellite object:', satellite)
+      console.log('Extracted satelliteId:', satelliteId)
+      console.log('Extracted noradId:', noradId)
+      
       if (!satelliteId) {
+        console.error('No satellite ID found in satellite object:', satellite)
         throw new Error('Satellite ID is required')
       }
       

@@ -461,7 +461,11 @@ export default function DetailPanel({ object }) {
 
       {showMqttConfig && (
         <MqttConfigModal
-          satellite={fullDocument || object}
+          satellite={fullDocument || { 
+            ...object, 
+            _id: object._id || `satellites/${object._mongodb_id}`,
+            _mongodb_id: object._mongodb_id
+          }}
           tleData={currentTle}
           onClose={() => setShowMqttConfig(false)}
         />
