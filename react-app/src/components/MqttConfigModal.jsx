@@ -143,8 +143,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
         mqtt_broker: {
           host: config.broker_host.trim(),
           port: parseInt(config.broker_port),
-          username: config.username.trim() || null,
-          password: config.password.trim() || null
+          username: config.username?.trim() || null,
+          password: config.password?.trim() || null
         },
         topic: config.topic.trim(),
         frequency_hours: parseInt(config.frequency_hours),

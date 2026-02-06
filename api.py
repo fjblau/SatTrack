@@ -1942,6 +1942,8 @@ def get_mqtt_config(satellite_id: str):
 
 @app.post("/v2/mqtt/config")
 def create_or_update_mqtt_config(config: MqttConfiguration):
+    logging.info(f"Saving MQTT config for satellite_id: {config.satellite_id}, norad_id: {config.norad_id}")
+    
     if config.frequency_hours not in [8, 24]:
         raise HTTPException(
             status_code=400,
@@ -1971,9 +1973,14 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
         'enabled': config.enabled
     }
     
+    logging.info(f"Config dict to save: {json.dumps({**config_dict, 'mqtt_broker': {**config_dict['mqtt_broker'], 'password': '***'}}, indent=2)}")
+    
     saved_config = save_mqtt_configuration(config_dict)
     if not saved_config:
+        logging.error(f"Failed to save MQTT configuration for satellite_id: {config.satellite_id}")
         raise HTTPException(status_code=500, detail="Failed to save MQTT configuration")
+    
+    logging.info(f"Successfully saved MQTT config with _key: {saved_config.get('_key')}")
     
     if config.enabled:
         mqtt_scheduler.schedule_mqtt_publish(saved_config)
@@ -2057,21 +2064,31 @@ def test_mqtt_connection(request: MqttTestConnectionRequest):
 
 @app.post("/v2/mqtt/publish-now/{satellite_id:path}")
 def publish_now(satellite_id: str):
+    logging.info(f"Publish now requested for satellite_id: {satellite_id}")
+    
     config = get_mqtt_configuration(satellite_id)
     if not config:
+        logging.error(f"MQTT configuration not found for satellite_id: {satellite_id}")
         raise HTTPException(status_code=404, detail="MQTT configuration not found")
     
+    logging.info(f"Found config: {config.get('_key')}")
+    
     if not config.get('enabled'):
+        logging.error(f"MQTT feed is disabled for satellite_id: {satellite_id}")
         raise HTTPException(status_code=400, detail="MQTT feed is disabled for this satellite")
     
     satellite = find_satellite(satellite_id)
     if not satellite:
+        logging.error(f"Satellite not found: {satellite_id}")
         raise HTTPException(status_code=404, detail="Satellite not found")
     
     canonical = satellite.get('canonical', {})
     intl_desig = canonical.get('international_designator')
     
+    logging.info(f"Satellite canonical data: norad={canonical.get('norad_cat_id')}, intl_desig={intl_desig}")
+    
     if not intl_desig:
+        logging.error(f"Satellite {satellite_id} has no international designator")
         raise HTTPException(status_code=400, detail="Satellite has no international designator")
     
     tle_cache = fetch_tle_data()
@@ -2079,10 +2096,12 @@ def publish_now(satellite_id: str):
     
     if not tle_data_tuple:
         norad_format = convert_to_norad_format(intl_desig)
+        logging.info(f"TLE not found for {intl_desig}, trying NORAD format: {norad_format}")
         if norad_format:
             tle_data_tuple = tle_cache.get(norad_format)
     
     if not tle_data_tuple:
+        logging.error(f"TLE data not found for satellite {satellite_id} (intl_desig: {intl_desig})")
         raise HTTPException(status_code=404, detail="TLE data not found for this satellite")
     
     tle_data = {
@@ -2092,6 +2111,7 @@ def publish_now(satellite_id: str):
         'source': 'CelesTrak'
     }
     
+    logging.info(f"Publishing TLE to MQTT broker: {config.get('mqtt_broker', {}).get('host')}:{config.get('mqtt_broker', {}).get('port')}")
     success, error_message = mqtt_publisher.publish_tle_to_mqtt(config, tle_data, satellite)
     
     if success:
@@ -2099,6 +2119,7 @@ def publish_now(satellite_id: str):
         
         payload = mqtt_publisher.convert_tle_to_json(satellite, tle_data)
         
+        logging.info(f"Successfully published TLE for {satellite_id} to topic {config.get('topic')}")
         return {
             "success": True,
             "message": "TLE data published successfully",
@@ -2106,6 +2127,7 @@ def publish_now(satellite_id: str):
             "payload": json.loads(payload)
         }
     else:
+        logging.error(f"MQTT publish failed for {satellite_id}: {error_message}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to publish TLE data: {error_message}"
