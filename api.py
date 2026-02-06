@@ -1987,7 +1987,9 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
         
         # Send immediate MQTT message when configuration is enabled
         try:
-            satellite = find_satellite(config.satellite_id)
+            # Extract international designator from satellite_id (format: satellites/2018-040E)
+            intl_desig_from_id = config.satellite_id.split('/')[-1] if '/' in config.satellite_id else config.satellite_id
+            satellite = find_satellite(international_designator=intl_desig_from_id)
             if satellite:
                 canonical = satellite.get('canonical', {})
                 intl_desig = canonical.get('international_designator')
@@ -2077,9 +2079,12 @@ def publish_now(satellite_id: str):
         logging.error(f"MQTT feed is disabled for satellite_id: {satellite_id}")
         raise HTTPException(status_code=400, detail="MQTT feed is disabled for this satellite")
     
-    satellite = find_satellite(satellite_id)
+    # Extract international designator from satellite_id (format: satellites/2018-040E)
+    intl_desig_from_id = satellite_id.split('/')[-1] if '/' in satellite_id else satellite_id
+    
+    satellite = find_satellite(international_designator=intl_desig_from_id)
     if not satellite:
-        logging.error(f"Satellite not found: {satellite_id}")
+        logging.error(f"Satellite not found for ID: {satellite_id} (searched for intl_desig: {intl_desig_from_id})")
         raise HTTPException(status_code=404, detail="Satellite not found")
     
     canonical = satellite.get('canonical', {})
