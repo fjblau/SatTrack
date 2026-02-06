@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
-from database.connection import get_satellites_collection, db, COLLECTION_NAME
+from database.connection import get_satellites_collection, COLLECTION_NAME
+import database.connection as db_conn
 from database.transformations import update_canonical
 
 
@@ -28,7 +29,7 @@ def create_satellite_document(
         LIMIT 1
         RETURN doc
     """
-    cursor = db.aql.execute(
+    cursor = db_conn.db.aql.execute(
         aql,
         bind_vars={'@collection': COLLECTION_NAME, 'identifier': identifier}
     )
@@ -114,7 +115,7 @@ def find_satellite(
     else:
         return None
     
-    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    cursor = db_conn.db.aql.execute(aql, bind_vars=bind_vars)
     results = list(cursor)
     return results[0] if results else None
 
@@ -170,7 +171,7 @@ def search_satellites(
         RETURN doc
     """
     
-    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    cursor = db_conn.db.aql.execute(aql, bind_vars=bind_vars)
     return list(cursor)
 
 
@@ -224,7 +225,7 @@ def count_satellites(
     )
     """
     
-    cursor = db.aql.execute(aql, bind_vars=bind_vars)
+    cursor = db_conn.db.aql.execute(aql, bind_vars=bind_vars)
     result = list(cursor)
     return result[0] if result else 0
 
@@ -239,7 +240,7 @@ def get_all_countries() -> List[str]:
             RETURN doc.canonical.country_of_origin
     )
     """
-    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    cursor = db_conn.db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
     result = list(cursor)
     return result[0] if result else []
 
@@ -254,7 +255,7 @@ def get_all_statuses() -> List[str]:
             RETURN doc.canonical.status
     )
     """
-    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    cursor = db_conn.db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
     result = list(cursor)
     return result[0] if result else []
 
@@ -269,7 +270,7 @@ def get_all_orbital_bands() -> List[str]:
             RETURN doc.canonical.orbital_band
     )
     """
-    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    cursor = db_conn.db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
     result = list(cursor)
     return result[0] if result else []
 
@@ -284,7 +285,7 @@ def get_all_congestion_risks() -> List[str]:
             RETURN doc.canonical.congestion_risk
     )
     """
-    cursor = db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    cursor = db_conn.db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
     result = list(cursor)
     return result[0] if result else []
 
