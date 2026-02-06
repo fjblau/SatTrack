@@ -1,15 +1,10 @@
 FROM arangodb:3.11
 
-# Railway provides PORT environment variable
-ENV ARANGO_NO_AUTH=0
-ENV PORT=8529
+# Disable authentication for Railway deployment
+ENV ARANGO_NO_AUTH=1
 
-# Expose port (Railway will map this dynamically)
+# Railway provides PORT environment variable
 EXPOSE 8529
 
-# Health check using Railway's PORT variable
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:${PORT}/_api/version || exit 1
-
 # Start ArangoDB on Railway's assigned PORT
-CMD ["sh", "-c", "arangod --server.endpoint tcp://0.0.0.0:${PORT}"]
+CMD ["sh", "-c", "arangod --server.endpoint tcp://0.0.0.0:${PORT:-8529}"]
