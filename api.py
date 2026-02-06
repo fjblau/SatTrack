@@ -1994,39 +1994,15 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
                 canonical = satellite.get('canonical', {})
                 intl_desig = canonical.get('international_designator')
                 
-                if intl_desig:
-                    # Try database first, then CelesTrak
-                    tle_data_tuple = None
-                    satellite_sources = satellite.get('sources', {})
+                norad_id = canonical.get('norad_cat_id')
+                
+                if norad_id:
+                    # Fetch TLE from external API (same source as frontend)
+                    logging.info(f"Immediate send: Fetching TLE from external API for NORAD ID: {norad_id}")
+                    tle_dict = fetch_tle_by_norad_id(str(norad_id))
                     
-                    for source_key, source_data in satellite_sources.items():
-                        if isinstance(source_data, dict) and 'tle' in source_data:
-                            tle_info = source_data['tle']
-                            if isinstance(tle_info, dict) and 'line1' in tle_info and 'line2' in tle_info:
-                                tle_data_tuple = (
-                                    canonical.get('name', 'UNKNOWN'),
-                                    tle_info['line1'],
-                                    tle_info['line2']
-                                )
-                                logging.info(f"Immediate send: Using TLE from database source: {source_key}")
-                                break
-                    
-                    if not tle_data_tuple:
-                        tle_cache = fetch_tle_data()
-                        tle_data_tuple = tle_cache.get(intl_desig)
-                        
-                        if not tle_data_tuple:
-                            norad_format = convert_to_norad_format(intl_desig)
-                            if norad_format:
-                                tle_data_tuple = tle_cache.get(norad_format)
-                    
-                    if tle_data_tuple:
-                        tle_data = {
-                            'name': tle_data_tuple[0],
-                            'line1': tle_data_tuple[1],
-                            'line2': tle_data_tuple[2],
-                            'source': 'CelesTrak'
-                        }
+                    if tle_dict and tle_dict.get('line1') and tle_dict.get('line2'):
+                        tle_data = tle_dict
                         
                         success, error_message = mqtt_publisher.publish_tle_to_mqtt(saved_config, tle_data, satellite)
                         
@@ -2128,48 +2104,21 @@ def publish_now(satellite_id: str):
     
     logging.info(f"Satellite canonical data: norad={canonical.get('norad_cat_id')}, intl_desig={intl_desig}")
     
-    if not intl_desig:
-        logging.error(f"Satellite {satellite_id} has no international designator")
-        raise HTTPException(status_code=400, detail="Satellite has no international designator")
+    norad_id = canonical.get('norad_cat_id')
     
-    # First try to get TLE from database (satellite sources)
-    tle_data_tuple = None
-    satellite_sources = satellite.get('sources', {})
+    if not norad_id:
+        logging.error(f"Satellite {satellite_id} has no NORAD catalog ID")
+        raise HTTPException(status_code=400, detail="Satellite has no NORAD catalog ID")
     
-    for source_key, source_data in satellite_sources.items():
-        if isinstance(source_data, dict) and 'tle' in source_data:
-            tle_info = source_data['tle']
-            if isinstance(tle_info, dict) and 'line1' in tle_info and 'line2' in tle_info:
-                tle_data_tuple = (
-                    satellite.get('canonical', {}).get('name', 'UNKNOWN'),
-                    tle_info['line1'],
-                    tle_info['line2']
-                )
-                logging.info(f"Using TLE from database source: {source_key}")
-                break
+    # Fetch TLE from external API (same source as frontend)
+    logging.info(f"Fetching TLE from external API for NORAD ID: {norad_id}")
+    tle_dict = fetch_tle_by_norad_id(str(norad_id))
     
-    # Fallback to CelesTrak if not in database
-    if not tle_data_tuple:
-        logging.info(f"TLE not in database, checking CelesTrak")
-        tle_cache = fetch_tle_data()
-        tle_data_tuple = tle_cache.get(intl_desig)
-        
-        if not tle_data_tuple:
-            norad_format = convert_to_norad_format(intl_desig)
-            logging.info(f"TLE not found for {intl_desig}, trying NORAD format: {norad_format}")
-            if norad_format:
-                tle_data_tuple = tle_cache.get(norad_format)
+    if not tle_dict or not tle_dict.get('line1') or not tle_dict.get('line2'):
+        logging.error(f"TLE data not found for satellite {satellite_id} (NORAD ID: {norad_id})")
+        raise HTTPException(status_code=404, detail=f"TLE data not available for NORAD ID {norad_id}")
     
-    if not tle_data_tuple:
-        logging.error(f"TLE data not found in database or CelesTrak for satellite {satellite_id} (intl_desig: {intl_desig})")
-        raise HTTPException(status_code=404, detail="TLE data not found for this satellite")
-    
-    tle_data = {
-        'name': tle_data_tuple[0],
-        'line1': tle_data_tuple[1],
-        'line2': tle_data_tuple[2],
-        'source': 'CelesTrak'
-    }
+    tle_data = tle_dict
     
     logging.info(f"Publishing TLE to MQTT broker: {config.get('mqtt_broker', {}).get('host')}:{config.get('mqtt_broker', {}).get('port')}")
     success, error_message = mqtt_publisher.publish_tle_to_mqtt(config, tle_data, satellite)
