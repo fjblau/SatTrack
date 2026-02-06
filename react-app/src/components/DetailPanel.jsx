@@ -461,7 +461,7 @@ export default function DetailPanel({ object }) {
 
       {showMqttConfig && (
         <MqttConfigModal
-          satellite={object}
+          satellite={fullDocument || object}
           tleData={currentTle}
           onClose={() => setShowMqttConfig(false)}
         />
