@@ -1,7 +1,14 @@
 # MQTT IP Address Investigation
 
 ## Bug Summary
-MQTT message sending is failing due to firewall restrictions on the Broker. The application is hosted on Vercel (sat-track-zeta.vercel.app) and needs to connect to an MQTT broker that requires IP allowlisting.
+MQTT connection test is failing due to firewall restrictions on the MQTT Broker. 
+
+**Deployment Architecture**:
+- **Frontend**: React app on Vercel (sat-track-zeta.vercel.app)
+- **Backend**: Python FastAPI on Vercel Serverless Functions (same domain)
+- **MQTT Connection**: Happens from backend → MQTT broker
+
+The MQTT broker has IP-based firewall rules and is blocking connections from Vercel's serverless functions.
 
 ## Current IP Addresses (Dynamic)
 DNS lookup for sat-track-zeta.vercel.app currently returns:
@@ -80,13 +87,53 @@ Add the current dynamic IPs to the allowlist:
 
 ## Recommended Action Plan
 
-1. **Immediate**: Check your Vercel plan tier (Dashboard → Settings → Billing)
-2. **If Pro/Enterprise**: Enable Static IPs (see Option 1)
-3. **If Hobby/Free**: 
-   - Evaluate cost of upgrading vs. proxy service
-   - Consider switching to authentication-based security (Option 3B)
-4. **Update firewall**: Add appropriate IP addresses once static IPs are obtained
-5. **Test**: Verify MQTT connection works after firewall update
+### Step 1: Check Vercel Plan
+Visit https://vercel.com/account/billing or run:
+```bash
+vercel whoami
+```
+
+### Step 2: Choose Solution Based on Plan
+
+**If Pro/Enterprise Plan ($20+/month)**:
+1. Go to Vercel Dashboard → sat-track project → Settings → Connectivity
+2. Enable Static IPs for your backend region
+3. Copy the static IP addresses provided by Vercel
+4. Add those IPs to your MQTT broker's firewall allowlist
+5. Test the MQTT connection again from the UI
+
+**If Hobby/Free Plan**:
+
+Choose one of these approaches:
+
+**A. Upgrade to Pro** ($20/month)
+- Pros: Clean solution, officially supported
+- Cons: Monthly cost
+
+**B. Deploy proxy service with static IP**
+1. Deploy a small MQTT proxy on DigitalOcean/AWS/GCP ($5-10/month for VPS)
+2. The proxy forwards connections: Vercel → Proxy (static IP) → MQTT broker
+3. Allowlist only the proxy's IP on your MQTT broker
+4. Update backend to connect to proxy instead of broker directly
+
+**C. Remove IP allowlisting, use authentication**
+1. Configure MQTT broker to use username/password or certificate auth
+2. Remove IP allowlisting requirement from broker firewall
+3. This is more secure and flexible than IP-based restrictions
+4. No additional costs
+
+**D. Move to different hosting**
+1. Deploy backend to Railway.app, Fly.io, or traditional VPS
+2. These platforms offer static IPs without enterprise pricing
+3. Keep frontend on Vercel, point API calls to new backend
+4. Update CORS and DNS configuration
+
+### Step 3: Test Connection
+After implementing your chosen solution:
+1. Open MQTT Config modal in the UI
+2. Enter broker host and port
+3. Click "Test Connection"
+4. Verify success message appears
 
 ## Edge Cases and Considerations
 - **Middleware**: Static IPs do NOT apply to Vercel Edge Middleware (runs on Edge Network)
