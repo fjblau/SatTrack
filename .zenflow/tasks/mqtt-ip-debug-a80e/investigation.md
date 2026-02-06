@@ -1,14 +1,16 @@
 # MQTT IP Address Investigation
 
 ## Bug Summary
-MQTT connection test is failing due to firewall restrictions on the MQTT Broker. 
+MQTT connection test was failing in the UI, but the actual issue was a **frontend bug**, not firewall restrictions.
+
+**Root Cause**: Frontend was sending wrong field names to the API:
+- Frontend sent: `broker_host`, `broker_port`
+- API expected: `host`, `port`
 
 **Deployment Architecture**:
 - **Frontend**: React app on Vercel (sat-track-zeta.vercel.app)
 - **Backend**: Python FastAPI on Vercel Serverless Functions (same domain)
-- **MQTT Connection**: Happens from backend → MQTT broker
-
-The MQTT broker has IP-based firewall rules and is blocking connections from Vercel's serverless functions.
+- **MQTT Connection**: Happens from backend → MQTT broker (172.104.235.199:1883 on Linode)
 
 ## Current IP Addresses (Dynamic)
 DNS lookup for sat-track-zeta.vercel.app currently returns:
@@ -18,21 +20,47 @@ DNS lookup for sat-track-zeta.vercel.app currently returns:
 **⚠️ WARNING**: These IP addresses are **dynamic** and will change. Do not rely on them for long-term firewall configuration.
 
 ## Root Cause Analysis
-Vercel's default infrastructure uses a **dynamic range of IP addresses** for outbound requests from:
-- Builds
-- Serverless Functions
-- Edge Functions
+The connection test was failing because the frontend component `MqttConfigModal.jsx` was sending incorrect field names in the API request body.
 
-This makes IP allowlisting unreliable without using Vercel's static IP features.
+**Bug location**: `react-app/src/components/MqttConfigModal.jsx:194-199`
+
+The test-connection endpoint expects:
+```json
+{"host": "...", "port": 1883}
+```
+
+But frontend was sending:
+```json
+{"broker_host": "...", "broker_port": 1883}
+```
+
+This caused API validation errors (422 Unprocessable Entity).
+
+**Verification**: Direct API test with correct field names succeeded:
+```bash
+curl -X POST https://sat-track-zeta.vercel.app/v2/mqtt/test-connection \
+  -H "Content-Type: application/json" \
+  -d '{"host":"172.104.235.199","port":1883}'
+# Response: {"success":true,"message":"Connection successful"}
+```
 
 ## Affected Components
-- MQTT broker connection from sat-track-zeta.vercel.app
-- Any outbound connections from Vercel Serverless Functions
-- Firewall configuration on MQTT broker
+- `MqttConfigModal.jsx` - Test connection button functionality
+- User experience when testing MQTT broker connectivity
 
-## Proposed Solutions
+## Implemented Solution
 
-### Option 1: Use Vercel Static IPs (Recommended if on Pro/Enterprise)
+**Fixed frontend field names** in `MqttConfigModal.jsx:195-196`:
+- Changed `broker_host` → `host`
+- Changed `broker_port` → `port`
+
+This aligns with the API's expected request schema.
+
+## Additional Context (IP Allowlisting)
+
+During investigation, we discovered that IP allowlisting was NOT the issue. However, for reference, here are solutions if you need static IPs in the future:
+
+### Option 1: Use Vercel Static IPs (if on Pro/Enterprise)
 **Requirements**: Vercel Pro or Enterprise plan
 
 **Steps**:

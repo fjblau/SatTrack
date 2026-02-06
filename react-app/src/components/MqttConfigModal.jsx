@@ -192,8 +192,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          broker_host: config.broker_host.trim(),
-          broker_port: parseInt(config.broker_port),
+          host: config.broker_host.trim(),
+          port: parseInt(config.broker_port),
           username: config.username.trim() || null,
           password: config.password.trim() || null
         })
