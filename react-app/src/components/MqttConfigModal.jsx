@@ -19,13 +19,14 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
   const [hasExistingConfig, setHasExistingConfig] = useState(false)
 
   useEffect(() => {
-    if (!satellite?._mongodb_id) return
+    const satelliteId = satellite?._id || satellite?._mongodb_id
+    if (!satelliteId) return
 
     const fetchConfig = async () => {
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(`/v2/mqtt/config/${encodeURIComponent(satellite._mongodb_id)}`)
+        const response = await fetch(`/v2/mqtt/config/${encodeURIComponent(satelliteId)}`)
         if (response.ok) {
           const data = await response.json()
           if (data) {
@@ -50,7 +51,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
     }
 
     fetchConfig()
-  }, [satellite?._mongodb_id])
+  }, [satellite?._id, satellite?._mongodb_id])
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -99,9 +100,12 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
     setSuccess(null)
 
     try {
+      const satelliteId = satellite._id || satellite._mongodb_id
+      const noradId = satellite.canonical?.norad_cat_id || satellite._norad_id || ''
+      
       const payload = {
-        satellite_id: satellite._mongodb_id,
-        norad_id: satellite._norad_id,
+        satellite_id: satelliteId,
+        norad_id: noradId,
         mqtt_broker: {
           host: config.broker_host.trim(),
           port: parseInt(config.broker_port),
@@ -112,6 +116,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
         frequency_hours: parseInt(config.frequency_hours),
         enabled: config.enabled
       }
+      
+      console.log('Saving MQTT config with payload:', { ...payload, mqtt_broker: { ...payload.mqtt_broker, password: '***' } })
 
       const response = await fetch('/v2/mqtt/config', {
         method: 'POST',
@@ -148,7 +154,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
     setSuccess(null)
 
     try {
-      const response = await fetch(`/v2/mqtt/config/${encodeURIComponent(satellite._mongodb_id)}`, {
+      const satelliteId = satellite._id || satellite._mongodb_id
+      const response = await fetch(`/v2/mqtt/config/${encodeURIComponent(satelliteId)}`, {
         method: 'DELETE'
       })
 
@@ -226,7 +233,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
     setSuccess(null)
 
     try {
-      const response = await fetch(`/v2/mqtt/publish-now/${encodeURIComponent(satellite._mongodb_id)}`, {
+      const satelliteId = satellite._id || satellite._mongodb_id
+      const response = await fetch(`/v2/mqtt/publish-now/${encodeURIComponent(satelliteId)}`, {
         method: 'POST'
       })
 
@@ -253,7 +261,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
         <div className="modal-header">
           <div>
             <h2>MQTT Feed Configuration</h2>
-            <p className="modal-subtitle">{satellite['Object Name']}</p>
+            <p className="modal-subtitle">{satellite.canonical?.name || satellite['Object Name'] || 'Unknown Satellite'}</p>
           </div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
