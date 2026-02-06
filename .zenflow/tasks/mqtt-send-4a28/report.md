@@ -79,9 +79,19 @@ The MQTT payload now includes:
 }
 ```
 
+## NORAD ID Topic Substitution
+
+Added dynamic topic placeholder replacement:
+
+- **Frontend**: Pre-fills topic field with `satellites/tle/{norad_id}` for new configurations
+- **Backend**: Replaces `{norad_id}` placeholder with actual NORAD catalog ID at publish time
+
+**Example**: Topic `satellites/tle/{norad_id}` becomes `satellites/tle/25544` for ISS
+
 ## Files Modified
 - [`api.py`](./api.py) - Updated TLE lookup to use external API
-- [`mqtt_publisher.py`](./mqtt_publisher.py) - Added complete TLE parser with all NORAD fields
+- [`mqtt_publisher.py`](./mqtt_publisher.py) - Added complete TLE parser + topic placeholder substitution
+- [`MqttConfigModal.jsx`](./react-app/src/components/MqttConfigModal.jsx) - Pre-fill default topic with placeholder
 
 ## Deployment
 Changes committed and pushed to `main` branch.
