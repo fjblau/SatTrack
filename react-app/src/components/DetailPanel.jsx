@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './DetailPanel.css'
 import DataRecordModal from './DataRecordModal'
 import MqttConfigModal from './MqttConfigModal'
+import { API_ENDPOINTS, EXTERNAL_URLS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
 export default function DetailPanel({ object }) {
   const [orbitalState, setOrbitalState] = useState(null)
@@ -41,7 +42,7 @@ export default function DetailPanel({ object }) {
         setDocLoading(true)
         try {
           const response = await fetch(
-            `/api/documents/resolve?path=${encodeURIComponent(object['Registration Document'])}`
+            `${API_ENDPOINTS.DOCUMENTS.RESOLVE}?path=${encodeURIComponent(object['Registration Document'])}`
           )
           if (response.ok) {
             const data = await response.json()
@@ -66,7 +67,7 @@ export default function DetailPanel({ object }) {
       setError(null)
       try {
         const identifier = object._mongodb_id || object['International Designator']
-        const response = await fetch(`/v2/satellite/${encodeURIComponent(identifier)}`)
+        const response = await fetch(`${API_ENDPOINTS.SATELLITE_DETAIL}/${encodeURIComponent(identifier)}`)
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
         }
@@ -81,7 +82,7 @@ export default function DetailPanel({ object }) {
           setOrbitalState({
             orbital_state: orbit,
             norad_id: canonical.norad_cat_id,
-            n2yo_url: canonical.norad_cat_id ? `https://www.n2yo.com/satellite/?s=${canonical.norad_cat_id}` : null,
+            n2yo_url: canonical.norad_cat_id ? `${EXTERNAL_URLS.N2YO_SATELLITE}${canonical.norad_cat_id}` : null,
             tracking_available: !!canonical.norad_cat_id
           })
         }
@@ -102,7 +103,7 @@ export default function DetailPanel({ object }) {
         setMetadataLoading(true)
         try {
           const response = await fetch(
-            `/api/documents/metadata?url=${encodeURIComponent(docLink)}`
+            `${API_ENDPOINTS.DOCUMENTS.METADATA}?url=${encodeURIComponent(docLink)}`
           )
           if (response.ok) {
             const data = await response.json()
@@ -128,7 +129,7 @@ export default function DetailPanel({ object }) {
       setTleLoading(true)
       try {
         const response = await fetch(
-          `/v2/tle/${encodeURIComponent(fullDocument.canonical.norad_cat_id)}`
+          `${API_ENDPOINTS.TLE}/${encodeURIComponent(fullDocument.canonical.norad_cat_id)}`
         )
         if (response.ok) {
           const data = await response.json()
@@ -154,14 +155,14 @@ export default function DetailPanel({ object }) {
   if (!object) {
     return (
       <div className="detail-panel empty">
-        <p>Select a row to view detailed information</p>
+        <p>{UI_TEXT.SELECT_ROW}</p>
       </div>
     )
   }
 
   const formatValue = (value) => {
     if (value === null || value === undefined || value === '') return '—'
-    if (typeof value === 'number') return value.toFixed(2)
+    if (typeof value === 'number') return value.toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES)
     return String(value)
   }
 

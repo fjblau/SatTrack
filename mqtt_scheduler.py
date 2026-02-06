@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 import logging
 
 import mqtt_publisher
-from db import (
+from database import (
     get_enabled_mqtt_configurations,
     get_mqtt_configuration,
     update_last_published,

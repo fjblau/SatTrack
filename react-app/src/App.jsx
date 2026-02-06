@@ -5,6 +5,7 @@ import DetailPanel from './components/DetailPanel'
 import Filters from './components/Filters'
 import GraphExplorer from './components/GraphExplorer'
 import TimelineChart from './components/TimelineChart'
+import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
 function App() {
   const [activeTab, setActiveTab] = useState('table')
@@ -18,7 +19,7 @@ function App() {
   const [page, setPage] = useState(0)
   const [filterOptions, setFilterOptions] = useState({})
 
-  const limit = 50
+  const limit = PAGINATION.DEFAULT_PAGE_SIZE
 
   useEffect(() => {
     fetchFilterOptions()
@@ -33,10 +34,10 @@ function App() {
   const fetchFilterOptions = async () => {
     try {
       const [countriesRes, statusesRes, orbitalBandsRes, congestionRisksRes] = await Promise.all([
-        fetch('/v2/countries'),
-        fetch('/v2/statuses'),
-        fetch('/v2/orbital-bands'),
-        fetch('/v2/congestion-risks')
+        fetch(API_ENDPOINTS.COUNTRIES),
+        fetch(API_ENDPOINTS.STATUSES),
+        fetch(API_ENDPOINTS.ORBITAL_BANDS),
+        fetch(API_ENDPOINTS.CONGESTION_RISKS)
       ])
       const countriesData = await countriesRes.json()
       const statusesData = await statusesRes.json()
@@ -48,9 +49,9 @@ function App() {
         statuses: statusesData.statuses || [],
         orbital_bands: orbitalBandsData.orbital_bands || [],
         congestion_risks: congestionRisksData.congestion_risks || [],
-        apogee_range: [0, 100000],
-        perigee_range: [0, 100000],
-        inclination_range: [0, 180]
+        apogee_range: [ORBITAL_RANGES.APOGEE.MIN, ORBITAL_RANGES.APOGEE.MAX],
+        perigee_range: [ORBITAL_RANGES.PERIGEE.MIN, ORBITAL_RANGES.PERIGEE.MAX],
+        inclination_range: [ORBITAL_RANGES.INCLINATION.MIN, ORBITAL_RANGES.INCLINATION.MAX]
       })
     } catch (error) {
       console.error('Error fetching filters:', error)
@@ -59,7 +60,7 @@ function App() {
 
   const fetchLaunchYears = async () => {
     try {
-      const response = await fetch('/v2/graphs/stats')
+      const response = await fetch(API_ENDPOINTS.GRAPHS.STATS)
       const data = await response.json()
       
       if (data.data && data.data.recent_launch_years) {
@@ -87,7 +88,7 @@ function App() {
     params.append('limit', limit)
 
     try {
-      const response = await fetch(`/v2/search?${params}`)
+      const response = await fetch(`${API_ENDPOINTS.SEARCH}?${params}`)
       const data = await response.json()
       
       const objects = data.data.map(item => {
@@ -218,7 +219,7 @@ function App() {
         <div className="timeline-view-container">
           <div className="timeline-sidebar">
             <h3>Launch Years</h3>
-            <p className="section-description">Select a year to view breakdown (98.6% coverage)</p>
+            <p className="section-description">Select a year to view breakdown ({UI_TEXT.TIMELINE_COVERAGE})</p>
             <div className="item-list">
               {launchYears.map((yearData) => (
                 <div
