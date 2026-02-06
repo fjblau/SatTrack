@@ -88,9 +88,17 @@ Added dynamic topic placeholder replacement:
 
 **Example**: Topic `satellites/tle/{norad_id}` becomes `satellites/tle/25544` for ISS
 
+## Bug Fixes
+
+### Country of Origin Field
+Fixed incorrect field mapping - was using `state_of_registry` (which doesn't exist) instead of `country_of_origin` or `country` from canonical data.
+
+**Before**: Country was always empty  
+**After**: Correctly shows Austria for NORAD 58023 (PRETTY satellite)
+
 ## Files Modified
 - [`api.py`](./api.py) - Updated TLE lookup to use external API
-- [`mqtt_publisher.py`](./mqtt_publisher.py) - Added complete TLE parser + topic placeholder substitution
+- [`mqtt_publisher.py`](./mqtt_publisher.py) - Added complete TLE parser + topic placeholder substitution + fixed country_of_origin field
 - [`MqttConfigModal.jsx`](./react-app/src/components/MqttConfigModal.jsx) - Pre-fill default topic with placeholder
 
 ## Deployment
