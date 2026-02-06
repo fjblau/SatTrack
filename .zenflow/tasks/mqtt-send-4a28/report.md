@@ -42,9 +42,46 @@ User needs to verify:
 3. TLE data is published to MQTT broker
 4. Immediate message sent when feed is enabled
 
+## Additional Feature: Complete TLE Parser
+
+Added comprehensive TLE parsing to extract all fields from both Line 1 and Line 2 according to NORAD specification:
+
+### Line 1 Fields Parsed
+- Line number, satellite number, classification
+- International designator (year, launch number, piece)
+- Epoch (year, day, ISO8601 timestamp)
+- Mean motion derivatives (1st and 2nd)
+- BSTAR drag term (with special scientific notation handling)
+- Ephemeris type, element number, checksum
+
+### Line 2 Fields Parsed
+- Line number, satellite number
+- Inclination, right ascension, eccentricity
+- Argument of perigee, mean anomaly
+- Mean motion, revolution number, checksum
+
+### JSON Structure
+The MQTT payload now includes:
+```json
+{
+  "tle": {
+    "raw": {
+      "line0": "Satellite Name",
+      "line1": "1 25544U 98067A...",
+      "line2": "2 25544  51.6416..."
+    },
+    "parsed": {
+      "line1": { /* all parsed fields */ },
+      "line2": { /* all parsed fields */ }
+    }
+  },
+  "orbital_parameters": { /* computed values */ }
+}
+```
+
 ## Files Modified
-- [`api.py`](./api.py) - Updated TLE lookup in both publish endpoints
-- [`debug_tle_structure.py`](./debug_tle_structure.py) - Added debugging script (can be removed)
+- [`api.py`](./api.py) - Updated TLE lookup to use external API
+- [`mqtt_publisher.py`](./mqtt_publisher.py) - Added complete TLE parser with all NORAD fields
 
 ## Deployment
 Changes committed and pushed to `main` branch.
