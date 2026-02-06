@@ -107,6 +107,14 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
         throw new Error('Satellite ID is required')
       }
       
+      if (!config.broker_host || !config.broker_host.trim()) {
+        throw new Error('Broker host is required')
+      }
+      
+      if (!config.topic || !config.topic.trim()) {
+        throw new Error('MQTT topic is required')
+      }
+      
       const payload = {
         satellite_id: satelliteId,
         norad_id: String(noradId),
@@ -138,7 +146,12 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
         let errorMsg = `HTTP ${response.status}: Failed to save configuration`
         if (errorData.detail) {
           if (Array.isArray(errorData.detail)) {
-            errorMsg = errorData.detail.map(e => typeof e === 'string' ? e : (e.msg || JSON.stringify(e))).join(', ')
+            errorMsg = errorData.detail.map(e => {
+              if (typeof e === 'string') return e
+              const field = e.loc ? e.loc.join('.') : 'unknown field'
+              const msg = e.msg || 'validation error'
+              return `${field}: ${msg}`
+            }).join('; ')
           } else if (typeof errorData.detail === 'string') {
             errorMsg = errorData.detail
           } else {

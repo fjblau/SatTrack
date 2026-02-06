@@ -1901,17 +1901,17 @@ def get_country_relations_graph(
 
 
 class MqttBrokerConfig(BaseModel):
-    host: str = Field(..., description="MQTT broker hostname or IP")
+    host: str = Field(..., min_length=1, description="MQTT broker hostname or IP")
     port: int = Field(1883, ge=1, le=65535, description="MQTT broker port")
     username: Optional[str] = Field(None, description="MQTT username")
     password: Optional[str] = Field(None, description="MQTT password")
 
 
 class MqttConfiguration(BaseModel):
-    satellite_id: str = Field(..., description="Satellite document ID")
-    norad_id: str = Field(..., description="NORAD catalog ID")
+    satellite_id: str = Field(..., min_length=1, description="Satellite document ID")
+    norad_id: str = Field(..., min_length=1, description="NORAD catalog ID")
     mqtt_broker: MqttBrokerConfig
-    topic: str = Field(..., description="MQTT topic for publishing")
+    topic: str = Field(..., min_length=1, description="MQTT topic for publishing")
     frequency_hours: int = Field(24, description="Publishing frequency in hours (8 or 24)")
     enabled: bool = Field(True, description="Enable/disable publishing")
 
