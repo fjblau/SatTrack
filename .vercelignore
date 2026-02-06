@@ -1,6 +1,5 @@
 # Exclude large files and directories from serverless functions
 *.csv
-*.json
 *.jsonl
 arango_export/
 data/
