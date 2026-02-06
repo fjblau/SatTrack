@@ -1977,6 +1977,40 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
     
     if config.enabled:
         mqtt_scheduler.schedule_mqtt_publish(saved_config)
+        
+        # Send immediate MQTT message when configuration is enabled
+        try:
+            satellite = find_satellite(config.satellite_id)
+            if satellite:
+                canonical = satellite.get('canonical', {})
+                intl_desig = canonical.get('international_designator')
+                
+                if intl_desig:
+                    tle_cache = fetch_tle_data()
+                    tle_data_tuple = tle_cache.get(intl_desig)
+                    
+                    if not tle_data_tuple:
+                        norad_format = convert_to_norad_format(intl_desig)
+                        if norad_format:
+                            tle_data_tuple = tle_cache.get(norad_format)
+                    
+                    if tle_data_tuple:
+                        tle_data = {
+                            'name': tle_data_tuple[0],
+                            'line1': tle_data_tuple[1],
+                            'line2': tle_data_tuple[2],
+                            'source': 'CelesTrak'
+                        }
+                        
+                        success, error_message = mqtt_publisher.publish_tle_to_mqtt(saved_config, tle_data, satellite)
+                        
+                        if success:
+                            update_last_published(saved_config['_key'], datetime.now(timezone.utc))
+                            logging.info(f"Initial MQTT message sent for satellite {config.satellite_id}")
+                        else:
+                            logging.warning(f"Failed to send initial MQTT message for satellite {config.satellite_id}: {error_message}")
+        except Exception as e:
+            logging.warning(f"Failed to send initial MQTT message for satellite {config.satellite_id}: {e}")
     else:
         mqtt_scheduler.remove_scheduled_job(config.satellite_id)
     
