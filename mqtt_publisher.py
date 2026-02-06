@@ -73,6 +73,98 @@ def extract_tle_epoch(tle_line1: str) -> Optional[str]:
         return None
 
 
+def parse_scientific_notation(field: str) -> float:
+    """
+    Parse TLE scientific notation format (assumed decimal point).
+    Format: ±.NNNNN±N where the first ± is sign, NNNNN is mantissa, and ±N is exponent
+    Example: " 10270-3" = 0.10270 x 10^-3 = 0.00010270
+    """
+    field = field.strip()
+    if not field or field == '00000-0' or field == '00000+0':
+        return 0.0
+    
+    try:
+        if '-' in field[1:]:
+            parts = field.split('-')
+            mantissa = float('0.' + parts[0].strip())
+            exponent = -int(parts[1])
+        elif '+' in field[1:]:
+            parts = field.split('+')
+            mantissa = float('0.' + parts[0].strip())
+            exponent = int(parts[1])
+        else:
+            return float(field)
+        
+        return mantissa * (10 ** exponent)
+    except Exception:
+        return 0.0
+
+
+def parse_tle_line1(line1: str) -> Dict[str, Any]:
+    """
+    Parse TLE Line 1 according to NORAD format specification.
+    
+    Args:
+        line1: TLE line 1 string
+    
+    Returns:
+        Dictionary with parsed Line 1 fields
+    """
+    try:
+        mean_motion_second_deriv_str = line1[44:52].strip()
+        bstar_str = line1[53:61].strip()
+        
+        return {
+            'line_number': int(line1[0:1]),
+            'satellite_number': int(line1[2:7]),
+            'classification': line1[7:8].strip(),
+            'international_designator': {
+                'year': line1[9:11],
+                'launch_number': line1[11:14].strip(),
+                'launch_piece': line1[14:17].strip(),
+                'full': line1[9:17].strip()
+            },
+            'epoch_year': int(line1[18:20]),
+            'epoch_day': float(line1[20:32]),
+            'epoch_iso': extract_tle_epoch(line1),
+            'mean_motion_first_derivative': float(line1[33:43]),
+            'mean_motion_second_derivative': parse_scientific_notation(mean_motion_second_deriv_str),
+            'bstar_drag': parse_scientific_notation(bstar_str),
+            'ephemeris_type': int(line1[62:63]) if line1[62:63].strip() else 0,
+            'element_number': int(line1[64:68]),
+            'checksum': int(line1[68:69])
+        }
+    except Exception as e:
+        return {'error': f'Failed to parse Line 1: {str(e)}'}
+
+
+def parse_tle_line2(line2: str) -> Dict[str, Any]:
+    """
+    Parse TLE Line 2 according to NORAD format specification.
+    
+    Args:
+        line2: TLE line 2 string
+    
+    Returns:
+        Dictionary with parsed Line 2 fields
+    """
+    try:
+        return {
+            'line_number': int(line2[0:1]),
+            'satellite_number': int(line2[2:7]),
+            'inclination_degrees': float(line2[8:16]),
+            'right_ascension_degrees': float(line2[17:25]),
+            'eccentricity': float('0.' + line2[26:33]),
+            'argument_of_perigee_degrees': float(line2[34:42]),
+            'mean_anomaly_degrees': float(line2[43:51]),
+            'mean_motion_rev_per_day': float(line2[52:63]),
+            'revolution_number': int(line2[63:68]),
+            'checksum': int(line2[68:69])
+        }
+    except Exception as e:
+        return {'error': f'Failed to parse Line 2: {str(e)}'}
+
+
 def convert_tle_to_json(satellite_data: Dict[str, Any], tle_data: Dict[str, Any]) -> str:
     """
     Convert TLE data and satellite metadata to JSON format for MQTT publishing.
@@ -89,35 +181,42 @@ def convert_tle_to_json(satellite_data: Dict[str, Any], tle_data: Dict[str, Any]
     
     canonical = satellite_data.get('canonical', {})
     
+    line1_parsed = parse_tle_line1(tle_line1) if tle_line1 else {}
+    line2_parsed = parse_tle_line2(tle_line2) if tle_line2 else {}
+    
     international_designator = canonical.get('international_designator', '')
-    if not international_designator and tle_line1:
-        international_designator = tle_line1[9:17].strip()
+    if not international_designator and line1_parsed.get('international_designator'):
+        international_designator = line1_parsed['international_designator']['full']
     
-    classification = 'U'
-    if tle_line1 and len(tle_line1) > 7:
-        classification = tle_line1[7]
-    
-    epoch = extract_tle_epoch(tle_line1) if tle_line1 else None
+    classification = line1_parsed.get('classification', 'U')
+    epoch = line1_parsed.get('epoch_iso')
     
     orbital_params = calculate_orbital_parameters(tle_line2) if tle_line2 else {}
     
     payload = {
         "satellite": {
-            "norad_id": canonical.get('norad_id', ''),
+            "norad_id": canonical.get('norad_cat_id', ''),
             "name": canonical.get('name', tle_data.get('name', '')),
             "international_designator": international_designator,
             "country_of_origin": canonical.get('state_of_registry', '')
         },
         "tle": {
-            "line1": tle_line1,
-            "line2": tle_line2,
+            "raw": {
+                "line0": tle_data.get('name', ''),
+                "line1": tle_line1,
+                "line2": tle_line2
+            },
+            "parsed": {
+                "line1": line1_parsed,
+                "line2": line2_parsed
+            },
             "epoch": epoch,
             "classification": classification
         },
         "orbital_parameters": orbital_params,
         "metadata": {
             "published_at": datetime.now(timezone.utc).isoformat(),
-            "data_source": tle_data.get('source', 'CelesTrak'),
+            "data_source": tle_data.get('source', 'tle-api'),
             "publisher": "Kessler MQTT Feed"
         }
     }
