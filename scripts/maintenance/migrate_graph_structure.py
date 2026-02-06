@@ -10,6 +10,11 @@ Creates:
 import sys
 import database as db_module
 
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 def migrate_graph_structure():
     """Create graph collections and named graph"""
     

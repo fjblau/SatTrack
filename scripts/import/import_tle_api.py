@@ -10,6 +10,11 @@ import time
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from database import connect_mongodb, get_satellites_collection, update_canonical
 
 try:

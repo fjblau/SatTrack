@@ -3,6 +3,12 @@
 Verify that the document was updated correctly in MongoDB
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from database import connect_mongodb, disconnect_mongodb, get_satellites_collection
 import json
 

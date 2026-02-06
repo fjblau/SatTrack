@@ -3,6 +3,12 @@
 Test script for helper functions in db.py
 """
 
+from pathlib import Path
+import sys
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from database import get_nested_field, set_nested_field, record_transformation
 
 

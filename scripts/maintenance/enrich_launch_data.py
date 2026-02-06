@@ -14,6 +14,11 @@ from datetime import datetime, timezone
 from collections import defaultdict
 import database as db_module
 
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 def parse_gcat_date(date_str):
     """Parse GCAT date format: 'YYYY MMM DD' or 'YYYY MMM  D' to ISO date string"""
     if not date_str or date_str.strip() == '':

@@ -3,6 +3,11 @@
 Direct test of graph API endpoints (without HTTP server).
 """
 import sys
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from api import get_graph_stats, get_constellation_graph, get_registration_document_graph
 import database as db_module
 

@@ -1,6 +1,11 @@
 import sys
 sys.path.insert(0, '.')
 
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from database import get_mqtt_configuration, find_satellite
 
 # Test with the satellite ID from the error

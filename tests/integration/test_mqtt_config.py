@@ -12,6 +12,11 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock, call
 from datetime import datetime, timezone, timedelta
 import json
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from fastapi.testclient import TestClient
 from api import app, MqttConfiguration, MqttBrokerConfig

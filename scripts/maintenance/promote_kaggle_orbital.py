@@ -24,6 +24,11 @@ import math
 from datetime import datetime, timezone
 import database as db_module
 
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 EARTH_RADIUS_KM = 6378.137
 
 def calculate_apogee_perigee(altitude_km, eccentricity):

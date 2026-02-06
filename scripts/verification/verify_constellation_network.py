@@ -5,6 +5,11 @@ Verify constellation membership network with graph traversal queries.
 import sys
 import database as db_module
 
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 def verify_constellation_network():
     """Verify constellation membership network"""
     

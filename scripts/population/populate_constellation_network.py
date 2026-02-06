@@ -11,6 +11,11 @@ import sys
 from collections import defaultdict
 import database as db_module
 
+from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 def populate_constellation_network(dry_run=False):
     """Create constellation membership edges"""
     
