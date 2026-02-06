@@ -129,3 +129,35 @@ After implementing the fix:
 3. **Integration**: Verify Vercel app connects to Railway database
    - Test: `curl https://sat-track.vercel.app/v2/search?limit=1`
    - Check logs for successful database connections
+
+---
+
+## Implementation Notes
+
+### Changes Made
+**Date**: 2026-02-07
+
+**Files Removed**:
+- `railway.toml` - Contained conflicting `uvicorn api:app` start command
+- `Procfile` - Also contained uvicorn start command (not needed for Railway DB service)
+
+**Files Preserved**:
+- `railway.json` - Correct ArangoDB configuration using `Dockerfile.railway`
+- `Dockerfile.railway` - ArangoDB container build file
+
+### Expected Behavior
+Railway will now:
+1. Build the ArangoDB Docker container using `Dockerfile.railway`
+2. Start ArangoDB server with `arangod` command
+3. Expose health check at `/_api/version` endpoint
+4. No longer attempt to run the Python FastAPI application
+
+### Next Steps
+1. Deploy to Railway and verify ArangoDB starts successfully
+2. Check Railway deployment logs for `arangod` startup messages
+3. Deploy FastAPI application to Vercel following `DEPLOY.md` instructions
+4. Configure Vercel environment variables for ArangoDB connection:
+   - `ARANGO_HOST` - Railway database URL
+   - `ARANGO_USER` - Database username
+   - `ARANGO_PASSWORD` - Database password
+   - `VERCEL=1` - Enable serverless mode
