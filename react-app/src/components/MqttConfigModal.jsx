@@ -129,7 +129,22 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}: Failed to save configuration`)
+        console.error('Save failed:', response.status, errorData)
+        
+        let errorMsg = `HTTP ${response.status}: Failed to save configuration`
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            errorMsg = errorData.detail.map(e => typeof e === 'string' ? e : (e.msg || JSON.stringify(e))).join(', ')
+          } else if (typeof errorData.detail === 'string') {
+            errorMsg = errorData.detail
+          } else {
+            errorMsg = JSON.stringify(errorData.detail)
+          }
+        } else if (errorData.message) {
+          errorMsg = errorData.message
+        }
+        
+        throw new Error(errorMsg)
       }
 
       const result = await response.json()
