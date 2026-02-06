@@ -198,7 +198,7 @@ def convert_tle_to_json(satellite_data: Dict[str, Any], tle_data: Dict[str, Any]
             "norad_id": canonical.get('norad_cat_id', ''),
             "name": canonical.get('name', tle_data.get('name', '')),
             "international_designator": international_designator,
-            "country_of_origin": canonical.get('state_of_registry', '')
+            "country_of_origin": canonical.get('country_of_origin') or canonical.get('country', '')
         },
         "tle": {
             "raw": {
