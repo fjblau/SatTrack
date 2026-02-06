@@ -288,11 +288,30 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
 
     try {
       const satelliteId = satellite._id || satellite._mongodb_id
+      console.log('Publishing now for satellite:', satelliteId)
+      
       const response = await fetch(`/v2/mqtt/publish-now/${encodeURIComponent(satelliteId)}`, {
         method: 'POST'
       })
 
+      console.log('Publish response status:', response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Publish failed:', response.status, errorData)
+        
+        let errorMsg = `HTTP ${response.status}`
+        if (errorData.detail) {
+          errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail)
+        } else if (errorData.message) {
+          errorMsg = errorData.message
+        }
+        
+        throw new Error(errorMsg)
+      }
+
       const result = await response.json()
+      console.log('Publish result:', result)
       
       if (result.success) {
         setSuccess('TLE published successfully!')
@@ -301,7 +320,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
         setError(result.message || 'Failed to publish TLE')
       }
     } catch (err) {
-      setError('Failed to publish: ' + err.message)
+      console.error('Publish error:', err)
+      setError(err.message || 'Failed to publish')
     } finally {
       setSaving(false)
     }
