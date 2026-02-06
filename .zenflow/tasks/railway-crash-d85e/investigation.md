@@ -166,12 +166,21 @@ Railway will now:
 
 **Solution 2**: Removed `startCommand` from `railway.json` to allow Dockerfile CMD to execute with proper port configuration.
 
-### Next Steps
-1. Deploy to Railway and verify ArangoDB starts successfully
-2. Check Railway deployment logs for `arangod` startup messages
-3. Deploy FastAPI application to Vercel following `DEPLOY.md` instructions
-4. Configure Vercel environment variables for ArangoDB connection:
-   - `ARANGO_HOST` - Railway database URL
-   - `ARANGO_USER` - Database username
-   - `ARANGO_PASSWORD` - Database password
-   - `VERCEL=1` - Enable serverless mode
+### Final Architecture - Both Services on Railway
+
+**Two Railway Services:**
+1. **Database Service**: Uses `Dockerfile.railway` → Runs ArangoDB
+2. **Web App Service**: Uses `Dockerfile` → Runs FastAPI with uvicorn
+
+**Files:**
+- `Dockerfile` - Python web app (uvicorn api.main:app)
+- `Dockerfile.railway` - ArangoDB database
+- `railway.json` - Database service configuration only
+
+**Web app service needs:**
+- Set "Dockerfile Path" to `Dockerfile` in Railway dashboard
+- Environment variables:
+  - `ARANGO_HOST` - Internal Railway database URL
+  - `ARANGO_USER` - root
+  - `ARANGO_PASSWORD` - Database password
+  - `CORS_ORIGINS` - Public domain
