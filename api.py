@@ -1995,13 +1995,30 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
                 intl_desig = canonical.get('international_designator')
                 
                 if intl_desig:
-                    tle_cache = fetch_tle_data()
-                    tle_data_tuple = tle_cache.get(intl_desig)
+                    # Try database first, then CelesTrak
+                    tle_data_tuple = None
+                    satellite_sources = satellite.get('sources', {})
+                    
+                    for source_key, source_data in satellite_sources.items():
+                        if isinstance(source_data, dict) and 'tle' in source_data:
+                            tle_info = source_data['tle']
+                            if isinstance(tle_info, dict) and 'line1' in tle_info and 'line2' in tle_info:
+                                tle_data_tuple = (
+                                    canonical.get('name', 'UNKNOWN'),
+                                    tle_info['line1'],
+                                    tle_info['line2']
+                                )
+                                logging.info(f"Immediate send: Using TLE from database source: {source_key}")
+                                break
                     
                     if not tle_data_tuple:
-                        norad_format = convert_to_norad_format(intl_desig)
-                        if norad_format:
-                            tle_data_tuple = tle_cache.get(norad_format)
+                        tle_cache = fetch_tle_data()
+                        tle_data_tuple = tle_cache.get(intl_desig)
+                        
+                        if not tle_data_tuple:
+                            norad_format = convert_to_norad_format(intl_desig)
+                            if norad_format:
+                                tle_data_tuple = tle_cache.get(norad_format)
                     
                     if tle_data_tuple:
                         tle_data = {
