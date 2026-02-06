@@ -108,9 +108,18 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       console.log('satellite.canonical:', satellite.canonical)
       console.log('Object.keys(satellite):', Object.keys(satellite))
       
-      let satelliteId = satellite._id || 
-                        satellite._mongodb_id || 
-                        (satellite.identifier ? `satellites/${satellite.identifier}` : null)
+      // Use _id first (which DetailPanel sets to satellites/XXX), fallback to constructing it
+      let satelliteId = satellite._id
+      
+      if (!satelliteId && satellite._mongodb_id) {
+        satelliteId = satellite._mongodb_id.includes('/') 
+          ? satellite._mongodb_id 
+          : `satellites/${satellite._mongodb_id}`
+      }
+      
+      if (!satelliteId && satellite.identifier) {
+        satelliteId = `satellites/${satellite.identifier}`
+      }
       
       // Additional fallbacks
       if (!satelliteId && satellite['International Designator']) {
@@ -119,8 +128,8 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       
       const noradId = satellite.canonical?.norad_cat_id || satellite._norad_id || 'N/A'
       
-      console.log('Extracted satelliteId:', satelliteId)
-      console.log('Extracted noradId:', noradId)
+      console.log('>>> FINAL satelliteId for save:', satelliteId)
+      console.log('>>> FINAL noradId for save:', noradId)
       
       if (!satelliteId) {
         console.error('FAILED: No satellite ID found!')
