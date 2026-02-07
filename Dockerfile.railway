@@ -1,14 +1,10 @@
 FROM arangodb:3.11
 
-# Railway provides PORT environment variable, but ArangoDB uses 8529
-ENV ARANGO_NO_AUTH=0
+# Disable authentication
+ENV ARANGO_NO_AUTH=1
 
-# Expose ArangoDB default port
 EXPOSE 8529
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:8529/_api/version || exit 1
-
-# Start ArangoDB
-CMD ["arangod"]
+# ENTRYPOINT cannot be overridden by Railway start command
+ENTRYPOINT ["arangod"]
+CMD ["--server.endpoint", "tcp://0.0.0.0:8529"]

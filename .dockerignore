@@ -1,0 +1,10 @@
+# Exclude from ArangoDB build only
+# Web app build needs everything
+.git
+.gitignore
+*.md
+node_modules
+react-app/
+.vercel
+.zenflow
+arango_export/
