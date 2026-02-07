@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Any
 import logging
-from database.connection import db, connect_mongodb
+import database.connection as db_connection
 
 MQTT_CONFIG_COLLECTION = "mqtt_configurations"
 
@@ -14,20 +14,20 @@ def get_mqtt_configurations_collection():
         Collection object or None on error
     """
     # Ensure database is connected
-    if db is None:
-        connect_mongodb()
+    if db_connection.db is None:
+        db_connection.connect_mongodb()
     
     # Check again after connection attempt
-    if db is None:
+    if db_connection.db is None:
         print("Failed to connect to database")
         return None
     
     try:
-        if not db.has_collection(MQTT_CONFIG_COLLECTION):
-            mqtt_collection = db.create_collection(MQTT_CONFIG_COLLECTION)
+        if not db_connection.db.has_collection(MQTT_CONFIG_COLLECTION):
+            mqtt_collection = db_connection.db.create_collection(MQTT_CONFIG_COLLECTION)
             print(f"Created collection: {MQTT_CONFIG_COLLECTION}")
         else:
-            mqtt_collection = db.collection(MQTT_CONFIG_COLLECTION)
+            mqtt_collection = db_connection.db.collection(MQTT_CONFIG_COLLECTION)
         
         # Add indexes for efficient queries (ignore if they already exist)
         try:
@@ -93,7 +93,7 @@ def save_mqtt_configuration(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             LIMIT 1
             RETURN doc
         """
-        cursor = db.aql.execute(
+        cursor = db_connection.db.aql.execute(
             aql,
             bind_vars={'@collection': MQTT_CONFIG_COLLECTION, 'satellite_id': satellite_id}
         )
@@ -168,7 +168,7 @@ def get_mqtt_configuration(satellite_id: str) -> Optional[Dict[str, Any]]:
             LIMIT 1
             RETURN doc
         """
-        cursor = db.aql.execute(
+        cursor = db_connection.db.aql.execute(
             aql,
             bind_vars={'@collection': MQTT_CONFIG_COLLECTION, 'satellite_id': satellite_id}
         )
@@ -230,7 +230,7 @@ def get_enabled_mqtt_configurations() -> List[Dict[str, Any]]:
             FILTER doc.enabled == true
             RETURN doc
         """
-        cursor = db.aql.execute(
+        cursor = db_connection.db.aql.execute(
             aql,
             bind_vars={'@collection': MQTT_CONFIG_COLLECTION}
         )
