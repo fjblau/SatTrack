@@ -9,5 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Railway provides PORT - default to 8000 if not set
-CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Use Python script to handle PORT env var properly
+CMD ["python", "start.py"]
