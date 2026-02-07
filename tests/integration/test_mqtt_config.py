@@ -19,7 +19,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from fastapi.testclient import TestClient
-from api import app, MqttConfiguration, MqttBrokerConfig
+from api.main import app
+from api.routers.mqtt import MqttConfiguration, MqttBrokerConfig
 
 
 @pytest.fixture
@@ -79,10 +80,10 @@ def sample_tle_data():
 class TestMqttConfigurationPersistence:
     """Test MQTT configuration persistence in database."""
     
-    @patch('api.save_mqtt_configuration')
-    @patch('api.mqtt_scheduler.schedule_mqtt_publish')
-    @patch('api.find_satellite')
-    @patch('api.fetch_tle_data')
+    @patch('database.mqtt_config.save_mqtt_configuration')
+    @patch('mqtt_scheduler.schedule_mqtt_publish')
+    @patch('database.operations.find_satellite')
+    @patch('api.services.tle_service.fetch_tle_data')
     def test_create_mqtt_config(self, mock_fetch_tle, mock_find_sat, 
                                 mock_schedule, mock_save, client, 
                                 sample_mqtt_config, sample_satellite_data, sample_tle_data):
@@ -120,7 +121,7 @@ class TestMqttConfigurationPersistence:
         mock_save.assert_called_once()
         mock_schedule.assert_called_once()
     
-    @patch('api.get_mqtt_configuration')
+    @patch('database.mqtt_config.get_mqtt_configuration')
     def test_retrieve_mqtt_config(self, mock_get, client, sample_mqtt_config):
         """Test retrieving existing MQTT configuration."""
         saved_config = {
@@ -137,10 +138,10 @@ class TestMqttConfigurationPersistence:
         assert data["satellite_id"] == "satellites/2017-036V"
         assert data["mqtt_broker"]["password"] == "[REDACTED]"
     
-    @patch('api.save_mqtt_configuration')
-    @patch('api.mqtt_scheduler.schedule_mqtt_publish')
-    @patch('api.find_satellite')
-    @patch('api.fetch_tle_data')
+    @patch('database.mqtt_config.save_mqtt_configuration')
+    @patch('mqtt_scheduler.schedule_mqtt_publish')
+    @patch('database.operations.find_satellite')
+    @patch('api.services.tle_service.fetch_tle_data')
     def test_update_mqtt_config(self, mock_fetch_tle, mock_find_sat,
                                 mock_schedule, mock_save, client, sample_mqtt_config):
         """Test updating existing MQTT configuration persists changes."""
@@ -291,12 +292,12 @@ class TestMqttPublishing:
 class TestImmediateMqttSend:
     """Test immediate MQTT send on configuration."""
     
-    @patch('api.update_last_published')
-    @patch('api.mqtt_publisher.publish_tle_to_mqtt')
-    @patch('api.save_mqtt_configuration')
-    @patch('api.mqtt_scheduler.schedule_mqtt_publish')
-    @patch('api.find_satellite')
-    @patch('api.fetch_tle_data')
+    @patch('database.mqtt_config.update_last_published')
+    @patch('mqtt_publisher.publish_tle_to_mqtt')
+    @patch('database.mqtt_config.save_mqtt_configuration')
+    @patch('mqtt_scheduler.schedule_mqtt_publish')
+    @patch('database.operations.find_satellite')
+    @patch('api.services.tle_service.fetch_tle_data')
     def test_immediate_send_on_new_config(self, mock_fetch_tle, mock_find_sat,
                                           mock_schedule, mock_save, mock_publish,
                                           mock_update_last, client, sample_mqtt_config,
@@ -331,11 +332,11 @@ class TestImmediateMqttSend:
         mock_update_last.assert_called_once()
         assert mock_update_last.call_args[0][0] == "mqtt_config_1"
     
-    @patch('api.mqtt_publisher.publish_tle_to_mqtt')
-    @patch('api.save_mqtt_configuration')
-    @patch('api.mqtt_scheduler.schedule_mqtt_publish')
-    @patch('api.mqtt_scheduler.remove_scheduled_job')
-    @patch('api.find_satellite')
+    @patch('mqtt_publisher.publish_tle_to_mqtt')
+    @patch('database.mqtt_config.save_mqtt_configuration')
+    @patch('mqtt_scheduler.schedule_mqtt_publish')
+    @patch('mqtt_scheduler.remove_scheduled_job')
+    @patch('database.operations.find_satellite')
     def test_no_immediate_send_when_disabled(self, mock_find_sat, mock_remove,
                                              mock_schedule, mock_save, mock_publish,
                                              client, sample_mqtt_config):

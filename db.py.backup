@@ -1005,6 +1005,17 @@ def get_mqtt_configurations_collection():
     Returns:
         Collection object or None on error
     """
+    global db
+    
+    # Ensure database is connected
+    if db is None:
+        connect_mongodb()
+    
+    # Check again after connection attempt
+    if db is None:
+        print("Failed to connect to database")
+        return None
+    
     try:
         if not db.has_collection(MQTT_CONFIG_COLLECTION):
             mqtt_collection = db.create_collection(MQTT_CONFIG_COLLECTION)
