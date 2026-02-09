@@ -34,27 +34,17 @@ export default function OrbitCalculationModal({ satellite, tleData, onClose }) {
     try {
       const noradId = satellite.canonical?.norad_cat_id || satellite._norad_id
       
-      console.log('OrbitCalculationModal - satellite object:', satellite)
-      console.log('OrbitCalculationModal - extracted NORAD ID:', noradId)
-      
       if (!noradId) {
         throw new Error('NORAD ID not found')
       }
 
-      const apiUrl = `/api/v2/tle/${noradId}/orbit?interval_minutes=${interval}`
-      console.log('OrbitCalculationModal - API URL:', apiUrl)
-
-      const response = await fetch(apiUrl)
-      
-      console.log('OrbitCalculationModal - API response status:', response.status)
+      const response = await fetch(`/v2/tle/${noradId}/orbit?interval_minutes=${interval}`)
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        console.log('OrbitCalculationModal - API error response:', errorData)
-        
         if (response.status === 404) {
-          throw new Error(`TLE data not found for NORAD ID ${noradId}`)
+          throw new Error('TLE data not found for this satellite')
         }
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || `HTTP ${response.status}: Failed to calculate orbit`)
       }
 
