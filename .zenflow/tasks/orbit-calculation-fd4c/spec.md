@@ -54,10 +54,12 @@ Add `sgp4>=2.23` to [./requirements.txt](./requirements.txt:1)
 **Create new service**: `api/services/propagation_service.py`
 
 The service will:
-- Accept TLE data (line1, line2) and optional start time
+- Accept TLE data (line1, line2) and optional start time (defaults to current UTC time)
 - Initialize SGP4 satellite object
 - Calculate orbital period from mean motion
-- Generate position predictions at 1-minute intervals for one complete orbit
+- Calculate **TLE epoch position** (position at the time the TLE was generated)
+- Calculate **current position** (position at start_time, typically "now")
+- Generate **future position predictions** starting from start_time at specified intervals for one complete orbit
 - Return position data in multiple formats:
   - **ECI coordinates** (Earth-Centered Inertial): X, Y, Z in kilometers
   - **Geodetic coordinates**: Latitude, Longitude, Altitude
@@ -76,11 +78,21 @@ Returns:
   "orbital_period_minutes": 90.5,
   "num_positions": 91,
   "start_time": "2026-02-09T12:00:00Z",
-  "positions": [
+  "tle_epoch_position": {
+    "time": "2026-02-08T12:34:56Z",
+    "eci": {"x": 6750.0, "y": 1180.0, "z": 290.0},
+    "geodetic": {"lat": 44.8, "lon": -123.1, "alt": 418.5}
+  },
+  "current_position": {
+    "time": "2026-02-09T12:00:00Z",
+    "eci": {"x": 6800.0, "y": 1200.0, "z": 300.0},
+    "geodetic": {"lat": 45.2, "lon": -122.5, "alt": 420.0}
+  },
+  "future_positions": [
     {
-      "time": "2026-02-09T12:00:00Z",
-      "eci": {"x": 6800.0, "y": 1200.0, "z": 300.0},
-      "geodetic": {"lat": 45.2, "lon": -122.5, "alt": 420.0}
+      "time": "2026-02-09T12:01:00Z",
+      "eci": {"x": 6810.0, "y": 1205.0, "z": 302.0},
+      "geodetic": {"lat": 45.3, "lon": -122.3, "alt": 420.5}
     },
     ...
   ]
@@ -119,7 +131,17 @@ This endpoint will:
     "num_positions": 91,
     "start_time": "2026-02-09T12:00:00Z",
     "interval_minutes": 1,
-    "positions": [...]
+    "tle_epoch_position": {
+      "time": "2026-02-08T12:34:56Z",
+      "eci": {"x": 6750.0, "y": 1180.0, "z": 290.0},
+      "geodetic": {"lat": 44.8, "lon": -123.1, "alt": 418.5}
+    },
+    "current_position": {
+      "time": "2026-02-09T12:00:00Z",
+      "eci": {"x": 6800.0, "y": 1200.0, "z": 300.0},
+      "geodetic": {"lat": 45.2, "lon": -122.5, "alt": 420.0}
+    },
+    "future_positions": [...]
   },
   "timestamp": "2026-02-09T12:03:45Z"
 }
@@ -171,7 +193,9 @@ Add new button next to the existing "MQTT Feed" button (around line 199-206):
 - Includes interval selector (1 min, 2 min, 5 min)
 - Close button to dismiss modal
 
-**Table Columns**:
+**Table Title**: "Future Orbit Positions (starting from current time)"
+
+**Table Columns** (displays `future_positions` array):
 1. **Time** - Timestamp (formatted: HH:MM:SS UTC)
 2. **Latitude** - Decimal degrees (-90 to 90)
 3. **Longitude** - Decimal degrees (-180 to 180)
@@ -180,12 +204,22 @@ Add new button next to the existing "MQTT Feed" button (around line 199-206):
 6. **ECI Y** - Earth-Centered Inertial Y (km) - optional, collapsible
 7. **ECI Z** - Earth-Centered Inertial Z (km) - optional, collapsible
 
+**Note**: Table shows positions extrapolated from the current estimated position, not from the TLE epoch.
+
 **Modal Header**:
 - Satellite name
 - NORAD ID
+- TLE epoch date and time
+- **Last TLE Position** (position at TLE epoch):
+  - Timestamp (TLE epoch)
+  - Latitude, Longitude, Altitude
+  - Display note: "Position at TLE epoch"
+- **Estimated Current Position** (position at current time):
+  - Timestamp (current UTC time)
+  - Latitude, Longitude, Altitude
+  - Display note: "Estimated position now (propagated from TLE)"
 - Orbital period (e.g., "90.5 minutes")
-- Number of positions (e.g., "91 positions")
-- TLE epoch date
+- Number of positions in table (e.g., "91 positions")
 
 **Table Features**:
 - Fixed header with scrollable body
@@ -234,10 +268,15 @@ const fetchOrbitData = async (noradId, intervalMinutes = 1) => {
 3. User clicks "Calculate Orbit" button (next to "MQTT Feed")
 4. Modal opens showing loading spinner
 5. Backend calculates orbit positions (1-2 seconds)
-6. Table populates with position data
-7. User can scroll through positions
-8. User can change interval and recalculate
-9. User clicks "Close" or clicks outside modal to dismiss
+6. Modal header displays:
+   - **Last TLE Position**: Position at TLE epoch (when TLE was created)
+   - **Estimated Current Position**: Position propagated to current time
+7. Table populates with future positions (starting from current time for one complete orbit)
+8. User can scroll through future positions
+9. User can change interval and recalculate
+10. User clicks "Close" or clicks outside modal to dismiss
+
+**Key Insight**: Since TLEs can be hours or days old, showing the current position and future predictions from "now" is more useful than showing positions from the historical TLE epoch.
 
 ### 5. Error Handling
 
@@ -309,6 +348,15 @@ The feature operates entirely on:
 
 ### 3. Manual Verification
 - Test with ISS (NORAD 25544) - well-known, stable orbit
+- **Verify TLE epoch vs current position**:
+  - Confirm TLE epoch position timestamp matches TLE epoch
+  - Confirm current position timestamp is current UTC time
+  - Positions should differ based on time elapsed since TLE epoch
+  - For a satellite in LEO with TLE 12 hours old, positions could differ significantly
+- **Verify future positions**:
+  - First future position should match current position (same timestamp)
+  - Positions should increment by the specified interval
+  - Last position should be approximately one orbital period after start
 - Compare results with online orbit calculators (e.g., N2YO, Heavens-Above)
 - Verify ground track makes sense (crosses equator for inclined orbit)
 - Check orbital period matches expected value (~90 min for LEO)

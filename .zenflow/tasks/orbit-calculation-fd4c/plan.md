@@ -75,17 +75,24 @@ Create `api/services/propagation_service.py` to handle orbit propagation logic.
 
 **Implementation Details**:
 - Create `PropagationService` class with `propagate_orbit()` method
-- Accept TLE lines (line1, line2), optional start time, and interval
+- Accept TLE lines (line1, line2), optional start time (defaults to current UTC), and interval
 - Use SGP4 to initialize satellite object from TLE
+- Extract TLE epoch from line 1
+- Calculate **TLE epoch position** (position at TLE epoch time)
+- Calculate **current position** (position at start_time, typically "now")
 - Calculate orbital period from mean motion in TLE
-- Generate positions at specified intervals for one complete orbit
-- Return both ECI (Earth-Centered Inertial) and geodetic (lat/lon/alt) coordinates
+- Generate **future positions** starting from start_time at specified intervals for one complete orbit
+- Return both ECI (Earth-Centered Inertial) and geodetic (lat/lon/alt) coordinates for all positions
+- Return structure: `{tle_epoch_position, current_position, future_positions, orbital_period_minutes, ...}`
 - Handle propagation errors (decayed satellites, invalid TLEs, etc.)
 
 **Unit Tests** (`tests/unit/test_propagation_service.py`):
 - Test with ISS TLE (NORAD 25544) - known stable orbit
-- Verify correct number of positions calculated (period / interval)
-- Validate position data structure (ECI and geodetic coordinates)
+- Verify TLE epoch position is calculated correctly
+- Verify current position (at start_time) is calculated correctly
+- Verify correct number of future positions calculated (period / interval)
+- Validate position data structure (ECI and geodetic coordinates) for all three position types
+- Test that future_positions start from start_time, not TLE epoch
 - Test error handling: invalid TLE format, propagation failures
 - Test different intervals (1 min, 5 min, 10 min)
 - Test custom start times
@@ -135,11 +142,18 @@ Create the React modal component to display orbit calculation results in a table
 - Create `react-app/src/components/OrbitCalculationModal.jsx`
 - Create `react-app/src/components/OrbitCalculationModal.css`
 - Modal features:
-  - Header with satellite name, NORAD ID, orbital period
+  - **Header section**:
+    - Satellite name and NORAD ID
+    - TLE epoch date/time
+    - **Last TLE Position** (tle_epoch_position): Display time, lat, lon, alt with note "Position at TLE epoch"
+    - **Estimated Current Position** (current_position): Display time, lat, lon, alt with note "Estimated position now"
+    - Orbital period
   - Interval selector dropdown (1, 2, 5 minutes)
   - Loading spinner during API call
-  - Scrollable table with fixed header
-  - Columns: Time, Latitude, Longitude, Altitude, ECI X/Y/Z (collapsible)
+  - **Future positions table** with scrollable body and fixed header:
+    - Title: "Future Orbit Positions (starting from current time)"
+    - Columns: Time, Latitude, Longitude, Altitude, ECI X/Y/Z (collapsible)
+    - Displays `future_positions` array from API response
   - Close button and click-outside-to-close behavior
   - Error message display
 - Follow existing modal patterns from `MqttConfigModal.jsx`
@@ -160,8 +174,11 @@ Create the React modal component to display orbit calculation results in a table
 **Verification**:
 - Component renders correctly
 - Modal opens/closes properly
-- Table displays data correctly
-- Interval selector works
+- Header displays Last TLE Position and Estimated Current Position correctly
+- Table displays future positions starting from current time
+- Table shows correct number of rows (orbital period / interval)
+- Interval selector works and triggers recalculation
+- Position formatting is correct (lat/lon: 2 decimals, alt: 1 decimal)
 - Error states display properly
 - Responsive on different screen sizes
 
@@ -210,11 +227,20 @@ Perform end-to-end manual testing and create completion report.
 
 **Frontend Testing**:
 - Complete user workflow: select satellite → click button → view orbit data
-- Test with different satellites and orbital periods
-- Test interval selector (1, 2, 5 minutes)
+- **Verify header positions**:
+  - Last TLE Position timestamp matches TLE epoch
+  - Estimated Current Position timestamp is current time
+  - Positions differ appropriately based on time elapsed since TLE epoch
+  - Both positions show reasonable lat/lon/alt values
+- **Verify future positions table**:
+  - First row starts at current time (matches Estimated Current Position timestamp)
+  - Subsequent rows increment by the selected interval
+  - Positions complete one full orbit (period matches expected value)
+- Test with different satellites and orbital periods (LEO ~90 min, GEO ~24 hours)
+- Test interval selector (1, 2, 5 minutes) and verify recalculation
 - Verify table scrolling with long datasets
 - Test modal close behavior (button, outside click, escape key)
-- Test error scenarios: invalid NORAD ID, network error
+- Test error scenarios: invalid NORAD ID, network error, TLE not found
 - Cross-browser testing (Chrome, Firefox, Safari)
 - Responsive design testing (desktop, tablet, mobile)
 
