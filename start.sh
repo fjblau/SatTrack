@@ -66,15 +66,15 @@ PYTHON="$SCRIPT_DIR/venv/bin/python"
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
     echo "❌ Error: Node.js is not installed"
-    echo "Please install Node.js 18+ from https://nodejs.org/"
+    echo "Please install Node.js 20+ from https://nodejs.org/"
     echo "Or use nvm: https://github.com/nvm-sh/nvm"
     exit 1
 fi
 
 # Check Node.js version
 NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo "❌ Error: Node.js 18 or higher is required (found v$NODE_VERSION)"
+if [ "$NODE_VERSION" -lt 20 ]; then
+    echo "❌ Error: Node.js 20 or higher is required (found v$NODE_VERSION)"
     echo "Please upgrade Node.js from https://nodejs.org/"
     exit 1
 fi
@@ -144,7 +144,7 @@ done
 # Run startup validation (optional - set SKIP_VALIDATION=1 to skip)
 if [ -z "$SKIP_VALIDATION" ]; then
     echo "🔍 Validating startup requirements..."
-    if ! $PYTHON test_startup.py; then
+    if ! $PYTHON tests/integration/test_startup.py; then
         echo ""
         echo "💡 Tip: Set SKIP_VALIDATION=1 to bypass validation"
         exit 1
