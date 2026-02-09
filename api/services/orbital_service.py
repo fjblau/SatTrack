@@ -10,6 +10,10 @@ class OrbitalService:
     
     This service consolidates orbital mechanics calculations that were previously
     duplicated across api.py and mqtt_publisher.py.
+    
+    Note: Uses mean Earth radius for orbital parameter calculations (apogee/perigee).
+    For geodetic position calculations (lat/lon/alt), use WGS84 ellipsoid model
+    via PropagationService instead.
     """
     
     GM = config.orbital.GM

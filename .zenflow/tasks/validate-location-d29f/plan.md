@@ -78,20 +78,23 @@ Replace simplified ECI-to-geodetic conversion with Skyfield-based accurate trans
 
 ---
 
-### [ ] Step: Update Configuration Constants
+### [x] Step: Update Configuration Constants
+<!-- chat-id: 17c69417-3682-4b9a-ac10-a10b16aa122e -->
+
+**Completed**: Successfully updated configuration with WGS84 constants while maintaining backward compatibility
 
 Update Earth model constants to WGS84 standard:
 
 **Changes in `config.py`**:
-- [ ] Add WGS84 constants (equatorial radius, polar radius, flattening)
-- [ ] Keep old `EARTH_RADIUS_KM` for backward compatibility with deprecation comment
-- [ ] Update `OrbitalService` to use new constants where appropriate
+- [x] Add WGS84 constants (equatorial radius, polar radius, flattening)
+- [x] Keep old `EARTH_RADIUS_KM` for backward compatibility with deprecation comment
+- [x] Update `OrbitalService` to use new constants where appropriate
 
 **Changes in `api/services/orbital_service.py`**:
-- [ ] Update references to use WGS84 constants
-- [ ] Ensure backward compatibility for existing calculations
+- [x] Update references to use WGS84 constants
+- [x] Ensure backward compatibility for existing calculations
 
-**Verification**: All existing tests still pass
+**Verification**: ✅ All 22 orbital service tests pass, all 27 propagation service tests pass
 
 ---
 
