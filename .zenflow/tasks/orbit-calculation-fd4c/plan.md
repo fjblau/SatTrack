@@ -106,7 +106,8 @@ Create `api/services/propagation_service.py` to handle orbit propagation logic.
 
 ---
 
-### [ ] Step: Add Orbit Calculation API Endpoint
+### [x] Step: Add Orbit Calculation API Endpoint
+<!-- chat-id: 33994cfe-4aa0-45fe-b6ed-d5e83e654a7e -->
 
 Add new endpoint to `api/routers/tle.py` for orbit calculation.
 
