@@ -4,6 +4,8 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from sgp4.api import Satrec, jday
+from skyfield.api import load, wgs84, EarthSatellite
+from skyfield.toposlib import GeographicPosition
 from api.services.orbital_service import OrbitalService
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,14 @@ class PropagationService:
     """
     
     EARTH_RADIUS_KM = 6371.0
+    _timescale = None
+    
+    @classmethod
+    def _get_timescale(cls):
+        """Get or create Skyfield timescale (lazy loading)"""
+        if cls._timescale is None:
+            cls._timescale = load.timescale()
+        return cls._timescale
     
     @staticmethod
     def _julian_date(dt: datetime) -> tuple[float, float]:
@@ -38,15 +48,61 @@ class PropagationService:
         jd, fr = jday(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond / 1e6)
         return jd, fr
     
-    @staticmethod
-    def _eci_to_geodetic(x_km: float, y_km: float, z_km: float) -> Dict[str, float]:
+    @classmethod
+    def _eci_to_geodetic_accurate(cls, x_km: float, y_km: float, z_km: float, dt: datetime) -> Dict[str, float]:
         """
-        Convert ECI (Earth-Centered Inertial) coordinates to geodetic (lat/lon/alt).
+        Convert ECI coordinates to geodetic using accurate WGS84 ellipsoid model.
+        
+        This method properly accounts for:
+        - Earth's rotation via GMST (Greenwich Mean Sidereal Time) correction
+        - WGS84 ellipsoid shape for accurate altitude calculation
+        - Proper coordinate frame transformations (ECI -> ECEF -> Geodetic)
         
         Args:
-            x_km: X coordinate in kilometers
-            y_km: Y coordinate in kilometers
-            z_km: Z coordinate in kilometers
+            x_km: X coordinate in kilometers (ECI/TEME frame from SGP4)
+            y_km: Y coordinate in kilometers (ECI/TEME frame from SGP4)
+            z_km: Z coordinate in kilometers (ECI/TEME frame from SGP4)
+            dt: datetime for GMST calculation (must be UTC)
+            
+        Returns:
+            Dictionary with latitude (degrees), longitude (degrees), and altitude (km)
+        """
+        ts = cls._get_timescale()
+        t = ts.from_datetime(dt)
+        
+        from skyfield.positionlib import Geocentric
+        from skyfield.units import Distance
+        
+        position = Geocentric(
+            [Distance(km=x_km).au, Distance(km=y_km).au, Distance(km=z_km).au],
+            t=t,
+            center=399
+        )
+        
+        geographic = wgs84.geographic_position_of(position)
+        
+        return {
+            'latitude': geographic.latitude.degrees,
+            'longitude': geographic.longitude.degrees,
+            'altitude_km': geographic.elevation.km
+        }
+    
+    @staticmethod
+    def _eci_to_geodetic_simple(x_km: float, y_km: float, z_km: float) -> Dict[str, float]:
+        """
+        Convert ECI coordinates to geodetic using simplified spherical Earth model.
+        
+        DEPRECATED: This method uses simplified assumptions and produces errors:
+        - Longitude error ~15-17° due to missing GMST (Earth rotation) correction
+        - Altitude error ~6-13 km due to spherical Earth assumption
+        - Latitude slightly inaccurate due to ignoring Earth's ellipsoid shape
+        
+        Kept for backward compatibility and debugging. Use _eci_to_geodetic_accurate instead.
+        
+        Args:
+            x_km: X coordinate in kilometers (ECI frame)
+            y_km: Y coordinate in kilometers (ECI frame)
+            z_km: Z coordinate in kilometers (ECI frame)
             
         Returns:
             Dictionary with latitude (degrees), longitude (degrees), and altitude (km)
@@ -64,8 +120,8 @@ class PropagationService:
             'altitude_km': altitude_km
         }
     
-    @staticmethod
-    def _calculate_position(satellite: Satrec, dt: datetime) -> Dict[str, Any]:
+    @classmethod
+    def _calculate_position(cls, satellite: Satrec, dt: datetime) -> Dict[str, Any]:
         """
         Calculate satellite position at a specific time.
         
@@ -88,7 +144,7 @@ class PropagationService:
         
         x_km, y_km, z_km = position
         
-        geodetic = PropagationService._eci_to_geodetic(x_km, y_km, z_km)
+        geodetic = cls._eci_to_geodetic_accurate(x_km, y_km, z_km, dt)
         
         return {
             'timestamp': dt.isoformat(),

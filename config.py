@@ -65,6 +65,14 @@ class ExternalServicesConfig:
 class OrbitalConstants:
     """Physical constants for orbital calculations"""
     GM: float = 398600.4418
+    
+    # WGS84 ellipsoid model constants (recommended for accurate geodetic calculations)
+    WGS84_EQUATORIAL_RADIUS_KM: float = 6378.137
+    WGS84_POLAR_RADIUS_KM: float = 6356.752
+    WGS84_FLATTENING: float = 1.0 / 298.257223563
+    
+    # Mean Earth radius (deprecated - use WGS84 constants for geodetic calculations)
+    # Kept for backward compatibility with orbital parameter calculations (apogee/perigee)
     EARTH_RADIUS_KM: float = 6371.0
 
 
