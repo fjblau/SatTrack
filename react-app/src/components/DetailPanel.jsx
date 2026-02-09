@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './DetailPanel.css'
 import DataRecordModal from './DataRecordModal'
 import MqttConfigModal from './MqttConfigModal'
+import OrbitCalculationModal from './OrbitCalculationModal'
 import { API_ENDPOINTS, EXTERNAL_URLS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
 export default function DetailPanel({ object }) {
@@ -17,6 +18,7 @@ export default function DetailPanel({ object }) {
   const [currentTle, setCurrentTle] = useState(null)
   const [tleLoading, setTleLoading] = useState(false)
   const [showMqttConfig, setShowMqttConfig] = useState(false)
+  const [showOrbitCalculation, setShowOrbitCalculation] = useState(false)
 
   useEffect(() => {
     if (!object) {
@@ -31,6 +33,7 @@ export default function DetailPanel({ object }) {
       setCurrentTle(null)
       setTleLoading(false)
       setShowMqttConfig(false)
+      setShowOrbitCalculation(false)
       return
     }
 
@@ -202,6 +205,14 @@ export default function DetailPanel({ object }) {
               onClick={() => setShowMqttConfig(true)}
             >
               MQTT Feed
+            </button>
+          )}
+          {currentTle && !currentTle._notFound && (currentTle.line1 || currentTle.line2) && (
+            <button 
+              className="orbit-calculation-button"
+              onClick={() => setShowOrbitCalculation(true)}
+            >
+              Calculate Orbit
             </button>
           )}
         </div>
@@ -485,6 +496,14 @@ export default function DetailPanel({ object }) {
           />
         )
       })()}
+
+      {showOrbitCalculation && (
+        <OrbitCalculationModal
+          satellite={fullDocument || object}
+          tleData={currentTle}
+          onClose={() => setShowOrbitCalculation(false)}
+        />
+      )}
     </div>
   )
 }

@@ -188,7 +188,8 @@ Create the React modal component to display orbit calculation results in a table
 
 ---
 
-### [ ] Step: Integrate Orbit Button in DetailPanel
+### [x] Step: Integrate Orbit Button in DetailPanel
+<!-- chat-id: 47185b0f-e4e7-43d6-a670-8fdf03f4e392 -->
 
 Add "Calculate Orbit" button to the DetailPanel component next to "MQTT Feed" button.
 
