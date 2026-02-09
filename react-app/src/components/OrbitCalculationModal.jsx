@@ -98,15 +98,15 @@ export default function OrbitCalculationModal({ satellite, tleData, onClose }) {
                 <div className="info-grid">
                   <div className="info-item">
                     <span className="info-label">NORAD ID:</span>
-                    <span className="info-value">{orbitData.norad_id}</span>
+                    <span className="info-value">{orbitData.satellite?.norad_id}</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">TLE Epoch:</span>
-                    <span className="info-value">{formatDateTime(orbitData.tle_epoch)}</span>
+                    <span className="info-value">{formatDateTime(orbitData.tle?.epoch)}</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">Orbital Period:</span>
-                    <span className="info-value">{formatCoordinate(orbitData.orbital_period_minutes, 2)} min</span>
+                    <span className="info-value">{formatCoordinate(orbitData.orbital_parameters?.period_minutes, 2)} min</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">Interval:</span>
@@ -135,15 +135,15 @@ export default function OrbitCalculationModal({ satellite, tleData, onClose }) {
                       </div>
                       <div className="position-row">
                         <span className="position-label">Latitude:</span>
-                        <span className="position-value">{formatCoordinate(orbitData.tle_epoch_position.latitude, 2)}°</span>
+                        <span className="position-value">{formatCoordinate(orbitData.tle_epoch_position?.geodetic?.latitude, 2)}°</span>
                       </div>
                       <div className="position-row">
                         <span className="position-label">Longitude:</span>
-                        <span className="position-value">{formatCoordinate(orbitData.tle_epoch_position.longitude, 2)}°</span>
+                        <span className="position-value">{formatCoordinate(orbitData.tle_epoch_position?.geodetic?.longitude, 2)}°</span>
                       </div>
                       <div className="position-row">
                         <span className="position-label">Altitude:</span>
-                        <span className="position-value">{formatCoordinate(orbitData.tle_epoch_position.altitude_km, 1)} km</span>
+                        <span className="position-value">{formatCoordinate(orbitData.tle_epoch_position?.geodetic?.altitude_km, 1)} km</span>
                       </div>
                     </div>
                   </div>
@@ -160,15 +160,15 @@ export default function OrbitCalculationModal({ satellite, tleData, onClose }) {
                       </div>
                       <div className="position-row">
                         <span className="position-label">Latitude:</span>
-                        <span className="position-value">{formatCoordinate(orbitData.current_position.latitude, 2)}°</span>
+                        <span className="position-value">{formatCoordinate(orbitData.current_position?.geodetic?.latitude, 2)}°</span>
                       </div>
                       <div className="position-row">
                         <span className="position-label">Longitude:</span>
-                        <span className="position-value">{formatCoordinate(orbitData.current_position.longitude, 2)}°</span>
+                        <span className="position-value">{formatCoordinate(orbitData.current_position?.geodetic?.longitude, 2)}°</span>
                       </div>
                       <div className="position-row">
                         <span className="position-label">Altitude:</span>
-                        <span className="position-value">{formatCoordinate(orbitData.current_position.altitude_km, 1)} km</span>
+                        <span className="position-value">{formatCoordinate(orbitData.current_position?.geodetic?.altitude_km, 1)} km</span>
                       </div>
                     </div>
                   </div>
@@ -209,14 +209,14 @@ export default function OrbitCalculationModal({ satellite, tleData, onClose }) {
                       {orbitData.future_positions && orbitData.future_positions.map((pos, idx) => (
                         <tr key={idx}>
                           <td>{formatDateTime(pos.timestamp)}</td>
-                          <td className="numeric">{formatCoordinate(pos.latitude, 2)}</td>
-                          <td className="numeric">{formatCoordinate(pos.longitude, 2)}</td>
-                          <td className="numeric">{formatCoordinate(pos.altitude_km, 1)}</td>
+                          <td className="numeric">{formatCoordinate(pos.geodetic?.latitude, 2)}</td>
+                          <td className="numeric">{formatCoordinate(pos.geodetic?.longitude, 2)}</td>
+                          <td className="numeric">{formatCoordinate(pos.geodetic?.altitude_km, 1)}</td>
                           {showEciColumns && (
                             <>
-                              <td className="numeric">{formatCoordinate(pos.eci_x_km, 2)}</td>
-                              <td className="numeric">{formatCoordinate(pos.eci_y_km, 2)}</td>
-                              <td className="numeric">{formatCoordinate(pos.eci_z_km, 2)}</td>
+                              <td className="numeric">{formatCoordinate(pos.eci?.x_km, 2)}</td>
+                              <td className="numeric">{formatCoordinate(pos.eci?.y_km, 2)}</td>
+                              <td className="numeric">{formatCoordinate(pos.eci?.z_km, 2)}</td>
                             </>
                           )}
                         </tr>

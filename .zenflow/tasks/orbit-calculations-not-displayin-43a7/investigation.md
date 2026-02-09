@@ -173,6 +173,37 @@ pos.eci_z_km       // ❌ Should be: pos.eci.z_km
    - Test with satellites without TLE data (should show error message)
    - Test with invalid NORAD IDs (should show 404 error)
 
+## Implementation
+
+### Changes Made
+
+All proposed changes to `OrbitCalculationModal.jsx` have been implemented:
+
+1. ✅ **Header Info (lines 101, 105, 109)**: Updated to use `satellite?.norad_id`, `tle?.epoch`, and `orbital_parameters?.period_minutes`
+
+2. ✅ **TLE Epoch Position (lines 138, 142, 146)**: Updated to access `tle_epoch_position?.geodetic?.latitude`, `longitude`, and `altitude_km`
+
+3. ✅ **Current Position (lines 163, 167, 171)**: Updated to access `current_position?.geodetic?.latitude`, `longitude`, and `altitude_km`
+
+4. ✅ **Future Positions Table (lines 212-219)**: Updated to access:
+   - `pos.geodetic?.latitude`, `longitude`, `altitude_km` for geographic coordinates
+   - `pos.eci?.x_km`, `y_km`, `z_km` for ECI coordinates
+
+### Implementation Notes
+
+- All field accessors now use optional chaining (`?.`) for safe navigation through nested objects
+- No changes to existing logic, error handling, or component structure
+- The fix aligns the frontend with the actual API response structure from the backend
+- Backward compatible: existing `formatCoordinate()` and `formatDateTime()` functions handle undefined values gracefully
+
+### Testing Status
+
+⚠️ **Manual testing pending**: Node.js environment not available in current workspace to run React dev server. However:
+
+- ✅ API server is running successfully on http://127.0.0.1:8000
+- ✅ Code changes match the exact API response structure documented in backend integration tests
+- ✅ All field paths verified against actual API response format
+
 ## References
 
 - **Backend API:** [`api/routers/tle.py`](./api/routers/tle.py:30-117)
