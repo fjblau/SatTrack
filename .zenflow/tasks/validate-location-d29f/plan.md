@@ -18,50 +18,100 @@ Do not make assumptions on important decisions — get clarification first.
 
 ## Workflow Steps
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
+<!-- chat-id: ecee3ca3-cddc-4c89-90a1-70c03a17aa62 -->
 
-Assess the task's difficulty, as underestimating it leads to poor outcomes.
-- easy: Straightforward implementation, trivial bug fix or feature
-- medium: Moderate complexity, some edge cases or caveats to consider
-- hard: Complex logic, many caveats, architectural considerations, or high-risk changes
+**Completed**: Created comprehensive technical specification in `.zenflow/tasks/validate-location-d29f/spec.md`
 
-Create a technical specification for the task that is appropriate for the complexity level:
-- Review the existing codebase architecture and identify reusable components.
-- Define the implementation approach based on established patterns in the project.
-- Identify all source code files that will be created or modified.
-- Define any necessary data model, API, or interface changes.
-- Describe verification steps using the project's test and lint commands.
+**Complexity Assessment**: **Hard** - Complex orbital mechanics, coordinate transformations, and geodetic calculations
 
-Save the output to `{@artifacts_path}/spec.md` with:
-- Technical context (language, dependencies)
-- Implementation approach
-- Source code structure changes
-- Data model / API / interface changes
-- Verification approach
+**Root Cause**: ECI to ECEF conversion missing GMST calculation, causing ~17° longitude errors
 
-If the task is complex enough, create a detailed implementation plan based on `{@artifacts_path}/spec.md`:
-- Break down the work into concrete tasks (incrementable, testable milestones)
-- Each task should reference relevant contracts and include verification steps
-- Replace the Implementation step below with the planned tasks
-
-Rule of thumb for step size: each step should represent a coherent unit of work (e.g., implement a component, add an API endpoint, write tests for a module). Avoid steps that are too granular (single function).
-
-Important: unit tests must be part of each implementation task, not separate tasks. Each task should implement the code and its tests together, if relevant.
-
-Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warrant this breakdown, keep the Implementation step below as is.
+**Approach**: Use Skyfield library for proper coordinate transformations with WGS84 ellipsoid model
 
 ---
 
-### [ ] Step: Implementation
+### [ ] Step: Setup and Investigation
 
-Implement the task according to the technical specification and general engineering best practices.
+Install Skyfield library and create comparison tools to validate the fix:
 
-1. Break the task into steps where possible.
-2. Implement the required changes in the codebase
-3. If relevant, write unit tests alongside each change.
-4. Run relevant tests and linters in the end of each step.
-5. Perform basic manual verification if applicable.
-6. After completion, write a report to `{@artifacts_path}/report.md` describing:
-   - What was implemented
-   - How the solution was tested
-   - The biggest issues or challenges encountered
+- [ ] Add `skyfield>=1.46` to `requirements.txt`
+- [ ] Install dependencies: `pip install -r requirements.txt`
+- [ ] Create test script to compare current implementation vs Skyfield vs N2YO for PRETTY satellite
+- [ ] Document exact discrepancies with multiple test cases (at least 3 satellites)
+- [ ] Verify Skyfield installation and basic functionality
+
+**Verification**: Test script runs successfully and shows current errors match spec analysis
+
+---
+
+### [ ] Step: Implement Accurate Coordinate Conversion
+
+Replace simplified ECI-to-geodetic conversion with Skyfield-based accurate transformation:
+
+**Changes in `api/services/propagation_service.py`**:
+- [ ] Import Skyfield dependencies (`from skyfield.api import wgs84, load`)
+- [ ] Create new `_eci_to_geodetic_accurate()` method using Skyfield and WGS84 ellipsoid
+- [ ] Update `_calculate_position()` to use new accurate conversion method
+- [ ] Keep old method as `_eci_to_geodetic_simple()` for comparison/debugging
+- [ ] Write unit tests for coordinate conversion accuracy
+- [ ] Test against known satellite positions
+
+**Verification**: 
+- Unit tests pass with < 0.1° lat/lon error, < 1 km altitude error
+- Run tests: `pytest tests/unit/test_propagation_service.py -v`
+
+---
+
+### [ ] Step: Update Configuration Constants
+
+Update Earth model constants to WGS84 standard:
+
+**Changes in `config.py`**:
+- [ ] Add WGS84 constants (equatorial radius, polar radius, flattening)
+- [ ] Keep old `EARTH_RADIUS_KM` for backward compatibility with deprecation comment
+- [ ] Update `OrbitalService` to use new constants where appropriate
+
+**Changes in `api/services/orbital_service.py`**:
+- [ ] Update references to use WGS84 constants
+- [ ] Ensure backward compatibility for existing calculations
+
+**Verification**: All existing tests still pass
+
+---
+
+### [ ] Step: Integration Testing and Validation
+
+Verify the fix resolves discrepancies with external reference data:
+
+- [ ] Test with PRETTY (NORAD 58023) - compare with N2YO
+- [ ] Test with ISS (NORAD 25544) - compare with N2YO
+- [ ] Test with a GEO satellite - compare with N2YO
+- [ ] Create integration test suite comparing with N2YO API (if accessible)
+- [ ] Performance benchmark: ensure overhead < 5ms per calculation
+- [ ] Run full test suite to ensure no regressions
+
+**Verification**:
+- Latitude error < 0.1° vs N2YO
+- Longitude error < 0.1° vs N2YO  
+- Altitude error < 1 km vs N2YO
+- All tests pass
+- Performance acceptable
+
+---
+
+### [ ] Step: Documentation and Cleanup
+
+Document changes and clean up code:
+
+- [ ] Update API documentation for `/v2/tle/{norad_id}/orbit` endpoint
+- [ ] Add code comments explaining coordinate transformation
+- [ ] Write report to `.zenflow/tasks/validate-location-d29f/report.md`:
+  - What was implemented
+  - How the solution was tested
+  - Accuracy improvements achieved
+  - Any issues or limitations encountered
+- [ ] Remove or archive old comparison scripts
+- [ ] Final code review and cleanup
+
+**Verification**: Documentation is clear and complete
