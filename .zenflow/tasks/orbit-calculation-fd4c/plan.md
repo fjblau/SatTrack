@@ -18,7 +18,8 @@ Do not make assumptions on important decisions — get clarification first.
 
 ## Workflow Steps
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
+<!-- chat-id: 527daa6f-dcf9-4268-812d-69911d3fc6f5 -->
 
 Assess the task's difficulty, as underestimating it leads to poor outcomes.
 - easy: Straightforward implementation, trivial bug fix or feature
@@ -52,16 +53,103 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Implementation
+### [ ] Step: Add SGP4 Dependency
 
-Implement the task according to the technical specification and general engineering best practices.
+Add the `sgp4` library to project dependencies and verify installation.
 
-1. Break the task into steps where possible.
-2. Implement the required changes in the codebase
-3. If relevant, write unit tests alongside each change.
-4. Run relevant tests and linters in the end of each step.
-5. Perform basic manual verification if applicable.
-6. After completion, write a report to `{@artifacts_path}/report.md` describing:
-   - What was implemented
-   - How the solution was tested
-   - The biggest issues or challenges encountered
+**Tasks**:
+- Add `sgp4>=2.23` to `requirements.txt`
+- Install the library: `pip install sgp4`
+- Verify import works: `python -c "from sgp4.api import Satrec, jday; print('SGP4 installed successfully')"`
+
+**Verification**:
+- Library installs without errors
+- Import statement succeeds
+- No conflicts with existing dependencies
+
+---
+
+### [ ] Step: Implement Propagation Service
+
+Create `api/services/propagation_service.py` to handle orbit propagation logic.
+
+**Implementation Details**:
+- Create `PropagationService` class with `propagate_orbit()` method
+- Accept TLE lines (line1, line2), optional start time, and interval
+- Use SGP4 to initialize satellite object from TLE
+- Calculate orbital period from mean motion in TLE
+- Generate positions at specified intervals for one complete orbit
+- Return both ECI (Earth-Centered Inertial) and geodetic (lat/lon/alt) coordinates
+- Handle propagation errors (decayed satellites, invalid TLEs, etc.)
+
+**Unit Tests** (`tests/unit/test_propagation_service.py`):
+- Test with ISS TLE (NORAD 25544) - known stable orbit
+- Verify correct number of positions calculated (period / interval)
+- Validate position data structure (ECI and geodetic coordinates)
+- Test error handling: invalid TLE format, propagation failures
+- Test different intervals (1 min, 5 min, 10 min)
+- Test custom start times
+
+**Verification**:
+- Run unit tests: `pytest tests/unit/test_propagation_service.py -v`
+- All tests pass
+- Code coverage >80% for new service
+
+---
+
+### [ ] Step: Add Orbit Calculation API Endpoint
+
+Add new endpoint to `api/routers/tle.py` for orbit calculation.
+
+**Implementation Details**:
+- Add `GET /v2/tle/{norad_id}/orbit` endpoint
+- Query parameters:
+  - `start_time` (optional): ISO 8601 timestamp
+  - `interval_minutes` (optional, default=1, max=10)
+- Integrate with existing `tle_service.fetch_tle_by_norad_id()`
+- Call `propagation_service.propagate_orbit()`
+- Return formatted JSON response with satellite info and positions
+- Handle errors: TLE not found (404), propagation errors (400/500)
+
+**Integration Tests** (`tests/integration/test_tle_orbit_endpoint.py`):
+- Test successful orbit calculation with ISS (NORAD 25544)
+- Test with different NORAD IDs
+- Test query parameters (start_time, interval_minutes)
+- Test error cases: invalid NORAD ID, TLE not found
+- Verify response format matches specification
+- Test caching behavior (leverages existing TLE cache)
+
+**Verification**:
+- Run integration tests: `pytest tests/integration/test_tle_orbit_endpoint.py -v`
+- All tests pass
+- Manual API test: `curl http://localhost:8000/v2/tle/25544/orbit`
+- Response matches expected format
+
+---
+
+### [ ] Step: Manual Verification and Documentation
+
+Perform end-to-end manual testing and create completion report.
+
+**Manual Testing**:
+- Test with ISS (NORAD 25544): verify ~90-minute orbital period
+- Test with geostationary satellite: verify ~24-hour period
+- Test with MEO satellite (GPS): verify ~12-hour period
+- Compare first/last positions to ensure orbit closes correctly
+- Verify geodetic coordinates make sense (lat: -90 to 90, lon: -180 to 180)
+- Test edge cases: very old TLE, recently launched satellite
+
+**Documentation**:
+- Update API documentation with new endpoint details
+- Create report at `{@artifacts_path}/report.md` with:
+  - Summary of implementation
+  - Test results and coverage
+  - Manual verification outcomes
+  - Known limitations (TLE age, accuracy degradation)
+  - Example API calls and responses
+  - Any challenges encountered
+
+**Final Verification**:
+- Run full test suite: `pytest tests/ -v`
+- Check for any lint/type errors
+- Ensure all workflow steps are completed
