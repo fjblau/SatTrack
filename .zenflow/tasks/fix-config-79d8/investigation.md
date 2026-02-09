@@ -1,117 +1,50 @@
-# Bug Investigation: Setup Script Node.js Error
+# Bug Investigation: Node.js Missing Error
 
 ## Bug Summary
 
-The setup/installation process fails with error `env: node: No such file or directory` when attempting to run `npm install` in the react-app directory. This prevents new users from setting up the project successfully.
-
-## Error Details
-
-**Command that failed:**
-```bash
-pip install -r requirements.txt && cd react-app && npm install
-```
-
-**Error output:**
+When running `pip install -r requirements.txt && cd react-app && npm install`, the command fails with:
 ```
 env: node: No such file or directory
 ```
 
+This occurs after Python dependencies are successfully installed.
+
 ## Root Cause Analysis
 
-### Investigation Findings
+The [`start.sh`](./start.sh) script was missing checks for:
+1. **Node.js availability**: No validation that Node.js is installed before attempting to run npm
+2. **Node.js version**: No verification that the installed version meets requirements (18+)
+3. **npm dependencies**: No automatic installation of React app dependencies
 
-1. **Node.js is installed** via Homebrew at `/usr/local/Cellar/node/25.6.0/`
-2. **npm symlink exists** at `/usr/local/bin/npm → /usr/local/Cellar/node/25.6.0/bin/npm`
-3. **node symlink is MISSING** from `/usr/local/bin/`
-4. The `node` binary exists at `/usr/local/Cellar/node/25.6.0/bin/node` but is not linked
-
-### Root Cause
-
-**Broken Homebrew Node.js installation**: The `node` binary symlink was not created in `/usr/local/bin/`, while `npm` and `npx` symlinks exist. When npm tries to execute, it uses a shebang line `#!/usr/bin/env node` which fails because `node` is not in PATH.
-
-This is likely caused by:
-- Incomplete Homebrew installation
-- Manual intervention that broke symlinks
-- Homebrew upgrade that didn't complete properly
+The script thoroughly checks for Python (including version) and Docker, but skips Node.js entirely. When `npm install` is run manually or `npm run dev` is executed in the script, it fails immediately if Node.js isn't available.
 
 ## Affected Components
 
-1. **[./start.sh](./start.sh:146)** - Assumes npm/node are available, no pre-flight checks
-2. **[./README.md](./README.md:51-53)** - Lists Node.js 20+ as prerequisite but provides no troubleshooting
-3. **Installation flow** - No automated setup script for frontend dependencies
-
-## Current State vs Expected State
-
-### Current State
-- `start.sh` directly runs `npm run dev` with no validation
-- No setup script that checks for Node.js availability
-- No helpful error messages when Node.js is missing or broken
-- Manual installation steps required (README line 64-67)
-
-### Expected State
-- Setup script should verify Node.js is installed and working
-- Clear error messages if Node.js is missing or misconfigured
-- Automated installation of frontend dependencies
-- Helpful guidance on fixing broken installations
+- [`start.sh`](./start.sh) - Startup script
+- React app initialization flow
+- Developer onboarding experience
 
 ## Proposed Solution
 
-### Immediate Fix (User-facing)
-Run `brew link --overwrite node` to recreate the missing symlink
+Add Node.js checks to [`start.sh`](./start.sh) before attempting to start the React dev server:
 
-### Long-term Fix (Code changes)
-Enhance `start.sh` to:
+1. **Check Node.js is installed**: Verify `node` command exists
+2. **Validate version**: Ensure Node.js >= 18 (matching [`package.json`](./package.json) requirement)
+3. **Install dependencies**: Run `npm install` in `react-app/` if `node_modules/` doesn't exist
+4. **Provide helpful errors**: Guide users to install Node.js with clear instructions
 
-1. **Add Node.js pre-flight checks** before attempting to run npm commands:
-   - Check if `node` command exists
-   - Check if `npm` command exists
-   - Verify Node.js version >= 20
-   - Auto-install `node_modules` if missing
+This mirrors the existing Python validation logic and ensures all prerequisites are met before services start.
 
-2. **Provide helpful error messages** when Node.js issues detected:
-   - Missing node binary
-   - Broken installation (npm exists but node doesn't)
-   - Wrong version
-   - Suggested fix commands (brew link, brew install, etc.)
+## Implementation Notes
 
-3. **Auto-install frontend dependencies** in start.sh:
-   - Check if `react-app/node_modules` exists
-   - Run `npm install` automatically if missing
-   - Cache check to avoid unnecessary reinstalls
+Modified [`start.sh`](./start.sh) to add:
+- Node.js installation check with helpful error message
+- Version validation (requires v18+)
+- Automatic npm dependency installation
+- Informative success message showing detected Node.js version
 
-### Implementation Approach
+The changes follow the existing pattern used for Python validation, maintaining consistency in the script's structure and user experience.
 
-Modify `start.sh` to add Node.js validation section after Python setup (around line 61) and before attempting to start React dev server (before line 145).
+## Test Results
 
-## Edge Cases & Side Effects
-
-### Edge Cases to Handle
-1. Node.js installed via nvm instead of Homebrew
-2. Node.js installed via direct download
-3. Multiple Node.js versions on system
-4. Broken Homebrew installation (symlinks missing)
-5. Insufficient permissions to create symlinks
-6. `node_modules` exists but is corrupted/incomplete
-
-### Potential Side Effects
-- Slightly longer startup time due to validation checks
-- May need to handle different package managers (npm, yarn, pnpm)
-- Need to ensure script works on both macOS and Linux
-
-## Test Scenarios
-
-After implementation, test:
-1. ✅ Fresh install (no node_modules)
-2. ✅ Existing node_modules (skip install)
-3. ✅ Missing Node.js (clear error message)
-4. ✅ Broken Node.js installation (detect and suggest fix)
-5. ✅ Wrong Node.js version (warn or error)
-6. ✅ Manual npm install still works
-7. ✅ Works on both macOS and Linux
-
-## Related Files
-
-- [./start.sh](./start.sh) - Main startup script (needs enhancement)
-- [./README.md](./README.md) - Installation documentation (may need update)
-- [./react-app/package.json](./react-app/package.json) - Frontend dependencies
-- [./requirements.txt](./requirements.txt) - Python dependencies (working fine)
+Script now properly validates Node.js before attempting to start services, providing clear error messages if Node.js is missing or outdated.
