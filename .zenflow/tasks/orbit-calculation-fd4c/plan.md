@@ -137,7 +137,8 @@ Add new endpoint to `api/routers/tle.py` for orbit calculation.
 
 ---
 
-### [ ] Step: Create Orbit Calculation Modal Component
+### [x] Step: Create Orbit Calculation Modal Component
+<!-- chat-id: f837fd39-72d8-4ad5-9cde-ea7d6c58cae5 -->
 
 Create the React modal component to display orbit calculation results in a table.
 
