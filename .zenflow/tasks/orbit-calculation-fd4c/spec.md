@@ -125,7 +125,121 @@ This endpoint will:
 }
 ```
 
-### 4. Error Handling
+### 4. Frontend Implementation
+
+**Add UI components for displaying orbit calculations in the React application.**
+
+#### 4.1. Orbit Calculation Button
+
+**Location**: [./react-app/src/components/DetailPanel.jsx](./react-app/src/components/DetailPanel.jsx:204)
+
+Add new button next to the existing "MQTT Feed" button (around line 199-206):
+
+```jsx
+{currentTle && !currentTle._notFound && (currentTle.line1 || currentTle.line2) && (
+  <>
+    <button 
+      className="mqtt-feed-button"
+      onClick={() => setShowMqttConfig(true)}
+    >
+      MQTT Feed
+    </button>
+    <button 
+      className="orbit-calculation-button"
+      onClick={() => setShowOrbitCalculation(true)}
+    >
+      Calculate Orbit
+    </button>
+  </>
+)}
+```
+
+**State Management**:
+- Add `const [showOrbitCalculation, setShowOrbitCalculation] = useState(false)`
+- Add `const [orbitData, setOrbitData] = useState(null)`
+- Add `const [orbitLoading, setOrbitLoading] = useState(false)`
+
+#### 4.2. Orbit Calculation Modal Component
+
+**Create new component**: `react-app/src/components/OrbitCalculationModal.jsx`
+
+**Component Features**:
+- Modal dialog overlaying the current page
+- Fetches orbit data from `/v2/tle/{norad_id}/orbit` endpoint
+- Displays loading state while calculating
+- Shows orbit positions in a scrollable table
+- Includes interval selector (1 min, 2 min, 5 min)
+- Close button to dismiss modal
+
+**Table Columns**:
+1. **Time** - Timestamp (formatted: HH:MM:SS UTC)
+2. **Latitude** - Decimal degrees (-90 to 90)
+3. **Longitude** - Decimal degrees (-180 to 180)
+4. **Altitude** - Kilometers above Earth surface
+5. **ECI X** - Earth-Centered Inertial X (km) - optional, collapsible
+6. **ECI Y** - Earth-Centered Inertial Y (km) - optional, collapsible
+7. **ECI Z** - Earth-Centered Inertial Z (km) - optional, collapsible
+
+**Modal Header**:
+- Satellite name
+- NORAD ID
+- Orbital period (e.g., "90.5 minutes")
+- Number of positions (e.g., "91 positions")
+- TLE epoch date
+
+**Table Features**:
+- Fixed header with scrollable body
+- Zebra striping for readability
+- Numeric values right-aligned
+- Precision: Lat/Lon (2 decimals), Alt (1 decimal), ECI (1 decimal)
+- Row highlighting on hover
+
+**Styling**: `react-app/src/components/OrbitCalculationModal.css`
+- Consistent with existing modal styles (reference: MqttConfigModal.css)
+- Responsive design for different screen sizes
+- Table width optimized for readability
+
+#### 4.3. API Integration
+
+**Endpoint Call**:
+```javascript
+const fetchOrbitData = async (noradId, intervalMinutes = 1) => {
+  setOrbitLoading(true)
+  try {
+    const response = await fetch(
+      `/api/v2/tle/${noradId}/orbit?interval_minutes=${intervalMinutes}`
+    )
+    const data = await response.json()
+    setOrbitData(data)
+  } catch (error) {
+    console.error('Error fetching orbit data:', error)
+    // Show error message to user
+  } finally {
+    setOrbitLoading(false)
+  }
+}
+```
+
+**Error Handling**:
+- Display user-friendly error messages for:
+  - TLE not found (404)
+  - Propagation errors (400)
+  - Network errors
+- Allow retry on failure
+
+#### 4.4. User Workflow
+
+1. User selects satellite in Table View
+2. DetailPanel shows satellite details with TLE data
+3. User clicks "Calculate Orbit" button (next to "MQTT Feed")
+4. Modal opens showing loading spinner
+5. Backend calculates orbit positions (1-2 seconds)
+6. Table populates with position data
+7. User can scroll through positions
+8. User can change interval and recalculate
+9. User clicks "Close" or clicks outside modal to dismiss
+
+### 5. Error Handling
 
 **Common Error Scenarios**:
 - **TLE not found**: Return 404 with helpful message
@@ -143,24 +257,31 @@ This endpoint will:
 }
 ```
 
-### 5. Performance Considerations
+### 6. Performance Considerations
 
 - **Caching**: Leverage existing TLE cache (1-hour TTL)
 - **Computation**: Propagating 90 positions should complete in <100ms
 - **Memory**: Minimal overhead (~10KB per orbit calculation)
 - **Rate Limiting**: Consider adding rate limits if endpoint becomes popular
+- **Frontend**: Render table with virtualization if >500 positions (not needed for 1-minute intervals)
 
 ## Source Code Changes
 
-### Files to Create
+### Backend Files to Create
 1. `api/services/propagation_service.py` - New service for orbit propagation
 
-### Files to Modify
+### Backend Files to Modify
 1. [./requirements.txt](./requirements.txt:1) - Add `sgp4>=2.23`
 2. [./api/routers/tle.py](./api/routers/tle.py:1) - Add new `/tle/{norad_id}/orbit` endpoint
-3. [./api/services/orbital_service.py](./api/services/orbital_service.py:1) - Optional: add helper method to extract mean motion
 
-### Files to Create (Tests)
+### Frontend Files to Create
+1. `react-app/src/components/OrbitCalculationModal.jsx` - Modal component for displaying orbit table
+2. `react-app/src/components/OrbitCalculationModal.css` - Styling for orbit modal
+
+### Frontend Files to Modify
+1. [./react-app/src/components/DetailPanel.jsx](./react-app/src/components/DetailPanel.jsx:1) - Add "Calculate Orbit" button and modal integration
+
+### Test Files to Create
 1. `tests/unit/test_propagation_service.py` - Unit tests for propagation logic
 2. `tests/integration/test_tle_orbit_endpoint.py` - Integration tests for API endpoint
 
@@ -212,6 +333,7 @@ mypy api/services/propagation_service.py
 
 ## Implementation Estimates
 
+### Backend
 - **Service Layer** (`propagation_service.py`): 2-3 hours
   - SGP4 integration: 1 hour
   - Position formatting: 30 min
@@ -223,9 +345,27 @@ mypy api/services/propagation_service.py
   - Query parameter handling: 30 min
   - Integration tests: 1 hour
 
-- **Documentation & Manual Testing**: 1 hour
+### Frontend
+- **Modal Component** (`OrbitCalculationModal.jsx`): 2-3 hours
+  - Component structure: 30 min
+  - API integration: 30 min
+  - Table rendering: 1 hour
+  - Styling: 1 hour
 
-**Total Estimate**: 4-6 hours
+- **DetailPanel Integration**: 30 min
+  - Add button: 15 min
+  - State management: 15 min
+
+### Testing & Documentation
+- **Manual Testing**: 1 hour
+  - End-to-end workflow testing
+  - Cross-browser testing
+  
+- **Documentation**: 30 min
+  - API documentation
+  - Implementation report
+
+**Total Estimate**: 7-10 hours
 
 ## Dependencies & Constraints
 

@@ -127,17 +127,96 @@ Add new endpoint to `api/routers/tle.py` for orbit calculation.
 
 ---
 
+### [ ] Step: Create Orbit Calculation Modal Component
+
+Create the React modal component to display orbit calculation results in a table.
+
+**Implementation Details**:
+- Create `react-app/src/components/OrbitCalculationModal.jsx`
+- Create `react-app/src/components/OrbitCalculationModal.css`
+- Modal features:
+  - Header with satellite name, NORAD ID, orbital period
+  - Interval selector dropdown (1, 2, 5 minutes)
+  - Loading spinner during API call
+  - Scrollable table with fixed header
+  - Columns: Time, Latitude, Longitude, Altitude, ECI X/Y/Z (collapsible)
+  - Close button and click-outside-to-close behavior
+  - Error message display
+- Follow existing modal patterns from `MqttConfigModal.jsx`
+- Responsive design
+
+**API Integration**:
+- Fetch from `/api/v2/tle/{norad_id}/orbit?interval_minutes={interval}`
+- Handle loading states
+- Handle errors (404, 400, network errors)
+- Display user-friendly error messages
+
+**Styling**:
+- Consistent with existing modal styles
+- Table formatting: zebra striping, hover effects
+- Number formatting: lat/lon (2 decimals), alt (1 decimal)
+- Right-align numeric columns
+
+**Verification**:
+- Component renders correctly
+- Modal opens/closes properly
+- Table displays data correctly
+- Interval selector works
+- Error states display properly
+- Responsive on different screen sizes
+
+---
+
+### [ ] Step: Integrate Orbit Button in DetailPanel
+
+Add "Calculate Orbit" button to the DetailPanel component next to "MQTT Feed" button.
+
+**Implementation Details**:
+- Modify `react-app/src/components/DetailPanel.jsx`
+- Add button next to MQTT Feed button (line ~199-206)
+- Add state variables:
+  - `showOrbitCalculation`
+  - `orbitData`
+  - `orbitLoading`
+- Import and render `OrbitCalculationModal` component
+- Pass necessary props: NORAD ID, satellite name, TLE data
+- Button only shows when valid TLE data exists (same condition as MQTT button)
+
+**Button Styling**:
+- Add CSS for `orbit-calculation-button` class
+- Match styling of adjacent MQTT Feed button
+- Ensure proper spacing between buttons
+
+**Verification**:
+- Button appears next to MQTT Feed button
+- Button only shows for satellites with TLE data
+- Clicking button opens modal
+- Modal receives correct satellite data
+- Test with multiple satellites (ISS, geostationary, MEO)
+
+---
+
 ### [ ] Step: Manual Verification and Documentation
 
 Perform end-to-end manual testing and create completion report.
 
-**Manual Testing**:
+**Backend Testing**:
 - Test with ISS (NORAD 25544): verify ~90-minute orbital period
 - Test with geostationary satellite: verify ~24-hour period
 - Test with MEO satellite (GPS): verify ~12-hour period
 - Compare first/last positions to ensure orbit closes correctly
 - Verify geodetic coordinates make sense (lat: -90 to 90, lon: -180 to 180)
 - Test edge cases: very old TLE, recently launched satellite
+
+**Frontend Testing**:
+- Complete user workflow: select satellite → click button → view orbit data
+- Test with different satellites and orbital periods
+- Test interval selector (1, 2, 5 minutes)
+- Verify table scrolling with long datasets
+- Test modal close behavior (button, outside click, escape key)
+- Test error scenarios: invalid NORAD ID, network error
+- Cross-browser testing (Chrome, Firefox, Safari)
+- Responsive design testing (desktop, tablet, mobile)
 
 **Documentation**:
 - Update API documentation with new endpoint details
@@ -147,9 +226,12 @@ Perform end-to-end manual testing and create completion report.
   - Manual verification outcomes
   - Known limitations (TLE age, accuracy degradation)
   - Example API calls and responses
+  - Screenshots of UI (optional)
   - Any challenges encountered
 
 **Final Verification**:
-- Run full test suite: `pytest tests/ -v`
+- Run full backend test suite: `pytest tests/ -v`
+- Run frontend build: `cd react-app && npm run build`
 - Check for any lint/type errors
 - Ensure all workflow steps are completed
+- Test deployed application (if applicable)
