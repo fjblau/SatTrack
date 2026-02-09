@@ -87,7 +87,7 @@ class StartupValidator:
         return True
     
     def check_nodejs(self):
-        """Check if Node.js and npm are installed"""
+        """Check if Node.js and npm are installed with correct version"""
         try:
             result = subprocess.run(
                 ['node', '--version'],
@@ -98,8 +98,23 @@ class StartupValidator:
             if result.returncode != 0:
                 self.errors.append("Node.js is not installed")
                 return False
+            
+            # Check Node.js version (must be >= 20)
+            version_str = result.stdout.strip().lstrip('v')
+            major_version = int(version_str.split('.')[0])
+            if major_version < 20:
+                self.errors.append(
+                    f"Node.js 20 or higher required, found v{version_str}"
+                )
+                self.errors.append(
+                    "Install from: https://nodejs.org/"
+                )
+                return False
         except (subprocess.TimeoutExpired, FileNotFoundError):
             self.errors.append("Node.js is not installed")
+            return False
+        except (ValueError, IndexError):
+            self.errors.append("Could not parse Node.js version")
             return False
         
         try:
