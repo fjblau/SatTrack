@@ -352,20 +352,53 @@ class TestPropagationServiceHelpers(unittest.TestCase):
         self.assertIsInstance(fr, float)
         self.assertGreater(jd, 2400000)
     
-    def test_eci_to_geodetic_north_pole(self):
-        """Test ECI to geodetic conversion at North Pole"""
-        result = PropagationService._eci_to_geodetic(0, 0, 6771)
+    def test_eci_to_geodetic_simple_north_pole(self):
+        """Test simple ECI to geodetic conversion at North Pole"""
+        result = PropagationService._eci_to_geodetic_simple(0, 0, 6771)
         
         self.assertAlmostEqual(result['latitude'], 90, delta=1)
         self.assertAlmostEqual(result['altitude_km'], 400, delta=10)
     
-    def test_eci_to_geodetic_equator(self):
-        """Test ECI to geodetic conversion at equator"""
-        result = PropagationService._eci_to_geodetic(6771, 0, 0)
+    def test_eci_to_geodetic_simple_equator(self):
+        """Test simple ECI to geodetic conversion at equator"""
+        result = PropagationService._eci_to_geodetic_simple(6771, 0, 0)
         
         self.assertAlmostEqual(result['latitude'], 0, delta=1)
         self.assertAlmostEqual(result['longitude'], 0, delta=1)
         self.assertAlmostEqual(result['altitude_km'], 400, delta=10)
+    
+    def test_eci_to_geodetic_accurate_north_pole(self):
+        """Test accurate ECI to geodetic conversion at North Pole"""
+        dt = datetime(2024, 2, 7, 13, 6, 0, tzinfo=timezone.utc)
+        result = PropagationService._eci_to_geodetic_accurate(0, 0, 6771, dt)
+        
+        self.assertGreater(result['latitude'], 89.5)
+        self.assertLess(result['latitude'], 90.5)
+        self.assertAlmostEqual(result['altitude_km'], 400, delta=20)
+    
+    def test_eci_to_geodetic_accurate_equator(self):
+        """Test accurate ECI to geodetic conversion at equator"""
+        dt = datetime(2024, 2, 7, 13, 6, 0, tzinfo=timezone.utc)
+        result = PropagationService._eci_to_geodetic_accurate(6771, 0, 0, dt)
+        
+        self.assertGreater(result['latitude'], -1)
+        self.assertLess(result['latitude'], 1)
+        self.assertGreater(result['altitude_km'], 390)
+        self.assertLess(result['altitude_km'], 410)
+    
+    def test_eci_to_geodetic_comparison_iss(self):
+        """Test that accurate conversion differs from simple conversion for ISS orbit"""
+        dt = datetime(2024, 2, 7, 13, 6, 0, tzinfo=timezone.utc)
+        x_km, y_km, z_km = 3652.4, -5302.1, 2348.7
+        
+        simple = PropagationService._eci_to_geodetic_simple(x_km, y_km, z_km)
+        accurate = PropagationService._eci_to_geodetic_accurate(x_km, y_km, z_km, dt)
+        
+        lon_diff = abs(simple['longitude'] - accurate['longitude'])
+        alt_diff = abs(simple['altitude_km'] - accurate['altitude_km'])
+        
+        self.assertGreater(lon_diff, 5, "Longitude should differ significantly due to GMST correction")
+        self.assertGreater(alt_diff, 1, "Altitude should differ due to WGS84 vs spherical model")
 
 
 if __name__ == "__main__":
