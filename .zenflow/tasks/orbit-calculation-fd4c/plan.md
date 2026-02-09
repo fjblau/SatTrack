@@ -53,7 +53,8 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Add SGP4 Dependency
+### [x] Step: Add SGP4 Dependency
+<!-- chat-id: 165ff26d-2830-4f02-a4a4-461ca85eaabe -->
 
 Add the `sgp4` library to project dependencies and verify installation.
 
