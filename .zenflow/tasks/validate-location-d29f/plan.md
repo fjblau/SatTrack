@@ -31,17 +31,27 @@ Do not make assumptions on important decisions — get clarification first.
 
 ---
 
-### [ ] Step: Setup and Investigation
+### [x] Step: Setup and Investigation
+<!-- chat-id: cf26fb63-118f-4ec9-9612-8887a4b4272a -->
+
+**Completed**: Successfully installed Skyfield and validated coordinate transformation errors
 
 Install Skyfield library and create comparison tools to validate the fix:
 
-- [ ] Add `skyfield>=1.46` to `requirements.txt`
-- [ ] Install dependencies: `pip install -r requirements.txt`
-- [ ] Create test script to compare current implementation vs Skyfield vs N2YO for PRETTY satellite
-- [ ] Document exact discrepancies with multiple test cases (at least 3 satellites)
-- [ ] Verify Skyfield installation and basic functionality
+- [x] Add `skyfield>=1.46` to `requirements.txt`
+- [x] Install dependencies: `pip install -r requirements.txt`
+- [x] Create test script to compare current implementation vs Skyfield vs N2YO for PRETTY satellite
+- [x] Document exact discrepancies with multiple test cases (at least 3 satellites)
+- [x] Verify Skyfield installation and basic functionality
 
-**Verification**: Test script runs successfully and shows current errors match spec analysis
+**Results**:
+- Confirmed **~15° longitude error** across all satellites (LEO, ISS, GEO)
+- Confirmed **6-13 km altitude error** due to spherical Earth assumption
+- Skyfield installation verified and fully functional
+- Created comparison scripts: `compare_coordinates.py` and `verify_skyfield.py`
+- Detailed investigation report: `.zenflow/tasks/validate-location-d29f/investigation_report.md`
+
+**Verification**: ✅ Test script runs successfully and confirms spec analysis
 
 ---
 
