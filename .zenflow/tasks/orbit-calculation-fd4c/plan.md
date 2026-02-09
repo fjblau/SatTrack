@@ -70,7 +70,8 @@ Add the `sgp4` library to project dependencies and verify installation.
 
 ---
 
-### [ ] Step: Implement Propagation Service
+### [x] Step: Implement Propagation Service
+<!-- chat-id: a226bf16-83bc-45ef-a806-a5906919c5e5 -->
 
 Create `api/services/propagation_service.py` to handle orbit propagation logic.
 
