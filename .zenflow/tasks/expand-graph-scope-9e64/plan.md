@@ -53,6 +53,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 ---
 
 ### [ ] Step: Phase 1 - Backend Infrastructure
+<!-- chat-id: e8f018ef-1c1e-4d7d-85c3-fa041af0f770 -->
 
 Create foundational graph analytics infrastructure and data structures.
 

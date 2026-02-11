@@ -22,6 +22,8 @@ from database.connection import (
     EDGE_COLLECTION_CONSTELLATION,
     EDGE_COLLECTION_REGISTRATION,
     EDGE_COLLECTION_PROXIMITY,
+    EDGE_COLLECTION_COLLISION_RISK,
+    EDGE_COLLECTION_SATELLITE_LINEAGE,
     COLLECTION_REG_DOCS,
     client,
     db,
@@ -63,6 +65,17 @@ from database.graph_operations import (
     clear_edge_collection,
     get_graph,
     add_edge_indexes,
+)
+
+# Graph analytics
+from database.graph_analytics import (
+    find_shortest_path,
+    find_all_paths,
+    calculate_degree_centrality,
+    traverse_graph,
+    get_neighbors,
+    count_edges_by_type,
+    find_connected_components,
 )
 
 # MQTT configuration
@@ -112,6 +125,8 @@ __all__ = [
     'EDGE_COLLECTION_CONSTELLATION',
     'EDGE_COLLECTION_REGISTRATION',
     'EDGE_COLLECTION_PROXIMITY',
+    'EDGE_COLLECTION_COLLISION_RISK',
+    'EDGE_COLLECTION_SATELLITE_LINEAGE',
     'COLLECTION_REG_DOCS',
     'MQTT_CONFIG_COLLECTION',
     
@@ -153,6 +168,15 @@ __all__ = [
     'clear_edge_collection',
     'get_graph',
     'add_edge_indexes',
+    
+    # Graph analytics
+    'find_shortest_path',
+    'find_all_paths',
+    'calculate_degree_centrality',
+    'traverse_graph',
+    'get_neighbors',
+    'count_edges_by_type',
+    'find_connected_components',
     
     # MQTT configuration
     'get_mqtt_configurations_collection',
