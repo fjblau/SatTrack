@@ -26,7 +26,7 @@ from database.graph_analytics import (
     find_function_based_clusters
 )
 from api.services.cache_service import get_cache
-from api.services import collision_service
+from api.services import collision_service, lineage_service
 
 router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
 
@@ -2022,4 +2022,142 @@ def get_function_based_clusters(
         raise HTTPException(
             status_code=500,
             detail=f"Error finding function-based clusters: {str(e)}"
+        )
+
+
+@router.get("/lineage/{satellite_id}")
+def get_satellite_lineage_tree(
+    satellite_id: str,
+    direction: str = Query(
+        default="both",
+        description="Traversal direction: 'ancestors', 'descendants', or 'both'"
+    ),
+    max_depth: int = Query(
+        default=5,
+        description="Maximum traversal depth",
+        ge=1,
+        le=10
+    )
+):
+    """
+    Get satellite lineage tree showing family relationships.
+    
+    Returns ancestors (predecessors) and/or descendants (successors) of a satellite
+    within the same family lineage (e.g., GPS-IIA → GPS-III, Iridium → Iridium Next).
+    
+    Args:
+        satellite_id: Satellite identifier or document key
+        direction: 'ancestors', 'descendants', or 'both'
+        max_depth: Maximum traversal depth (1-10)
+    
+    Returns:
+        Root satellite with ancestors/descendants and generation information
+    """
+    try:
+        if direction not in ["ancestors", "descendants", "both"]:
+            raise HTTPException(
+                status_code=400,
+                detail="direction must be 'ancestors', 'descendants', or 'both'"
+            )
+        
+        result = lineage_service.get_satellite_lineage(
+            satellite_id=satellite_id,
+            direction=direction,
+            max_depth=max_depth
+        )
+        
+        if "error" in result and result["root"] is None:
+            raise HTTPException(
+                status_code=404,
+                detail=result["error"]
+            )
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving satellite lineage: {str(e)}"
+        )
+
+
+@router.get("/lineage/family/{family_name}")
+def get_family_tree(
+    family_name: str,
+    limit: int = Query(
+        default=100,
+        description="Maximum number of satellites to return",
+        ge=1,
+        le=500
+    )
+):
+    """
+    Get complete family tree for a satellite family.
+    
+    Returns all satellites and their relationships within a specific family
+    (e.g., GPS, IRIDIUM, GLONASS, STARLINK).
+    
+    Args:
+        family_name: Family name (e.g., 'GPS', 'IRIDIUM', 'STARLINK')
+        limit: Maximum number of satellites (1-500)
+    
+    Returns:
+        Graph data with nodes (satellites) and edges (lineage relationships)
+        organized by family generations
+    """
+    try:
+        result = lineage_service.get_satellite_family_tree(
+            family_name=family_name,
+            limit=limit
+        )
+        
+        if not result.get("nodes"):
+            return {
+                "data": result,
+                "message": f"No satellites found for family '{family_name}'",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving family tree: {str(e)}"
+        )
+
+
+@router.get("/lineage/statistics")
+def get_lineage_statistics_endpoint():
+    """
+    Get statistics about satellite lineage relationships.
+    
+    Returns summary statistics including:
+    - Total lineage edges
+    - Family counts
+    - Generation gap distribution
+    
+    Returns:
+        Statistics dictionary with counts and distributions
+    """
+    try:
+        stats = lineage_service.get_lineage_statistics()
+        
+        return {
+            "data": stats,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving lineage statistics: {str(e)}"
         )

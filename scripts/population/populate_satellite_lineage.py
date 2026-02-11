@@ -20,6 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from api.services.lineage_service import detect_satellite_family, detect_lineage_relationships
+
 
 def extract_satellite_family(name):
     """
@@ -135,74 +137,43 @@ def populate_satellite_lineage(dry_run=False):
     print(f"Found {len(satellites):,} satellites")
     
     print("\n" + "=" * 60)
-    print("Step 2: Group Satellites by Family")
+    print("Step 2: Detect Satellite Families and Generations")
     print("=" * 60)
     
-    families = defaultdict(list)
+    satellites_with_family = []
     for sat in satellites:
-        family = extract_satellite_family(sat['name'])
-        if family:
-            generation = extract_generation_info(sat['name'])
-            sat['family'] = family
-            sat['generation'] = generation
-            families[family].append(sat)
+        family_info = detect_satellite_family(sat['name'])
+        if family_info:
+            sat['_id'] = f"{db_module.COLLECTION_NAME}/{sat['_key']}"
+            sat['family_name'] = family_info[0]
+            sat['variant'] = family_info[1]
+            sat['generation'] = family_info[2]
+            satellites_with_family.append(sat)
+    
+    print(f"Identified {len(satellites_with_family)} satellites with family information")
+    
+    families = defaultdict(list)
+    for sat in satellites_with_family:
+        families[sat['family_name']].append(sat)
     
     families = {k: v for k, v in families.items() if len(v) >= 2}
     
-    print(f"Identified {len(families)} satellite families with 2+ members")
+    print(f"Found {len(families)} satellite families with 2+ members")
     print(f"\nTop 10 largest families:")
     sorted_families = sorted(families.items(), key=lambda x: len(x[1]), reverse=True)
     for family, members in sorted_families[:10]:
         print(f"  {family}: {len(members):,} satellites")
     
     print("\n" + "=" * 60)
-    print("Step 3: Create Lineage Edges")
+    print("Step 3: Create Lineage Edges Using Detection Algorithm")
     print("=" * 60)
     
-    all_edges = []
-    edge_count_by_family = defaultdict(int)
+    all_edges = detect_lineage_relationships(satellites_with_family)
     
-    for family, members in families.items():
-        members_by_generation = defaultdict(list)
-        
-        for sat in members:
-            gen = sat.get('generation', 'unknown')
-            members_by_generation[gen].append(sat)
-        
-        generations = sorted(members_by_generation.keys())
-        
-        for i, current_gen in enumerate(generations):
-            current_members = members_by_generation[current_gen]
-            
-            current_members.sort(key=lambda x: x['launch_date'] if x['launch_date'] else '9999')
-            
-            for j, sat in enumerate(current_members):
-                if j > 0:
-                    prev_sat = current_members[j - 1]
-                    all_edges.append({
-                        '_from': f"{db_module.COLLECTION_NAME}/{prev_sat['_key']}",
-                        '_to': f"{db_module.COLLECTION_NAME}/{sat['_key']}",
-                        'family': family,
-                        'generation': current_gen,
-                        'relationship': 'sibling',
-                        'sequence_number': j + 1
-                    })
-                    edge_count_by_family[family] += 1
-            
-            if i > 0 and len(current_members) > 0 and len(members_by_generation[generations[i-1]]) > 0:
-                prev_gen = generations[i - 1]
-                prev_last = members_by_generation[prev_gen][-1]
-                current_first = current_members[0]
-                
-                all_edges.append({
-                    '_from': f"{db_module.COLLECTION_NAME}/{prev_last['_key']}",
-                    '_to': f"{db_module.COLLECTION_NAME}/{current_first['_key']}",
-                    'family': family,
-                    'from_generation': prev_gen,
-                    'to_generation': current_gen,
-                    'relationship': 'generation_successor'
-                })
-                edge_count_by_family[family] += 1
+    edge_count_by_family = defaultdict(int)
+    for edge in all_edges:
+        family = edge.get('family_name', 'unknown')
+        edge_count_by_family[family] += 1
     
     print(f"Total edges to create: {len(all_edges):,}")
     print(f"\nEdges by family (top 10):")
@@ -212,7 +183,7 @@ def populate_satellite_lineage(dry_run=False):
     
     relationship_counts = defaultdict(int)
     for edge in all_edges:
-        relationship_counts[edge['relationship']] += 1
+        relationship_counts[edge.get('relationship_type', 'unknown')] += 1
     
     print(f"\nRelationship type distribution:")
     for rel_type, count in relationship_counts.items():
@@ -222,11 +193,11 @@ def populate_satellite_lineage(dry_run=False):
         print(f"\n[DRY-RUN] Would create {len(all_edges):,} lineage edges")
         
         if len(all_edges) > 0:
-            print(f"\nSample generation successor edges:")
-            gen_edges = [e for e in all_edges if e['relationship'] == 'generation_successor'][:5]
-            for edge in gen_edges:
+            print(f"\nSample successor edges:")
+            sample_edges = all_edges[:5]
+            for edge in sample_edges:
                 print(f"  {edge['_from']} -> {edge['_to']}")
-                print(f"    Family: {edge['family']}, {edge.get('from_generation', '?')} -> {edge.get('to_generation', '?')}")
+                print(f"    Family: {edge['family_name']}, Gen {edge.get('generation_from', '?')} -> Gen {edge.get('generation_to', '?')}")
         
         return True
     
@@ -277,14 +248,17 @@ def populate_satellite_lineage(dry_run=False):
     
     db_module.add_edge_indexes(db_module.EDGE_COLLECTION_SATELLITE_LINEAGE)
     
-    edge_collection.add_persistent_index(fields=['family'], unique=False)
-    print("✓ Added family index")
+    edge_collection.add_persistent_index(fields=['family_name'], unique=False)
+    print("✓ Added family_name index")
     
-    edge_collection.add_persistent_index(fields=['relationship'], unique=False)
-    print("✓ Added relationship index")
+    edge_collection.add_persistent_index(fields=['relationship_type'], unique=False)
+    print("✓ Added relationship_type index")
     
-    edge_collection.add_persistent_index(fields=['generation'], unique=False, sparse=True)
-    print("✓ Added generation index")
+    edge_collection.add_persistent_index(fields=['generation_from'], unique=False, sparse=True)
+    print("✓ Added generation_from index")
+    
+    edge_collection.add_persistent_index(fields=['generation_to'], unique=False, sparse=True)
+    print("✓ Added generation_to index")
     
     print("\n" + "=" * 60)
     print("Summary")
@@ -292,10 +266,11 @@ def populate_satellite_lineage(dry_run=False):
     
     print(f"✓ Total lineage edges created: {total_inserted:,}")
     print(f"✓ Families with lineage: {len(families)}")
-    print(f"✓ Sibling relationships: {relationship_counts.get('sibling', 0):,}")
-    print(f"✓ Generation successors: {relationship_counts.get('generation_successor', 0):,}")
+    print(f"✓ Successor relationships: {relationship_counts.get('successor', 0):,}")
     print(f"\nSatellite lineage network is ready!")
-    print(f"\nYou can now query satellite families and evolution via graph traversal")
+    print(f"\nYou can now query satellite families and evolution via:")
+    print(f"  - GET /v2/graphs/lineage/{{satellite_id}}")
+    print(f"  - GET /v2/graphs/lineage/family/{{family_name}}")
     
     db_module.disconnect_mongodb()
     return True

@@ -9,7 +9,7 @@ This module provides helper functions for:
 - Multi-edge type queries
 """
 from typing import Optional, Dict, List, Any, Set
-from database.connection import db, COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK
+from database.connection import db, COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK, EDGE_COLLECTION_SATELLITE_LINEAGE
 
 
 def find_shortest_path(
@@ -1178,3 +1178,242 @@ def find_function_based_clusters(
     except Exception as e:
         print(f"Error finding function-based clusters: {e}")
         return {}
+
+
+def traverse_lineage_tree(
+    satellite_id: str,
+    direction: str = "ANY",
+    max_depth: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Traverse satellite lineage tree (ancestors and/or descendants).
+    
+    Args:
+        satellite_id: Starting satellite document ID
+        direction: "OUTBOUND" (descendants), "INBOUND" (ancestors), or "ANY" (both)
+        max_depth: Maximum traversal depth
+    
+    Returns:
+        List of related satellites with lineage edge information
+    """
+    try:
+        if "/" not in satellite_id:
+            satellite_id = f"{COLLECTION_NAME}/{satellite_id}"
+        
+        query = f"""
+        FOR v, e, p IN 1..@max_depth {direction} @satellite_id
+            {EDGE_COLLECTION_SATELLITE_LINEAGE}
+            RETURN {{
+                satellite: {{
+                    _id: v._id,
+                    identifier: v.identifier,
+                    name: v.canonical.name,
+                    manufacturer: v.canonical.manufacturer,
+                    launch_date: v.canonical.date_of_launch,
+                    orbital_band: v.canonical.orbital_band
+                }},
+                edge: {{
+                    relationship_type: e.relationship_type,
+                    family_name: e.family_name,
+                    generation_from: e.generation_from,
+                    generation_to: e.generation_to,
+                    generation_gap: e.generation_gap
+                }},
+                depth: LENGTH(p.vertices) - 1,
+                path: {{
+                    vertices: p.vertices,
+                    edges: p.edges
+                }}
+            }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                "satellite_id": satellite_id,
+                "max_depth": max_depth
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error traversing lineage tree: {e}")
+        return []
+
+
+def get_lineage_neighbors(
+    satellite_id: str,
+    relationship_type: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Get direct lineage neighbors (immediate predecessors and successors).
+    
+    Args:
+        satellite_id: Satellite document ID
+        relationship_type: Optional filter for relationship type
+    
+    Returns:
+        List of directly connected satellites in lineage graph
+    """
+    try:
+        if "/" not in satellite_id:
+            satellite_id = f"{COLLECTION_NAME}/{satellite_id}"
+        
+        filter_clause = ""
+        bind_vars = {"satellite_id": satellite_id}
+        
+        if relationship_type:
+            filter_clause = "FILTER e.relationship_type == @relationship_type"
+            bind_vars["relationship_type"] = relationship_type
+        
+        query = f"""
+        FOR v, e IN 1..1 ANY @satellite_id
+            {EDGE_COLLECTION_SATELLITE_LINEAGE}
+            {filter_clause}
+            RETURN {{
+                satellite: {{
+                    _id: v._id,
+                    identifier: v.identifier,
+                    name: v.canonical.name,
+                    manufacturer: v.canonical.manufacturer
+                }},
+                edge: {{
+                    relationship_type: e.relationship_type,
+                    family_name: e.family_name,
+                    generation_from: e.generation_from,
+                    generation_to: e.generation_to
+                }},
+                direction: e._from == @satellite_id ? "successor" : "predecessor"
+            }}
+        """
+        
+        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error getting lineage neighbors: {e}")
+        return []
+
+
+def find_satellite_generation(satellite_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Find satellite's generation within its family.
+    
+    Args:
+        satellite_id: Satellite document ID
+    
+    Returns:
+        Dictionary with generation information or None
+    """
+    try:
+        if "/" not in satellite_id:
+            satellite_id = f"{COLLECTION_NAME}/{satellite_id}"
+        
+        query = f"""
+        LET sat = DOCUMENT(@satellite_id)
+        
+        LET predecessors = (
+            FOR v, e IN 1..10 INBOUND @satellite_id
+                {EDGE_COLLECTION_SATELLITE_LINEAGE}
+                RETURN e
+        )
+        
+        LET successors = (
+            FOR v, e IN 1..10 OUTBOUND @satellite_id
+                {EDGE_COLLECTION_SATELLITE_LINEAGE}
+                RETURN e
+        )
+        
+        LET family_name = FIRST(
+            FOR e IN APPEND(predecessors, successors)
+                FILTER e.family_name != null
+                RETURN e.family_name
+        )
+        
+        RETURN {{
+            satellite: {{
+                _id: sat._id,
+                identifier: sat.identifier,
+                name: sat.canonical.name
+            }},
+            family_name: family_name,
+            predecessor_count: LENGTH(predecessors),
+            successor_count: LENGTH(successors),
+            is_root: LENGTH(predecessors) == 0,
+            is_leaf: LENGTH(successors) == 0
+        }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={"satellite_id": satellite_id}
+        )
+        
+        results = list(cursor)
+        return results[0] if results else None
+        
+    except Exception as e:
+        print(f"Error finding satellite generation: {e}")
+        return None
+
+
+def get_lineage_family_members(family_name: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """
+    Get all satellites in a specific family lineage.
+    
+    Args:
+        family_name: Family name (e.g., "GPS", "IRIDIUM")
+        limit: Maximum number of satellites to return
+    
+    Returns:
+        List of satellites in the family
+    """
+    try:
+        query = f"""
+        LET family_edges = (
+            FOR edge IN {EDGE_COLLECTION_SATELLITE_LINEAGE}
+                FILTER edge.family_name == @family_name
+                RETURN edge
+        )
+        
+        LET satellite_ids = UNIQUE(FLATTEN(
+            FOR edge IN family_edges
+                RETURN [edge._from, edge._to]
+        ))
+        
+        FOR sat_id IN satellite_ids
+            LIMIT @limit
+            LET sat = DOCUMENT(sat_id)
+            
+            LET generation = FIRST(
+                FOR edge IN family_edges
+                    FILTER edge._from == sat_id OR edge._to == sat_id
+                    RETURN edge._from == sat_id ? edge.generation_from : edge.generation_to
+            )
+            
+            RETURN {{
+                _id: sat._id,
+                identifier: sat.identifier,
+                name: sat.canonical.name,
+                manufacturer: sat.canonical.manufacturer,
+                launch_date: sat.canonical.date_of_launch,
+                orbital_band: sat.canonical.orbital_band,
+                family_name: @family_name,
+                generation: generation
+            }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                "family_name": family_name.upper(),
+                "limit": limit
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error getting lineage family members: {e}")
+        return []
