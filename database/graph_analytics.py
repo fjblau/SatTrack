@@ -9,7 +9,7 @@ This module provides helper functions for:
 - Multi-edge type queries
 """
 from typing import Optional, Dict, List, Any, Set
-from database.connection import db, COLLECTION_NAME
+from database.connection import db, COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK
 
 
 def find_shortest_path(
@@ -611,4 +611,132 @@ def find_connected_components(
         
     except Exception as e:
         print(f"Error finding connected components: {e}")
+        return []
+
+
+def get_collision_risk_neighbors(
+    satellite_id: str,
+    risk_threshold: float = 0.5,
+    limit: int = 50
+) -> List[Dict[str, Any]]:
+    """
+    Get satellites with collision risk to a specific satellite.
+    
+    Args:
+        satellite_id: Satellite document ID
+        risk_threshold: Minimum risk score threshold
+        limit: Maximum number of results
+    
+    Returns:
+        List of satellites with collision risk information
+    """
+    try:
+        if "/" not in satellite_id:
+            satellite_id = f"{COLLECTION_NAME}/{satellite_id}"
+        
+        query = f"""
+        FOR v, e IN 1..1 ANY @satellite_id {EDGE_COLLECTION_COLLISION_RISK}
+            FILTER e.risk_score >= @risk_threshold
+            SORT e.risk_score DESC
+            LIMIT @limit
+            RETURN {{
+                satellite: v,
+                edge: e,
+                risk_score: e.risk_score,
+                risk_level: e.risk_level,
+                orbital_band: e.orbital_band,
+                differences: {{
+                    apogee_km: e.apogee_diff_km,
+                    perigee_km: e.perigee_diff_km,
+                    inclination_degrees: e.inclination_diff_degrees
+                }}
+            }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'satellite_id': satellite_id,
+                'risk_threshold': risk_threshold,
+                'limit': limit
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error getting collision risk neighbors: {e}")
+        return []
+
+
+def analyze_collision_clusters(
+    orbital_band: Optional[str] = None,
+    risk_threshold: float = 0.7,
+    min_cluster_size: int = 3
+) -> List[Dict[str, Any]]:
+    """
+    Identify clusters of satellites with high collision risk.
+    
+    Args:
+        orbital_band: Optional filter by orbital band
+        risk_threshold: Minimum risk score to consider
+        min_cluster_size: Minimum number of satellites in a cluster
+    
+    Returns:
+        List of collision risk clusters
+    """
+    try:
+        bind_vars = {
+            'risk_threshold': risk_threshold,
+            'min_cluster_size': min_cluster_size
+        }
+        
+        band_filter = ""
+        if orbital_band:
+            band_filter = "FILTER edge.orbital_band == @orbital_band"
+            bind_vars['orbital_band'] = orbital_band
+        
+        query = f"""
+        LET high_risk_edges = (
+            FOR edge IN {EDGE_COLLECTION_COLLISION_RISK}
+                {band_filter}
+                FILTER edge.risk_score >= @risk_threshold
+                RETURN edge
+        )
+        
+        FOR doc IN {COLLECTION_NAME}
+            LET cluster_satellites = (
+                FOR v, e IN 1..2 ANY doc._id {EDGE_COLLECTION_COLLISION_RISK}
+                    FILTER e.risk_score >= @risk_threshold
+                    {band_filter.replace('edge.', 'e.')}
+                    RETURN DISTINCT v
+            )
+            FILTER LENGTH(cluster_satellites) >= @min_cluster_size
+            
+            LET cluster_edges = (
+                FOR edge IN high_risk_edges
+                    FILTER edge._from IN cluster_satellites[*]._id OR edge._to IN cluster_satellites[*]._id
+                    RETURN edge
+            )
+            
+            RETURN {{
+                center_satellite: {{
+                    _id: doc._id,
+                    identifier: doc.identifier,
+                    name: doc.canonical.name,
+                    orbital_band: doc.canonical.orbital_band
+                }},
+                cluster_size: LENGTH(cluster_satellites),
+                satellites: cluster_satellites,
+                internal_edges: LENGTH(cluster_edges),
+                avg_risk_score: AVERAGE(cluster_edges[*].risk_score),
+                max_risk_score: MAX(cluster_edges[*].risk_score)
+            }}
+        """
+        
+        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error analyzing collision clusters: {e}")
         return []
