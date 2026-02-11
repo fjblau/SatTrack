@@ -740,3 +740,441 @@ def analyze_collision_clusters(
     except Exception as e:
         print(f"Error analyzing collision clusters: {e}")
         return []
+
+
+def find_cross_constellation_proximity(
+    limit: int = 100,
+    proximity_threshold: float = 0.7
+) -> Dict[str, Any]:
+    """
+    Find satellites from different constellations that are in orbital proximity.
+    
+    This demonstrates multi-dimensional graph traversal combining:
+    - Constellation membership edges
+    - Orbital proximity edges
+    
+    Args:
+        limit: Maximum number of satellite pairs to return
+        proximity_threshold: Minimum proximity score
+    
+    Returns:
+        Dictionary containing nodes and edges showing cross-constellation proximity
+    """
+    try:
+        from database.connection import (
+            EDGE_COLLECTION_CONSTELLATION,
+            EDGE_COLLECTION_PROXIMITY
+        )
+        
+        query = f"""
+        LET proximity_pairs = (
+            FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+                FILTER edge.proximity_score >= @proximity_threshold
+                LIMIT @limit * 2
+                
+                LET sat_from = DOCUMENT(edge._from)
+                LET sat_to = DOCUMENT(edge._to)
+                
+                FILTER sat_from.canonical.constellation != null
+                FILTER sat_to.canonical.constellation != null
+                FILTER sat_from.canonical.constellation != sat_to.canonical.constellation
+                
+                RETURN {{
+                    sat_from: sat_from,
+                    sat_to: sat_to,
+                    edge: edge
+                }}
+        )
+        
+        LET limited_pairs = SLICE(proximity_pairs, 0, @limit)
+        
+        LET satellite_ids = UNIQUE(FLATTEN(
+            FOR pair IN limited_pairs
+                RETURN [pair.sat_from._id, pair.sat_to._id]
+        ))
+        
+        LET nodes = (
+            FOR sat_id IN satellite_ids
+                LET sat = DOCUMENT(sat_id)
+                RETURN {{
+                    id: sat._id,
+                    key: sat._key,
+                    identifier: sat.identifier,
+                    name: sat.canonical.name,
+                    constellation: sat.canonical.constellation,
+                    country: sat.canonical.country_of_origin,
+                    orbital_band: sat.canonical.orbital_band,
+                    apogee_km: sat.canonical.orbit.apogee_km,
+                    perigee_km: sat.canonical.orbit.perigee_km
+                }}
+        )
+        
+        LET edges = (
+            FOR pair IN limited_pairs
+                RETURN {{
+                    id: pair.edge._key,
+                    source: pair.edge._from,
+                    target: pair.edge._to,
+                    proximity_score: pair.edge.proximity_score,
+                    constellation_from: pair.sat_from.canonical.constellation,
+                    constellation_to: pair.sat_to.canonical.constellation,
+                    orbital_band: pair.edge.orbital_band,
+                    edge_type: "cross_constellation_proximity"
+                }}
+        )
+        
+        LET constellation_stats = (
+            FOR edge IN edges
+                COLLECT pair = CONCAT(edge.constellation_from, " <-> ", edge.constellation_to) 
+                WITH COUNT INTO pair_count
+                SORT pair_count DESC
+                LIMIT 20
+                RETURN {{
+                    constellation_pair: pair,
+                    proximity_count: pair_count
+                }}
+        )
+        
+        RETURN {{
+            nodes: nodes,
+            edges: edges,
+            stats: {{
+                total_satellites: LENGTH(nodes),
+                total_proximity_pairs: LENGTH(edges),
+                constellation_pairs: LENGTH(constellation_stats),
+                top_constellation_pairs: constellation_stats
+            }}
+        }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'limit': limit,
+                'proximity_threshold': proximity_threshold
+            }
+        )
+        
+        results = list(cursor)
+        return results[0] if results else {}
+        
+    except Exception as e:
+        print(f"Error finding cross-constellation proximity: {e}")
+        return {}
+
+
+def find_country_cooperation_network(
+    limit: int = 50,
+    min_shared_satellites: int = 2
+) -> Dict[str, Any]:
+    """
+    Find countries that cooperate through multiple relationship types.
+    
+    This demonstrates multi-dimensional analysis combining:
+    - Shared registration documents
+    - Satellites in orbital proximity
+    - Constellation membership
+    
+    Args:
+        limit: Maximum number of country pairs to return
+        min_shared_satellites: Minimum number of shared satellites/connections
+    
+    Returns:
+        Dictionary containing country cooperation network data
+    """
+    try:
+        from database.connection import (
+            EDGE_COLLECTION_CONSTELLATION,
+            EDGE_COLLECTION_REGISTRATION,
+            EDGE_COLLECTION_PROXIMITY,
+            COLLECTION_REG_DOCS
+        )
+        
+        query = f"""
+        LET country_pairs = (
+            FOR doc IN {COLLECTION_REG_DOCS}
+                FILTER LENGTH(doc.countries) >= 2
+                
+                FOR country1 IN doc.countries
+                    FOR country2 IN doc.countries
+                        FILTER country1 < country2
+                        
+                        LET satellites_country1 = (
+                            FOR v IN 1..1 INBOUND doc._id {EDGE_COLLECTION_REGISTRATION}
+                                FILTER v.canonical.country_of_origin == country1
+                                RETURN v._id
+                        )
+                        
+                        LET satellites_country2 = (
+                            FOR v IN 1..1 INBOUND doc._id {EDGE_COLLECTION_REGISTRATION}
+                                FILTER v.canonical.country_of_origin == country2
+                                RETURN v._id
+                        )
+                        
+                        FILTER LENGTH(satellites_country1) > 0 AND LENGTH(satellites_country2) > 0
+                        
+                        LET proximity_connections = LENGTH(
+                            FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+                                FILTER edge._from IN satellites_country1 AND edge._to IN satellites_country2
+                                    OR edge._from IN satellites_country2 AND edge._to IN satellites_country1
+                                RETURN 1
+                        )
+                        
+                        RETURN {{
+                            country1: country1,
+                            country2: country2,
+                            shared_document: doc._key,
+                            satellites_country1: LENGTH(satellites_country1),
+                            satellites_country2: LENGTH(satellites_country2),
+                            proximity_connections: proximity_connections,
+                            cooperation_score: LENGTH(satellites_country1) + LENGTH(satellites_country2) + proximity_connections
+                        }}
+        )
+        
+        LET aggregated_pairs = (
+            FOR pair IN country_pairs
+                COLLECT 
+                    c1 = pair.country1, 
+                    c2 = pair.country2 
+                AGGREGATE 
+                    total_shared_docs = LENGTH(pair),
+                    total_satellites_c1 = SUM(pair.satellites_country1),
+                    total_satellites_c2 = SUM(pair.satellites_country2),
+                    total_proximity = SUM(pair.proximity_connections),
+                    total_cooperation_score = SUM(pair.cooperation_score)
+                
+                FILTER total_shared_docs >= @min_shared_satellites 
+                    OR total_proximity > 0
+                
+                SORT total_cooperation_score DESC
+                LIMIT @limit
+                
+                RETURN {{
+                    country1: c1,
+                    country2: c2,
+                    shared_documents: total_shared_docs,
+                    satellites_country1: total_satellites_c1,
+                    satellites_country2: total_satellites_c2,
+                    proximity_connections: total_proximity,
+                    cooperation_score: total_cooperation_score,
+                    cooperation_types: {{
+                        shared_registration: total_shared_docs > 0,
+                        orbital_proximity: total_proximity > 0
+                    }}
+                }}
+        )
+        
+        LET country_nodes = UNIQUE(FLATTEN(
+            FOR pair IN aggregated_pairs
+                RETURN [pair.country1, pair.country2]
+        ))
+        
+        LET nodes = (
+            FOR country IN country_nodes
+                LET satellite_count = LENGTH(
+                    FOR sat IN {COLLECTION_NAME}
+                        FILTER sat.canonical.country_of_origin == country
+                        RETURN 1
+                )
+                RETURN {{
+                    id: country,
+                    name: country,
+                    type: "country",
+                    satellite_count: satellite_count
+                }}
+        )
+        
+        LET edges = (
+            FOR pair IN aggregated_pairs
+                RETURN {{
+                    id: CONCAT(pair.country1, "_to_", pair.country2),
+                    source: pair.country1,
+                    target: pair.country2,
+                    shared_documents: pair.shared_documents,
+                    proximity_connections: pair.proximity_connections,
+                    cooperation_score: pair.cooperation_score,
+                    cooperation_types: pair.cooperation_types,
+                    edge_type: "country_cooperation"
+                }}
+        )
+        
+        RETURN {{
+            nodes: nodes,
+            edges: edges,
+            stats: {{
+                total_countries: LENGTH(nodes),
+                total_cooperation_pairs: LENGTH(edges),
+                avg_cooperation_score: AVERAGE(edges[*].cooperation_score),
+                max_cooperation_score: MAX(edges[*].cooperation_score)
+            }}
+        }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'limit': limit,
+                'min_shared_satellites': min_shared_satellites
+            }
+        )
+        
+        results = list(cursor)
+        return results[0] if results else {}
+        
+    except Exception as e:
+        print(f"Error finding country cooperation network: {e}")
+        return {}
+
+
+def find_function_based_clusters(
+    orbital_band: Optional[str] = None,
+    limit: int = 20,
+    min_cluster_size: int = 3
+) -> Dict[str, Any]:
+    """
+    Find satellite clusters based on shared function, orbital band, and proximity.
+    
+    This demonstrates multi-dimensional clustering combining:
+    - Similar satellite functions
+    - Same orbital band
+    - Orbital proximity relationships
+    
+    Args:
+        orbital_band: Optional filter by specific orbital band
+        limit: Maximum number of clusters to return
+        min_cluster_size: Minimum satellites in a cluster
+    
+    Returns:
+        Dictionary containing function-based clusters
+    """
+    try:
+        from database.connection import EDGE_COLLECTION_PROXIMITY
+        
+        band_filter = ""
+        bind_vars = {
+            'limit': limit,
+            'min_cluster_size': min_cluster_size
+        }
+        
+        if orbital_band:
+            band_filter = "FILTER sat.canonical.orbital_band == @orbital_band"
+            bind_vars['orbital_band'] = orbital_band
+        
+        query = f"""
+        LET function_groups = (
+            FOR sat IN {COLLECTION_NAME}
+                FILTER sat.canonical.function != null
+                {band_filter}
+                COLLECT 
+                    func = sat.canonical.function,
+                    band = sat.canonical.orbital_band
+                INTO group
+                
+                LET satellites = group[*].sat
+                FILTER LENGTH(satellites) >= @min_cluster_size
+                
+                LET proximity_edges = (
+                    FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+                        FILTER edge._from IN satellites[*]._id 
+                            AND edge._to IN satellites[*]._id
+                        RETURN edge
+                )
+                
+                LET internal_proximity = LENGTH(proximity_edges)
+                LET density = internal_proximity > 0 
+                    ? internal_proximity / (LENGTH(satellites) * (LENGTH(satellites) - 1) / 2) 
+                    : 0
+                
+                FILTER internal_proximity > 0
+                
+                SORT density DESC, LENGTH(satellites) DESC
+                LIMIT @limit
+                
+                RETURN {{
+                    function: func,
+                    orbital_band: band,
+                    satellites: satellites,
+                    cluster_size: LENGTH(satellites),
+                    internal_proximity_edges: internal_proximity,
+                    density: density,
+                    countries: UNIQUE(satellites[*].canonical.country_of_origin),
+                    constellations: UNIQUE(
+                        FOR s IN satellites
+                            FILTER s.canonical.constellation != null
+                            RETURN s.canonical.constellation
+                    )
+                }}
+        )
+        
+        LET all_satellite_ids = UNIQUE(FLATTEN(
+            FOR cluster IN function_groups
+                RETURN cluster.satellites[*]._id
+        ))
+        
+        LET nodes = (
+            FOR sat_id IN all_satellite_ids
+                LET sat = DOCUMENT(sat_id)
+                RETURN {{
+                    id: sat._id,
+                    key: sat._key,
+                    identifier: sat.identifier,
+                    name: sat.canonical.name,
+                    function: sat.canonical.function,
+                    orbital_band: sat.canonical.orbital_band,
+                    country: sat.canonical.country_of_origin,
+                    constellation: sat.canonical.constellation
+                }}
+        )
+        
+        LET edges = FLATTEN(
+            FOR cluster IN function_groups
+                FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+                    FILTER edge._from IN cluster.satellites[*]._id 
+                        AND edge._to IN cluster.satellites[*]._id
+                    RETURN {{
+                        id: edge._key,
+                        source: edge._from,
+                        target: edge._to,
+                        proximity_score: edge.proximity_score,
+                        function_cluster: cluster.function,
+                        orbital_band: cluster.orbital_band,
+                        edge_type: "function_cluster_proximity"
+                    }}
+        )
+        
+        LET clusters = (
+            FOR cluster IN function_groups
+                RETURN {{
+                    function: cluster.function,
+                    orbital_band: cluster.orbital_band,
+                    size: cluster.cluster_size,
+                    density: cluster.density,
+                    countries: cluster.countries,
+                    country_count: LENGTH(cluster.countries),
+                    constellations: cluster.constellations,
+                    constellation_count: LENGTH(cluster.constellations)
+                }}
+        )
+        
+        RETURN {{
+            nodes: nodes,
+            edges: edges,
+            clusters: clusters,
+            stats: {{
+                total_clusters: LENGTH(clusters),
+                total_satellites: LENGTH(nodes),
+                total_proximity_edges: LENGTH(edges),
+                avg_cluster_size: AVERAGE(clusters[*].size),
+                avg_density: AVERAGE(clusters[*].density)
+            }}
+        }}
+        """
+        
+        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        
+        results = list(cursor)
+        return results[0] if results else {}
+        
+    except Exception as e:
+        print(f"Error finding function-based clusters: {e}")
+        return {}

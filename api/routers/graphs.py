@@ -20,7 +20,10 @@ from database.graph_analytics import (
     calculate_betweenness_centrality,
     calculate_closeness_centrality,
     get_collision_risk_neighbors,
-    analyze_collision_clusters
+    analyze_collision_clusters,
+    find_cross_constellation_proximity,
+    find_country_cooperation_network,
+    find_function_based_clusters
 )
 from api.services.cache_service import get_cache
 from api.services import collision_service
@@ -1805,4 +1808,218 @@ def get_collision_clusters(
         raise HTTPException(
             status_code=500,
             detail=f"Error analyzing collision clusters: {str(e)}"
+        )
+
+
+@router.get("/cross-constellation-proximity")
+def get_cross_constellation_proximity(
+    limit: int = Query(
+        default=100,
+        description="Maximum number of satellite pairs to return",
+        ge=1,
+        le=500
+    ),
+    proximity_threshold: float = Query(
+        default=0.7,
+        description="Minimum proximity score threshold (0-1)",
+        ge=0.0,
+        le=1.0
+    )
+):
+    """
+    Find satellites from different constellations that are in orbital proximity.
+    
+    This demonstrates multi-dimensional graph queries by combining:
+    - Constellation membership relationships
+    - Orbital proximity relationships
+    
+    Returns satellites that belong to different constellations but are
+    in close orbital proximity, highlighting potential collision risks
+    between different constellation systems.
+    
+    Args:
+        limit: Maximum number of satellite pairs (1-500)
+        proximity_threshold: Minimum proximity score (0-1)
+    
+    Returns:
+        Graph data with nodes (satellites) and edges (cross-constellation proximity)
+        including statistics on constellation pairs
+    """
+    try:
+        result = find_cross_constellation_proximity(
+            limit=limit,
+            proximity_threshold=proximity_threshold
+        )
+        
+        if not result:
+            return {
+                "data": {
+                    "nodes": [],
+                    "edges": [],
+                    "stats": {
+                        "total_satellites": 0,
+                        "total_proximity_pairs": 0,
+                        "constellation_pairs": 0,
+                        "top_constellation_pairs": []
+                    }
+                },
+                "message": "No cross-constellation proximity relationships found",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error finding cross-constellation proximity: {str(e)}"
+        )
+
+
+@router.get("/country-cooperation-network")
+def get_country_cooperation_network(
+    limit: int = Query(
+        default=50,
+        description="Maximum number of country pairs to return",
+        ge=1,
+        le=200
+    ),
+    min_shared_satellites: int = Query(
+        default=2,
+        description="Minimum number of shared satellites/connections",
+        ge=1,
+        le=20
+    )
+):
+    """
+    Find countries that cooperate through multiple relationship types.
+    
+    This demonstrates multi-dimensional graph analysis by combining:
+    - Shared registration documents
+    - Satellites in orbital proximity
+    - Constellation membership patterns
+    
+    Returns country pairs that show cooperation through shared registration
+    documents and/or satellites in close orbital proximity, revealing
+    international space collaboration patterns.
+    
+    Args:
+        limit: Maximum number of country pairs (1-200)
+        min_shared_satellites: Minimum shared satellites/connections (1-20)
+    
+    Returns:
+        Graph data with nodes (countries) and edges (cooperation relationships)
+        including cooperation scores and types
+    """
+    try:
+        result = find_country_cooperation_network(
+            limit=limit,
+            min_shared_satellites=min_shared_satellites
+        )
+        
+        if not result:
+            return {
+                "data": {
+                    "nodes": [],
+                    "edges": [],
+                    "stats": {
+                        "total_countries": 0,
+                        "total_cooperation_pairs": 0,
+                        "avg_cooperation_score": 0,
+                        "max_cooperation_score": 0
+                    }
+                },
+                "message": "No country cooperation relationships found",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error finding country cooperation network: {str(e)}"
+        )
+
+
+@router.get("/function-clusters")
+def get_function_based_clusters(
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band (e.g., 'LEO', 'MEO', 'GEO')"
+    ),
+    limit: int = Query(
+        default=20,
+        description="Maximum number of clusters to return",
+        ge=1,
+        le=100
+    ),
+    min_cluster_size: int = Query(
+        default=3,
+        description="Minimum number of satellites in a cluster",
+        ge=2,
+        le=50
+    )
+):
+    """
+    Find satellite clusters based on shared function, orbital band, and proximity.
+    
+    This demonstrates multi-dimensional clustering by combining:
+    - Similar satellite functions (communication, Earth observation, etc.)
+    - Same orbital band
+    - Orbital proximity relationships
+    
+    Returns clusters of satellites that share the same function and orbital band,
+    and have proximity relationships with each other, revealing functional
+    satellite groupings and potential congestion zones.
+    
+    Args:
+        orbital_band: Optional orbital band filter
+        limit: Maximum number of clusters (1-100)
+        min_cluster_size: Minimum satellites per cluster (2-50)
+    
+    Returns:
+        Graph data with nodes (satellites), edges (proximity), and cluster metadata
+        including density metrics and multi-country collaboration
+    """
+    try:
+        result = find_function_based_clusters(
+            orbital_band=orbital_band,
+            limit=limit,
+            min_cluster_size=min_cluster_size
+        )
+        
+        if not result:
+            return {
+                "data": {
+                    "nodes": [],
+                    "edges": [],
+                    "clusters": [],
+                    "stats": {
+                        "total_clusters": 0,
+                        "total_satellites": 0,
+                        "total_proximity_edges": 0,
+                        "avg_cluster_size": 0,
+                        "avg_density": 0
+                    }
+                },
+                "message": "No function-based clusters found",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error finding function-based clusters: {str(e)}"
         )
