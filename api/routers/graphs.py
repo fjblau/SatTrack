@@ -23,7 +23,8 @@ from database.graph_analytics import (
     analyze_collision_clusters,
     find_cross_constellation_proximity,
     find_country_cooperation_network,
-    find_function_based_clusters
+    find_function_based_clusters,
+    detect_communities
 )
 from api.services.cache_service import get_cache
 from api.services import collision_service, lineage_service
@@ -32,6 +33,7 @@ router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
 
 path_cache = get_cache("path_queries", ttl=3600, max_size=1000)
 centrality_cache = get_cache("centrality_queries", ttl=86400, max_size=500)
+community_cache = get_cache("community_queries", ttl=43200, max_size=200)
 
 
 @router.get("/constellation/{constellation_name}")
@@ -2160,4 +2162,99 @@ def get_lineage_statistics_endpoint():
         raise HTTPException(
             status_code=500,
             detail=f"Error retrieving lineage statistics: {str(e)}"
+        )
+
+
+@router.get("/communities")
+def get_communities(
+    algorithm: str = Query(
+        default="label_propagation",
+        description="Community detection algorithm: 'connected_components' or 'label_propagation'"
+    ),
+    min_size: int = Query(
+        default=2,
+        description="Minimum community size",
+        ge=2,
+        le=100
+    ),
+    edge_types: Optional[List[str]] = Query(
+        default=None,
+        description="Optional list of edge types to consider"
+    )
+):
+    """
+    Detect communities in the satellite network.
+    
+    Communities are groups of satellites that are more densely connected to each
+    other than to the rest of the network. This endpoint supports multiple
+    detection algorithms:
+    
+    - **label_propagation**: Fast iterative algorithm where nodes adopt the most
+      common label among their neighbors. Good for large graphs and detecting
+      overlapping community structures.
+    
+    - **connected_components**: Finds isolated clusters of connected satellites.
+      Useful for identifying completely separate network segments.
+    
+    Args:
+        algorithm: Detection algorithm to use
+        min_size: Minimum number of satellites in a community
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        List of detected communities with members, statistics, and characteristics.
+        Results are cached for 12 hours to improve performance.
+    
+    Example:
+        GET /v2/graphs/communities?algorithm=label_propagation&min_size=5
+    """
+    try:
+        cache_key = f"{algorithm}:{min_size}:{','.join(edge_types) if edge_types else 'all'}"
+        
+        cached_result = community_cache.get(cache_key)
+        if cached_result is not None:
+            return {
+                "data": cached_result,
+                "cached": True,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        valid_algorithms = ["connected_components", "label_propagation"]
+        if algorithm not in valid_algorithms:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid algorithm. Must be one of: {', '.join(valid_algorithms)}"
+            )
+        
+        communities = detect_communities(
+            algorithm=algorithm,
+            edge_types=edge_types,
+            min_community_size=min_size
+        )
+        
+        result = {
+            "communities": communities,
+            "algorithm": algorithm,
+            "stats": {
+                "total_communities": len(communities),
+                "total_satellites": sum(c.get("size", 0) for c in communities),
+                "min_community_size": min_size,
+                "edge_types": edge_types or ["all"]
+            }
+        }
+        
+        community_cache.set(cache_key, result)
+        
+        return {
+            "data": result,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error detecting communities: {str(e)}"
         )

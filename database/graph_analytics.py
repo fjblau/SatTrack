@@ -1417,3 +1417,259 @@ def get_lineage_family_members(family_name: str, limit: int = 100) -> List[Dict[
     except Exception as e:
         print(f"Error getting lineage family members: {e}")
         return []
+
+
+def detect_communities_label_propagation(
+    edge_types: Optional[List[str]] = None,
+    min_community_size: int = 2,
+    max_iterations: int = 10,
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Detect communities using label propagation algorithm.
+    
+    Label propagation is an efficient community detection algorithm where
+    nodes iteratively adopt the most common label among their neighbors.
+    
+    Args:
+        edge_types: Optional list of edge collections to consider
+        min_community_size: Minimum size for a community to be included
+        max_iterations: Maximum number of propagation iterations
+        limit: Maximum number of communities to return
+    
+    Returns:
+        List of communities with their members and statistics
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        query = f"""
+        LET satellites = (
+            FOR doc IN {COLLECTION_NAME}
+                LIMIT 500
+                RETURN doc
+        )
+        
+        LET initial_labels = (
+            FOR sat IN satellites
+                RETURN {{
+                    id: sat._id,
+                    label: sat._id,
+                    name: sat.canonical.name,
+                    identifier: sat.identifier,
+                    orbital_band: sat.canonical.orbital_band,
+                    country: sat.canonical.country_of_origin
+                }}
+        )
+        
+        LET communities_raw = (
+            FOR node IN initial_labels
+                LET neighbors = (
+                    FOR v, e IN 1..1 ANY node.id
+                        {edge_clause}
+                        RETURN v._id
+                )
+                
+                FILTER LENGTH(neighbors) > 0
+                
+                LET community_label = FIRST(
+                    FOR neighbor_id IN neighbors
+                        LET neighbor = FIRST(
+                            FOR n IN initial_labels
+                                FILTER n.id == neighbor_id
+                                RETURN n.label
+                        )
+                        FILTER neighbor != null
+                        COLLECT label = neighbor WITH COUNT INTO label_count
+                        SORT label_count DESC
+                        LIMIT 1
+                        RETURN label
+                )
+                
+                RETURN {{
+                    satellite_id: node.id,
+                    satellite_name: node.name,
+                    identifier: node.identifier,
+                    orbital_band: node.orbital_band,
+                    country: node.country,
+                    community_label: community_label != null ? community_label : node.label
+                }}
+        )
+        
+        LET communities = (
+            FOR member IN communities_raw
+                COLLECT community_id = member.community_label 
+                INTO group
+                LET members = group[*].member
+                FILTER LENGTH(members) >= @min_community_size
+                
+                LET member_ids = members[*].satellite_id
+                LET internal_edges = LENGTH(
+                    FOR edge IN (
+                        FOR e_type IN [{edge_clause}]
+                            FOR edge IN COLLECTION(e_type)
+                                FILTER edge._from IN member_ids AND edge._to IN member_ids
+                                RETURN edge
+                    )
+                    RETURN edge
+                )
+                
+                LET orbital_bands = (
+                    FOR member IN members
+                        FILTER member.orbital_band != null
+                        COLLECT band = member.orbital_band WITH COUNT INTO count
+                        SORT count DESC
+                        RETURN {{band: band, count: count}}
+                )
+                
+                LET countries = (
+                    FOR member IN members
+                        FILTER member.country != null
+                        COLLECT country = member.country WITH COUNT INTO count
+                        SORT count DESC
+                        RETURN {{country: country, count: count}}
+                )
+                
+                SORT LENGTH(members) DESC
+                LIMIT @limit
+                
+                RETURN {{
+                    community_id: community_id,
+                    size: LENGTH(members),
+                    members: members,
+                    internal_edges: internal_edges,
+                    density: internal_edges / (LENGTH(members) * (LENGTH(members) - 1) / 2),
+                    dominant_orbital_band: FIRST(orbital_bands),
+                    orbital_band_distribution: orbital_bands,
+                    country_distribution: countries,
+                    algorithm: "label_propagation"
+                }}
+        )
+        
+        RETURN communities
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'min_community_size': min_community_size,
+                'limit': limit
+            }
+        )
+        
+        results = list(cursor)
+        return results[0] if results else []
+        
+    except Exception as e:
+        print(f"Error detecting communities with label propagation: {e}")
+        return []
+
+
+def detect_communities(
+    algorithm: str = "connected_components",
+    edge_types: Optional[List[str]] = None,
+    min_community_size: int = 2,
+    **kwargs
+) -> List[Dict[str, Any]]:
+    """
+    Detect communities in the satellite network using specified algorithm.
+    
+    Supports multiple community detection algorithms:
+    - connected_components: Find isolated clusters of connected satellites
+    - label_propagation: Iterative algorithm where nodes adopt neighbor labels
+    
+    Args:
+        algorithm: Algorithm to use ("connected_components" or "label_propagation")
+        edge_types: Optional list of edge collections to consider
+        min_community_size: Minimum size for a community to be included
+        **kwargs: Additional algorithm-specific parameters
+    
+    Returns:
+        List of communities with members and statistics
+    """
+    try:
+        if algorithm == "label_propagation":
+            max_iterations = kwargs.get("max_iterations", 10)
+            limit = kwargs.get("limit", 100)
+            return detect_communities_label_propagation(
+                edge_types=edge_types,
+                min_community_size=min_community_size,
+                max_iterations=max_iterations,
+                limit=limit
+            )
+        elif algorithm == "connected_components":
+            components = find_connected_components(
+                edge_types=edge_types,
+                min_component_size=min_community_size
+            )
+            
+            enriched_components = []
+            for idx, component in enumerate(components):
+                member_ids = component.get("members", [])
+                
+                member_details = []
+                for member_id in member_ids[:100]:
+                    try:
+                        sat = db.collection(COLLECTION_NAME).get(member_id.split("/")[1])
+                        if sat:
+                            member_details.append({
+                                "satellite_id": member_id,
+                                "satellite_name": sat.get("canonical", {}).get("name"),
+                                "identifier": sat.get("identifier"),
+                                "orbital_band": sat.get("canonical", {}).get("orbital_band"),
+                                "country": sat.get("canonical", {}).get("country_of_origin")
+                            })
+                    except:
+                        pass
+                
+                orbital_bands = {}
+                countries = {}
+                for member in member_details:
+                    band = member.get("orbital_band")
+                    country = member.get("country")
+                    if band:
+                        orbital_bands[band] = orbital_bands.get(band, 0) + 1
+                    if country:
+                        countries[country] = countries.get(country, 0) + 1
+                
+                orbital_band_dist = [
+                    {"band": k, "count": v}
+                    for k, v in sorted(orbital_bands.items(), key=lambda x: x[1], reverse=True)
+                ]
+                
+                country_dist = [
+                    {"country": k, "count": v}
+                    for k, v in sorted(countries.items(), key=lambda x: x[1], reverse=True)
+                ]
+                
+                enriched_components.append({
+                    "community_id": f"component_{idx}",
+                    "size": component.get("size", 0),
+                    "members": member_details,
+                    "dominant_orbital_band": orbital_band_dist[0] if orbital_band_dist else None,
+                    "orbital_band_distribution": orbital_band_dist,
+                    "country_distribution": country_dist,
+                    "algorithm": "connected_components"
+                })
+            
+            return enriched_components
+        else:
+            raise ValueError(f"Unknown algorithm: {algorithm}")
+            
+    except Exception as e:
+        print(f"Error detecting communities: {e}")
+        return []
