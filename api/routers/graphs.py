@@ -13,12 +13,19 @@ from database import (
     EDGE_COLLECTION_PROXIMITY,
     GRAPH_NAME
 )
-from database.graph_analytics import find_shortest_path, find_all_paths
+from database.graph_analytics import (
+    find_shortest_path,
+    find_all_paths,
+    calculate_degree_centrality,
+    calculate_betweenness_centrality,
+    calculate_closeness_centrality
+)
 from api.services.cache_service import get_cache
 
 router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
 
 path_cache = get_cache("path_queries", ttl=3600, max_size=1000)
+centrality_cache = get_cache("centrality_queries", ttl=86400, max_size=500)
 
 
 @router.get("/constellation/{constellation_name}")
@@ -1386,6 +1393,141 @@ def get_path_cache_stats():
     Returns cache hit rate, size, and other performance metrics.
     """
     stats = path_cache.get_stats()
+    return {
+        "data": stats,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.get("/analytics/centrality")
+def get_centrality_analysis(
+    metric: str = Query(
+        default="degree",
+        description="Centrality metric: 'degree', 'betweenness', or 'closeness'"
+    ),
+    edge_types: Optional[List[str]] = Query(
+        default=None,
+        description="Edge collection names to consider"
+    ),
+    limit: int = Query(
+        default=50,
+        description="Maximum number of results to return",
+        ge=1,
+        le=200
+    ),
+    sample_size: Optional[int] = Query(
+        default=100,
+        description="Sample size for betweenness calculation (betweenness only)",
+        ge=10,
+        le=500
+    ),
+    max_depth: Optional[int] = Query(
+        default=5,
+        description="Maximum depth for closeness calculation (closeness only)",
+        ge=1,
+        le=10
+    )
+):
+    """
+    Calculate centrality metrics for satellites in the graph.
+    
+    Centrality metrics identify the most important nodes in the network:
+    
+    - **degree**: Number of direct connections (fast, good for identifying hubs)
+    - **betweenness**: How often a node appears on shortest paths (identifies bridges)
+    - **closeness**: How close a node is to all others (identifies nodes with quick access)
+    
+    Args:
+        metric: Centrality metric to calculate
+        edge_types: Optional list of edge collections to consider
+        limit: Maximum number of results (1-200)
+        sample_size: Sample size for betweenness (10-500, betweenness only)
+        max_depth: Maximum depth for closeness (1-10, closeness only)
+    
+    Returns:
+        List of satellites with their centrality scores, sorted by score descending
+    """
+    if metric not in ["degree", "betweenness", "closeness"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid metric: {metric}. Use 'degree', 'betweenness', or 'closeness'"
+        )
+    
+    cache_key = hashlib.md5(
+        json.dumps({
+            "metric": metric,
+            "edge_types": sorted(edge_types) if edge_types else None,
+            "limit": limit,
+            "sample_size": sample_size if metric == "betweenness" else None,
+            "max_depth": max_depth if metric == "closeness" else None
+        }, sort_keys=True).encode()
+    ).hexdigest()
+    
+    cached_result = centrality_cache.get(cache_key)
+    if cached_result is not None:
+        return {
+            "data": cached_result,
+            "cached": True,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    try:
+        if metric == "degree":
+            results = calculate_degree_centrality(
+                edge_types=edge_types,
+                limit=limit
+            )
+        elif metric == "betweenness":
+            results = calculate_betweenness_centrality(
+                edge_types=edge_types,
+                limit=limit,
+                sample_size=sample_size
+            )
+        elif metric == "closeness":
+            results = calculate_closeness_centrality(
+                edge_types=edge_types,
+                limit=limit,
+                max_depth=max_depth
+            )
+        
+        response_data = {
+            "metric": metric,
+            "satellites": results,
+            "count": len(results),
+            "parameters": {
+                "edge_types": edge_types,
+                "limit": limit
+            }
+        }
+        
+        if metric == "betweenness":
+            response_data["parameters"]["sample_size"] = sample_size
+        elif metric == "closeness":
+            response_data["parameters"]["max_depth"] = max_depth
+        
+        centrality_cache.set(cache_key, response_data)
+        
+        return {
+            "data": response_data,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calculating {metric} centrality: {str(e)}"
+        )
+
+
+@router.get("/analytics/centrality/cache/stats")
+def get_centrality_cache_stats():
+    """
+    Get statistics about the centrality query cache.
+    
+    Returns cache hit rate, size, and other performance metrics.
+    """
+    stats = centrality_cache.get_stats()
     return {
         "data": stats,
         "timestamp": datetime.now(timezone.utc).isoformat()

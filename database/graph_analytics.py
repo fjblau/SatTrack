@@ -394,6 +394,169 @@ def count_edges_by_type(vertex_id: str) -> Dict[str, int]:
         return {}
 
 
+def calculate_betweenness_centrality(
+    edge_types: Optional[List[str]] = None,
+    limit: int = 100,
+    sample_size: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Calculate betweenness centrality for satellites.
+    
+    Betweenness centrality measures how often a node appears on shortest paths
+    between other nodes. Higher scores indicate nodes that serve as bridges
+    in the network.
+    
+    Args:
+        edge_types: Optional list of edge collections to consider
+        limit: Maximum number of results to return
+        sample_size: Number of nodes to sample for path calculations
+    
+    Returns:
+        List of satellites with their betweenness centrality scores
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        query = f"""
+        LET sample_nodes = (
+            FOR doc IN {COLLECTION_NAME}
+                LIMIT @sample_size
+                RETURN doc._id
+        )
+        
+        FOR node IN {COLLECTION_NAME}
+            LET betweenness = SUM(
+                FOR source IN sample_nodes
+                    FILTER source != node._id
+                    FOR target IN sample_nodes
+                        FILTER target != node._id AND target != source
+                        LET path = (
+                            FOR v, e, p IN 1..5 OUTBOUND source
+                                {edge_clause}
+                                FILTER v._id == target
+                                LIMIT 1
+                                RETURN p.vertices
+                        )
+                        RETURN LENGTH(path) > 0 AND node._id IN path[0] ? 1 : 0
+            )
+            FILTER betweenness > 0
+            SORT betweenness DESC
+            LIMIT @limit
+            RETURN {{
+                _id: node._id,
+                identifier: node.identifier,
+                name: node.canonical.name,
+                betweenness_centrality: betweenness,
+                normalized_score: betweenness / (@sample_size * (@sample_size - 1))
+            }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'limit': limit,
+                'sample_size': sample_size
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error calculating betweenness centrality: {e}")
+        return []
+
+
+def calculate_closeness_centrality(
+    edge_types: Optional[List[str]] = None,
+    limit: int = 100,
+    max_depth: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Calculate closeness centrality for satellites.
+    
+    Closeness centrality measures how close a node is to all other nodes
+    in the network. Higher scores indicate nodes that can reach others quickly.
+    
+    Args:
+        edge_types: Optional list of edge collections to consider
+        limit: Maximum number of results to return
+        max_depth: Maximum depth for reachability calculations
+    
+    Returns:
+        List of satellites with their closeness centrality scores
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        query = f"""
+        FOR node IN {COLLECTION_NAME}
+            LET reachable = (
+                FOR v, e, p IN 1..@max_depth ANY node._id
+                    {edge_clause}
+                    RETURN {{
+                        vertex: v._id,
+                        distance: LENGTH(p.vertices) - 1
+                    }}
+            )
+            LET total_distance = SUM(reachable[*].distance)
+            LET reachable_count = LENGTH(reachable)
+            FILTER reachable_count > 0
+            LET closeness = reachable_count / total_distance
+            SORT closeness DESC
+            LIMIT @limit
+            RETURN {{
+                _id: node._id,
+                identifier: node.identifier,
+                name: node.canonical.name,
+                closeness_centrality: closeness,
+                reachable_nodes: reachable_count,
+                avg_distance: total_distance / reachable_count
+            }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'limit': limit,
+                'max_depth': max_depth
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error calculating closeness centrality: {e}")
+        return []
+
+
 def find_connected_components(
     edge_types: Optional[List[str]] = None,
     min_component_size: int = 2

@@ -4,6 +4,8 @@ from database.graph_analytics import (
     find_shortest_path,
     find_all_paths,
     calculate_degree_centrality,
+    calculate_betweenness_centrality,
+    calculate_closeness_centrality,
     traverse_graph,
     get_neighbors,
     count_edges_by_type,
@@ -312,6 +314,153 @@ class TestGraphAnalytics(unittest.TestCase):
         result = traverse_graph("satellites/SAT1")
         
         self.assertEqual(result, [])
+    
+    @patch('database.graph_analytics.db')
+    def test_calculate_betweenness_centrality(self, mock_db):
+        """Test calculating betweenness centrality"""
+        mock_cursor = MagicMock()
+        mock_cursor.__iter__ = Mock(return_value=iter([
+            {
+                "_id": "satellites/SAT1",
+                "identifier": "2025-001A",
+                "name": "Test Sat 1",
+                "betweenness_centrality": 25,
+                "normalized_score": 0.0025
+            },
+            {
+                "_id": "satellites/SAT2",
+                "identifier": "2025-002A",
+                "name": "Test Sat 2",
+                "betweenness_centrality": 18,
+                "normalized_score": 0.0018
+            }
+        ]))
+        mock_db.aql.execute.return_value = mock_cursor
+        
+        result = calculate_betweenness_centrality(limit=2, sample_size=100)
+        
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["betweenness_centrality"], 25)
+        self.assertEqual(result[1]["betweenness_centrality"], 18)
+        self.assertIn("normalized_score", result[0])
+    
+    @patch('database.graph_analytics.db')
+    def test_calculate_betweenness_centrality_with_edge_types(self, mock_db):
+        """Test calculating betweenness centrality for specific edge types"""
+        mock_cursor = MagicMock()
+        mock_cursor.__iter__ = Mock(return_value=iter([]))
+        mock_db.aql.execute.return_value = mock_cursor
+        
+        result = calculate_betweenness_centrality(
+            edge_types=["orbital_proximity"],
+            limit=10,
+            sample_size=50
+        )
+        
+        call_args = mock_db.aql.execute.call_args
+        query = call_args[0][0]
+        self.assertIn("orbital_proximity", query)
+        bind_vars = call_args[1]['bind_vars']
+        self.assertEqual(bind_vars['sample_size'], 50)
+        self.assertEqual(bind_vars['limit'], 10)
+    
+    @patch('database.graph_analytics.db')
+    def test_calculate_closeness_centrality(self, mock_db):
+        """Test calculating closeness centrality"""
+        mock_cursor = MagicMock()
+        mock_cursor.__iter__ = Mock(return_value=iter([
+            {
+                "_id": "satellites/SAT1",
+                "identifier": "2025-001A",
+                "name": "Test Sat 1",
+                "closeness_centrality": 0.85,
+                "reachable_nodes": 50,
+                "avg_distance": 2.3
+            },
+            {
+                "_id": "satellites/SAT2",
+                "identifier": "2025-002A",
+                "name": "Test Sat 2",
+                "closeness_centrality": 0.72,
+                "reachable_nodes": 45,
+                "avg_distance": 2.8
+            }
+        ]))
+        mock_db.aql.execute.return_value = mock_cursor
+        
+        result = calculate_closeness_centrality(limit=2, max_depth=5)
+        
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["closeness_centrality"], 0.85)
+        self.assertEqual(result[1]["closeness_centrality"], 0.72)
+        self.assertIn("reachable_nodes", result[0])
+        self.assertIn("avg_distance", result[0])
+    
+    @patch('database.graph_analytics.db')
+    def test_calculate_closeness_centrality_with_edge_types(self, mock_db):
+        """Test calculating closeness centrality for specific edge types"""
+        mock_cursor = MagicMock()
+        mock_cursor.__iter__ = Mock(return_value=iter([]))
+        mock_db.aql.execute.return_value = mock_cursor
+        
+        result = calculate_closeness_centrality(
+            edge_types=["constellation_membership"],
+            limit=15,
+            max_depth=3
+        )
+        
+        call_args = mock_db.aql.execute.call_args
+        query = call_args[0][0]
+        self.assertIn("constellation_membership", query)
+        bind_vars = call_args[1]['bind_vars']
+        self.assertEqual(bind_vars['max_depth'], 3)
+        self.assertEqual(bind_vars['limit'], 15)
+    
+    @patch('database.graph_analytics.db')
+    def test_error_handling_betweenness_centrality(self, mock_db):
+        """Test error handling in calculate_betweenness_centrality"""
+        mock_db.aql.execute.side_effect = Exception("Database error")
+        
+        result = calculate_betweenness_centrality()
+        
+        self.assertEqual(result, [])
+    
+    @patch('database.graph_analytics.db')
+    def test_error_handling_closeness_centrality(self, mock_db):
+        """Test error handling in calculate_closeness_centrality"""
+        mock_db.aql.execute.side_effect = Exception("Database error")
+        
+        result = calculate_closeness_centrality()
+        
+        self.assertEqual(result, [])
+    
+    @patch('database.graph_analytics.db')
+    def test_betweenness_centrality_default_parameters(self, mock_db):
+        """Test betweenness centrality with default parameters"""
+        mock_cursor = MagicMock()
+        mock_cursor.__iter__ = Mock(return_value=iter([]))
+        mock_db.aql.execute.return_value = mock_cursor
+        
+        result = calculate_betweenness_centrality()
+        
+        call_args = mock_db.aql.execute.call_args
+        bind_vars = call_args[1]['bind_vars']
+        self.assertEqual(bind_vars['limit'], 100)
+        self.assertEqual(bind_vars['sample_size'], 100)
+    
+    @patch('database.graph_analytics.db')
+    def test_closeness_centrality_default_parameters(self, mock_db):
+        """Test closeness centrality with default parameters"""
+        mock_cursor = MagicMock()
+        mock_cursor.__iter__ = Mock(return_value=iter([]))
+        mock_db.aql.execute.return_value = mock_cursor
+        
+        result = calculate_closeness_centrality()
+        
+        call_args = mock_db.aql.execute.call_args
+        bind_vars = call_args[1]['bind_vars']
+        self.assertEqual(bind_vars['limit'], 100)
+        self.assertEqual(bind_vars['max_depth'], 5)
 
 
 if __name__ == "__main__":
