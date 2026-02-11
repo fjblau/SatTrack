@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Query, HTTPException
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone
+import hashlib
+import json
 
 import database.connection as db_conn
 from database import (
@@ -11,8 +13,12 @@ from database import (
     EDGE_COLLECTION_PROXIMITY,
     GRAPH_NAME
 )
+from database.graph_analytics import find_shortest_path, find_all_paths
+from api.services.cache_service import get_cache
 
 router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
+
+path_cache = get_cache("path_queries", ttl=3600, max_size=1000)
 
 
 @router.get("/constellation/{constellation_name}")
@@ -1259,3 +1265,128 @@ def get_country_relations_graph(
             },
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+
+@router.get("/paths/{from_id}/{to_id}")
+def get_path_between_satellites(
+    from_id: str,
+    to_id: str,
+    max_depth: Optional[int] = Query(default=10, description="Maximum traversal depth", ge=1, le=20),
+    edge_types: Optional[List[str]] = Query(default=None, description="Edge collection names to traverse"),
+    algorithm: Optional[str] = Query(default="shortest", description="Path finding algorithm: 'shortest' or 'all'")
+):
+    """
+    Find paths between two satellites in the graph.
+    
+    Args:
+        from_id: Source satellite ID (e.g., '2025-206B' or 'satellites/2025-206B')
+        to_id: Target satellite ID
+        max_depth: Maximum number of hops to search (1-20)
+        edge_types: Optional list of edge collections to traverse
+        algorithm: 'shortest' for single shortest path, 'all' for all paths up to max_depth
+    
+    Returns:
+        Path information including vertices, edges, and distance
+    """
+    if not from_id or not to_id:
+        raise HTTPException(status_code=400, detail="Both from_id and to_id are required")
+    
+    from_doc_id = from_id if from_id.startswith("satellites/") else f"satellites/{from_id}"
+    to_doc_id = to_id if to_id.startswith("satellites/") else f"satellites/{to_id}"
+    
+    cache_key = hashlib.md5(
+        json.dumps({
+            "from": from_doc_id,
+            "to": to_doc_id,
+            "max_depth": max_depth,
+            "edge_types": sorted(edge_types) if edge_types else None,
+            "algorithm": algorithm
+        }, sort_keys=True).encode()
+    ).hexdigest()
+    
+    cached_result = path_cache.get(cache_key)
+    if cached_result is not None:
+        return {
+            "data": cached_result,
+            "cached": True,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    try:
+        if algorithm == "shortest":
+            result = find_shortest_path(
+                from_id=from_doc_id,
+                to_id=to_doc_id,
+                edge_types=edge_types,
+                max_depth=max_depth
+            )
+            
+            if result is None:
+                response_data = {
+                    "from_id": from_doc_id,
+                    "to_id": to_doc_id,
+                    "path_found": False,
+                    "message": f"No path found between {from_id} and {to_id} within {max_depth} hops"
+                }
+            else:
+                response_data = {
+                    "from_id": from_doc_id,
+                    "to_id": to_doc_id,
+                    "path_found": True,
+                    "path": result,
+                    "algorithm": "shortest"
+                }
+        
+        elif algorithm == "all":
+            paths = find_all_paths(
+                from_id=from_doc_id,
+                to_id=to_doc_id,
+                edge_types=edge_types,
+                max_depth=max_depth,
+                limit=10
+            )
+            
+            response_data = {
+                "from_id": from_doc_id,
+                "to_id": to_doc_id,
+                "path_found": len(paths) > 0,
+                "paths": paths,
+                "path_count": len(paths),
+                "algorithm": "all"
+            }
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid algorithm: {algorithm}. Use 'shortest' or 'all'"
+            )
+        
+        path_cache.set(cache_key, response_data)
+        
+        return {
+            "data": response_data,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        if "document not found" in str(e).lower():
+            raise HTTPException(
+                status_code=404,
+                detail=f"One or both satellites not found: {from_id}, {to_id}"
+            )
+        raise HTTPException(status_code=500, detail=f"Error finding path: {str(e)}")
+
+
+@router.get("/paths/cache/stats")
+def get_path_cache_stats():
+    """
+    Get statistics about the path query cache.
+    
+    Returns cache hit rate, size, and other performance metrics.
+    """
+    stats = path_cache.get_stats()
+    return {
+        "data": stats,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
