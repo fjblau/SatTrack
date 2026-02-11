@@ -18,6 +18,16 @@ export const API_ENDPOINTS = {
     LAUNCH_TIMELINE_BREAKDOWN: '/v2/graphs/launch-timeline/breakdown',
     LAUNCH_TIMELINE_MONTHLY: '/v2/graphs/launch-timeline/monthly',
     LAUNCH_TIMELINE_BREAKDOWN_MONTHLY: '/v2/graphs/launch-timeline/breakdown/monthly',
+    PATHS: '/v2/graphs/paths',
+    CENTRALITY: '/v2/graphs/analytics/centrality',
+    COLLISION_RISKS: '/v2/graphs/collision-risks',
+    COLLISION_RISKS_NETWORK: '/v2/graphs/collision-risks/network/graph',
+    COLLISION_RISKS_CLUSTERS: '/v2/graphs/collision-risks/clusters',
+    CROSS_CONSTELLATION_PROXIMITY: '/v2/graphs/cross-constellation-proximity',
+    COUNTRY_COOPERATION: '/v2/graphs/country-cooperation-network',
+    FUNCTION_CLUSTERS: '/v2/graphs/function-clusters',
+    LINEAGE: '/v2/graphs/lineage',
+    COMMUNITIES: '/v2/graphs/communities',
   },
   
   DOCUMENTS: {
