@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import GraphViewer from './GraphViewer'
 import PathFinderPanel from './PathFinderPanel'
-import CentralityView from './CentralityView'
 import CollisionRiskView from './CollisionRiskView'
-import EvolutionTimelineView from './EvolutionTimelineView'
+import ConstellationBrowser from './ConstellationBrowser'
+import SatelliteNeighborhood from './SatelliteNeighborhood'
 import './GraphExplorer.css'
 import { API_ENDPOINTS, GRAPH_SETTINGS, UI_TEXT } from '../config/constants'
 
@@ -21,17 +21,12 @@ function GraphExplorer() {
   const [selectedCountries, setSelectedCountries] = useState([])
   const [loading, setLoading] = useState(false)
   const [pathData, setPathData] = useState(null)
-  const [centralityData, setCentralityData] = useState(null)
-  const [centralityMetric, setCentralityMetric] = useState(null)
   const [collisionRiskData, setCollisionRiskData] = useState(null)
   const [collisionViewType, setCollisionViewType] = useState(null)
-  const [evolutionTimelineData, setEvolutionTimelineData] = useState(null)
   const [selectedSatellite, setSelectedSatellite] = useState(null)
   const [satelliteSearchQuery, setSatelliteSearchQuery] = useState('')
   const [satelliteSearchResults, setSatelliteSearchResults] = useState([])
   const [searchingsatellite, setSearchingsatellite] = useState(false)
-  const [communityAlgorithm, setCommunityAlgorithm] = useState('label_propagation')
-  const [communityMinSize, setCommunityMinSize] = useState(3)
 
   useEffect(() => {
     loadGraphStats()
@@ -197,10 +192,16 @@ function GraphExplorer() {
             Path Finder
           </button>
           <button 
-            className={graphType === 'centrality' ? 'active' : ''}
-            onClick={() => setGraphType('centrality')}
+            className={graphType === 'constellation-browser' ? 'active' : ''}
+            onClick={() => setGraphType('constellation-browser')}
           >
-            Centrality Analysis
+            Constellation Browser
+          </button>
+          <button 
+            className={graphType === 'neighborhood' ? 'active' : ''}
+            onClick={() => setGraphType('neighborhood')}
+          >
+            Satellite Neighborhood
           </button>
           <button 
             className={graphType === 'collision' ? 'active' : ''}
@@ -213,18 +214,6 @@ function GraphExplorer() {
             onClick={() => setGraphType('lineage')}
           >
             Satellite Lineage
-          </button>
-          <button 
-            className={graphType === 'communities' ? 'active' : ''}
-            onClick={() => setGraphType('communities')}
-          >
-            Communities
-          </button>
-          <button 
-            className={graphType === 'evolution' ? 'active' : ''}
-            onClick={() => setGraphType('evolution')}
-          >
-            Graph Evolution
           </button>
         </div>
 
@@ -348,12 +337,24 @@ function GraphExplorer() {
           </div>
         )}
 
-        {graphType === 'centrality' && (
+        {graphType === 'constellation-browser' && (
           <div className="selector-content">
-            <CentralityView onCentralitySelect={(data, metric) => {
-              setCentralityData(data)
-              setCentralityMetric(metric)
-            }} />
+            <ConstellationBrowser 
+              constellations={constellations}
+              onConstellationSelect={(data, name) => {
+                // Data is passed to GraphViewer via the component itself
+              }}
+            />
+          </div>
+        )}
+
+        {graphType === 'neighborhood' && (
+          <div className="selector-content">
+            <SatelliteNeighborhood 
+              onNeighborhoodLoad={(data, satellite) => {
+                // Data is passed to GraphViewer via the component itself
+              }}
+            />
           </div>
         )}
 
@@ -478,76 +479,16 @@ function GraphExplorer() {
           </div>
         )}
 
-        {graphType === 'communities' && (
-          <div className="selector-content">
-            <h3>Community Detection</h3>
-            <p className="section-description">Discover clusters and communities in the satellite network</p>
-            
-            <div style={{ marginTop: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                Detection Algorithm:
-              </label>
-              <select
-                value={communityAlgorithm}
-                onChange={(e) => setCommunityAlgorithm(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '0.9rem',
-                  backgroundColor: 'white'
-                }}
-              >
-                <option value="label_propagation">Label Propagation</option>
-                <option value="connected_components">Connected Components</option>
-              </select>
-            </div>
-            
-            <div style={{ marginTop: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                Minimum Community Size:
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="50"
-                value={communityMinSize}
-                onChange={(e) => setCommunityMinSize(parseInt(e.target.value) || 1)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '0.9rem'
-                }}
-              />
-              <p style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
-                Filter out communities with fewer members than this
-              </p>
-            </div>
-            
-            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1.5rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-              💡 Communities are automatically detected based on satellite relationships. Nodes with the same color belong to the same community.
-            </p>
-          </div>
-        )}
 
-        {graphType === 'evolution' && (
-          <div className="selector-content">
-            <h3>Graph Evolution Timeline</h3>
-            <p className="section-description">Visualize how the satellite network has grown over time</p>
-            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1rem' }}>
-              Track node count, edge count, density, and growth metrics across different time periods.
-            </p>
-          </div>
-        )}
 
       </div>
 
       <div className="graph-main">
-        {graphType === 'evolution' ? (
-          <EvolutionTimelineView onTimelineLoad={(data) => setEvolutionTimelineData(data)} />
+        {graphType === 'constellation-browser' || graphType === 'neighborhood' ? (
+          <div className="info-message">
+            <p>Interactive graph visualization appears in the left panel for these views.</p>
+            <p>Select an item to explore the network connections.</p>
+          </div>
         ) : (
           <GraphViewer 
             graphType={graphType}
@@ -557,13 +498,9 @@ function GraphExplorer() {
             selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
             selectedCountries={graphType === 'country' ? selectedCountries : null}
             pathData={graphType === 'paths' ? pathData : null}
-            centralityData={graphType === 'centrality' ? centralityData : null}
-            centralityMetric={graphType === 'centrality' ? centralityMetric : null}
             collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
             collisionViewType={graphType === 'collision' ? collisionViewType : null}
             selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
-            communityAlgorithm={graphType === 'communities' ? communityAlgorithm : null}
-            communityMinSize={graphType === 'communities' ? communityMinSize : null}
           />
         )}
       </div>

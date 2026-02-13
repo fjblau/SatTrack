@@ -164,6 +164,168 @@ def get_constellation_graph(
         }
 
 
+@router.get("/satellite/{satellite_id}/neighborhood")
+def get_satellite_neighborhood(
+    satellite_id: str,
+    depth: int = Query(default=2, ge=1, le=3, description="Traversal depth (1-3 hops)"),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum total nodes to return"),
+    edge_types: Optional[List[str]] = Query(
+        default=None,
+        description="Edge types to traverse (orbital_proximity, constellation_membership, registration_links)"
+    )
+):
+    """
+    Get the local neighborhood graph around a satellite.
+    
+    Returns all satellites within N hops of the source satellite, where N is the depth parameter.
+    Useful for exploring local network structure and finding related satellites.
+    
+    Parameters:
+        satellite_id: Source satellite identifier (e.g., "NORAD-44714")
+        depth: Number of hops to traverse (1-3, default: 2)
+        limit: Maximum total nodes to return (1-500, default: 100)
+        edge_types: Optional list of edge collections to traverse
+    
+    Returns:
+        Network graph with nodes and edges representing the satellite's neighborhood.
+    
+    Example:
+        GET /v2/graphs/satellite/NORAD-44714/neighborhood?depth=2&limit=100
+    """
+    try:
+        # Build full document ID
+        full_id = f"{COLLECTION_NAME}/{satellite_id}"
+        
+        # Determine edge collections
+        if edge_types:
+            edge_collections = []
+            mapping = {
+                'orbital_proximity': EDGE_COLLECTION_PROXIMITY,
+                'constellation_membership': EDGE_COLLECTION_CONSTELLATION,
+                'registration_links': EDGE_COLLECTION_REGISTRATION
+            }
+            for et in edge_types:
+                if et in mapping:
+                    edge_collections.append(mapping[et])
+        else:
+            # Default: use all edge types
+            edge_collections = [
+                EDGE_COLLECTION_PROXIMITY,
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION
+            ]
+        
+        edge_clause = ", ".join(edge_collections)
+        
+        query = f"""
+        LET source = DOCUMENT(@source_id)
+        
+        LET neighbors = (
+            FOR v, e, p IN 1..@depth ANY @source_id {edge_clause}
+                OPTIONS {{uniqueVertices: "global", bfs: true}}
+                LIMIT @limit
+                RETURN {{
+                    vertex: v,
+                    edge: e,
+                    path_length: LENGTH(p.edges)
+                }}
+        )
+        
+        LET nodes = APPEND(
+            [{{
+                id: source._id,
+                key: source._key,
+                identifier: source.identifier,
+                name: source.canonical.name,
+                country: source.canonical.country_of_origin,
+                orbital_band: source.canonical.orbital_band,
+                status: source.canonical.status,
+                launch_date: source.canonical.date_of_launch,
+                constellation: source.canonical.constellation,
+                is_source: true,
+                distance: 0
+            }}],
+            (
+                FOR n IN neighbors
+                    RETURN {{
+                        id: n.vertex._id,
+                        key: n.vertex._key,
+                        identifier: n.vertex.identifier,
+                        name: n.vertex.canonical.name,
+                        country: n.vertex.canonical.country_of_origin,
+                        orbital_band: n.vertex.canonical.orbital_band,
+                        status: n.vertex.canonical.status,
+                        launch_date: n.vertex.canonical.date_of_launch,
+                        constellation: n.vertex.canonical.constellation,
+                        is_source: false,
+                        distance: n.path_length
+                    }}
+            )
+        )
+        
+        LET edges = (
+            FOR n IN neighbors
+                RETURN {{
+                    id: n.edge._id,
+                    source: n.edge._from,
+                    target: n.edge._to,
+                    type: SPLIT(n.edge._id, "/")[0],
+                    constellation: n.edge.constellation_name,
+                    distance_km: n.edge.distance_km
+                }}
+        )
+        
+        RETURN {{
+            source_satellite: {{
+                id: source._id,
+                identifier: source.identifier,
+                name: source.canonical.name
+            }},
+            nodes: nodes,
+            edges: edges,
+            stats: {{
+                total_nodes: LENGTH(nodes),
+                total_edges: LENGTH(edges),
+                depth: @depth,
+                edge_types_used: @edge_types
+            }}
+        }}
+        """
+        
+        cursor = db_conn.db.aql.execute(
+            query,
+            bind_vars={
+                'source_id': full_id,
+                'depth': depth,
+                'limit': limit,
+                'edge_types': edge_types or ['all']
+            }
+        )
+        
+        results = list(cursor)
+        
+        if results and results[0]['nodes']:
+            return {
+                "data": results[0],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Satellite '{satellite_id}' not found or has no neighbors"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving neighborhood: {str(e)}"
+        )
+
+
 @router.get("/registration-document/{doc_key}")
 def get_registration_document_graph(
     doc_key: str,
