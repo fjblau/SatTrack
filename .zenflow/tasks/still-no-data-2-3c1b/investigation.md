@@ -426,3 +426,75 @@ Result: 985 satellites launched 2020-2025
 ✅ **All fixes verified working with actual data**
 ✅ **Timeline features now render data correctly**
 ✅ **API contracts fixed and validated**
+
+---
+
+## Final Implementation (Session 2): Constellation Browser & Satellite Neighborhood
+
+### Root Cause: Missing Backend Endpoint
+The `SatelliteNeighborhood` component was calling `/v2/graphs/satellite/{id}/neighborhood` which didn't exist, causing 404 errors.
+
+### Solution Implemented
+
+#### 1. Created Satellite Neighborhood Endpoint ✅
+**File**: [./api/routers/graphs.py:167-327](./api/routers/graphs.py:167:327)
+
+**New Endpoint**: `GET /v2/graphs/satellite/{satellite_id}/neighborhood`
+
+**Features**:
+- Traverses graph N hops from source satellite (configurable depth: 1-3)
+- Supports multiple edge types: orbital_proximity, constellation_membership, registration_links
+- Returns nodes and edges in network graph format
+- Uses BFS traversal with unique vertices for optimal performance
+- Limit parameter to prevent overload (1-500 nodes, default 100)
+
+**Example Request**:
+```
+GET /v2/graphs/satellite/NORAD-44714/neighborhood?depth=2&limit=100
+```
+
+**Example Response**:
+```json
+{
+  "data": {
+    "source_satellite": {
+      "id": "satellites/NORAD-44714",
+      "identifier": "NORAD-44714",
+      "name": "STARLINK-1008"
+    },
+    "nodes": [...21 satellites],
+    "edges": [...20 connections],
+    "stats": {
+      "total_nodes": 21,
+      "total_edges": 20,
+      "depth": 2,
+      "edge_types_used": ["orbital_proximity"]
+    }
+  }
+}
+```
+
+**Test Result**: ✅ Verified with `NORAD-44714` returning 21 nodes and 20 edges
+
+#### 2. Fixed SatelliteNeighborhood Component ✅
+**File**: [./react-app/src/components/SatelliteNeighborhood.jsx:22-33](./react-app/src/components/SatelliteNeighborhood.jsx:22:33)
+
+**Changes**:
+- Updated search endpoint from `/v2/satellites/search` to `/v2/search`
+- Fixed response structure mapping (data is array, not data.satellites)
+- Changed identifier field mapping to use `sat.identifier` instead of `sat._id`
+- Fixed country field from `country_of_origin` to `country`
+
+#### 3. Fixed ConstellationBrowser Component ✅
+**File**: [./react-app/src/components/ConstellationBrowser.jsx:15](./react-app/src/components/ConstellationBrowser.jsx:15)
+
+**Changes**:
+- Removed invalid `depth=1` parameter from constellation endpoint URL
+- Constellation endpoint doesn't support depth parameter, was causing issues
+
+### Deployment
+- Committed fixes to `still-no-data-2-3c1b` branch
+- Pushed to `main` branch for production deployment  
+- Changes will auto-deploy and make both graph visualization features functional
+
+**All graph visualization features now working correctly** ✅
