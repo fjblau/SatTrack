@@ -440,6 +440,534 @@ Retrieve statistics about graph data.
 
 ---
 
+#### Find Path Between Satellites
+
+```http
+GET /v2/graphs/paths/{from_id}/{to_id}
+```
+
+Find shortest or all paths between two satellites using graph traversal.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `from_id` | string | Yes | Source satellite NORAD ID |
+| `to_id` | string | Yes | Target satellite NORAD ID |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `algorithm` | string | No | Path algorithm: `shortest` (default) or `all` |
+| `max_depth` | integer | No | Maximum traversal depth (default: 10, max: 20) |
+| `edge_types` | array[string] | No | Edge types to traverse (default: all) |
+
+**Response:**
+
+```json
+{
+  "from": {
+    "norad_id": "25544",
+    "name": "ISS (ZARYA)"
+  },
+  "to": {
+    "norad_id": "48274",
+    "name": "TIANGONG"
+  },
+  "algorithm": "shortest",
+  "path": {
+    "vertices": [...],
+    "edges": [...],
+    "distance": 3
+  }
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/graphs/paths/25544/48274?algorithm=shortest&max_depth=5"
+```
+
+---
+
+#### Calculate Network Centrality
+
+```http
+GET /v2/graphs/analytics/centrality
+```
+
+Calculate centrality metrics to identify important nodes in the satellite network.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `metric` | string | Yes | Centrality metric: `degree`, `betweenness`, or `closeness` |
+| `edge_types` | array[string] | No | Edge types to include (default: all) |
+| `limit` | integer | No | Number of top results (default: 100, max: 500) |
+| `min_degree` | integer | No | Minimum degree for betweenness/closeness (default: 2) |
+
+**Response:**
+
+```json
+{
+  "metric": "degree",
+  "edge_types": ["constellation_membership", "orbital_proximity"],
+  "total_nodes_analyzed": 13452,
+  "results": [
+    {
+      "satellite": {
+        "norad_id": "25544",
+        "name": "ISS (ZARYA)"
+      },
+      "score": 0.85,
+      "degree": 342
+    }
+  ]
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/graphs/analytics/centrality?metric=degree&limit=50"
+```
+
+---
+
+#### Get Collision Risks
+
+```http
+GET /v2/graphs/collision-risks
+```
+
+Retrieve collision risk network showing satellites with potential collision risks.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `orbital_band` | string | No | Filter by orbital band (LEO, MEO, GEO) |
+| `min_risk_score` | float | No | Minimum risk score (0.0-1.0, default: 0.5) |
+| `limit` | integer | No | Maximum edges to return (default: 100, max: 1000) |
+
+**Response:**
+
+```json
+{
+  "orbital_band": "LEO",
+  "min_risk_score": 0.5,
+  "total_risk_edges": 1247,
+  "nodes": [...],
+  "edges": [
+    {
+      "from": "satellites/2025-001A",
+      "to": "satellites/2025-002B",
+      "risk_score": 0.85,
+      "min_distance_km": 12.5,
+      "crossing_time": "2025-02-15T12:30:00Z"
+    }
+  ]
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/graphs/collision-risks?orbital_band=LEO&min_risk_score=0.7"
+```
+
+---
+
+#### Get Collision Risks for Satellite
+
+```http
+GET /v2/graphs/collision-risks/{satellite_id}
+```
+
+Get collision risk edges for a specific satellite.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `satellite_id` | string | Yes | Satellite NORAD ID |
+
+**Response:**
+
+```json
+{
+  "satellite": {
+    "norad_id": "25544",
+    "name": "ISS (ZARYA)"
+  },
+  "risk_count": 23,
+  "risks": [...]
+}
+```
+
+---
+
+#### Get Collision Risk Statistics
+
+```http
+GET /v2/graphs/collision-risks/statistics
+```
+
+Retrieve collision risk statistics by orbital band.
+
+**Response:**
+
+```json
+{
+  "total_risk_edges": 3456,
+  "by_orbital_band": {
+    "LEO": 2890,
+    "MEO": 234,
+    "GEO": 332
+  },
+  "high_risk_count": 567
+}
+```
+
+---
+
+#### Get Collision Clusters
+
+```http
+GET /v2/graphs/collision-risks/clusters
+```
+
+Identify clusters of satellites with collision risks.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `orbital_band` | string | No | Filter by orbital band |
+| `min_cluster_size` | integer | No | Minimum cluster size (default: 3) |
+
+**Response:**
+
+```json
+{
+  "orbital_band": "LEO",
+  "clusters": [
+    {
+      "cluster_id": 0,
+      "size": 45,
+      "satellites": [...]
+    }
+  ]
+}
+```
+
+---
+
+#### Get Cross-Constellation Proximity
+
+```http
+GET /v2/graphs/cross-constellation-proximity
+```
+
+Find satellites from different constellations in orbital proximity.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `orbital_band` | string | No | Filter by orbital band |
+| `limit` | integer | No | Maximum results (default: 100, max: 500) |
+
+**Response:**
+
+```json
+{
+  "orbital_band": "LEO",
+  "total_matches": 234,
+  "relationships": [
+    {
+      "satellite1": {...},
+      "satellite2": {...},
+      "constellation1": "Starlink",
+      "constellation2": "OneWeb",
+      "proximity_km": 45.2
+    }
+  ]
+}
+```
+
+---
+
+#### Get Country Cooperation Network
+
+```http
+GET /v2/graphs/country-cooperation-network
+```
+
+Analyze country relationships through shared satellites and documents.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `min_connections` | integer | No | Minimum shared satellites (default: 1) |
+
+**Response:**
+
+```json
+{
+  "countries": [...],
+  "connections": [
+    {
+      "country1": "USA",
+      "country2": "RUS",
+      "shared_satellites": 5,
+      "shared_documents": 2
+    }
+  ]
+}
+```
+
+---
+
+#### Get Function-Based Clusters
+
+```http
+GET /v2/graphs/function-clusters
+```
+
+Find satellite clusters based on function and orbital proximity.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `orbital_band` | string | No | Filter by orbital band |
+| `min_cluster_size` | integer | No | Minimum cluster size (default: 5) |
+
+**Response:**
+
+```json
+{
+  "clusters": [
+    {
+      "function": "Earth Observation",
+      "orbital_band": "LEO",
+      "satellites": [...]
+    }
+  ]
+}
+```
+
+---
+
+#### Get Satellite Lineage
+
+```http
+GET /v2/graphs/lineage/{satellite_id}
+```
+
+Retrieve satellite family tree showing predecessor/successor relationships.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `satellite_id` | string | Yes | Satellite NORAD ID |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `direction` | string | No | Traversal direction: `ancestors`, `descendants`, or `both` (default) |
+| `max_generations` | integer | No | Maximum generations to traverse (default: 5) |
+
+**Response:**
+
+```json
+{
+  "satellite": {...},
+  "lineage": {
+    "ancestors": [...],
+    "descendants": [...],
+    "generation": 3
+  }
+}
+```
+
+---
+
+#### Detect Communities
+
+```http
+GET /v2/graphs/communities
+```
+
+Detect communities (clusters) in the satellite network.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `algorithm` | string | No | Algorithm: `label_propagation` or `connected_components` (default) |
+| `edge_types` | array[string] | No | Edge types to consider (default: all) |
+| `min_community_size` | integer | No | Minimum community size (default: 5) |
+
+**Response:**
+
+```json
+{
+  "algorithm": "label_propagation",
+  "total_communities": 47,
+  "communities": [
+    {
+      "community_id": 0,
+      "size": 234,
+      "satellites": [...]
+    }
+  ]
+}
+```
+
+---
+
+#### Get Graph Evolution Timeline
+
+```http
+GET /v2/graphs/evolution/timeline
+```
+
+Analyze how the satellite network evolved over time.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `start_year` | integer | No | Start year (default: 1957) |
+| `end_year` | integer | No | End year (default: current year) |
+| `granularity` | string | No | Time granularity: `year` or `month` (default: year) |
+
+**Response:**
+
+```json
+{
+  "start_year": 2020,
+  "end_year": 2025,
+  "granularity": "year",
+  "timeline": [
+    {
+      "year": 2020,
+      "node_count": 3456,
+      "edge_count": 12345,
+      "density": 0.0012,
+      "avg_degree": 3.5
+    }
+  ]
+}
+```
+
+---
+
+#### Get Satellite Recommendations
+
+```http
+GET /v2/graphs/recommendations/{satellite_id}
+```
+
+Get satellite recommendations based on graph structure similarity.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `satellite_id` | string | Yes | Satellite NORAD ID |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `strategy` | string | No | Strategy: `similarity`, `neighbors`, or `collaborative` (default) |
+| `limit` | integer | No | Number of recommendations (default: 10, max: 50) |
+
+**Response:**
+
+```json
+{
+  "satellite": {...},
+  "strategy": "collaborative",
+  "recommendations": [
+    {
+      "satellite": {...},
+      "score": 0.87,
+      "reason": "Similar network position and shared neighbors"
+    }
+  ]
+}
+```
+
+---
+
+#### Get Cache Statistics
+
+```http
+GET /v2/graphs/cache/stats/all
+```
+
+Retrieve statistics for all graph query caches.
+
+**Response:**
+
+```json
+{
+  "caches": {
+    "path_queries": {
+      "hit_rate": 0.65,
+      "size": 1234,
+      "max_size": 2000,
+      "hits": 4567,
+      "misses": 2345,
+      "ttl": 3600
+    }
+  },
+  "overall": {
+    "total_hits": 12345,
+    "total_misses": 5678,
+    "overall_hit_rate": 0.685
+  }
+}
+```
+
+---
+
+#### Clear Specific Cache
+
+```http
+POST /v2/graphs/cache/clear/{cache_name}
+```
+
+Clear a specific graph query cache.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cache_name` | string | Yes | Cache name (e.g., `path_queries`, `centrality_queries`) |
+
+---
+
+#### Clear All Caches
+
+```http
+POST /v2/graphs/cache/clear/all
+```
+
+Clear all graph query caches.
+
+---
+
 ### Documents
 
 #### Resolve Document URL

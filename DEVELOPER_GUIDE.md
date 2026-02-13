@@ -12,9 +12,10 @@ Complete guide for developers contributing to the Kessler project.
 4. [Adding New Features](#adding-new-features)
 5. [Using Services](#using-services)
 6. [Database Operations](#database-operations)
-7. [Testing](#testing)
-8. [Deployment](#deployment)
-9. [Troubleshooting](#troubleshooting)
+7. [Graph Analytics](#graph-analytics)
+8. [Testing](#testing)
+9. [Deployment](#deployment)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -642,6 +643,454 @@ async def custom_query():
     )
     
     return await cursor.batch()
+```
+
+---
+
+## Graph Analytics
+
+### Overview
+
+The Kessler application uses ArangoDB's graph database capabilities to perform advanced network analysis on satellite relationships. The graph analytics module provides functions for path finding, centrality analysis, community detection, and multi-dimensional queries.
+
+### Graph Structure
+
+**Node Collections:**
+- `satellites` - Satellite documents
+- `registration_documents` - UN registration documents
+
+**Edge Collections:**
+- `constellation_membership` - Satellite → Constellation
+- `registration_links` - Satellite → Registration document
+- `orbital_proximity` - Satellite → Satellite (similar orbits)
+- `collision_risk_edges` - Satellite → Satellite (collision risks)
+- `satellite_lineage` - Satellite → Satellite (predecessor/successor)
+
+### Path Finding
+
+**Find shortest path between satellites:**
+
+```python
+from database.graph_analytics import find_shortest_path
+
+path = find_shortest_path(
+    from_id="satellites/25544",
+    to_id="satellites/48274",
+    edge_types=["constellation_membership", "orbital_proximity"],
+    max_depth=10
+)
+
+if path:
+    print(f"Path distance: {path['distance']}")
+    print(f"Vertices: {path['vertices']}")
+    print(f"Edges: {path['edges']}")
+```
+
+**Find all paths:**
+
+```python
+from database.graph_analytics import find_all_paths
+
+paths = find_all_paths(
+    from_id="satellites/25544",
+    to_id="satellites/48274",
+    max_depth=5,
+    limit=10
+)
+
+for i, path in enumerate(paths):
+    print(f"Path {i+1}: {path['distance']} hops")
+```
+
+### Centrality Analysis
+
+**Degree centrality** - Identifies satellites with most connections:
+
+```python
+from database.graph_analytics import calculate_degree_centrality
+
+results = calculate_degree_centrality(
+    node_collection="satellites",
+    edge_collections=["constellation_membership", "orbital_proximity"],
+    limit=100
+)
+
+for result in results:
+    print(f"{result['satellite']['name']}: degree={result['degree']}")
+```
+
+**Betweenness centrality** - Identifies critical bridge satellites:
+
+```python
+from database.graph_analytics import calculate_betweenness_centrality
+
+results = calculate_betweenness_centrality(
+    node_collection="satellites",
+    edge_collections=["constellation_membership", "orbital_proximity"],
+    limit=50,
+    sample_size=1000
+)
+
+for result in results:
+    print(f"{result['satellite']['name']}: score={result['score']:.3f}")
+```
+
+**Closeness centrality** - Identifies central satellites:
+
+```python
+from database.graph_analytics import calculate_closeness_centrality
+
+results = calculate_closeness_centrality(
+    node_collection="satellites",
+    edge_collections=["constellation_membership"],
+    limit=50,
+    max_depth=5
+)
+```
+
+### Collision Risk Analysis
+
+**Get collision risk neighbors:**
+
+```python
+from database.graph_analytics import get_collision_risk_neighbors
+
+risks = get_collision_risk_neighbors(
+    satellite_id="satellites/25544",
+    min_risk_score=0.5
+)
+
+for risk in risks:
+    print(f"Risk with {risk['target']['name']}: {risk['risk_score']:.2f}")
+```
+
+**Analyze collision clusters:**
+
+```python
+from database.graph_analytics import analyze_collision_clusters
+
+clusters = analyze_collision_clusters(
+    orbital_band="LEO",
+    min_cluster_size=3
+)
+
+for cluster in clusters:
+    print(f"Cluster {cluster['cluster_id']}: {cluster['size']} satellites")
+```
+
+### Multi-Dimensional Queries
+
+**Cross-constellation proximity:**
+
+```python
+from database.graph_analytics import find_cross_constellation_proximity
+
+results = find_cross_constellation_proximity(
+    orbital_band="LEO",
+    limit=100
+)
+
+for result in results:
+    print(f"{result['constellation1']} <-> {result['constellation2']}")
+    print(f"  Proximity: {result['proximity_km']:.1f} km")
+```
+
+**Country cooperation network:**
+
+```python
+from database.graph_analytics import find_country_cooperation_network
+
+network = find_country_cooperation_network(min_connections=2)
+
+for conn in network['connections']:
+    print(f"{conn['country1']} <-> {conn['country2']}")
+    print(f"  Shared satellites: {conn['shared_satellites']}")
+```
+
+**Function-based clusters:**
+
+```python
+from database.graph_analytics import find_function_based_clusters
+
+clusters = find_function_based_clusters(
+    orbital_band="LEO",
+    min_cluster_size=5
+)
+
+for cluster in clusters:
+    print(f"{cluster['function']}: {len(cluster['satellites'])} satellites")
+```
+
+### Community Detection
+
+**Label propagation algorithm:**
+
+```python
+from database.graph_analytics import detect_communities
+
+communities = detect_communities(
+    algorithm="label_propagation",
+    edge_types=["constellation_membership", "orbital_proximity"],
+    min_community_size=5
+)
+
+print(f"Found {len(communities)} communities")
+for comm in communities:
+    print(f"Community {comm['community_id']}: {comm['size']} satellites")
+```
+
+**Connected components:**
+
+```python
+communities = detect_communities(
+    algorithm="connected_components",
+    edge_types=["orbital_proximity"],
+    min_community_size=10
+)
+```
+
+### Temporal Analysis
+
+**Graph evolution timeline:**
+
+```python
+from database.graph_analytics import calculate_graph_evolution_timeline
+
+timeline = calculate_graph_evolution_timeline(
+    start_year=2020,
+    end_year=2025,
+    granularity="year"
+)
+
+for entry in timeline:
+    print(f"{entry['year']}: {entry['node_count']} satellites")
+    print(f"  Density: {entry['density']:.4f}")
+    print(f"  Avg degree: {entry['avg_degree']:.2f}")
+```
+
+**Graph snapshot:**
+
+```python
+from database.graph_analytics import get_graph_snapshot_by_date
+
+snapshot = get_graph_snapshot_by_date(
+    date="2023-01-01",
+    edge_types=["constellation_membership"]
+)
+
+print(f"Nodes: {snapshot['node_count']}")
+print(f"Edges: {snapshot['edge_count']}")
+```
+
+### Recommendations
+
+**Similar satellites:**
+
+```python
+from database.graph_analytics import get_similar_satellites
+
+recommendations = get_similar_satellites(
+    satellite_id="satellites/25544",
+    limit=10
+)
+
+for rec in recommendations:
+    print(f"{rec['satellite']['name']}: score={rec['score']:.2f}")
+    print(f"  Reason: {rec['reason']}")
+```
+
+**Neighbor-based recommendations:**
+
+```python
+from database.graph_analytics import get_neighbor_based_recommendations
+
+recommendations = get_neighbor_based_recommendations(
+    satellite_id="satellites/25544",
+    limit=10
+)
+```
+
+**Collaborative filtering:**
+
+```python
+from database.graph_analytics import get_collaborative_filtering_recommendations
+
+recommendations = get_collaborative_filtering_recommendations(
+    satellite_id="satellites/25544",
+    limit=10
+)
+```
+
+### Graph Algorithms Reference
+
+| Algorithm | Purpose | Complexity | Use Case |
+|-----------|---------|------------|----------|
+| **Shortest Path** | Find shortest path between nodes | O(V+E) | Connection discovery |
+| **Degree Centrality** | Count direct connections | O(V) | Identify hubs |
+| **Betweenness Centrality** | Measure bridge importance | O(V²E) | Find critical nodes |
+| **Closeness Centrality** | Measure average distance | O(VE) | Find central nodes |
+| **Label Propagation** | Community detection | O(E) | Cluster detection |
+| **Connected Components** | Find isolated subgraphs | O(V+E) | Network segmentation |
+
+### Performance Optimization
+
+**Caching:**
+
+All graph queries use intelligent caching with different TTLs:
+
+```python
+from api.services.cache_service import get_cache
+
+# Path queries - 1 hour TTL
+path_cache = get_cache("path_queries", ttl=3600, max_size=2000)
+
+# Centrality - 12 hour TTL
+centrality_cache = get_cache("centrality_queries", ttl=43200, max_size=500)
+
+# Communities - 12 hour TTL
+community_cache = get_cache("community_queries", ttl=43200, max_size=300)
+```
+
+**Pre-computing metrics:**
+
+Use the background job for expensive operations:
+
+```bash
+# Run precomputation script
+python scripts/maintenance/precompute_graph_metrics.py
+
+# Schedule as cron job (daily at 2 AM)
+0 2 * * * cd /path/to/kessler && python scripts/maintenance/precompute_graph_metrics.py
+```
+
+**Benchmarking:**
+
+Monitor graph query performance:
+
+```bash
+# Run benchmarks
+python scripts/maintenance/benchmark_graph_queries.py --runs 5
+
+# Check cache statistics
+curl http://localhost:8000/v2/graphs/cache/stats/all
+```
+
+### Best Practices
+
+**1. Limit graph depth:**
+```python
+# Good: reasonable depth
+path = find_shortest_path(from_id, to_id, max_depth=5)
+
+# Bad: excessive depth
+path = find_shortest_path(from_id, to_id, max_depth=100)  # Too slow
+```
+
+**2. Use specific edge types:**
+```python
+# Good: targeted traversal
+centrality = calculate_degree_centrality(
+    edge_collections=["constellation_membership"]
+)
+
+# Less efficient: all edges
+centrality = calculate_degree_centrality(
+    edge_collections=None  # Uses all edges
+)
+```
+
+**3. Implement pagination:**
+```python
+from api.utils.pagination import paginate_results
+
+# Paginate large result sets
+paginated = paginate_results(
+    results=large_query_results,
+    offset=0,
+    limit=100
+)
+```
+
+**4. Monitor cache performance:**
+```python
+# Check hit rates regularly
+stats = cache.get_statistics()
+if stats['hit_rate'] < 0.5:
+    # Consider increasing cache size or adjusting TTL
+    pass
+```
+
+**5. Use sampling for expensive algorithms:**
+```python
+# For large graphs, use sampling
+betweenness = calculate_betweenness_centrality(
+    sample_size=1000  # Sample 1000 nodes instead of all
+)
+```
+
+### Common Patterns
+
+**Pattern 1: Path-based analysis**
+```python
+def analyze_satellite_connections(sat1_id, sat2_id):
+    """Find and analyze connections between satellites."""
+    path = find_shortest_path(sat1_id, sat2_id, max_depth=5)
+    
+    if not path:
+        return {"connected": False}
+    
+    return {
+        "connected": True,
+        "distance": path['distance'],
+        "intermediate_nodes": len(path['vertices']) - 2,
+        "relationship_types": [e['type'] for e in path['edges']]
+    }
+```
+
+**Pattern 2: Network importance ranking**
+```python
+def rank_satellites_by_importance(edge_types, limit=50):
+    """Rank satellites by network importance."""
+    degree_results = calculate_degree_centrality(
+        edge_collections=edge_types,
+        limit=limit
+    )
+    
+    betweenness_results = calculate_betweenness_centrality(
+        edge_collections=edge_types,
+        limit=limit
+    )
+    
+    # Combine scores
+    importance_scores = {}
+    for result in degree_results:
+        sat_id = result['satellite']['norad_id']
+        importance_scores[sat_id] = result['score']
+    
+    for result in betweenness_results:
+        sat_id = result['satellite']['norad_id']
+        importance_scores[sat_id] += result['score']
+    
+    return sorted(importance_scores.items(), key=lambda x: x[1], reverse=True)
+```
+
+**Pattern 3: Risk assessment**
+```python
+def assess_satellite_collision_risk(satellite_id):
+    """Comprehensive collision risk assessment."""
+    risks = get_collision_risk_neighbors(satellite_id, min_risk_score=0.3)
+    
+    high_risk = [r for r in risks if r['risk_score'] > 0.7]
+    medium_risk = [r for r in risks if 0.5 <= r['risk_score'] <= 0.7]
+    low_risk = [r for r in risks if r['risk_score'] < 0.5]
+    
+    return {
+        "total_risks": len(risks),
+        "high_risk_count": len(high_risk),
+        "medium_risk_count": len(medium_risk),
+        "low_risk_count": len(low_risk),
+        "highest_risk": max(risks, key=lambda x: x['risk_score']) if risks else None
+    }
 ```
 
 ---
