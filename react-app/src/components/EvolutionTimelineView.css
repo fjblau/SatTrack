@@ -12,6 +12,18 @@
   font-size: 1.1rem;
 }
 
+.error-message {
+  padding: 1rem;
+  margin: 1rem 0;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-left: 4px solid #ff6b6b;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 .timeline-controls {
   display: flex;
   gap: 1rem;
