@@ -10,6 +10,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState(null)
+  const [error, setError] = useState(null)
   const [layout, setLayout] = useState('cola')
   const [countryGraphData, setCountryGraphData] = useState(null)
   const [functionGraphData, setFunctionGraphData] = useState(null)
@@ -302,38 +303,63 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Loading constellation graph:', constellation)
     setLoading(true)
+    setError(null)
     try {
-      const response = await fetch(`/v2/graphs/constellation/${encodeURIComponent(constellation)}?limit=100`)
-      const data = await response.json()
+      const url = `/v2/graphs/constellation/${encodeURIComponent(constellation)}?limit=100`
+      console.log('[GraphViewer] Fetching:', url)
+      const response = await fetch(url)
+      console.log('[GraphViewer] Response status:', response.status)
       
-      if (data.data && data.data.nodes && data.data.nodes.length > 0) {
-        const elements = {
-          nodes: data.data.nodes.map(node => ({
-            data: {
-              id: node.id,
-              label: node.name || node.identifier,
-              is_hub: node.is_hub,
-              ...node
-            }
-          })),
-          edges: data.data.edges.map(edge => ({
-            data: {
-              id: edge.id,
-              source: edge.source,
-              target: edge.target,
-              ...edge
-            }
-          }))
-        }
-        
-        cyRef.current.elements().remove()
-        cyRef.current.add(elements)
-        applyLayout(layout)
-        setStats(data.data.stats)
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${response.statusText}`)
       }
+      
+      const data = await response.json()
+      console.log('[GraphViewer] Constellation data received:', {
+        hasData: !!data.data,
+        nodeCount: data.data?.nodes?.length || 0,
+        edgeCount: data.data?.edges?.length || 0
+      })
+      
+      if (!data.data) {
+        throw new Error('No data returned from API')
+      }
+      
+      if (!data.data.nodes || data.data.nodes.length === 0) {
+        setError('No nodes found for this constellation')
+        setStats({ message: 'No data available' })
+        return
+      }
+      
+      const elements = {
+        nodes: data.data.nodes.map(node => ({
+          data: {
+            id: node.id,
+            label: node.name || node.identifier,
+            is_hub: node.is_hub,
+            ...node
+          }
+        })),
+        edges: data.data.edges.map(edge => ({
+          data: {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            ...edge
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      setStats(data.data.stats)
+      console.log('[GraphViewer] Constellation graph rendered successfully')
     } catch (error) {
-      console.error('Error loading constellation graph:', error)
+      console.error('[GraphViewer] Error loading constellation graph:', error)
+      setError(`Failed to load constellation: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -342,38 +368,63 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const loadRegistrationGraph = async (docKey) => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Loading registration graph:', docKey)
     setLoading(true)
+    setError(null)
     try {
-      const response = await fetch(`/v2/graphs/registration-document/${encodeURIComponent(docKey)}?limit=50`)
-      const data = await response.json()
+      const url = `/v2/graphs/registration-document/${encodeURIComponent(docKey)}?limit=50`
+      console.log('[GraphViewer] Fetching:', url)
+      const response = await fetch(url)
+      console.log('[GraphViewer] Response status:', response.status)
       
-      if (data.data && data.data.nodes && data.data.nodes.length > 0) {
-        const elements = {
-          nodes: data.data.nodes.map(node => ({
-            data: {
-              id: node.id,
-              label: node.name || node.url || node.identifier,
-              type: node.type,
-              ...node
-            }
-          })),
-          edges: data.data.edges.map(edge => ({
-            data: {
-              id: edge.id,
-              source: edge.source,
-              target: edge.target,
-              ...edge
-            }
-          }))
-        }
-        
-        cyRef.current.elements().remove()
-        cyRef.current.add(elements)
-        applyLayout(layout)
-        setStats(data.data.stats)
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${response.statusText}`)
       }
+      
+      const data = await response.json()
+      console.log('[GraphViewer] Registration data received:', {
+        hasData: !!data.data,
+        nodeCount: data.data?.nodes?.length || 0,
+        edgeCount: data.data?.edges?.length || 0
+      })
+      
+      if (!data.data) {
+        throw new Error('No data returned from API')
+      }
+      
+      if (!data.data.nodes || data.data.nodes.length === 0) {
+        setError('No nodes found for this registration document')
+        setStats({ message: 'No data available' })
+        return
+      }
+      
+      const elements = {
+        nodes: data.data.nodes.map(node => ({
+          data: {
+            id: node.id,
+            label: node.name || node.url || node.identifier,
+            type: node.type,
+            ...node
+          }
+        })),
+        edges: data.data.edges.map(edge => ({
+          data: {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            ...edge
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      setStats(data.data.stats)
+      console.log('[GraphViewer] Registration graph rendered successfully')
     } catch (error) {
-      console.error('Error loading registration graph:', error)
+      console.error('[GraphViewer] Error loading registration graph:', error)
+      setError(`Failed to load registration document: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -382,10 +433,35 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const loadProximityGraph = async (orbitalBand) => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Loading proximity graph:', orbitalBand)
     setLoading(true)
+    setError(null)
     try {
-      const response = await fetch(`/v2/graphs/orbital-proximity/${encodeURIComponent(orbitalBand)}?limit=100`)
+      const url = `/v2/graphs/orbital-proximity/${encodeURIComponent(orbitalBand)}?limit=100`
+      console.log('[GraphViewer] Fetching:', url)
+      const response = await fetch(url)
+      console.log('[GraphViewer] Response status:', response.status)
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[GraphViewer] Proximity data received:', {
+        hasData: !!data.data,
+        nodeCount: data.data?.nodes?.length || 0,
+        edgeCount: data.data?.edges?.length || 0
+      })
+      
+      if (!data.data) {
+        throw new Error('No data returned from API')
+      }
+      
+      if (!data.data.nodes || data.data.nodes.length === 0) {
+        setError('No nodes found for this orbital band')
+        setStats({ message: 'No data available' })
+        return
+      }
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
         const filteredEdges = data.data.edges.filter(edge => edge.source < edge.target)
@@ -445,9 +521,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         cyRef.current.add(elements)
         applyLayout(layout)
         setStats(data.data.stats)
+        console.log('[GraphViewer] Proximity graph rendered successfully')
       }
     } catch (error) {
-      console.error('Error loading proximity graph:', error)
+      console.error('[GraphViewer] Error loading proximity graph:', error)
+      setError(`Failed to load proximity graph: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -456,10 +534,35 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const loadAllFunctionCategories = async () => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Loading function categories')
     setLoading(true)
+    setError(null)
     try {
-      const response = await fetch('/v2/graphs/function-similarity?limit=50')
+      const url = '/v2/graphs/function-similarity?limit=50'
+      console.log('[GraphViewer] Fetching:', url)
+      const response = await fetch(url)
+      console.log('[GraphViewer] Response status:', response.status)
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[GraphViewer] Function data received:', {
+        hasData: !!data.data,
+        nodeCount: data.data?.nodes?.length || 0,
+        edgeCount: data.data?.edges?.length || 0
+      })
+      
+      if (!data.data) {
+        throw new Error('No data returned from API')
+      }
+      
+      if (!data.data.nodes || data.data.nodes.length === 0) {
+        setError('No function similarity data found')
+        setStats({ message: 'No data available' })
+        return
+      }
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
         setFunctionGraphData(data.data)
@@ -495,9 +598,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         cyRef.current.add(elements)
         applyLayout(layout)
         setStats(data.data.stats)
+        console.log('[GraphViewer] Function graph rendered successfully')
       }
     } catch (error) {
-      console.error('Error loading function graph:', error)
+      console.error('[GraphViewer] Error loading function graph:', error)
+      setError(`Failed to load function graph: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -506,7 +611,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const filterFunctionGraph = (categories) => {
     if (!cyRef.current || !functionGraphData) return
     
+    console.log('[GraphViewer] Filtering function graph:', { categories })
     setLoading(true)
+    setError(null)
     try {
       let filteredNodes, filteredEdges
       
@@ -581,10 +688,35 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const loadCountryGraph = async () => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Loading country graph')
     setLoading(true)
+    setError(null)
     try {
-      const response = await fetch('/v2/graphs/country-relations?min_satellites=10&limit_countries=100')
+      const url = '/v2/graphs/country-relations?min_satellites=10&limit_countries=100'
+      console.log('[GraphViewer] Fetching:', url)
+      const response = await fetch(url)
+      console.log('[GraphViewer] Response status:', response.status)
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[GraphViewer] Country data received:', {
+        hasData: !!data.data,
+        nodeCount: data.data?.nodes?.length || 0,
+        edgeCount: data.data?.edges?.length || 0
+      })
+      
+      if (!data.data) {
+        throw new Error('No data returned from API')
+      }
+      
+      if (!data.data.nodes || data.data.nodes.length === 0) {
+        setError('No country relationship data found')
+        setStats({ message: 'No data available' })
+        return
+      }
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
         setCountryGraphData(data.data)
@@ -620,9 +752,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         cyRef.current.add(elements)
         applyLayout(layout)
         setStats(data.data.stats)
+        console.log('[GraphViewer] Country graph rendered successfully')
       }
     } catch (error) {
-      console.error('Error loading country graph:', error)
+      console.error('[GraphViewer] Error loading country graph:', error)
+      setError(`Failed to load country graph: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -631,7 +765,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const filterCountryGraph = (countries) => {
     if (!cyRef.current || !countryGraphData) return
     
+    console.log('[GraphViewer] Filtering country graph:', { countries })
     setLoading(true)
+    setError(null)
     try {
       let filteredNodes, filteredEdges
       
@@ -703,8 +839,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const renderPathGraph = (data) => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Rendering path graph:', { hasData: !!data, pathsCount: data?.paths?.length || 0 })
     setLoading(true)
+    setError(null)
     try {
+      if (!data || !data.paths) {
+        setError('No path data provided')
+        setStats({ message: 'No paths to display' })
+        setLoading(false)
+        return
+      }
+      
       const pathNodes = new Set()
       const pathEdges = new Set()
       
@@ -747,8 +892,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         total_nodes: elements.nodes.length,
         total_edges: elements.edges.length
       })
+      console.log('[GraphViewer] Path graph rendered successfully')
     } catch (error) {
-      console.error('Error rendering path graph:', error)
+      console.error('[GraphViewer] Error rendering path graph:', error)
+      setError(`Failed to render paths: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -757,9 +904,25 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const renderCentralityGraph = (data, metric) => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Rendering centrality graph:', { hasData: !!data, metric, satelliteCount: data?.satellites?.length || 0 })
     setLoading(true)
+    setError(null)
     try {
+      if (!data || !data.satellites) {
+        setError('No centrality data provided')
+        setStats({ message: 'No centrality data to display' })
+        setLoading(false)
+        return
+      }
+      
       const satellites = data.satellites || []
+      
+      if (satellites.length === 0) {
+        setError('No satellites found in centrality data')
+        setStats({ message: 'No satellites to analyze' })
+        setLoading(false)
+        return
+      }
       
       const getScore = (item) => {
         if (metric === 'degree') return item.degree
@@ -799,8 +962,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         nodes_analyzed: satellites.length,
         max_score: maxScore.toFixed(4)
       })
+      console.log('[GraphViewer] Centrality graph rendered successfully')
     } catch (error) {
-      console.error('Error rendering centrality graph:', error)
+      console.error('[GraphViewer] Error rendering centrality graph:', error)
+      setError(`Failed to render centrality: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -809,8 +974,24 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const renderCollisionRiskGraph = (data, viewType) => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Rendering collision risk graph:', { hasData: !!data, viewType, nodesCount: data?.nodes?.length || 0, edgesCount: data?.edges?.length || 0 })
     setLoading(true)
+    setError(null)
     try {
+      if (!data) {
+        setError('No collision risk data provided')
+        setStats({ message: 'No collision data to display' })
+        setLoading(false)
+        return
+      }
+      
+      if (!data.nodes || data.nodes.length === 0) {
+        setError('No satellites found in collision risk data')
+        setStats({ message: 'No collision risks to analyze' })
+        setLoading(false)
+        return
+      }
+      
       const getRiskColor = (riskScore) => {
         if (riskScore > 0.8) return '#c0392b'
         if (riskScore > 0.6) return '#e74c3c'
@@ -855,8 +1036,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         collision_risks: elements.edges.length,
         ...(data.stats || {})
       })
+      console.log('[GraphViewer] Collision risk graph rendered successfully')
     } catch (error) {
-      console.error('Error rendering collision risk graph:', error)
+      console.error('[GraphViewer] Error rendering collision risk graph:', error)
+      setError(`Failed to render collision risks: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -865,10 +1048,35 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const loadCommunitiesGraph = async () => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Loading communities graph')
     setLoading(true)
+    setError(null)
     try {
-      const response = await fetch('/v2/graphs/communities?algorithm=label_propagation&min_size=3')
+      const url = '/v2/graphs/communities?algorithm=label_propagation&min_size=3'
+      console.log('[GraphViewer] Fetching:', url)
+      const response = await fetch(url)
+      console.log('[GraphViewer] Response status:', response.status)
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[GraphViewer] Communities data received:', {
+        hasData: !!data.data,
+        communitiesCount: data.data?.communities?.length || 0,
+        dataStructure: data.data ? Object.keys(data.data) : []
+      })
+      
+      if (!data.data) {
+        throw new Error('No data returned from API')
+      }
+      
+      if (!data.data.communities || data.data.communities.length === 0) {
+        setError('No communities found')
+        setStats({ message: 'No communities detected' })
+        return
+      }
       
       if (data.data && data.data.communities) {
         const communityColors = {}
@@ -914,9 +1122,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           total_nodes: nodes.length,
           algorithm: data.data.algorithm || 'label_propagation'
         })
+        console.log('[GraphViewer] Communities graph rendered successfully')
       }
     } catch (error) {
-      console.error('Error loading communities graph:', error)
+      console.error('[GraphViewer] Error loading communities graph:', error)
+      setError(`Failed to load communities: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -925,11 +1135,44 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const loadLineageGraph = async (satelliteId) => {
     if (!cyRef.current) return
     
+    console.log('[GraphViewer] Loading lineage graph for:', satelliteId)
     setLoading(true)
+    setError(null)
     try {
       const cleanId = satelliteId.includes('/') ? satelliteId.split('/')[1] : satelliteId
-      const response = await fetch(`/v2/graphs/lineage/${encodeURIComponent(cleanId)}?direction=both&max_depth=5`)
+      const url = `/v2/graphs/lineage/${encodeURIComponent(cleanId)}?direction=both&max_depth=5`
+      console.log('[GraphViewer] Fetching:', url)
+      const response = await fetch(url)
+      console.log('[GraphViewer] Response status:', response.status)
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[GraphViewer] Lineage data received:', {
+        hasData: !!data.data,
+        hasRoot: !!data.data?.root,
+        ancestorsCount: data.data?.ancestors?.length || 0,
+        descendantsCount: data.data?.descendants?.length || 0,
+        dataStructure: data.data ? Object.keys(data.data) : []
+      })
+      
+      if (!data.data) {
+        throw new Error('No data returned from API')
+      }
+      
+      if (data.data.error) {
+        setError(data.data.error)
+        setStats({ error: data.data.error })
+        return
+      }
+      
+      if (!data.data.root) {
+        setError('No lineage data found for this satellite')
+        setStats({ message: 'No lineage data available' })
+        return
+      }
       
       if (data.data && data.data.root) {
         const nodes = []
@@ -1020,11 +1263,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           total_descendants: data.data.stats?.total_descendants || 0,
           family: data.data.root.family || 'Unknown'
         })
-      } else if (data.data && data.data.error) {
-        setStats({ error: data.data.error })
+        console.log('[GraphViewer] Lineage graph rendered successfully')
       }
     } catch (error) {
-      console.error('Error loading lineage graph:', error)
+      console.error('[GraphViewer] Error loading lineage graph:', error)
+      setError(`Failed to load lineage: ${error.message}`)
       setStats({ error: 'Failed to load lineage data' })
     } finally {
       setLoading(false)
@@ -1132,6 +1375,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       
       <div className="graph-container" ref={containerRef}>
         {loading && <div className="loading-overlay">Loading graph...</div>}
+        {error && !loading && (
+          <div className="error-overlay">
+            <div className="error-message">
+              <strong>Error:</strong> {error}
+            </div>
+          </div>
+        )}
       </div>
       
       <div className="graph-legend">
