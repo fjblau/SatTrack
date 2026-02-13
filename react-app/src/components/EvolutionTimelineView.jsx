@@ -4,6 +4,7 @@ import { API_ENDPOINTS } from '../config/constants'
 
 function EvolutionTimelineView({ onTimelineLoad }) {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [timelineData, setTimelineData] = useState(null)
   const [startDate, setStartDate] = useState('2000')
   const [endDate, setEndDate] = useState(new Date().getFullYear().toString())
@@ -15,8 +16,54 @@ function EvolutionTimelineView({ onTimelineLoad }) {
     loadTimeline()
   }, [])
 
+  const validateDateRange = () => {
+    const yearPattern = /^\d{4}$/
+    const yearMonthPattern = /^\d{4}-\d{2}$/
+    
+    if (!yearPattern.test(startDate) && !yearMonthPattern.test(startDate)) {
+      return `⚠️ Invalid start date format. Use YYYY or YYYY-MM.`
+    }
+    
+    if (!yearPattern.test(endDate) && !yearMonthPattern.test(endDate)) {
+      return `⚠️ Invalid end date format. Use YYYY or YYYY-MM.`
+    }
+    
+    const startYear = parseInt(startDate.split('-')[0])
+    const endYear = parseInt(endDate.split('-')[0])
+    
+    if (startYear < 1957) {
+      return `⚠️ Start date cannot be before 1957 (Sputnik launch).`
+    }
+    
+    if (endYear > new Date().getFullYear()) {
+      return `⚠️ End date cannot be in the future.`
+    }
+    
+    if (startYear > endYear) {
+      return `⚠️ Start date must be before end date.`
+    }
+    
+    return null
+  }
+
   const loadTimeline = async () => {
+    console.log('[EvolutionTimelineView] Loading timeline with params:', {
+      startDate,
+      endDate,
+      granularity
+    })
+    
+    setError(null)
+    
+    const validationError = validateDateRange()
+    if (validationError) {
+      console.error('[EvolutionTimelineView] Validation failed:', validationError)
+      setError(validationError)
+      return
+    }
+    
     setLoading(true)
+    
     try {
       const params = new URLSearchParams({
         start_date: startDate,
@@ -24,17 +71,59 @@ function EvolutionTimelineView({ onTimelineLoad }) {
         granularity: granularity
       })
 
-      const response = await fetch(`${API_ENDPOINTS.GRAPHS.EVOLUTION_TIMELINE}?${params}`)
+      const url = `${API_ENDPOINTS.GRAPHS.EVOLUTION_TIMELINE}?${params}`
+      console.log('[EvolutionTimelineView] Fetching:', url)
+      
+      const response = await fetch(url)
+      console.log('[EvolutionTimelineView] Response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[EvolutionTimelineView] API error response:', errorText)
+        throw new Error(`❌ API request failed with status ${response.status}`)
+      }
+      
       const result = await response.json()
-
-      if (result.data) {
-        setTimelineData(result.data)
-        if (onTimelineLoad) {
-          onTimelineLoad(result.data)
-        }
+      console.log('[EvolutionTimelineView] Response data:', result)
+      
+      if (!result) {
+        console.error('[EvolutionTimelineView] Empty response')
+        throw new Error('❌ Received empty response from server')
+      }
+      
+      if (!result.data) {
+        console.error('[EvolutionTimelineView] Missing data property in response:', result)
+        throw new Error('❌ Response missing data property')
+      }
+      
+      if (!result.data.timeline || !Array.isArray(result.data.timeline)) {
+        console.error('[EvolutionTimelineView] Invalid timeline structure:', result.data)
+        throw new Error('❌ Invalid timeline data structure')
+      }
+      
+      if (result.data.timeline.length === 0) {
+        console.warn('[EvolutionTimelineView] Empty timeline array')
+        setError('No data available for the selected date range. Try adjusting your filters.')
+        setTimelineData(null)
+        return
+      }
+      
+      console.log('[EvolutionTimelineView] Timeline loaded successfully:', {
+        periods: result.data.timeline.length,
+        stats: result.data.stats
+      })
+      
+      setTimelineData(result.data)
+      setError(null)
+      
+      if (onTimelineLoad) {
+        onTimelineLoad(result.data)
       }
     } catch (error) {
-      console.error('Error loading evolution timeline:', error)
+      console.error('[EvolutionTimelineView] Error loading evolution timeline:', error)
+      const errorMessage = error.message || '❌ Failed to load timeline data. Please try again.'
+      setError(errorMessage)
+      setTimelineData(null)
     } finally {
       setLoading(false)
     }
@@ -264,6 +353,12 @@ function EvolutionTimelineView({ onTimelineLoad }) {
           Apply
         </button>
       </div>
+
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
 
       <div className="metric-selector">
         <button

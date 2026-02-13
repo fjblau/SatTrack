@@ -26,6 +26,12 @@ function GraphExplorer() {
   const [collisionRiskData, setCollisionRiskData] = useState(null)
   const [collisionViewType, setCollisionViewType] = useState(null)
   const [evolutionTimelineData, setEvolutionTimelineData] = useState(null)
+  const [selectedSatellite, setSelectedSatellite] = useState(null)
+  const [satelliteSearchQuery, setSatelliteSearchQuery] = useState('')
+  const [satelliteSearchResults, setSatelliteSearchResults] = useState([])
+  const [searchingsatellite, setSearchingsatellite] = useState(false)
+  const [communityAlgorithm, setCommunityAlgorithm] = useState('label_propagation')
+  const [communityMinSize, setCommunityMinSize] = useState(3)
 
   useEffect(() => {
     loadGraphStats()
@@ -106,6 +112,48 @@ function GraphExplorer() {
         return [...prev, country]
       }
     })
+  }
+
+  const searchSatellites = async (query) => {
+    if (!query || query.length < 2) {
+      setSatelliteSearchResults([])
+      return
+    }
+    
+    setSearchingsatellite(true)
+    try {
+      const response = await fetch(`${API_ENDPOINTS.SEARCH}?q=${encodeURIComponent(query)}&limit=10`)
+      const data = await response.json()
+      
+      if (data.data) {
+        const results = data.data.map(item => ({
+          id: item._id,
+          name: item.canonical?.object_name || item.canonical?.name || item.canonical?.registration_number || item._id,
+          registration: item.canonical?.registration_number || ''
+        }))
+        setSatelliteSearchResults(results)
+      }
+    } catch (error) {
+      console.error('Error searching satellites:', error)
+      setSatelliteSearchResults([])
+    } finally {
+      setSearchingsatellite(false)
+    }
+  }
+
+  const handleSatelliteSelect = (satellite) => {
+    setSelectedSatellite(satellite.id)
+    setSatelliteSearchQuery(satellite.name)
+    setSatelliteSearchResults([])
+  }
+
+  const handleSearchInputChange = (value) => {
+    setSatelliteSearchQuery(value)
+    if (value.length >= 2) {
+      searchSatellites(value)
+    } else {
+      setSatelliteSearchResults([])
+    }
   }
 
   return (
@@ -322,9 +370,111 @@ function GraphExplorer() {
           <div className="selector-content">
             <h3>Satellite Lineage</h3>
             <p className="section-description">Explore satellite family relationships and generations</p>
-            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1rem' }}>
-              Click on a satellite in the main data table to view its lineage in the graph.
-            </p>
+            
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                Search Satellite:
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={satelliteSearchQuery}
+                  onChange={(e) => handleSearchInputChange(e.target.value)}
+                  placeholder="Enter satellite name or registration..."
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '0.9rem'
+                  }}
+                />
+                {searchingsatellite && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    right: '0.5rem', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    fontSize: '0.8rem',
+                    color: '#666'
+                  }}>
+                    Searching...
+                  </div>
+                )}
+                {satelliteSearchResults.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    maxHeight: '300px',
+                    overflowY: 'auto',
+                    backgroundColor: 'white',
+                    border: '1px solid #ddd',
+                    borderTop: 'none',
+                    borderRadius: '0 0 4px 4px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                    zIndex: 1000
+                  }}>
+                    {satelliteSearchResults.map((satellite) => (
+                      <div
+                        key={satellite.id}
+                        onClick={() => handleSatelliteSelect(satellite)}
+                        style={{
+                          padding: '0.75rem',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f0f0f0',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                      >
+                        <div style={{ fontWeight: '500', fontSize: '0.9rem' }}>
+                          {satellite.name}
+                        </div>
+                        {satellite.registration && (
+                          <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
+                            {satellite.registration}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {selectedSatellite && (
+              <div style={{
+                marginTop: '1rem',
+                padding: '0.75rem',
+                backgroundColor: '#e8f5e9',
+                border: '1px solid #4caf50',
+                borderRadius: '4px'
+              }}>
+                <div style={{ fontSize: '0.85rem', color: '#2e7d32', fontWeight: '500' }}>
+                  ✓ Selected: {satelliteSearchQuery}
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedSatellite(null)
+                    setSatelliteSearchQuery('')
+                  }}
+                  style={{
+                    marginTop: '0.5rem',
+                    padding: '0.25rem 0.75rem',
+                    fontSize: '0.8rem',
+                    backgroundColor: 'white',
+                    border: '1px solid #4caf50',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    color: '#2e7d32'
+                  }}
+                >
+                  Clear Selection
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -332,8 +482,54 @@ function GraphExplorer() {
           <div className="selector-content">
             <h3>Community Detection</h3>
             <p className="section-description">Discover clusters and communities in the satellite network</p>
-            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1rem' }}>
-              Communities will be automatically detected and visualized.
+            
+            <div style={{ marginTop: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                Detection Algorithm:
+              </label>
+              <select
+                value={communityAlgorithm}
+                onChange={(e) => setCommunityAlgorithm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.9rem',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="label_propagation">Label Propagation</option>
+                <option value="louvain">Louvain</option>
+                <option value="greedy_modularity">Greedy Modularity</option>
+              </select>
+            </div>
+            
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                Minimum Community Size:
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={communityMinSize}
+                onChange={(e) => setCommunityMinSize(parseInt(e.target.value) || 1)}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.9rem'
+                }}
+              />
+              <p style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+                Filter out communities with fewer members than this
+              </p>
+            </div>
+            
+            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1.5rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+              💡 Communities are automatically detected based on satellite relationships. Nodes with the same color belong to the same community.
             </p>
           </div>
         )}
@@ -366,6 +562,9 @@ function GraphExplorer() {
             centralityMetric={graphType === 'centrality' ? centralityMetric : null}
             collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
             collisionViewType={graphType === 'collision' ? collisionViewType : null}
+            selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
+            communityAlgorithm={graphType === 'communities' ? communityAlgorithm : null}
+            communityMinSize={graphType === 'communities' ? communityMinSize : null}
           />
         )}
       </div>
