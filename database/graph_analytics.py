@@ -1955,3 +1955,427 @@ def get_temporal_network_metrics(
     except Exception as e:
         print(f"Error calculating temporal network metrics: {e}")
         return {"periods": [], "summary": {}}
+
+
+def calculate_jaccard_similarity(
+    satellite_id: str,
+    candidate_id: str,
+    edge_types: Optional[List[str]] = None
+) -> float:
+    """
+    Calculate Jaccard similarity between two satellites based on their neighbors.
+    
+    Jaccard similarity = |A ∩ B| / |A ∪ B|
+    
+    Args:
+        satellite_id: First satellite document ID
+        candidate_id: Second satellite document ID
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        Similarity score between 0 and 1
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        query = f"""
+        LET neighbors_a = (
+            FOR v IN 1..1 ANY @satellite_id {edge_clause}
+            RETURN v._id
+        )
+        
+        LET neighbors_b = (
+            FOR v IN 1..1 ANY @candidate_id {edge_clause}
+            RETURN v._id
+        )
+        
+        LET intersection = LENGTH(
+            FOR id IN neighbors_a
+            FILTER id IN neighbors_b
+            RETURN id
+        )
+        
+        LET union = LENGTH(UNIQUE(APPEND(neighbors_a, neighbors_b)))
+        
+        RETURN union > 0 ? intersection / union : 0
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'satellite_id': satellite_id,
+                'candidate_id': candidate_id
+            }
+        )
+        
+        results = list(cursor)
+        return results[0] if results else 0.0
+        
+    except Exception as e:
+        print(f"Error calculating Jaccard similarity: {e}")
+        return 0.0
+
+
+def get_similar_satellites(
+    satellite_id: str,
+    edge_types: Optional[List[str]] = None,
+    limit: int = 10,
+    min_similarity: float = 0.1
+) -> List[Dict[str, Any]]:
+    """
+    Find satellites similar to the given satellite based on graph structure.
+    
+    Uses Jaccard similarity of neighbor sets to determine similarity.
+    
+    Args:
+        satellite_id: Reference satellite document ID
+        edge_types: Optional list of edge collections to consider
+        limit: Maximum number of similar satellites to return
+        min_similarity: Minimum similarity threshold (0-1)
+    
+    Returns:
+        List of similar satellites with similarity scores
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        query = f"""
+        LET source_neighbors = (
+            FOR v IN 1..1 ANY @satellite_id {edge_clause}
+            RETURN v._id
+        )
+        
+        FOR candidate IN {COLLECTION_NAME}
+            FILTER candidate._id != @satellite_id
+            
+            LET candidate_neighbors = (
+                FOR v IN 1..1 ANY candidate._id {edge_clause}
+                RETURN v._id
+            )
+            
+            LET intersection = LENGTH(
+                FOR id IN source_neighbors
+                FILTER id IN candidate_neighbors
+                RETURN id
+            )
+            
+            LET union = LENGTH(UNIQUE(APPEND(source_neighbors, candidate_neighbors)))
+            
+            LET similarity = union > 0 ? intersection / union : 0
+            
+            FILTER similarity >= @min_similarity
+            SORT similarity DESC
+            LIMIT @limit
+            
+            RETURN {{
+                _id: candidate._id,
+                identifier: candidate.identifier,
+                name: candidate.canonical.name,
+                country: candidate.canonical.country_of_origin,
+                orbital_band: candidate.canonical.orbital_band,
+                similarity_score: similarity,
+                common_neighbors: intersection,
+                total_neighbors: LENGTH(candidate_neighbors)
+            }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'satellite_id': satellite_id,
+                'limit': limit,
+                'min_similarity': min_similarity
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error finding similar satellites: {e}")
+        return []
+
+
+def get_neighbor_based_recommendations(
+    satellite_id: str,
+    edge_types: Optional[List[str]] = None,
+    limit: int = 10,
+    strategy: str = "similar_neighbors"
+) -> List[Dict[str, Any]]:
+    """
+    Get recommendations based on neighbor analysis.
+    
+    Strategies:
+    - "similar_neighbors": Recommend neighbors of similar satellites
+    - "second_degree": Recommend satellites at distance 2 (friends of friends)
+    - "common_neighbors": Recommend satellites with most common neighbors
+    
+    Args:
+        satellite_id: Reference satellite document ID
+        edge_types: Optional list of edge collections
+        limit: Maximum number of recommendations
+        strategy: Recommendation strategy to use
+    
+    Returns:
+        List of recommended satellites with relevance scores
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        if strategy == "similar_neighbors":
+            query = f"""
+            LET similar_sats = (
+                LET source_neighbors = (
+                    FOR v IN 1..1 ANY @satellite_id {edge_clause}
+                    RETURN v._id
+                )
+                
+                FOR candidate IN {COLLECTION_NAME}
+                    FILTER candidate._id != @satellite_id
+                    
+                    LET candidate_neighbors = (
+                        FOR v IN 1..1 ANY candidate._id {edge_clause}
+                        RETURN v._id
+                    )
+                    
+                    LET intersection = LENGTH(
+                        FOR id IN source_neighbors
+                        FILTER id IN candidate_neighbors
+                        RETURN id
+                    )
+                    
+                    LET union = LENGTH(UNIQUE(APPEND(source_neighbors, candidate_neighbors)))
+                    LET similarity = union > 0 ? intersection / union : 0
+                    
+                    FILTER similarity > 0.1
+                    SORT similarity DESC
+                    LIMIT 5
+                    RETURN candidate._id
+            )
+            
+            LET direct_neighbors = (
+                FOR v IN 1..1 ANY @satellite_id {edge_clause}
+                RETURN v._id
+            )
+            
+            FOR similar_id IN similar_sats
+                FOR recommendation IN 1..1 ANY similar_id {edge_clause}
+                    FILTER recommendation._id != @satellite_id
+                    FILTER recommendation._id NOT IN direct_neighbors
+                    COLLECT rec = recommendation INTO groups
+                    LET score = LENGTH(groups)
+                    SORT score DESC
+                    LIMIT @limit
+                    RETURN {{
+                        _id: rec._id,
+                        identifier: rec.identifier,
+                        name: rec.canonical.name,
+                        country: rec.canonical.country_of_origin,
+                        orbital_band: rec.canonical.orbital_band,
+                        relevance_score: score,
+                        recommendation_type: "similar_neighbors"
+                    }}
+            """
+        
+        elif strategy == "second_degree":
+            query = f"""
+            LET direct_neighbors = (
+                FOR v IN 1..1 ANY @satellite_id {edge_clause}
+                RETURN v._id
+            )
+            
+            FOR v IN 2..2 ANY @satellite_id {edge_clause}
+                FILTER v._id != @satellite_id
+                FILTER v._id NOT IN direct_neighbors
+                COLLECT recommendation = v INTO groups
+                LET score = LENGTH(groups)
+                SORT score DESC
+                LIMIT @limit
+                RETURN {{
+                    _id: recommendation._id,
+                    identifier: recommendation.identifier,
+                    name: recommendation.canonical.name,
+                    country: recommendation.canonical.country_of_origin,
+                    orbital_band: recommendation.canonical.orbital_band,
+                    relevance_score: score,
+                    recommendation_type: "second_degree"
+                }}
+            """
+        
+        elif strategy == "common_neighbors":
+            query = f"""
+            LET source_neighbors = (
+                FOR v IN 1..1 ANY @satellite_id {edge_clause}
+                RETURN v._id
+            )
+            
+            FOR candidate IN {COLLECTION_NAME}
+                FILTER candidate._id != @satellite_id
+                FILTER candidate._id NOT IN source_neighbors
+                
+                LET candidate_neighbors = (
+                    FOR v IN 1..1 ANY candidate._id {edge_clause}
+                    RETURN v._id
+                )
+                
+                LET common_count = LENGTH(
+                    FOR id IN source_neighbors
+                    FILTER id IN candidate_neighbors
+                    RETURN id
+                )
+                
+                FILTER common_count > 0
+                SORT common_count DESC
+                LIMIT @limit
+                
+                RETURN {{
+                    _id: candidate._id,
+                    identifier: candidate.identifier,
+                    name: candidate.canonical.name,
+                    country: candidate.canonical.country_of_origin,
+                    orbital_band: candidate.canonical.orbital_band,
+                    relevance_score: common_count,
+                    recommendation_type: "common_neighbors"
+                }}
+            """
+        
+        else:
+            return []
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'satellite_id': satellite_id,
+                'limit': limit
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error getting neighbor-based recommendations: {e}")
+        return []
+
+
+def get_collaborative_filtering_recommendations(
+    satellite_id: str,
+    edge_types: Optional[List[str]] = None,
+    limit: int = 10,
+    min_common_connections: int = 2
+) -> List[Dict[str, Any]]:
+    """
+    Get recommendations using collaborative filtering approach.
+    
+    Finds satellites that share many connections with the source satellite
+    but are not directly connected. Similar to "users who liked X also liked Y".
+    
+    Args:
+        satellite_id: Reference satellite document ID
+        edge_types: Optional list of edge collections
+        limit: Maximum number of recommendations
+        min_common_connections: Minimum number of shared connections required
+    
+    Returns:
+        List of recommended satellites with relevance scores
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        query = f"""
+        LET source_neighbors = (
+            FOR v IN 1..1 ANY @satellite_id {edge_clause}
+            RETURN v._id
+        )
+        
+        LET direct_connections = APPEND(source_neighbors, [@satellite_id])
+        
+        FOR neighbor IN source_neighbors
+            FOR second_degree IN 1..1 ANY neighbor {edge_clause}
+                FILTER second_degree._id NOT IN direct_connections
+                COLLECT recommendation = second_degree INTO groups
+                LET common_connections = LENGTH(groups)
+                FILTER common_connections >= @min_common_connections
+                SORT common_connections DESC
+                LIMIT @limit
+                RETURN {{
+                    _id: recommendation._id,
+                    identifier: recommendation.identifier,
+                    name: recommendation.canonical.name,
+                    country: recommendation.canonical.country_of_origin,
+                    orbital_band: recommendation.canonical.orbital_band,
+                    status: recommendation.canonical.status,
+                    relevance_score: common_connections,
+                    common_connections: common_connections,
+                    recommendation_type: "collaborative_filtering"
+                }}
+        """
+        
+        cursor = db.aql.execute(
+            query,
+            bind_vars={
+                'satellite_id': satellite_id,
+                'limit': limit,
+                'min_common_connections': min_common_connections
+            }
+        )
+        
+        return list(cursor)
+        
+    except Exception as e:
+        print(f"Error getting collaborative filtering recommendations: {e}")
+        return []

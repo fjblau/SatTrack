@@ -27,7 +27,10 @@ from database.graph_analytics import (
     detect_communities,
     get_graph_snapshot_by_date,
     calculate_graph_evolution_timeline,
-    get_temporal_network_metrics
+    get_temporal_network_metrics,
+    get_similar_satellites,
+    get_neighbor_based_recommendations,
+    get_collaborative_filtering_recommendations
 )
 from api.services.cache_service import get_cache
 from api.services import collision_service, lineage_service
@@ -38,6 +41,7 @@ path_cache = get_cache("path_queries", ttl=3600, max_size=1000)
 centrality_cache = get_cache("centrality_queries", ttl=86400, max_size=500)
 community_cache = get_cache("community_queries", ttl=43200, max_size=200)
 evolution_cache = get_cache("evolution_queries", ttl=86400, max_size=100)
+recommendation_cache = get_cache("recommendation_queries", ttl=7200, max_size=500)
 
 
 @router.get("/constellation/{constellation_name}")
@@ -2429,4 +2433,140 @@ def get_graph_snapshot(
         raise HTTPException(
             status_code=500,
             detail=f"Error getting graph snapshot: {str(e)}"
+        )
+
+
+@router.get("/recommendations/{satellite_id}")
+def get_satellite_recommendations(
+    satellite_id: str,
+    strategy: str = Query(
+        default="collaborative_filtering",
+        description="Recommendation strategy: 'collaborative_filtering', 'similar_neighbors', 'second_degree', 'common_neighbors', or 'similarity'"
+    ),
+    edge_types: Optional[List[str]] = Query(
+        default=None,
+        description="Optional list of edge types to consider"
+    ),
+    limit: int = Query(default=10, ge=1, le=100, description="Maximum number of recommendations"),
+    min_similarity: float = Query(default=0.1, ge=0.0, le=1.0, description="Minimum similarity threshold (for similarity strategy)"),
+    min_common_connections: int = Query(default=2, ge=1, description="Minimum common connections (for collaborative filtering)")
+):
+    """
+    Get satellite recommendations based on graph structure.
+    
+    Provides different recommendation strategies:
+    
+    - **collaborative_filtering**: Satellites that share many connections but aren't directly connected
+      (like "users who liked X also liked Y")
+    
+    - **similar_neighbors**: Satellites connected to other satellites similar to this one
+    
+    - **second_degree**: Satellites at distance 2 (friends of friends)
+    
+    - **common_neighbors**: Satellites with most common neighbors
+    
+    - **similarity**: Satellites most similar based on Jaccard similarity of neighbor sets
+    
+    Parameters:
+        satellite_id: Reference satellite ID (e.g., "2025-001A")
+        strategy: Recommendation strategy to use
+        edge_types: Optional list of edge collections to consider
+        limit: Maximum number of recommendations (1-100)
+        min_similarity: Minimum similarity threshold for similarity strategy (0-1)
+        min_common_connections: Minimum common connections for collaborative filtering
+    
+    Returns:
+        Recommended satellites with relevance scores and recommendation metadata.
+    
+    Example:
+        GET /v2/graphs/recommendations/2025-001A?strategy=collaborative_filtering&limit=10
+    """
+    try:
+        cache_key = hashlib.md5(
+            json.dumps({
+                "satellite_id": satellite_id,
+                "strategy": strategy,
+                "edge_types": edge_types or [],
+                "limit": limit,
+                "min_similarity": min_similarity,
+                "min_common_connections": min_common_connections
+            }, sort_keys=True).encode()
+        ).hexdigest()
+        
+        cached_result = recommendation_cache.get(cache_key)
+        if cached_result is not None:
+            return {
+                "data": cached_result,
+                "cached": True,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        full_id = f"{COLLECTION_NAME}/{satellite_id}"
+        
+        valid_strategies = [
+            "collaborative_filtering",
+            "similar_neighbors",
+            "second_degree",
+            "common_neighbors",
+            "similarity"
+        ]
+        
+        if strategy not in valid_strategies:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid strategy. Must be one of: {', '.join(valid_strategies)}"
+            )
+        
+        if strategy == "collaborative_filtering":
+            recommendations = get_collaborative_filtering_recommendations(
+                satellite_id=full_id,
+                edge_types=edge_types,
+                limit=limit,
+                min_common_connections=min_common_connections
+            )
+        elif strategy == "similarity":
+            recommendations = get_similar_satellites(
+                satellite_id=full_id,
+                edge_types=edge_types,
+                limit=limit,
+                min_similarity=min_similarity
+            )
+        else:
+            recommendations = get_neighbor_based_recommendations(
+                satellite_id=full_id,
+                edge_types=edge_types,
+                limit=limit,
+                strategy=strategy
+            )
+        
+        result = {
+            "satellite_id": satellite_id,
+            "strategy": strategy,
+            "recommendations": recommendations,
+            "count": len(recommendations),
+            "parameters": {
+                "strategy": strategy,
+                "edge_types": edge_types or ["all"],
+                "limit": limit,
+                "min_similarity": min_similarity if strategy == "similarity" else None,
+                "min_common_connections": min_common_connections if strategy == "collaborative_filtering" else None
+            }
+        }
+        
+        recommendation_cache.set(cache_key, result)
+        
+        return {
+            "data": result,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting recommendations: {str(e)}"
         )
