@@ -1368,6 +1368,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             {stats.view_type && <span>View: {stats.view_type}</span>}
             {stats.collision_risks !== undefined && <span>Risks: {stats.collision_risks}</span>}
             {stats.communities_found !== undefined && <span>Communities: {stats.communities_found}</span>}
+            {stats.root_satellite && <span>Root: {stats.root_satellite}</span>}
+            {stats.total_ancestors !== undefined && <span>Ancestors: {stats.total_ancestors}</span>}
+            {stats.total_descendants !== undefined && <span>Descendants: {stats.total_descendants}</span>}
+            {stats.family && <span>Family: {stats.family}</span>}
             {stats.message && <span>{stats.message}</span>}
           </div>
         )}
@@ -1497,6 +1501,24 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
                 <span className="legend-edge" style={{backgroundColor: '#27ae60'}}></span>
                 <span>Low (&lt;0.4)</span>
               </div>
+            </div>
+          </>
+        ) : graphType === 'lineage' ? (
+          <>
+            <div className="legend-item">
+              <span className="legend-node" style={{backgroundColor: '#e74c3c'}}></span>
+              <span>Root Satellite (selected)</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node" style={{backgroundColor: '#3498db'}}></span>
+              <span>Ancestor</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node" style={{backgroundColor: '#2ecc71'}}></span>
+              <span>Descendant</span>
+            </div>
+            <div className="legend-note">
+              Lineage shows family relationships and generations
             </div>
           </>
         ) : graphType === 'communities' ? (

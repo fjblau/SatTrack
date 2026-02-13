@@ -68,16 +68,28 @@ Add comprehensive error handling and logging to identify which API calls are fai
 
 ---
 
-### [ ] Step: Fix Satellite Lineage Selection
+### [x] Step: Fix Satellite Lineage Selection
+<!-- chat-id: f2fe7728-e8eb-4435-8133-6979759ce0ff -->
+
+**Completed:** Satellite selection UI implemented with search functionality
 
 Implement satellite selection UI for the lineage graph:
 
-- [ ] Add satellite search state to GraphExplorer
-- [ ] Create satellite search input in lineage panel
-- [ ] Add autocomplete/typeahead functionality
-- [ ] Pass selectedSatellite prop to GraphViewer
-- [ ] Add loading state while fetching lineage data
-- [ ] Display lineage tree when satellite is selected
+- [x] Add satellite search state to GraphExplorer
+- [x] Create satellite search input in lineage panel
+- [x] Add autocomplete/typeahead functionality
+- [x] Pass selectedSatellite prop to GraphViewer
+- [x] Add loading state while fetching lineage data
+- [x] Display lineage tree when satellite is selected
+
+**Changes Made:**
+- Added state management for satellite search (selectedSatellite, satelliteSearchQuery, satelliteSearchResults, searchingsatellite)
+- Implemented `searchSatellites()` function that queries `/v2/search` endpoint with autocomplete
+- Created search input UI with dropdown results display in lineage panel
+- Added satellite selection handling with visual confirmation
+- Passed `selectedSatellite` prop to GraphViewer component
+- Added lineage-specific legend showing root/ancestor/descendant color coding
+- Added lineage stats display (root satellite, ancestors, descendants, family)
 
 **Verification:**
 - Navigate to Satellite Lineage view
