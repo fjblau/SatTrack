@@ -500,8 +500,7 @@ function GraphExplorer() {
                 }}
               >
                 <option value="label_propagation">Label Propagation</option>
-                <option value="louvain">Louvain</option>
-                <option value="greedy_modularity">Greedy Modularity</option>
+                <option value="connected_components">Connected Components</option>
               </select>
             </div>
             

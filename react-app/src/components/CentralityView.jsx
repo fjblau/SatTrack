@@ -37,14 +37,14 @@ function CentralityView({ onCentralitySelect }) {
     try {
       const params = new URLSearchParams({
         metric: metricType,
-        top_n: topN
+        limit: topN
       })
       
       edgeTypes.forEach(type => {
         params.append('edge_types', type)
       })
 
-      console.log(`[CentralityView] Fetching centrality: metric=${metricType}, edge_types=[${edgeTypes.join(',')}], top_n=${topN}`)
+      console.log(`[CentralityView] Fetching centrality: metric=${metricType}, edge_types=[${edgeTypes.join(',')}], limit=${topN}`)
       
       const response = await fetch(`/v2/graphs/analytics/centrality?${params}`)
       
@@ -57,11 +57,11 @@ function CentralityView({ onCentralitySelect }) {
       console.log('[CentralityView] Response:', data)
 
       if (data.data) {
-        if (data.data.nodes && data.data.nodes.length === 0) {
+        if (data.data.satellites && data.data.satellites.length === 0) {
           setNoResults(true)
           console.log('[CentralityView] No results found')
         } else {
-          console.log(`[CentralityView] Success: ${data.data.nodes?.length || 0} nodes`)
+          console.log(`[CentralityView] Success: ${data.data.satellites?.length || 0} satellites`)
           onCentralitySelect(data.data, metricType)
         }
       } else {

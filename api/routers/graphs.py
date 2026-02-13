@@ -303,8 +303,8 @@ def get_graph_stats():
     
     LET launches_by_year = (
         FOR doc IN {COLLECTION_NAME}
-            FILTER doc.canonical.launch_date != null
-            LET year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            FILTER doc.canonical.date_of_launch != null
+            LET year = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 0, 4))
             COLLECT launch_year = year WITH COUNT INTO sat_count
             SORT launch_year DESC
             LIMIT 10
@@ -524,9 +524,9 @@ def get_yearly_launch_data_filtered(
     
     query = f"""
     FOR doc IN {COLLECTION_NAME}
-        FILTER doc.canonical.launch_date != null
+        FILTER doc.canonical.date_of_launch != null
         FILTER {filter_clause}
-        LET launch_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+        LET launch_year = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 0, 4))
         FILTER launch_year != null AND launch_year >= 1957
         COLLECT year = launch_year WITH COUNT INTO sat_count
         SORT year ASC
@@ -573,11 +573,11 @@ def get_monthly_launch_data(
     
     query = f"""
     FOR doc IN {COLLECTION_NAME}
-        FILTER doc.canonical.launch_date != null
+        FILTER doc.canonical.date_of_launch != null
         FILTER {filter_clause}
-        LET launch_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+        LET launch_year = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 0, 4))
         FILTER launch_year == @year
-        LET launch_month = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 5, 2))
+        LET launch_month = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 5, 2))
         COLLECT month = launch_month WITH COUNT INTO sat_count
         SORT month ASC
         RETURN {{
@@ -628,8 +628,8 @@ def get_launch_timeline_breakdown(
     query = f"""
     LET year_satellites = (
         FOR doc IN {COLLECTION_NAME}
-            FILTER doc.canonical.launch_date != null
-            LET sat_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            FILTER doc.canonical.date_of_launch != null
+            LET sat_year = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 0, 4))
             FILTER sat_year == @year
             RETURN doc
     )
@@ -724,9 +724,9 @@ def get_monthly_launch_breakdown(
     query = f"""
     LET month_satellites = (
         FOR doc IN {COLLECTION_NAME}
-            FILTER doc.canonical.launch_date != null
-            LET sat_year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
-            LET sat_month = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 5, 2))
+            FILTER doc.canonical.date_of_launch != null
+            LET sat_year = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 0, 4))
+            LET sat_month = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 5, 2))
             FILTER sat_year == @year AND sat_month == @month
             RETURN doc
     )
@@ -825,8 +825,8 @@ def get_launch_timeline_graph(
     query = f"""
     LET satellites_in_period = (
         FOR doc IN {COLLECTION_NAME}
-            FILTER doc.canonical.launch_date != null
-            LET year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            FILTER doc.canonical.date_of_launch != null
+            LET year = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 0, 4))
             FILTER year >= @start_year AND year <= @end_year
             LIMIT @limit
             RETURN {{
@@ -834,7 +834,7 @@ def get_launch_timeline_graph(
                 _id: doc._id,
                 identifier: doc.identifier,
                 name: doc.canonical.name,
-                launch_date: doc.canonical.launch_date,
+                launch_date: doc.canonical.date_of_launch,
                 launch_year: year,
                 country: doc.canonical.country,
                 constellation: doc.canonical.constellation,
@@ -855,8 +855,8 @@ def get_launch_timeline_graph(
     
     LET total_in_period = LENGTH(
         FOR doc IN {COLLECTION_NAME}
-            FILTER doc.canonical.launch_date != null
-            LET year = TO_NUMBER(SUBSTRING(doc.canonical.launch_date, 0, 4))
+            FILTER doc.canonical.date_of_launch != null
+            LET year = TO_NUMBER(SUBSTRING(doc.canonical.date_of_launch, 0, 4))
             FILTER year >= @start_year AND year <= @end_year
             RETURN 1
     )
@@ -949,7 +949,7 @@ def get_function_similarity_graph(limit: Optional[int] = Query(default=100, desc
                 function: doc.canonical.function,
                 function_category: category,
                 country: doc.canonical.country,
-                launch_date: doc.canonical.launch_date,
+                launch_date: doc.canonical.date_of_launch,
                 orbital_band: doc.canonical.orbital_band,
                 congestion_risk: doc.canonical.congestion_risk
             }}
@@ -1087,7 +1087,7 @@ def get_function_category_graph(
                 function: doc.canonical.function,
                 function_category: detected_category,
                 country: doc.canonical.country,
-                launch_date: doc.canonical.launch_date,
+                launch_date: doc.canonical.date_of_launch,
                 orbital_band: doc.canonical.orbital_band,
                 congestion_risk: doc.canonical.congestion_risk,
                 norad_cat_id: doc.canonical.norad_cat_id

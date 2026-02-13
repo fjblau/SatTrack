@@ -1725,16 +1725,16 @@ def get_graph_snapshot_by_date(
         date_filter = ""
         
         if date_len == 4:
-            date_filter = "STARTS_WITH(doc.canonical.launch_date, @target_date)"
+            date_filter = "STARTS_WITH(doc.canonical.date_of_launch, @target_date)"
         elif date_len == 7:
-            date_filter = "STARTS_WITH(doc.canonical.launch_date, @target_date)"
+            date_filter = "STARTS_WITH(doc.canonical.date_of_launch, @target_date)"
         else:
-            date_filter = "doc.canonical.launch_date <= @target_date"
+            date_filter = "doc.canonical.date_of_launch <= @target_date"
         
         query = f"""
         LET satellites_at_date = (
             FOR doc IN {COLLECTION_NAME}
-                FILTER doc.canonical.launch_date != null
+                FILTER doc.canonical.date_of_launch != null
                 FILTER {date_filter}
                 RETURN doc
         )
@@ -1769,7 +1769,7 @@ def get_graph_snapshot_by_date(
             count_query = f"""
             LET satellites_at_date = (
                 FOR doc IN {COLLECTION_NAME}
-                    FILTER doc.canonical.launch_date != null
+                    FILTER doc.canonical.date_of_launch != null
                     FILTER {date_filter}
                     RETURN doc._id
             )
@@ -1790,7 +1790,7 @@ def get_graph_snapshot_by_date(
         
         satellite_query = f"""
         FOR doc IN {COLLECTION_NAME}
-            FILTER doc.canonical.launch_date != null
+            FILTER doc.canonical.date_of_launch != null
             FILTER {date_filter}
             RETURN doc
         """
