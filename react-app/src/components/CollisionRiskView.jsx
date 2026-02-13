@@ -9,6 +9,7 @@ function CollisionRiskView({ onCollisionRiskSelect }) {
   const [minClusterSize, setMinClusterSize] = useState(3)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [noResults, setNoResults] = useState(false)
 
   useEffect(() => {
     loadOrbitalBands()
@@ -16,22 +17,42 @@ function CollisionRiskView({ onCollisionRiskSelect }) {
 
   const loadOrbitalBands = async () => {
     try {
+      console.log('[CollisionRiskView] Loading orbital bands...')
       const response = await fetch('/v2/graphs/stats')
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[CollisionRiskView] Orbital bands response:', data)
+      
       if (data.data?.proximity_by_orbital_band) {
         setOrbitalBands(data.data.proximity_by_orbital_band)
         if (data.data.proximity_by_orbital_band.length > 0) {
           setSelectedOrbitalBand(data.data.proximity_by_orbital_band[0].orbital_band)
         }
+        console.log(`[CollisionRiskView] Loaded ${data.data.proximity_by_orbital_band.length} orbital bands`)
       }
     } catch (err) {
-      console.error('Error loading orbital bands:', err)
+      console.error('[CollisionRiskView] Error loading orbital bands:', err)
     }
   }
 
   const handleLoadCollisionRisks = async () => {
+    if (viewType === 'clusters' && (minClusterSize < 2 || minClusterSize > 50)) {
+      setError('⚠️ Minimum cluster size must be between 2 and 50')
+      return
+    }
+
+    if (viewType === 'network' && (riskThreshold < 0 || riskThreshold > 1)) {
+      setError('⚠️ Risk threshold must be between 0 and 1')
+      return
+    }
+
     setLoading(true)
     setError(null)
+    setNoResults(false)
 
     try {
       let endpoint
@@ -43,24 +64,43 @@ function CollisionRiskView({ onCollisionRiskSelect }) {
         if (selectedOrbitalBand) {
           params.append('orbital_band', selectedOrbitalBand)
         }
+        console.log(`[CollisionRiskView] Loading network: threshold=${riskThreshold}, band=${selectedOrbitalBand || 'all'}`)
       } else if (viewType === 'clusters') {
         endpoint = '/v2/graphs/collision-risks/clusters'
         params.append('min_cluster_size', minClusterSize)
         if (selectedOrbitalBand) {
           params.append('orbital_band', selectedOrbitalBand)
         }
+        console.log(`[CollisionRiskView] Loading clusters: min_size=${minClusterSize}, band=${selectedOrbitalBand || 'all'}`)
       }
 
       const response = await fetch(`${endpoint}?${params}`)
+      
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[CollisionRiskView] Response:', data)
 
-      if (response.ok && data.data) {
-        onCollisionRiskSelect(data.data, viewType)
+      if (data.data) {
+        const nodeCount = data.data.nodes?.length || 0
+        const edgeCount = data.data.edges?.length || 0
+        
+        if (nodeCount === 0 && edgeCount === 0) {
+          setNoResults(true)
+          console.log('[CollisionRiskView] No results found')
+        } else {
+          console.log(`[CollisionRiskView] Success: ${nodeCount} nodes, ${edgeCount} edges`)
+          onCollisionRiskSelect(data.data, viewType)
+        }
       } else {
-        setError(data.message || 'Failed to load collision risks')
+        throw new Error('Invalid response: missing data field')
       }
     } catch (err) {
-      setError('Error loading collision risks: ' + err.message)
+      console.error('[CollisionRiskView] Error:', err)
+      setError(`❌ Error loading collision risks: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -132,10 +172,36 @@ function CollisionRiskView({ onCollisionRiskSelect }) {
           disabled={loading}
           className="load-button"
         >
-          {loading ? 'Loading...' : 'Load Collision Risks'}
+          {loading ? (
+            <>
+              <span className="spinner"></span>
+              Loading...
+            </>
+          ) : 'Load Collision Risks'}
         </button>
 
         {error && <div className="error-message">{error}</div>}
+        {noResults && (
+          <div className="no-results-message">
+            ℹ️ No collision risks found with the selected parameters. Try:
+            <ul>
+              {viewType === 'network' && (
+                <>
+                  <li>Lowering the risk threshold</li>
+                  <li>Selecting a different orbital band</li>
+                  <li>Selecting "All Bands"</li>
+                </>
+              )}
+              {viewType === 'clusters' && (
+                <>
+                  <li>Reducing the minimum cluster size</li>
+                  <li>Selecting a different orbital band</li>
+                  <li>Selecting "All Bands"</li>
+                </>
+              )}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="risk-info">

@@ -7,6 +7,7 @@ function CentralityView({ onCentralitySelect }) {
   const [topN, setTopN] = useState(20)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [noResults, setNoResults] = useState(false)
 
   const handleEdgeTypeToggle = (edgeType) => {
     setEdgeTypes(prev => {
@@ -20,12 +21,18 @@ function CentralityView({ onCentralitySelect }) {
 
   const handleCalculateCentrality = async () => {
     if (edgeTypes.length === 0) {
-      setError('Please select at least one edge type')
+      setError('⚠️ Please select at least one edge type to calculate centrality')
+      return
+    }
+
+    if (topN < 5 || topN > 100) {
+      setError('⚠️ Top N must be between 5 and 100')
       return
     }
 
     setLoading(true)
     setError(null)
+    setNoResults(false)
 
     try {
       const params = new URLSearchParams({
@@ -37,16 +44,32 @@ function CentralityView({ onCentralitySelect }) {
         params.append('edge_types', type)
       })
 
+      console.log(`[CentralityView] Fetching centrality: metric=${metricType}, edge_types=[${edgeTypes.join(',')}], top_n=${topN}`)
+      
       const response = await fetch(`/v2/graphs/analytics/centrality?${params}`)
+      
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('[CentralityView] Response:', data)
 
-      if (response.ok && data.data) {
-        onCentralitySelect(data.data, metricType)
+      if (data.data) {
+        if (data.data.nodes && data.data.nodes.length === 0) {
+          setNoResults(true)
+          console.log('[CentralityView] No results found')
+        } else {
+          console.log(`[CentralityView] Success: ${data.data.nodes?.length || 0} nodes`)
+          onCentralitySelect(data.data, metricType)
+        }
       } else {
-        setError(data.message || 'Failed to calculate centrality')
+        throw new Error('Invalid response: missing data field')
       }
     } catch (err) {
-      setError('Error calculating centrality: ' + err.message)
+      console.error('[CentralityView] Error:', err)
+      setError(`❌ Error calculating centrality: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -113,10 +136,25 @@ function CentralityView({ onCentralitySelect }) {
           disabled={loading}
           className="calculate-button"
         >
-          {loading ? 'Calculating...' : 'Calculate Centrality'}
+          {loading ? (
+            <>
+              <span className="spinner"></span>
+              Calculating...
+            </>
+          ) : 'Calculate Centrality'}
         </button>
 
         {error && <div className="error-message">{error}</div>}
+        {noResults && (
+          <div className="no-results-message">
+            ℹ️ No results found with the selected parameters. Try:
+            <ul>
+              <li>Selecting more edge types</li>
+              <li>Increasing the Top N value</li>
+              <li>Using a different centrality metric</li>
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="metric-info">

@@ -135,15 +135,40 @@ Fix communities graph data handling and display:
 
 ---
 
-### [ ] Step: Enhance Centrality and Collision Risk Views
+### [x] Step: Enhance Centrality and Collision Risk Views
+<!-- chat-id: 3c4c0d81-7d98-47a5-a52b-7f09589a2952 -->
+
+**Completed:** Enhanced user feedback, error handling, validation, and loading states for both views
 
 Improve user feedback and error handling:
 
-- [ ] Add inline error messages to CentralityView
-- [ ] Add inline error messages to CollisionRiskView
-- [ ] Improve loading state feedback (show spinner/progress)
-- [ ] Add "No results" state for empty responses
-- [ ] Add validation for required parameters before API call
+- [x] Add inline error messages to CentralityView
+- [x] Add inline error messages to CollisionRiskView
+- [x] Improve loading state feedback (show spinner/progress)
+- [x] Add "No results" state for empty responses
+- [x] Add validation for required parameters before API call
+
+**Changes Made:**
+
+**CentralityView.jsx:**
+- Added `noResults` state for empty response handling
+- Added parameter validation (edge types, top N range)
+- Enhanced error handling with emoji indicators (⚠️ for validation, ❌ for errors)
+- Added detailed console logging with `[CentralityView]` prefix
+- Added HTTP status validation and data structure checks
+- Implemented loading spinner in button
+- Added "No results" message with helpful suggestions
+- CSS: Added `.error-message`, `.no-results-message`, `.spinner` styles with animation
+
+**CollisionRiskView.jsx:**
+- Added `noResults` state for empty response handling
+- Added parameter validation (cluster size, risk threshold ranges)
+- Enhanced error handling with emoji indicators (⚠️ for validation, ❌ for errors)
+- Added detailed console logging with `[CollisionRiskView]` prefix for both orbital bands loading and collision risk loading
+- Added HTTP status validation and data structure checks
+- Implemented loading spinner in button
+- Added "No results" message with context-specific suggestions (different for network vs clusters view)
+- CSS: Added `.error-message`, `.no-results-message`, `.spinner` styles with animation
 
 **Verification:**
 - Test Centrality Analysis with all three metrics
