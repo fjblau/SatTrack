@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -289,10 +289,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       renderCollisionRiskGraph(collisionRiskData, collisionViewType)
     } else if (graphType === 'communities') {
       loadCommunitiesGraph()
+    } else if (graphType === 'lineage' && selectedSatellite) {
+      loadLineageGraph(selectedSatellite)
     } else if (graphType === 'lineage') {
       setStats({ message: 'Select a satellite from the data table to view its lineage' })
+      if (cyRef.current) {
+        cyRef.current.elements().remove()
+      }
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -754,31 +759,35 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     
     setLoading(true)
     try {
-      const maxScore = Math.max(...(data.centrality_scores?.map(s => s.score) || [1]))
+      const satellites = data.satellites || []
+      
+      const getScore = (item) => {
+        if (metric === 'degree') return item.degree
+        if (metric === 'betweenness') return item.betweenness
+        if (metric === 'closeness') return item.closeness
+        return 0
+      }
+      
+      const scores = satellites.map(getScore)
+      const maxScore = Math.max(...scores, 1)
       
       const elements = {
-        nodes: (data.centrality_scores || []).map(item => {
-          const normalizedScore = item.score / maxScore
+        nodes: satellites.map(item => {
+          const score = getScore(item)
+          const normalizedScore = score / maxScore
           const nodeSize = 20 + (normalizedScore * 60)
           
           return {
             data: {
-              id: item.node_id,
-              label: item.node_id.split('/')[1] || item.node_id,
-              centrality_score: item.score,
+              id: item._id,
+              label: item.name || item.identifier || item._id.split('/')[1],
+              centrality_score: score,
               centrality_size: nodeSize,
               node_size: nodeSize
             }
           }
         }),
-        edges: (data.edges || []).map(edge => ({
-          data: {
-            id: `${edge.source}_to_${edge.target}`,
-            source: edge.source,
-            target: edge.target,
-            relationship_type: edge.relationship_type
-          }
-        }))
+        edges: []
       }
       
       cyRef.current.elements().remove()
@@ -787,7 +796,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       
       setStats({
         metric_type: metric,
-        nodes_analyzed: data.centrality_scores?.length || 0,
+        nodes_analyzed: satellites.length,
         max_score: maxScore.toFixed(4)
       })
     } catch (error) {
@@ -858,42 +867,42 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     
     setLoading(true)
     try {
-      const response = await fetch('/v2/graphs/communities?algorithm=label_propagation&min_community_size=3')
+      const response = await fetch('/v2/graphs/communities?algorithm=label_propagation&min_size=3')
       const data = await response.json()
       
-      if (data.data && data.data.nodes) {
+      if (data.data && data.data.communities) {
         const communityColors = {}
         let colorIndex = 0
         const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22']
         
-        const elements = {
-          nodes: data.data.nodes.map(node => {
-            const community = node.community_id || 0
-            if (!communityColors[community]) {
-              communityColors[community] = colors[colorIndex % colors.length]
-              colorIndex++
-            }
-            
-            return {
+        const nodes = []
+        data.data.communities.forEach(community => {
+          const communityId = community.community_id
+          if (!communityColors[communityId]) {
+            communityColors[communityId] = colors[colorIndex % colors.length]
+            colorIndex++
+          }
+          
+          (community.members || []).forEach(member => {
+            nodes.push({
               data: {
-                id: node.id || node._id,
-                label: node.name || node.identifier || (node.id?.split('/')[1]),
-                community_id: community,
-                background_color: communityColors[community],
+                id: member.satellite_id,
+                label: member.satellite_name || member.identifier || member.satellite_id.split('/')[1],
+                community_id: communityId,
+                orbital_band: member.orbital_band,
+                country: member.country,
                 node_size: 25
               },
               style: {
-                'background-color': communityColors[community]
+                'background-color': communityColors[communityId]
               }
-            }
-          }),
-          edges: (data.data.edges || []).map(edge => ({
-            data: {
-              id: edge.id || `${edge.source}_to_${edge.target}`,
-              source: edge.source || edge._from,
-              target: edge.target || edge._to
-            }
-          }))
+            })
+          })
+        })
+        
+        const elements = {
+          nodes: nodes,
+          edges: []
         }
         
         cyRef.current.elements().remove()
@@ -901,13 +910,122 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         applyLayout(layout)
         
         setStats({
-          communities_found: Object.keys(communityColors).length,
-          total_nodes: elements.nodes.length,
-          total_edges: elements.edges.length
+          communities_found: data.data.communities.length,
+          total_nodes: nodes.length,
+          algorithm: data.data.algorithm || 'label_propagation'
         })
       }
     } catch (error) {
       console.error('Error loading communities graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadLineageGraph = async (satelliteId) => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const cleanId = satelliteId.includes('/') ? satelliteId.split('/')[1] : satelliteId
+      const response = await fetch(`/v2/graphs/lineage/${encodeURIComponent(cleanId)}?direction=both&max_depth=5`)
+      const data = await response.json()
+      
+      if (data.data && data.data.root) {
+        const nodes = []
+        const edges = []
+        const nodeColors = {
+          root: '#e74c3c',
+          ancestor: '#3498db',
+          descendant: '#2ecc71'
+        }
+        
+        nodes.push({
+          data: {
+            id: data.data.root._id,
+            label: data.data.root.name || data.data.root.identifier,
+            node_type: 'root',
+            family: data.data.root.family,
+            generation: data.data.root.generation,
+            node_size: 40
+          },
+          style: {
+            'background-color': nodeColors.root
+          }
+        })
+        
+        (data.data.ancestors || []).forEach(item => {
+          const sat = item.satellite
+          nodes.push({
+            data: {
+              id: sat._id,
+              label: sat.name || sat.identifier,
+              node_type: 'ancestor',
+              generation: item.generation,
+              node_size: 30
+            },
+            style: {
+              'background-color': nodeColors.ancestor
+            }
+          })
+          
+          if (item.edge) {
+            edges.push({
+              data: {
+                id: `${sat._id}_to_${data.data.root._id}`,
+                source: sat._id,
+                target: data.data.root._id,
+                relationship: item.edge.relationship_type
+              }
+            })
+          }
+        })
+        
+        (data.data.descendants || []).forEach(item => {
+          const sat = item.satellite
+          nodes.push({
+            data: {
+              id: sat._id,
+              label: sat.name || sat.identifier,
+              node_type: 'descendant',
+              generation: item.generation,
+              node_size: 30
+            },
+            style: {
+              'background-color': nodeColors.descendant
+            }
+          })
+          
+          if (item.edge) {
+            edges.push({
+              data: {
+                id: `${data.data.root._id}_to_${sat._id}`,
+                source: data.data.root._id,
+                target: sat._id,
+                relationship: item.edge.relationship_type
+              }
+            })
+          }
+        })
+        
+        const elements = { nodes, edges }
+        
+        cyRef.current.elements().remove()
+        cyRef.current.add(elements)
+        applyLayout('cola')
+        
+        setStats({
+          root_satellite: data.data.root.name || data.data.root.identifier,
+          total_ancestors: data.data.stats?.total_ancestors || 0,
+          total_descendants: data.data.stats?.total_descendants || 0,
+          family: data.data.root.family || 'Unknown'
+        })
+      } else if (data.data && data.data.error) {
+        setStats({ error: data.data.error })
+      }
+    } catch (error) {
+      console.error('Error loading lineage graph:', error)
+      setStats({ error: 'Failed to load lineage data' })
     } finally {
       setLoading(false)
     }
