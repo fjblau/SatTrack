@@ -155,3 +155,61 @@ To verify the bug:
 Expected browser console errors:
 - "Cannot read property 'map' of undefined" (accessing undefined arrays)
 - No data logged for communities/centrality responses
+
+---
+
+## Implementation Notes
+
+### Changes Made (Frontend Fixes)
+
+#### 1. Communities Graph ([`GraphViewer.jsx:856-923`](./react-app/src/components/GraphViewer.jsx:856))
+**Fixed**:
+- Changed API parameter from `min_community_size=3` to `min_size=3` (line 861)
+- Updated data access from `data.data.nodes` to `data.data.communities` (line 864)
+- Transformed communities array structure to nodes/edges format:
+  - Iterate through each community
+  - Extract members from community object
+  - Create nodes with community colors
+  - No edges needed (communities are separate groups)
+- Updated stats to show `communities_found` instead of assuming node/edge structure
+
+#### 2. Centrality Analysis ([`GraphViewer.jsx:752-803`](./react-app/src/components/GraphViewer.jsx:752))
+**Fixed**:
+- Changed data access from `data.centrality_scores` to `data.satellites` (line 757)
+- Added metric-based score extraction (degree/betweenness/closeness) (lines 759-764)
+- Updated node ID mapping from `item.node_id` to `item._id` (line 777)
+- Updated label extraction to use `item.name`, `item.identifier`, or fallback (line 778)
+- Removed edges array (backend doesn't provide edges for centrality metrics) (line 785)
+- Updated stats to reference satellites length (line 794)
+
+#### 3. Lineage Graph ([`GraphViewer.jsx:925-1032`](./react-app/src/components/GraphViewer.jsx:925))
+**Implemented**:
+- Added `selectedSatellite` prop to component signature (line 8)
+- Created `loadLineageGraph()` function to fetch and render lineage data
+- Fetches from `/v2/graphs/lineage/{satelliteId}` endpoint (line 931)
+- Transforms lineage tree structure to graph nodes/edges:
+  - Root satellite (red node)
+  - Ancestors (blue nodes) with edges pointing to root
+  - Descendants (green nodes) with edges from root
+- Added error handling for missing satellites
+- Updated useEffect dependencies to include `selectedSatellite` (line 300)
+- Shows message when no satellite is selected (line 295-298)
+
+**Note**: Lineage feature requires parent component to pass `selectedSatellite` prop. The implementation is complete but requires integration with data table selection (future work).
+
+### Testing Status
+- **Manual Testing**: Not completed (Node.js not available in environment)
+- **Code Review**: Completed - all changes align with backend API structures
+- **Syntax Check**: Passed - no obvious syntax errors
+
+### Verification Steps (when environment is available)
+1. Start application: `./start.sh`
+2. Navigate to Graph Explorer
+3. Test Communities: Should display colored nodes grouped by community
+4. Test Centrality: Should display nodes sized by centrality score
+5. Test Lineage: Should show message or graph if satellite selected
+
+### Expected Behavior After Fixes
+- **Communities**: Displays satellites as colored nodes grouped by detected communities
+- **Centrality**: Displays satellites sized by centrality score (degree/betweenness/closeness)
+- **Lineage**: Displays family tree with ancestors and descendants (requires satellite selection)
