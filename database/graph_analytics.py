@@ -52,7 +52,7 @@ def find_shortest_path(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         FOR v, e IN 1..@max_depth OUTBOUND @from_id
@@ -118,7 +118,7 @@ def find_all_paths(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         FOR v, e, p IN 1..@max_depth OUTBOUND @from_id
@@ -178,7 +178,7 @@ def calculate_degree_centrality(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         FOR doc IN {COLLECTION_NAME}
@@ -253,7 +253,7 @@ def traverse_graph(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         limit_clause = f"LIMIT {limit}" if limit else ""
         
@@ -316,7 +316,7 @@ def get_neighbors(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         FOR v, e IN 1..1 {direction} @vertex_id
@@ -433,7 +433,7 @@ def calculate_betweenness_centrality(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         LET sample_nodes = (
@@ -530,7 +530,7 @@ def calculate_closeness_centrality(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         FOR node IN {COLLECTION_NAME}
@@ -601,7 +601,7 @@ def find_connected_components(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         FOR doc IN {COLLECTION_NAME}
@@ -1470,7 +1470,7 @@ def detect_communities_label_propagation(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         LET satellites = (
@@ -1867,7 +1867,7 @@ def calculate_graph_evolution_timeline(
                 EDGE_COLLECTION_SATELLITE_LINEAGE
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         if granularity == 'year':
             start_year = int(start_date[:4])
@@ -2004,7 +2004,7 @@ def calculate_jaccard_similarity(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         LET neighbors_a = (
@@ -2079,7 +2079,7 @@ def get_similar_satellites(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         LET source_neighbors = (
@@ -2175,7 +2175,7 @@ def get_neighbor_based_recommendations(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         if strategy == "similar_neighbors":
             query = f"""
@@ -2348,7 +2348,7 @@ def get_collaborative_filtering_recommendations(
                 EDGE_COLLECTION_PROXIMITY
             ]
         
-        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        edge_clause = ", ".join(edge_collections)
         
         query = f"""
         LET source_neighbors = (
