@@ -13,8 +13,13 @@ def create_edge_collection(edge_collection_name: str) -> bool:
         True if created or already exists, False on error
     """
     try:
-        if not db.has_collection(edge_collection_name):
-            db.create_collection(edge_collection_name, edge=True)
+        from database.connection import db as current_db
+        if current_db is None:
+            print(f"Database not connected. Call connect_arangodb() first.")
+            return False
+        
+        if not current_db.has_collection(edge_collection_name):
+            current_db.create_collection(edge_collection_name, edge=True)
             print(f"Created edge collection: {edge_collection_name}")
         else:
             print(f"Edge collection already exists: {edge_collection_name}")
@@ -223,11 +228,16 @@ def add_edge_indexes(edge_collection_name: str) -> bool:
         True if successful, False otherwise
     """
     try:
-        if not db.has_collection(edge_collection_name):
+        from database.connection import db as current_db
+        if current_db is None:
+            print(f"Database not connected. Call connect_arangodb() first.")
+            return False
+        
+        if not current_db.has_collection(edge_collection_name):
             print(f"❌ Collection not found: {edge_collection_name}")
             return False
         
-        edge_collection = db.collection(edge_collection_name)
+        edge_collection = current_db.collection(edge_collection_name)
         existing_indexes = edge_collection.indexes()
         
         edge_index_exists = any(

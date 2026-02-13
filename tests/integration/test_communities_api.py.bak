@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""
+Integration tests for community detection API endpoints.
+
+Tests the /v2/graphs/communities endpoint with various
+algorithms, configurations, and caching behavior.
+"""
+import requests
+import time
+import pytest
+
+API_BASE = "http://localhost:8000"
+
+
+@pytest.fixture(scope="module")
+def api_available():
+    """Check if API is available before running tests"""
+    try:
+        response = requests.get(f"{API_BASE}/v2/health", timeout=2)
+        return response.status_code == 200
+    except Exception:
+        pytest.skip("API server not available")
+
+
+class TestCommunitiesAPI:
+    """Integration tests for communities API endpoint"""
+    
+    def test_get_communities_default_algorithm(self, api_available):
+        """Test getting communities with default algorithm (label_propagation)"""
+        url = f"{API_BASE}/v2/graphs/communities"
+        
+        response = requests.get(url, timeout=30)
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "data" in data
+        assert "timestamp" in data
+        assert "cached" in data
+        
+        result = data["data"]
+        assert "communities" in result
+        assert "algorithm" in result
+        assert "stats" in result
+        
+        assert result["algorithm"] == "label_propagation"
+        assert isinstance(result["communities"], list)
+        assert isinstance(result["stats"], dict)
+    
+    def test_get_communities_label_propagation(self, api_available):
+        """Test getting communities with label propagation algorithm"""
+        url = f"{API_BASE}/v2/graphs/communities"
+        params = {"algorithm": "label_propagation", "min_size": 2}
+        
+        response = requests.get(url, params=params, timeout=30)
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        assert result["algorithm"] == "label_propagation"
+        assert result["stats"]["min_community_size"] == 2
+        
+        if result["communities"]:
+            community = result["communities"][0]
+            assert "community_id" in community
+            assert "size" in community
+            assert "members" in community
+            assert "algorithm" in community
+            assert community["algorithm"] == "label_propagation"
+            assert community["size"] >= 2
+    
+    def test_get_communities_connected_components(self):
+        """Test getting communities with connected components algorithm"""
+        response = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"algorithm": "connected_components", "min_size": 3}
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        assert result["algorithm"] == "connected_components"
+        assert result["stats"]["min_community_size"] == 3
+        
+        if result["communities"]:
+            community = result["communities"][0]
+            assert "community_id" in community
+            assert "size" in community
+            assert "members" in community
+            assert "algorithm" in community
+            assert community["algorithm"] == "connected_components"
+            assert community["size"] >= 3
+    
+    def test_get_communities_invalid_algorithm(self):
+        """Test getting communities with invalid algorithm"""
+        response = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"algorithm": "invalid_algorithm"}
+        )
+        
+        assert response.status_code == 400
+        assert "Invalid algorithm" in response.json()["detail"]
+    
+    def test_get_communities_with_min_size(self):
+        """Test getting communities with custom minimum size"""
+        response = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"min_size": 5}
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        assert result["stats"]["min_community_size"] == 5
+        
+        for community in result["communities"]:
+            assert community["size"] >= 5
+    
+    def test_get_communities_min_size_validation(self):
+        """Test minimum size validation"""
+        response = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"min_size": 1}
+        )
+        
+        assert response.status_code == 422
+    
+    def test_get_communities_max_min_size_validation(self):
+        """Test maximum min_size validation"""
+        response = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"min_size": 101}
+        )
+        
+        assert response.status_code == 422
+    
+    def test_get_communities_with_edge_types(self):
+        """Test getting communities with specific edge types"""
+        response = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={
+                "algorithm": "label_propagation",
+                "edge_types": ["constellation_membership", "orbital_proximity"]
+            }
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        assert "edge_types" in result["stats"]
+        edge_types = result["stats"]["edge_types"]
+        assert "constellation_membership" in edge_types
+        assert "orbital_proximity" in edge_types
+    
+    def test_get_communities_caching(self):
+        """Test that communities endpoint uses caching"""
+        params = {"algorithm": "label_propagation", "min_size": 2}
+        
+        response1 = requests.get(f"{API_BASE}"/v2/graphs/communities", params=params)
+        assert response1.status_code == 200
+        data1 = response1.json()
+        
+        response2 = requests.get(f"{API_BASE}"/v2/graphs/communities", params=params)
+        assert response2.status_code == 200
+        data2 = response2.json()
+        
+        assert data2["cached"] == True
+        assert data1["data"] == data2["data"]
+    
+    def test_get_communities_response_structure(self):
+        """Test that response has correct structure"""
+        response = requests.get(f"{API_BASE}"/v2/graphs/communities")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "data" in data
+        assert "timestamp" in data
+        assert "cached" in data
+        
+        result = data["data"]
+        assert "communities" in result
+        assert "algorithm" in result
+        assert "stats" in result
+        
+        stats = result["stats"]
+        assert "total_communities" in stats
+        assert "total_satellites" in stats
+        assert "min_community_size" in stats
+        assert "edge_types" in stats
+    
+    def test_get_communities_statistics(self):
+        """Test that statistics are calculated correctly"""
+        response = requests.get(f"{API_BASE}"/v2/graphs/communities")
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        stats = result["stats"]
+        communities = result["communities"]
+        
+        assert stats["total_communities"] == len(communities)
+        
+        actual_total = sum(c.get("size", 0) for c in communities)
+        assert stats["total_satellites"] == actual_total
+    
+    def test_get_communities_member_details(self):
+        """Test that community members have required details"""
+        response = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"min_size": 2}
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        if result["communities"]:
+            community = result["communities"][0]
+            if community.get("members"):
+                member = community["members"][0]
+                assert "satellite_id" in member
+    
+    def test_get_communities_orbital_band_distribution(self):
+        """Test that communities include orbital band distribution"""
+        response = requests.get(f"{API_BASE}"/v2/graphs/communities")
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        if result["communities"]:
+            community = result["communities"][0]
+            
+            if community.get("orbital_band_distribution"):
+                dist = community["orbital_band_distribution"]
+                assert isinstance(dist, list)
+                
+                if dist:
+                    band_info = dist[0]
+                    assert "band" in band_info or "orbital_band" in band_info
+                    assert "count" in band_info
+    
+    def test_get_communities_country_distribution(self):
+        """Test that communities include country distribution"""
+        response = requests.get(f"{API_BASE}"/v2/graphs/communities")
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]
+        
+        if result["communities"]:
+            community = result["communities"][0]
+            
+            if community.get("country_distribution"):
+                dist = community["country_distribution"]
+                assert isinstance(dist, list)
+                
+                if dist:
+                    country_info = dist[0]
+                    assert "country" in country_info
+                    assert "count" in country_info
+    
+    def test_get_communities_timestamp_format(self):
+        """Test that timestamp is in correct format"""
+        response = requests.get(f"{API_BASE}"/v2/graphs/communities")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        timestamp = data["timestamp"]
+        try:
+            datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        except ValueError:
+            pytest.fail(f"Invalid timestamp format: {timestamp}")
+    
+    def test_get_communities_different_algorithms_different_results(self):
+        """Test that different algorithms can produce different results"""
+        response_lp = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"algorithm": "label_propagation", "min_size": 2}
+        )
+        
+        response_cc = requests.get(f"{API_BASE}
+            "/v2/graphs/communities",
+            params={"algorithm": "connected_components", "min_size": 2}
+        )
+        
+        assert response_lp.status_code == 200
+        assert response_cc.status_code == 200
+        
+        data_lp = response_lp.json()["data"]
+        data_cc = response_cc.json()["data"]
+        
+        assert data_lp["algorithm"] == "label_propagation"
+        assert data_cc["algorithm"] == "connected_components"
+    
+    def test_get_communities_cache_invalidation_by_params(self):
+        """Test that cache is different for different parameters"""
+        params1 = {"algorithm": "label_propagation", "min_size": 2}
+        params2 = {"algorithm": "label_propagation", "min_size": 3}
+        
+        response1 = requests.get(f"{API_BASE}"/v2/graphs/communities", params=params1)
+        response2 = requests.get(f"{API_BASE}"/v2/graphs/communities", params=params2)
+        
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+        
+        data1 = response1.json()
+        data2 = response2.json()
+        
+        assert data1["data"]["stats"]["min_community_size"] == 2
+        assert data2["data"]["stats"]["min_community_size"] == 3
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

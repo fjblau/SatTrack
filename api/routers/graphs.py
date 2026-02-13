@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Query, HTTPException
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone
+import hashlib
+import json
 
 import database.connection as db_conn
 from database import (
@@ -11,8 +13,51 @@ from database import (
     EDGE_COLLECTION_PROXIMITY,
     GRAPH_NAME
 )
+from database.graph_analytics import (
+    find_shortest_path,
+    find_all_paths,
+    calculate_degree_centrality,
+    calculate_betweenness_centrality,
+    calculate_closeness_centrality,
+    get_collision_risk_neighbors,
+    analyze_collision_clusters,
+    find_cross_constellation_proximity,
+    find_country_cooperation_network,
+    find_function_based_clusters,
+    detect_communities,
+    get_graph_snapshot_by_date,
+    calculate_graph_evolution_timeline,
+    get_temporal_network_metrics,
+    get_similar_satellites,
+    get_neighbor_based_recommendations,
+    get_collaborative_filtering_recommendations
+)
+from api.services.cache_service import get_cache
+from api.services import collision_service, lineage_service
 
 router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
+
+# Optimized cache configurations based on query patterns and update frequencies
+# Path queries: frequently requested, relatively stable - increased capacity
+path_cache = get_cache("path_queries", ttl=3600, max_size=2000)
+
+# Centrality: expensive to compute, moderately stable - reduced TTL for freshness
+centrality_cache = get_cache("centrality_queries", ttl=43200, max_size=500)
+
+# Community detection: expensive, fairly stable - keep long TTL
+community_cache = get_cache("community_queries", ttl=43200, max_size=300)
+
+# Evolution: very stable temporal data - long TTL, small cache
+evolution_cache = get_cache("evolution_queries", ttl=86400, max_size=150)
+
+# Recommendations: moderately expensive, should be fresh - shorter TTL
+recommendation_cache = get_cache("recommendation_queries", ttl=3600, max_size=750)
+
+# Collision risks: expensive to compute, moderately dynamic - new cache
+collision_cache = get_cache("collision_queries", ttl=7200, max_size=400)
+
+# Cross-domain queries: complex multi-edge traversals - new cache
+cross_domain_cache = get_cache("cross_domain_queries", ttl=14400, max_size=300)
 
 
 @router.get("/constellation/{constellation_name}")
@@ -1259,3 +1304,1395 @@ def get_country_relations_graph(
             },
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+
+@router.get("/paths/{from_id}/{to_id}")
+def get_path_between_satellites(
+    from_id: str,
+    to_id: str,
+    max_depth: Optional[int] = Query(default=10, description="Maximum traversal depth", ge=1, le=20),
+    edge_types: Optional[List[str]] = Query(default=None, description="Edge collection names to traverse"),
+    algorithm: Optional[str] = Query(default="shortest", description="Path finding algorithm: 'shortest' or 'all'")
+):
+    """
+    Find paths between two satellites in the graph.
+    
+    Args:
+        from_id: Source satellite ID (e.g., '2025-206B' or 'satellites/2025-206B')
+        to_id: Target satellite ID
+        max_depth: Maximum number of hops to search (1-20)
+        edge_types: Optional list of edge collections to traverse
+        algorithm: 'shortest' for single shortest path, 'all' for all paths up to max_depth
+    
+    Returns:
+        Path information including vertices, edges, and distance
+    """
+    if not from_id or not to_id:
+        raise HTTPException(status_code=400, detail="Both from_id and to_id are required")
+    
+    from_doc_id = from_id if from_id.startswith("satellites/") else f"satellites/{from_id}"
+    to_doc_id = to_id if to_id.startswith("satellites/") else f"satellites/{to_id}"
+    
+    cache_key = hashlib.md5(
+        json.dumps({
+            "from": from_doc_id,
+            "to": to_doc_id,
+            "max_depth": max_depth,
+            "edge_types": sorted(edge_types) if edge_types else None,
+            "algorithm": algorithm
+        }, sort_keys=True).encode()
+    ).hexdigest()
+    
+    cached_result = path_cache.get(cache_key)
+    if cached_result is not None:
+        return {
+            "data": cached_result,
+            "cached": True,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    try:
+        if algorithm == "shortest":
+            result = find_shortest_path(
+                from_id=from_doc_id,
+                to_id=to_doc_id,
+                edge_types=edge_types,
+                max_depth=max_depth
+            )
+            
+            if result is None:
+                response_data = {
+                    "from_id": from_doc_id,
+                    "to_id": to_doc_id,
+                    "path_found": False,
+                    "message": f"No path found between {from_id} and {to_id} within {max_depth} hops"
+                }
+            else:
+                response_data = {
+                    "from_id": from_doc_id,
+                    "to_id": to_doc_id,
+                    "path_found": True,
+                    "path": result,
+                    "algorithm": "shortest"
+                }
+        
+        elif algorithm == "all":
+            paths = find_all_paths(
+                from_id=from_doc_id,
+                to_id=to_doc_id,
+                edge_types=edge_types,
+                max_depth=max_depth,
+                limit=10
+            )
+            
+            response_data = {
+                "from_id": from_doc_id,
+                "to_id": to_doc_id,
+                "path_found": len(paths) > 0,
+                "paths": paths,
+                "path_count": len(paths),
+                "algorithm": "all"
+            }
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid algorithm: {algorithm}. Use 'shortest' or 'all'"
+            )
+        
+        path_cache.set(cache_key, response_data)
+        
+        return {
+            "data": response_data,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        if "document not found" in str(e).lower():
+            raise HTTPException(
+                status_code=404,
+                detail=f"One or both satellites not found: {from_id}, {to_id}"
+            )
+        raise HTTPException(status_code=500, detail=f"Error finding path: {str(e)}")
+
+
+@router.get("/paths/cache/stats")
+def get_path_cache_stats():
+    """
+    Get statistics about the path query cache.
+    
+    Returns cache hit rate, size, and other performance metrics.
+    """
+    stats = path_cache.get_stats()
+    return {
+        "data": stats,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.get("/analytics/centrality")
+def get_centrality_analysis(
+    metric: str = Query(
+        default="degree",
+        description="Centrality metric: 'degree', 'betweenness', or 'closeness'"
+    ),
+    edge_types: Optional[List[str]] = Query(
+        default=None,
+        description="Edge collection names to consider"
+    ),
+    limit: int = Query(
+        default=50,
+        description="Maximum number of results to return",
+        ge=1,
+        le=200
+    ),
+    sample_size: Optional[int] = Query(
+        default=100,
+        description="Sample size for betweenness calculation (betweenness only)",
+        ge=10,
+        le=500
+    ),
+    max_depth: Optional[int] = Query(
+        default=5,
+        description="Maximum depth for closeness calculation (closeness only)",
+        ge=1,
+        le=10
+    )
+):
+    """
+    Calculate centrality metrics for satellites in the graph.
+    
+    Centrality metrics identify the most important nodes in the network:
+    
+    - **degree**: Number of direct connections (fast, good for identifying hubs)
+    - **betweenness**: How often a node appears on shortest paths (identifies bridges)
+    - **closeness**: How close a node is to all others (identifies nodes with quick access)
+    
+    Args:
+        metric: Centrality metric to calculate
+        edge_types: Optional list of edge collections to consider
+        limit: Maximum number of results (1-200)
+        sample_size: Sample size for betweenness (10-500, betweenness only)
+        max_depth: Maximum depth for closeness (1-10, closeness only)
+    
+    Returns:
+        List of satellites with their centrality scores, sorted by score descending
+    """
+    if metric not in ["degree", "betweenness", "closeness"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid metric: {metric}. Use 'degree', 'betweenness', or 'closeness'"
+        )
+    
+    cache_key = hashlib.md5(
+        json.dumps({
+            "metric": metric,
+            "edge_types": sorted(edge_types) if edge_types else None,
+            "limit": limit,
+            "sample_size": sample_size if metric == "betweenness" else None,
+            "max_depth": max_depth if metric == "closeness" else None
+        }, sort_keys=True).encode()
+    ).hexdigest()
+    
+    cached_result = centrality_cache.get(cache_key)
+    if cached_result is not None:
+        return {
+            "data": cached_result,
+            "cached": True,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    try:
+        if metric == "degree":
+            results = calculate_degree_centrality(
+                edge_types=edge_types,
+                limit=limit
+            )
+        elif metric == "betweenness":
+            results = calculate_betweenness_centrality(
+                edge_types=edge_types,
+                limit=limit,
+                sample_size=sample_size
+            )
+        elif metric == "closeness":
+            results = calculate_closeness_centrality(
+                edge_types=edge_types,
+                limit=limit,
+                max_depth=max_depth
+            )
+        
+        response_data = {
+            "metric": metric,
+            "satellites": results,
+            "count": len(results),
+            "parameters": {
+                "edge_types": edge_types,
+                "limit": limit
+            }
+        }
+        
+        if metric == "betweenness":
+            response_data["parameters"]["sample_size"] = sample_size
+        elif metric == "closeness":
+            response_data["parameters"]["max_depth"] = max_depth
+        
+        centrality_cache.set(cache_key, response_data)
+        
+        return {
+            "data": response_data,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calculating {metric} centrality: {str(e)}"
+        )
+
+
+@router.get("/analytics/centrality/cache/stats")
+def get_centrality_cache_stats():
+    """
+    Get statistics about the centrality query cache.
+    
+    Returns cache hit rate, size, and other performance metrics.
+    """
+    stats = centrality_cache.get_stats()
+    return {
+        "data": stats,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.get("/collision-risks")
+def get_collision_risks(
+    risk_threshold: Optional[float] = Query(
+        default=0.5,
+        description="Minimum risk score threshold (0-1)",
+        ge=0.0,
+        le=1.0
+    ),
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band (LEO, MEO, GEO, etc.)"
+    ),
+    risk_level: Optional[str] = Query(
+        default=None,
+        description="Filter by risk level (high, medium, low)"
+    ),
+    limit: int = Query(
+        default=100,
+        description="Maximum number of edges to return",
+        ge=1,
+        le=500
+    )
+):
+    """
+    Get collision risk edges with filtering.
+    
+    Returns collision risk relationships between satellites based on:
+    - Orbital proximity (apogee, perigee, inclination)
+    - Risk scoring (0-1, higher = higher collision risk)
+    - Orbital band (LEO, MEO, GEO)
+    
+    Args:
+        risk_threshold: Minimum risk score (0-1)
+        orbital_band: Filter by orbital band
+        risk_level: Filter by risk level (high, medium, low)
+        limit: Maximum number of edges (1-500)
+    
+    Returns:
+        List of collision risk edges with satellite information
+    """
+    if risk_level and risk_level not in ["high", "medium", "low"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid risk_level: {risk_level}. Use 'high', 'medium', or 'low'"
+        )
+    
+    try:
+        results = collision_service.get_collision_risks(
+            risk_threshold=risk_threshold,
+            orbital_band=orbital_band,
+            risk_level=risk_level,
+            limit=limit
+        )
+        
+        return {
+            "data": {
+                "edges": results,
+                "count": len(results),
+                "parameters": {
+                    "risk_threshold": risk_threshold,
+                    "orbital_band": orbital_band,
+                    "risk_level": risk_level,
+                    "limit": limit
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error querying collision risks: {str(e)}"
+        )
+
+
+@router.get("/collision-risks/{satellite_id}")
+def get_collision_risks_for_satellite(
+    satellite_id: str,
+    risk_threshold: Optional[float] = Query(
+        default=0.5,
+        description="Minimum risk score threshold (0-1)",
+        ge=0.0,
+        le=1.0
+    ),
+    limit: int = Query(
+        default=50,
+        description="Maximum number of results",
+        ge=1,
+        le=200
+    )
+):
+    """
+    Get collision risks for a specific satellite.
+    
+    Args:
+        satellite_id: Satellite identifier (e.g., "2025-206B" or "satellites/2025-206B")
+        risk_threshold: Minimum risk score
+        limit: Maximum number of results (1-200)
+    
+    Returns:
+        List of satellites with collision risk to the specified satellite
+    """
+    try:
+        results = collision_service.get_collision_risks_for_satellite(
+            satellite_id=satellite_id,
+            risk_threshold=risk_threshold,
+            limit=limit
+        )
+        
+        return {
+            "data": {
+                "satellite_id": satellite_id,
+                "collision_risks": results,
+                "count": len(results),
+                "parameters": {
+                    "risk_threshold": risk_threshold,
+                    "limit": limit
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error querying collision risks for satellite: {str(e)}"
+        )
+
+
+@router.get("/collision-risks/network/graph")
+def get_collision_risk_network(
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band"
+    ),
+    risk_threshold: float = Query(
+        default=0.5,
+        description="Minimum risk score threshold (0-1)",
+        ge=0.0,
+        le=1.0
+    ),
+    limit: int = Query(
+        default=100,
+        description="Maximum number of edges",
+        ge=1,
+        le=500
+    )
+):
+    """
+    Get collision risk network as nodes and edges for visualization.
+    
+    Args:
+        orbital_band: Optional filter by orbital band
+        risk_threshold: Minimum risk score (0-1)
+        limit: Maximum number of edges (1-500)
+    
+    Returns:
+        Graph data with nodes (satellites) and edges (collision risks)
+    """
+    try:
+        result = collision_service.get_collision_risk_network(
+            orbital_band=orbital_band,
+            risk_threshold=risk_threshold,
+            limit=limit
+        )
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error building collision risk network: {str(e)}"
+        )
+
+
+@router.get("/collision-risks/statistics")
+def get_collision_risk_statistics(
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band"
+    )
+):
+    """
+    Get statistics about collision risks in the database.
+    
+    Args:
+        orbital_band: Optional filter by orbital band
+    
+    Returns:
+        Statistics including edge counts, risk levels, and orbital band distribution
+    """
+    try:
+        stats = collision_service.get_collision_risk_statistics(
+            orbital_band=orbital_band
+        )
+        
+        return {
+            "data": stats,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calculating collision risk statistics: {str(e)}"
+        )
+
+
+@router.get("/collision-risks/clusters")
+def get_collision_clusters(
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band"
+    ),
+    risk_threshold: float = Query(
+        default=0.7,
+        description="Minimum risk score for cluster membership (0-1)",
+        ge=0.0,
+        le=1.0
+    ),
+    min_cluster_size: int = Query(
+        default=3,
+        description="Minimum number of satellites in a cluster",
+        ge=2,
+        le=50
+    )
+):
+    """
+    Identify clusters of satellites with high collision risk.
+    
+    Clusters represent groups of satellites that have multiple high-risk
+    collision relationships with each other.
+    
+    Args:
+        orbital_band: Optional filter by orbital band
+        risk_threshold: Minimum risk score for cluster edges (0-1)
+        min_cluster_size: Minimum satellites per cluster (2-50)
+    
+    Returns:
+        List of collision risk clusters with member satellites
+    """
+    try:
+        results = analyze_collision_clusters(
+            orbital_band=orbital_band,
+            risk_threshold=risk_threshold,
+            min_cluster_size=min_cluster_size
+        )
+        
+        return {
+            "data": {
+                "clusters": results,
+                "count": len(results),
+                "parameters": {
+                    "orbital_band": orbital_band,
+                    "risk_threshold": risk_threshold,
+                    "min_cluster_size": min_cluster_size
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing collision clusters: {str(e)}"
+        )
+
+
+@router.get("/cross-constellation-proximity")
+def get_cross_constellation_proximity(
+    limit: int = Query(
+        default=100,
+        description="Maximum number of satellite pairs to return",
+        ge=1,
+        le=500
+    ),
+    proximity_threshold: float = Query(
+        default=0.7,
+        description="Minimum proximity score threshold (0-1)",
+        ge=0.0,
+        le=1.0
+    )
+):
+    """
+    Find satellites from different constellations that are in orbital proximity.
+    
+    This demonstrates multi-dimensional graph queries by combining:
+    - Constellation membership relationships
+    - Orbital proximity relationships
+    
+    Returns satellites that belong to different constellations but are
+    in close orbital proximity, highlighting potential collision risks
+    between different constellation systems.
+    
+    Args:
+        limit: Maximum number of satellite pairs (1-500)
+        proximity_threshold: Minimum proximity score (0-1)
+    
+    Returns:
+        Graph data with nodes (satellites) and edges (cross-constellation proximity)
+        including statistics on constellation pairs
+    """
+    try:
+        result = find_cross_constellation_proximity(
+            limit=limit,
+            proximity_threshold=proximity_threshold
+        )
+        
+        if not result:
+            return {
+                "data": {
+                    "nodes": [],
+                    "edges": [],
+                    "stats": {
+                        "total_satellites": 0,
+                        "total_proximity_pairs": 0,
+                        "constellation_pairs": 0,
+                        "top_constellation_pairs": []
+                    }
+                },
+                "message": "No cross-constellation proximity relationships found",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error finding cross-constellation proximity: {str(e)}"
+        )
+
+
+@router.get("/country-cooperation-network")
+def get_country_cooperation_network(
+    limit: int = Query(
+        default=50,
+        description="Maximum number of country pairs to return",
+        ge=1,
+        le=200
+    ),
+    min_shared_satellites: int = Query(
+        default=2,
+        description="Minimum number of shared satellites/connections",
+        ge=1,
+        le=20
+    )
+):
+    """
+    Find countries that cooperate through multiple relationship types.
+    
+    This demonstrates multi-dimensional graph analysis by combining:
+    - Shared registration documents
+    - Satellites in orbital proximity
+    - Constellation membership patterns
+    
+    Returns country pairs that show cooperation through shared registration
+    documents and/or satellites in close orbital proximity, revealing
+    international space collaboration patterns.
+    
+    Args:
+        limit: Maximum number of country pairs (1-200)
+        min_shared_satellites: Minimum shared satellites/connections (1-20)
+    
+    Returns:
+        Graph data with nodes (countries) and edges (cooperation relationships)
+        including cooperation scores and types
+    """
+    try:
+        result = find_country_cooperation_network(
+            limit=limit,
+            min_shared_satellites=min_shared_satellites
+        )
+        
+        if not result:
+            return {
+                "data": {
+                    "nodes": [],
+                    "edges": [],
+                    "stats": {
+                        "total_countries": 0,
+                        "total_cooperation_pairs": 0,
+                        "avg_cooperation_score": 0,
+                        "max_cooperation_score": 0
+                    }
+                },
+                "message": "No country cooperation relationships found",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error finding country cooperation network: {str(e)}"
+        )
+
+
+@router.get("/function-clusters")
+def get_function_based_clusters(
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band (e.g., 'LEO', 'MEO', 'GEO')"
+    ),
+    limit: int = Query(
+        default=20,
+        description="Maximum number of clusters to return",
+        ge=1,
+        le=100
+    ),
+    min_cluster_size: int = Query(
+        default=3,
+        description="Minimum number of satellites in a cluster",
+        ge=2,
+        le=50
+    )
+):
+    """
+    Find satellite clusters based on shared function, orbital band, and proximity.
+    
+    This demonstrates multi-dimensional clustering by combining:
+    - Similar satellite functions (communication, Earth observation, etc.)
+    - Same orbital band
+    - Orbital proximity relationships
+    
+    Returns clusters of satellites that share the same function and orbital band,
+    and have proximity relationships with each other, revealing functional
+    satellite groupings and potential congestion zones.
+    
+    Args:
+        orbital_band: Optional orbital band filter
+        limit: Maximum number of clusters (1-100)
+        min_cluster_size: Minimum satellites per cluster (2-50)
+    
+    Returns:
+        Graph data with nodes (satellites), edges (proximity), and cluster metadata
+        including density metrics and multi-country collaboration
+    """
+    try:
+        result = find_function_based_clusters(
+            orbital_band=orbital_band,
+            limit=limit,
+            min_cluster_size=min_cluster_size
+        )
+        
+        if not result:
+            return {
+                "data": {
+                    "nodes": [],
+                    "edges": [],
+                    "clusters": [],
+                    "stats": {
+                        "total_clusters": 0,
+                        "total_satellites": 0,
+                        "total_proximity_edges": 0,
+                        "avg_cluster_size": 0,
+                        "avg_density": 0
+                    }
+                },
+                "message": "No function-based clusters found",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error finding function-based clusters: {str(e)}"
+        )
+
+
+@router.get("/lineage/{satellite_id}")
+def get_satellite_lineage_tree(
+    satellite_id: str,
+    direction: str = Query(
+        default="both",
+        description="Traversal direction: 'ancestors', 'descendants', or 'both'"
+    ),
+    max_depth: int = Query(
+        default=5,
+        description="Maximum traversal depth",
+        ge=1,
+        le=10
+    )
+):
+    """
+    Get satellite lineage tree showing family relationships.
+    
+    Returns ancestors (predecessors) and/or descendants (successors) of a satellite
+    within the same family lineage (e.g., GPS-IIA → GPS-III, Iridium → Iridium Next).
+    
+    Args:
+        satellite_id: Satellite identifier or document key
+        direction: 'ancestors', 'descendants', or 'both'
+        max_depth: Maximum traversal depth (1-10)
+    
+    Returns:
+        Root satellite with ancestors/descendants and generation information
+    """
+    try:
+        if direction not in ["ancestors", "descendants", "both"]:
+            raise HTTPException(
+                status_code=400,
+                detail="direction must be 'ancestors', 'descendants', or 'both'"
+            )
+        
+        result = lineage_service.get_satellite_lineage(
+            satellite_id=satellite_id,
+            direction=direction,
+            max_depth=max_depth
+        )
+        
+        if "error" in result and result["root"] is None:
+            raise HTTPException(
+                status_code=404,
+                detail=result["error"]
+            )
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving satellite lineage: {str(e)}"
+        )
+
+
+@router.get("/lineage/family/{family_name}")
+def get_family_tree(
+    family_name: str,
+    limit: int = Query(
+        default=100,
+        description="Maximum number of satellites to return",
+        ge=1,
+        le=500
+    )
+):
+    """
+    Get complete family tree for a satellite family.
+    
+    Returns all satellites and their relationships within a specific family
+    (e.g., GPS, IRIDIUM, GLONASS, STARLINK).
+    
+    Args:
+        family_name: Family name (e.g., 'GPS', 'IRIDIUM', 'STARLINK')
+        limit: Maximum number of satellites (1-500)
+    
+    Returns:
+        Graph data with nodes (satellites) and edges (lineage relationships)
+        organized by family generations
+    """
+    try:
+        result = lineage_service.get_satellite_family_tree(
+            family_name=family_name,
+            limit=limit
+        )
+        
+        if not result.get("nodes"):
+            return {
+                "data": result,
+                "message": f"No satellites found for family '{family_name}'",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving family tree: {str(e)}"
+        )
+
+
+@router.get("/lineage/statistics")
+def get_lineage_statistics_endpoint():
+    """
+    Get statistics about satellite lineage relationships.
+    
+    Returns summary statistics including:
+    - Total lineage edges
+    - Family counts
+    - Generation gap distribution
+    
+    Returns:
+        Statistics dictionary with counts and distributions
+    """
+    try:
+        stats = lineage_service.get_lineage_statistics()
+        
+        return {
+            "data": stats,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving lineage statistics: {str(e)}"
+        )
+
+
+@router.get("/communities")
+def get_communities(
+    algorithm: str = Query(
+        default="label_propagation",
+        description="Community detection algorithm: 'connected_components' or 'label_propagation'"
+    ),
+    min_size: int = Query(
+        default=2,
+        description="Minimum community size",
+        ge=2,
+        le=100
+    ),
+    edge_types: Optional[List[str]] = Query(
+        default=None,
+        description="Optional list of edge types to consider"
+    )
+):
+    """
+    Detect communities in the satellite network.
+    
+    Communities are groups of satellites that are more densely connected to each
+    other than to the rest of the network. This endpoint supports multiple
+    detection algorithms:
+    
+    - **label_propagation**: Fast iterative algorithm where nodes adopt the most
+      common label among their neighbors. Good for large graphs and detecting
+      overlapping community structures.
+    
+    - **connected_components**: Finds isolated clusters of connected satellites.
+      Useful for identifying completely separate network segments.
+    
+    Args:
+        algorithm: Detection algorithm to use
+        min_size: Minimum number of satellites in a community
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        List of detected communities with members, statistics, and characteristics.
+        Results are cached for 12 hours to improve performance.
+    
+    Example:
+        GET /v2/graphs/communities?algorithm=label_propagation&min_size=5
+    """
+    try:
+        cache_key = f"{algorithm}:{min_size}:{','.join(edge_types) if edge_types else 'all'}"
+        
+        cached_result = community_cache.get(cache_key)
+        if cached_result is not None:
+            return {
+                "data": cached_result,
+                "cached": True,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        valid_algorithms = ["connected_components", "label_propagation"]
+        if algorithm not in valid_algorithms:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid algorithm. Must be one of: {', '.join(valid_algorithms)}"
+            )
+        
+        communities = detect_communities(
+            algorithm=algorithm,
+            edge_types=edge_types,
+            min_community_size=min_size
+        )
+        
+        result = {
+            "communities": communities,
+            "algorithm": algorithm,
+            "stats": {
+                "total_communities": len(communities),
+                "total_satellites": sum(c.get("size", 0) for c in communities),
+                "min_community_size": min_size,
+                "edge_types": edge_types or ["all"]
+            }
+        }
+        
+        community_cache.set(cache_key, result)
+        
+        return {
+            "data": result,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error detecting communities: {str(e)}"
+        )
+
+
+@router.get("/evolution/timeline")
+def get_graph_evolution_timeline(
+    start_date: Optional[str] = Query(default="1957", description="Start date (YYYY or YYYY-MM or YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(default=None, description="End date (YYYY or YYYY-MM or YYYY-MM-DD)"),
+    granularity: str = Query(default="year", description="Time granularity (year, month, quarter)"),
+    edge_types: Optional[List[str]] = Query(default=None, description="Optional list of edge types to include")
+):
+    """
+    Get graph evolution timeline showing how the network grows over time.
+    
+    Parameters:
+        start_date: Start date for timeline (default: 1957, first satellite)
+        end_date: End date for timeline (default: current year)
+        granularity: Time granularity - 'year', 'month', or 'quarter'
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        Timeline data with node counts, edge counts, density, and growth metrics.
+        Results are cached for 24 hours to improve performance.
+    
+    Example:
+        GET /v2/graphs/evolution/timeline?start_date=2000&end_date=2024&granularity=year
+    """
+    try:
+        if end_date is None:
+            import datetime
+            end_date = str(datetime.datetime.now().year)
+        
+        cache_key = f"{start_date}:{end_date}:{granularity}:{','.join(edge_types) if edge_types else 'all'}"
+        
+        cached_result = evolution_cache.get(cache_key)
+        if cached_result is not None:
+            return {
+                "data": cached_result,
+                "cached": True,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        valid_granularities = ["year", "month", "quarter"]
+        if granularity not in valid_granularities:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid granularity. Must be one of: {', '.join(valid_granularities)}"
+            )
+        
+        if granularity == "year":
+            start_formatted = f"{start_date}-01-01" if len(start_date) == 4 else start_date
+            end_formatted = f"{end_date}-12-31" if len(end_date) == 4 else end_date
+        elif granularity == "month":
+            start_formatted = f"{start_date}-01" if len(start_date) == 4 else start_date
+            end_formatted = f"{end_date}-12" if len(end_date) == 4 else end_date
+        else:
+            start_formatted = start_date
+            end_formatted = end_date
+        
+        timeline = calculate_graph_evolution_timeline(
+            start_date=start_formatted,
+            end_date=end_formatted,
+            granularity=granularity,
+            edge_types=edge_types
+        )
+        
+        if not timeline:
+            result = {
+                "timeline": [],
+                "parameters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "granularity": granularity,
+                    "edge_types": edge_types or ["all"]
+                },
+                "stats": {
+                    "total_periods": 0,
+                    "total_growth": {
+                        "nodes": 0,
+                        "edges": 0
+                    },
+                    "final_state": {
+                        "node_count": 0,
+                        "edge_count": 0,
+                        "density": 0
+                    }
+                }
+            }
+        else:
+            final_snapshot = timeline[-1]
+            initial_snapshot = timeline[0]
+            
+            result = {
+                "timeline": timeline,
+                "parameters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "granularity": granularity,
+                    "edge_types": edge_types or ["all"]
+                },
+                "stats": {
+                    "total_periods": len(timeline),
+                    "total_growth": {
+                        "nodes": final_snapshot['node_count'] - initial_snapshot['node_count'],
+                        "edges": final_snapshot['edge_count'] - initial_snapshot['edge_count']
+                    },
+                    "final_state": {
+                        "node_count": final_snapshot['node_count'],
+                        "edge_count": final_snapshot['edge_count'],
+                        "density": final_snapshot['density'],
+                        "avg_degree": final_snapshot['avg_degree']
+                    },
+                    "peak_growth_period": max(timeline, key=lambda x: x.get('node_growth', 0))['period'],
+                    "avg_density": sum(t['density'] for t in timeline) / len(timeline)
+                }
+            }
+        
+        evolution_cache.set(cache_key, result)
+        
+        return {
+            "data": result,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calculating graph evolution timeline: {str(e)}"
+        )
+
+
+@router.get("/evolution/snapshot/{date}")
+def get_graph_snapshot(
+    date: str,
+    edge_types: Optional[List[str]] = Query(default=None, description="Optional list of edge types to include")
+):
+    """
+    Get graph snapshot at a specific date.
+    
+    Parameters:
+        date: Target date (YYYY or YYYY-MM or YYYY-MM-DD)
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        Snapshot data with node count, edge count, density, and other metrics.
+    
+    Example:
+        GET /v2/graphs/evolution/snapshot/2020-01
+    """
+    try:
+        snapshot = get_graph_snapshot_by_date(
+            target_date=date,
+            edge_types=edge_types
+        )
+        
+        return {
+            "data": snapshot,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting graph snapshot: {str(e)}"
+        )
+
+
+@router.get("/recommendations/{satellite_id}")
+def get_satellite_recommendations(
+    satellite_id: str,
+    strategy: str = Query(
+        default="collaborative_filtering",
+        description="Recommendation strategy: 'collaborative_filtering', 'similar_neighbors', 'second_degree', 'common_neighbors', or 'similarity'"
+    ),
+    edge_types: Optional[List[str]] = Query(
+        default=None,
+        description="Optional list of edge types to consider"
+    ),
+    limit: int = Query(default=10, ge=1, le=100, description="Maximum number of recommendations"),
+    min_similarity: float = Query(default=0.1, ge=0.0, le=1.0, description="Minimum similarity threshold (for similarity strategy)"),
+    min_common_connections: int = Query(default=2, ge=1, description="Minimum common connections (for collaborative filtering)")
+):
+    """
+    Get satellite recommendations based on graph structure.
+    
+    Provides different recommendation strategies:
+    
+    - **collaborative_filtering**: Satellites that share many connections but aren't directly connected
+      (like "users who liked X also liked Y")
+    
+    - **similar_neighbors**: Satellites connected to other satellites similar to this one
+    
+    - **second_degree**: Satellites at distance 2 (friends of friends)
+    
+    - **common_neighbors**: Satellites with most common neighbors
+    
+    - **similarity**: Satellites most similar based on Jaccard similarity of neighbor sets
+    
+    Parameters:
+        satellite_id: Reference satellite ID (e.g., "2025-001A")
+        strategy: Recommendation strategy to use
+        edge_types: Optional list of edge collections to consider
+        limit: Maximum number of recommendations (1-100)
+        min_similarity: Minimum similarity threshold for similarity strategy (0-1)
+        min_common_connections: Minimum common connections for collaborative filtering
+    
+    Returns:
+        Recommended satellites with relevance scores and recommendation metadata.
+    
+    Example:
+        GET /v2/graphs/recommendations/2025-001A?strategy=collaborative_filtering&limit=10
+    """
+    try:
+        cache_key = hashlib.md5(
+            json.dumps({
+                "satellite_id": satellite_id,
+                "strategy": strategy,
+                "edge_types": edge_types or [],
+                "limit": limit,
+                "min_similarity": min_similarity,
+                "min_common_connections": min_common_connections
+            }, sort_keys=True).encode()
+        ).hexdigest()
+        
+        cached_result = recommendation_cache.get(cache_key)
+        if cached_result is not None:
+            return {
+                "data": cached_result,
+                "cached": True,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        full_id = f"{COLLECTION_NAME}/{satellite_id}"
+        
+        valid_strategies = [
+            "collaborative_filtering",
+            "similar_neighbors",
+            "second_degree",
+            "common_neighbors",
+            "similarity"
+        ]
+        
+        if strategy not in valid_strategies:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid strategy. Must be one of: {', '.join(valid_strategies)}"
+            )
+        
+        if strategy == "collaborative_filtering":
+            recommendations = get_collaborative_filtering_recommendations(
+                satellite_id=full_id,
+                edge_types=edge_types,
+                limit=limit,
+                min_common_connections=min_common_connections
+            )
+        elif strategy == "similarity":
+            recommendations = get_similar_satellites(
+                satellite_id=full_id,
+                edge_types=edge_types,
+                limit=limit,
+                min_similarity=min_similarity
+            )
+        else:
+            recommendations = get_neighbor_based_recommendations(
+                satellite_id=full_id,
+                edge_types=edge_types,
+                limit=limit,
+                strategy=strategy
+            )
+        
+        result = {
+            "satellite_id": satellite_id,
+            "strategy": strategy,
+            "recommendations": recommendations,
+            "count": len(recommendations),
+            "parameters": {
+                "strategy": strategy,
+                "edge_types": edge_types or ["all"],
+                "limit": limit,
+                "min_similarity": min_similarity if strategy == "similarity" else None,
+                "min_common_connections": min_common_connections if strategy == "collaborative_filtering" else None
+            }
+        }
+        
+        recommendation_cache.set(cache_key, result)
+        
+        return {
+            "data": result,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting recommendations: {str(e)}"
+        )
+
+
+@router.get("/cache/stats/all")
+def get_all_cache_stats():
+    """
+    Get comprehensive statistics for all graph query caches.
+    
+    Returns cache hit rates, sizes, and performance metrics for monitoring.
+    """
+    all_caches = {
+        "path_queries": path_cache.get_stats(),
+        "centrality_queries": centrality_cache.get_stats(),
+        "community_queries": community_cache.get_stats(),
+        "evolution_queries": evolution_cache.get_stats(),
+        "recommendation_queries": recommendation_cache.get_stats(),
+        "collision_queries": collision_cache.get_stats(),
+        "cross_domain_queries": cross_domain_cache.get_stats()
+    }
+    
+    total_hits = sum(cache["hits"] for cache in all_caches.values())
+    total_misses = sum(cache["misses"] for cache in all_caches.values())
+    total_requests = total_hits + total_misses
+    overall_hit_rate = (total_hits / total_requests * 100) if total_requests > 0 else 0.0
+    
+    return {
+        "data": {
+            "caches": all_caches,
+            "overall": {
+                "total_hits": total_hits,
+                "total_misses": total_misses,
+                "total_requests": total_requests,
+                "hit_rate": f"{overall_hit_rate:.2f}%",
+                "total_cache_size": sum(cache["size"] for cache in all_caches.values()),
+                "total_evictions": sum(cache["evictions"] for cache in all_caches.values())
+            }
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.post("/cache/clear/{cache_name}")
+def clear_cache(cache_name: str):
+    """
+    Clear a specific cache by name.
+    
+    Args:
+        cache_name: Name of cache to clear (path_queries, centrality_queries, etc.)
+    
+    Returns:
+        Confirmation message
+    """
+    cache_map = {
+        "path_queries": path_cache,
+        "centrality_queries": centrality_cache,
+        "community_queries": community_cache,
+        "evolution_queries": evolution_cache,
+        "recommendation_queries": recommendation_cache,
+        "collision_queries": collision_cache,
+        "cross_domain_queries": cross_domain_cache
+    }
+    
+    if cache_name not in cache_map:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid cache name. Valid options: {', '.join(cache_map.keys())}"
+        )
+    
+    cache = cache_map[cache_name]
+    cache.clear()
+    
+    return {
+        "message": f"Cache '{cache_name}' cleared successfully",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.post("/cache/clear/all")
+def clear_all_caches():
+    """
+    Clear all graph query caches.
+    
+    Returns:
+        Confirmation message with count of cleared caches
+    """
+    caches = [
+        path_cache,
+        centrality_cache,
+        community_cache,
+        evolution_cache,
+        recommendation_cache,
+        collision_cache,
+        cross_domain_cache
+    ]
+    
+    for cache in caches:
+        cache.clear()
+    
+    return {
+        "message": f"All {len(caches)} caches cleared successfully",
+        "caches_cleared": [
+            "path_queries",
+            "centrality_queries",
+            "community_queries",
+            "evolution_queries",
+            "recommendation_queries",
+            "collision_queries",
+            "cross_domain_queries"
+        ],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }

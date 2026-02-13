@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -179,6 +179,42 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
+            selector: 'node[centrality_score]',
+            style: {
+              'width': 'data(centrality_size)',
+              'height': 'data(centrality_size)',
+              'background-color': '#e74c3c',
+              'border-width': 3,
+              'border-color': '#c0392b'
+            }
+          },
+          {
+            selector: 'node[is_path_node]',
+            style: {
+              'background-color': '#9b59b6',
+              'border-width': 4,
+              'border-color': '#8e44ad'
+            }
+          },
+          {
+            selector: 'edge[is_path_edge]',
+            style: {
+              'line-color': '#9b59b6',
+              'width': 5,
+              'line-style': 'solid',
+              'target-arrow-shape': 'triangle',
+              'target-arrow-color': '#9b59b6'
+            }
+          },
+          {
+            selector: 'edge[collision_risk]',
+            style: {
+              'line-color': 'data(risk_color)',
+              'width': 'data(risk_width)',
+              'line-style': 'solid'
+            }
+          },
+          {
             selector: 'node[is_selected]',
             style: {
               'background-color': '#e74c3c',
@@ -245,8 +281,18 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       loadCountryGraph()
     } else if (graphType === 'country' && countryGraphData) {
       filterCountryGraph(selectedCountries)
+    } else if (graphType === 'paths' && pathData) {
+      renderPathGraph(pathData)
+    } else if (graphType === 'centrality' && centralityData) {
+      renderCentralityGraph(centralityData, centralityMetric)
+    } else if (graphType === 'collision' && collisionRiskData) {
+      renderCollisionRiskGraph(collisionRiskData, collisionViewType)
+    } else if (graphType === 'communities') {
+      loadCommunitiesGraph()
+    } else if (graphType === 'lineage') {
+      setStats({ message: 'Select a satellite from the data table to view its lineage' })
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -649,6 +695,224 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     }
   }
 
+  const renderPathGraph = (data) => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const pathNodes = new Set()
+      const pathEdges = new Set()
+      
+      if (data.paths && data.paths.length > 0) {
+        data.paths.forEach(path => {
+          path.nodes?.forEach(node => pathNodes.add(node))
+          path.edges?.forEach(edge => pathEdges.add(JSON.stringify(edge)))
+        })
+      }
+      
+      const elements = {
+        nodes: Array.from(pathNodes).map(nodeId => ({
+          data: {
+            id: nodeId,
+            label: nodeId.split('/')[1] || nodeId,
+            is_path_node: true,
+            node_size: 30
+          }
+        })),
+        edges: Array.from(pathEdges).map(edgeStr => {
+          const edge = JSON.parse(edgeStr)
+          return {
+            data: {
+              id: `${edge.source}_to_${edge.target}`,
+              source: edge.source,
+              target: edge.target,
+              is_path_edge: true,
+              edge_label: edge.relationship_type || ''
+            }
+          }
+        })
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      setStats({
+        paths_found: data.paths?.length || 0,
+        total_nodes: elements.nodes.length,
+        total_edges: elements.edges.length
+      })
+    } catch (error) {
+      console.error('Error rendering path graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderCentralityGraph = (data, metric) => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const maxScore = Math.max(...(data.centrality_scores?.map(s => s.score) || [1]))
+      
+      const elements = {
+        nodes: (data.centrality_scores || []).map(item => {
+          const normalizedScore = item.score / maxScore
+          const nodeSize = 20 + (normalizedScore * 60)
+          
+          return {
+            data: {
+              id: item.node_id,
+              label: item.node_id.split('/')[1] || item.node_id,
+              centrality_score: item.score,
+              centrality_size: nodeSize,
+              node_size: nodeSize
+            }
+          }
+        }),
+        edges: (data.edges || []).map(edge => ({
+          data: {
+            id: `${edge.source}_to_${edge.target}`,
+            source: edge.source,
+            target: edge.target,
+            relationship_type: edge.relationship_type
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      setStats({
+        metric_type: metric,
+        nodes_analyzed: data.centrality_scores?.length || 0,
+        max_score: maxScore.toFixed(4)
+      })
+    } catch (error) {
+      console.error('Error rendering centrality graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderCollisionRiskGraph = (data, viewType) => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const getRiskColor = (riskScore) => {
+        if (riskScore > 0.8) return '#c0392b'
+        if (riskScore > 0.6) return '#e74c3c'
+        if (riskScore > 0.4) return '#f39c12'
+        return '#27ae60'
+      }
+      
+      const getRiskWidth = (riskScore) => {
+        return 2 + (riskScore * 6)
+      }
+      
+      const elements = {
+        nodes: (data.nodes || []).map(node => ({
+          data: {
+            id: node.id || node._id,
+            label: node.name || node.identifier || (node.id?.split('/')[1]),
+            congestion_risk: node.congestion_risk,
+            node_size: 25,
+            ...node
+          }
+        })),
+        edges: (data.edges || []).map(edge => ({
+          data: {
+            id: edge.id || `${edge.source}_to_${edge.target}`,
+            source: edge.source || edge._from,
+            target: edge.target || edge._to,
+            collision_risk: edge.risk_score || edge.proximity_score,
+            risk_color: getRiskColor(edge.risk_score || edge.proximity_score || 0),
+            risk_width: getRiskWidth(edge.risk_score || edge.proximity_score || 0),
+            edge_label: edge.risk_score ? edge.risk_score.toFixed(2) : ''
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      setStats({
+        view_type: viewType,
+        satellites: elements.nodes.length,
+        collision_risks: elements.edges.length,
+        ...(data.stats || {})
+      })
+    } catch (error) {
+      console.error('Error rendering collision risk graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadCommunitiesGraph = async () => {
+    if (!cyRef.current) return
+    
+    setLoading(true)
+    try {
+      const response = await fetch('/v2/graphs/communities?algorithm=label_propagation&min_community_size=3')
+      const data = await response.json()
+      
+      if (data.data && data.data.nodes) {
+        const communityColors = {}
+        let colorIndex = 0
+        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22']
+        
+        const elements = {
+          nodes: data.data.nodes.map(node => {
+            const community = node.community_id || 0
+            if (!communityColors[community]) {
+              communityColors[community] = colors[colorIndex % colors.length]
+              colorIndex++
+            }
+            
+            return {
+              data: {
+                id: node.id || node._id,
+                label: node.name || node.identifier || (node.id?.split('/')[1]),
+                community_id: community,
+                background_color: communityColors[community],
+                node_size: 25
+              },
+              style: {
+                'background-color': communityColors[community]
+              }
+            }
+          }),
+          edges: (data.data.edges || []).map(edge => ({
+            data: {
+              id: edge.id || `${edge.source}_to_${edge.target}`,
+              source: edge.source || edge._from,
+              target: edge.target || edge._to
+            }
+          }))
+        }
+        
+        cyRef.current.elements().remove()
+        cyRef.current.add(elements)
+        applyLayout(layout)
+        
+        setStats({
+          communities_found: Object.keys(communityColors).length,
+          total_nodes: elements.nodes.length,
+          total_edges: elements.edges.length
+        })
+      }
+    } catch (error) {
+      console.error('Error loading communities graph:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const applyLayout = (layoutName) => {
     if (!cyRef.current) return
     
@@ -734,6 +998,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             {stats.selected_categories && <span>🔍 Categories: {stats.selected_categories}</span>}
             {stats.selected_countries && <span>🔍 Selected: {stats.selected_countries}</span>}
             {stats.satellites_shown !== undefined && <span>Satellites: {stats.satellites_shown}</span>}
+            {stats.paths_found !== undefined && <span>Paths: {stats.paths_found}</span>}
+            {stats.total_nodes !== undefined && <span>Nodes: {stats.total_nodes}</span>}
+            {stats.total_edges !== undefined && <span>Edges: {stats.total_edges}</span>}
+            {stats.metric_type && <span>Metric: {stats.metric_type}</span>}
+            {stats.nodes_analyzed !== undefined && <span>Analyzed: {stats.nodes_analyzed} nodes</span>}
+            {stats.max_score && <span>Max Score: {stats.max_score}</span>}
+            {stats.view_type && <span>View: {stats.view_type}</span>}
+            {stats.collision_risks !== undefined && <span>Risks: {stats.collision_risks}</span>}
+            {stats.communities_found !== undefined && <span>Communities: {stats.communities_found}</span>}
+            {stats.message && <span>{stats.message}</span>}
           </div>
         )}
       </div>
@@ -812,6 +1086,59 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             <div className="legend-item">
               <span className="legend-edge"></span>
               <span>Similar Function</span>
+            </div>
+          </>
+        ) : graphType === 'paths' ? (
+          <>
+            <div className="legend-item">
+              <span className="legend-node" style={{backgroundColor: '#9b59b6', border: '4px solid #8e44ad'}}></span>
+              <span>Path Node</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-edge-thick" style={{backgroundColor: '#9b59b6'}}></span>
+              <span>Path Edge</span>
+            </div>
+          </>
+        ) : graphType === 'centrality' ? (
+          <>
+            <div className="legend-item">
+              <span className="legend-node" style={{backgroundColor: '#e74c3c', border: '3px solid #c0392b'}}></span>
+              <span>High Centrality (larger = higher score)</span>
+            </div>
+            <div className="legend-note">
+              Node size indicates centrality importance
+            </div>
+          </>
+        ) : graphType === 'collision' ? (
+          <>
+            <div className="legend-section">
+              <h5>Risk Levels</h5>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#c0392b'}}></span>
+                <span>Critical (&gt;0.8)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#e74c3c'}}></span>
+                <span>High (0.6-0.8)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-medium" style={{backgroundColor: '#f39c12'}}></span>
+                <span>Medium (0.4-0.6)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge" style={{backgroundColor: '#27ae60'}}></span>
+                <span>Low (&lt;0.4)</span>
+              </div>
+            </div>
+          </>
+        ) : graphType === 'communities' ? (
+          <>
+            <div className="legend-item">
+              <span className="legend-node satellite"></span>
+              <span>Node (colored by community)</span>
+            </div>
+            <div className="legend-note">
+              Each color represents a different community
             </div>
           </>
         ) : (

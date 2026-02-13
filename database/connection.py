@@ -11,6 +11,8 @@ GRAPH_NAME = "satellite_relationships"
 EDGE_COLLECTION_CONSTELLATION = "constellation_membership"
 EDGE_COLLECTION_REGISTRATION = "registration_links"
 EDGE_COLLECTION_PROXIMITY = "orbital_proximity"
+EDGE_COLLECTION_COLLISION_RISK = "collision_risk_edges"
+EDGE_COLLECTION_SATELLITE_LINEAGE = "satellite_lineage"
 COLLECTION_REG_DOCS = "registration_documents"
 
 client = None
