@@ -406,6 +406,8 @@ def calculate_betweenness_centrality(
     between other nodes. Higher scores indicate nodes that serve as bridges
     in the network.
     
+    Optimized to use K_SHORTEST_PATHS for better performance.
+    
     Args:
         edge_types: Optional list of edge collections to consider
         limit: Maximum number of results to return
@@ -434,24 +436,34 @@ def calculate_betweenness_centrality(
         query = f"""
         LET sample_nodes = (
             FOR doc IN {COLLECTION_NAME}
+                SORT RAND()
                 LIMIT @sample_size
                 RETURN doc._id
         )
         
+        LET path_computations = (
+            FOR source IN sample_nodes
+                FOR target IN sample_nodes
+                    FILTER source != target
+                    LET shortest_path = FIRST(
+                        FOR v, e IN OUTBOUND 
+                            K_SHORTEST_PATHS source TO target
+                            {edge_clause}
+                            OPTIONS {{weightAttribute: null, defaultWeight: 1}}
+                            LIMIT 1
+                            RETURN {{vertices: v[*]._id}}
+                    )
+                    FILTER shortest_path != null
+                    RETURN shortest_path
+        )
+        
         FOR node IN {COLLECTION_NAME}
-            LET betweenness = SUM(
-                FOR source IN sample_nodes
-                    FILTER source != node._id
-                    FOR target IN sample_nodes
-                        FILTER target != node._id AND target != source
-                        LET path = (
-                            FOR v, e, p IN 1..5 OUTBOUND source
-                                {edge_clause}
-                                FILTER v._id == target
-                                LIMIT 1
-                                RETURN p.vertices
-                        )
-                        RETURN LENGTH(path) > 0 AND node._id IN path[0] ? 1 : 0
+            LET betweenness = LENGTH(
+                FOR path IN path_computations
+                    FILTER node._id IN path.vertices AND 
+                           path.vertices[0] != node._id AND 
+                           path.vertices[-1] != node._id
+                    RETURN 1
             )
             FILTER betweenness > 0
             SORT betweenness DESC
@@ -491,6 +503,8 @@ def calculate_closeness_centrality(
     Closeness centrality measures how close a node is to all other nodes
     in the network. Higher scores indicate nodes that can reach others quickly.
     
+    Optimized to reduce redundant calculations with COLLECT AGGREGATE.
+    
     Args:
         edge_types: Optional list of edge collections to consider
         limit: Maximum number of results to return
@@ -518,17 +532,16 @@ def calculate_closeness_centrality(
         
         query = f"""
         FOR node IN {COLLECTION_NAME}
-            LET reachable = (
+            LET distances = (
                 FOR v, e, p IN 1..@max_depth ANY node._id
                     {edge_clause}
-                    RETURN {{
-                        vertex: v._id,
-                        distance: LENGTH(p.vertices) - 1
-                    }}
+                    COLLECT vertex = v._id 
+                    AGGREGATE min_distance = MIN(LENGTH(p.vertices) - 1)
+                    RETURN min_distance
             )
-            LET total_distance = SUM(reachable[*].distance)
-            LET reachable_count = LENGTH(reachable)
+            LET reachable_count = LENGTH(distances)
             FILTER reachable_count > 0
+            LET total_distance = SUM(distances)
             LET closeness = reachable_count / total_distance
             SORT closeness DESC
             LIMIT @limit

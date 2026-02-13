@@ -37,11 +37,27 @@ from api.services import collision_service, lineage_service
 
 router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
 
-path_cache = get_cache("path_queries", ttl=3600, max_size=1000)
-centrality_cache = get_cache("centrality_queries", ttl=86400, max_size=500)
-community_cache = get_cache("community_queries", ttl=43200, max_size=200)
-evolution_cache = get_cache("evolution_queries", ttl=86400, max_size=100)
-recommendation_cache = get_cache("recommendation_queries", ttl=7200, max_size=500)
+# Optimized cache configurations based on query patterns and update frequencies
+# Path queries: frequently requested, relatively stable - increased capacity
+path_cache = get_cache("path_queries", ttl=3600, max_size=2000)
+
+# Centrality: expensive to compute, moderately stable - reduced TTL for freshness
+centrality_cache = get_cache("centrality_queries", ttl=43200, max_size=500)
+
+# Community detection: expensive, fairly stable - keep long TTL
+community_cache = get_cache("community_queries", ttl=43200, max_size=300)
+
+# Evolution: very stable temporal data - long TTL, small cache
+evolution_cache = get_cache("evolution_queries", ttl=86400, max_size=150)
+
+# Recommendations: moderately expensive, should be fresh - shorter TTL
+recommendation_cache = get_cache("recommendation_queries", ttl=3600, max_size=750)
+
+# Collision risks: expensive to compute, moderately dynamic - new cache
+collision_cache = get_cache("collision_queries", ttl=7200, max_size=400)
+
+# Cross-domain queries: complex multi-edge traversals - new cache
+cross_domain_cache = get_cache("cross_domain_queries", ttl=14400, max_size=300)
 
 
 @router.get("/constellation/{constellation_name}")
@@ -2570,3 +2586,113 @@ def get_satellite_recommendations(
             status_code=500,
             detail=f"Error getting recommendations: {str(e)}"
         )
+
+
+@router.get("/cache/stats/all")
+def get_all_cache_stats():
+    """
+    Get comprehensive statistics for all graph query caches.
+    
+    Returns cache hit rates, sizes, and performance metrics for monitoring.
+    """
+    all_caches = {
+        "path_queries": path_cache.get_stats(),
+        "centrality_queries": centrality_cache.get_stats(),
+        "community_queries": community_cache.get_stats(),
+        "evolution_queries": evolution_cache.get_stats(),
+        "recommendation_queries": recommendation_cache.get_stats(),
+        "collision_queries": collision_cache.get_stats(),
+        "cross_domain_queries": cross_domain_cache.get_stats()
+    }
+    
+    total_hits = sum(cache["hits"] for cache in all_caches.values())
+    total_misses = sum(cache["misses"] for cache in all_caches.values())
+    total_requests = total_hits + total_misses
+    overall_hit_rate = (total_hits / total_requests * 100) if total_requests > 0 else 0.0
+    
+    return {
+        "data": {
+            "caches": all_caches,
+            "overall": {
+                "total_hits": total_hits,
+                "total_misses": total_misses,
+                "total_requests": total_requests,
+                "hit_rate": f"{overall_hit_rate:.2f}%",
+                "total_cache_size": sum(cache["size"] for cache in all_caches.values()),
+                "total_evictions": sum(cache["evictions"] for cache in all_caches.values())
+            }
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.post("/cache/clear/{cache_name}")
+def clear_cache(cache_name: str):
+    """
+    Clear a specific cache by name.
+    
+    Args:
+        cache_name: Name of cache to clear (path_queries, centrality_queries, etc.)
+    
+    Returns:
+        Confirmation message
+    """
+    cache_map = {
+        "path_queries": path_cache,
+        "centrality_queries": centrality_cache,
+        "community_queries": community_cache,
+        "evolution_queries": evolution_cache,
+        "recommendation_queries": recommendation_cache,
+        "collision_queries": collision_cache,
+        "cross_domain_queries": cross_domain_cache
+    }
+    
+    if cache_name not in cache_map:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid cache name. Valid options: {', '.join(cache_map.keys())}"
+        )
+    
+    cache = cache_map[cache_name]
+    cache.clear()
+    
+    return {
+        "message": f"Cache '{cache_name}' cleared successfully",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.post("/cache/clear/all")
+def clear_all_caches():
+    """
+    Clear all graph query caches.
+    
+    Returns:
+        Confirmation message with count of cleared caches
+    """
+    caches = [
+        path_cache,
+        centrality_cache,
+        community_cache,
+        evolution_cache,
+        recommendation_cache,
+        collision_cache,
+        cross_domain_cache
+    ]
+    
+    for cache in caches:
+        cache.clear()
+    
+    return {
+        "message": f"All {len(caches)} caches cleared successfully",
+        "caches_cleared": [
+            "path_queries",
+            "centrality_queries",
+            "community_queries",
+            "evolution_queries",
+            "recommendation_queries",
+            "collision_queries",
+            "cross_domain_queries"
+        ],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
