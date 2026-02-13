@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -289,7 +289,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     } else if (graphType === 'collision' && collisionRiskData) {
       renderCollisionRiskGraph(collisionRiskData, collisionViewType)
     } else if (graphType === 'communities') {
-      loadCommunitiesGraph()
+      loadCommunitiesGraph(communityAlgorithm, communityMinSize)
     } else if (graphType === 'lineage' && selectedSatellite) {
       loadLineageGraph(selectedSatellite)
     } else if (graphType === 'lineage') {
@@ -298,7 +298,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         cyRef.current.elements().remove()
       }
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite, communityAlgorithm, communityMinSize])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -1045,88 +1045,167 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     }
   }
 
-  const loadCommunitiesGraph = async () => {
+  const loadCommunitiesGraph = async (algorithm = 'label_propagation', minSize = 3) => {
     if (!cyRef.current) return
     
-    console.log('[GraphViewer] Loading communities graph')
+    console.log('[GraphViewer] Loading communities graph with params:', { algorithm, minSize })
     setLoading(true)
     setError(null)
+    
     try {
-      const url = '/v2/graphs/communities?algorithm=label_propagation&min_size=3'
+      const url = `/v2/graphs/communities?algorithm=${encodeURIComponent(algorithm)}&min_size=${minSize}`
       console.log('[GraphViewer] Fetching:', url)
+      
       const response = await fetch(url)
       console.log('[GraphViewer] Response status:', response.status)
       
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[GraphViewer] API error response:', errorText)
         throw new Error(`API returned ${response.status}: ${response.statusText}`)
       }
       
       const data = await response.json()
       console.log('[GraphViewer] Communities data received:', {
         hasData: !!data.data,
+        dataStructure: data.data ? Object.keys(data.data) : [],
         communitiesCount: data.data?.communities?.length || 0,
-        dataStructure: data.data ? Object.keys(data.data) : []
+        communitiesIsArray: Array.isArray(data.data?.communities),
+        firstCommunity: data.data?.communities?.[0]
       })
       
       if (!data.data) {
+        console.warn('[GraphViewer] No data object in response')
         throw new Error('No data returned from API')
       }
       
-      if (!data.data.communities || data.data.communities.length === 0) {
-        setError('No communities found')
-        setStats({ message: 'No communities detected' })
+      if (!data.data.communities) {
+        console.warn('[GraphViewer] No communities property in data:', data.data)
+        setError('Invalid response structure: missing communities')
+        setStats({ message: 'No communities data in response' })
+        if (cyRef.current) {
+          cyRef.current.elements().remove()
+        }
         return
       }
       
-      if (data.data && data.data.communities) {
-        const communityColors = {}
-        let colorIndex = 0
-        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22']
-        
-        const nodes = []
-        data.data.communities.forEach(community => {
-          const communityId = community.community_id
-          if (!communityColors[communityId]) {
-            communityColors[communityId] = colors[colorIndex % colors.length]
-            colorIndex++
-          }
-          
-          (community.members || []).forEach(member => {
-            nodes.push({
-              data: {
-                id: member.satellite_id,
-                label: member.satellite_name || member.identifier || member.satellite_id.split('/')[1],
-                community_id: communityId,
-                orbital_band: member.orbital_band,
-                country: member.country,
-                node_size: 25
-              },
-              style: {
-                'background-color': communityColors[communityId]
-              }
-            })
-          })
+      if (!Array.isArray(data.data.communities)) {
+        console.warn('[GraphViewer] Communities is not an array:', typeof data.data.communities)
+        setError('Invalid response structure: communities is not an array')
+        setStats({ message: 'Invalid communities data format' })
+        if (cyRef.current) {
+          cyRef.current.elements().remove()
+        }
+        return
+      }
+      
+      if (data.data.communities.length === 0) {
+        console.log('[GraphViewer] No communities found with current parameters')
+        setError('No communities found with the current settings')
+        setStats({ 
+          message: 'No communities detected',
+          algorithm: algorithm,
+          min_size: minSize,
+          suggestion: 'Try lowering the minimum size or using a different algorithm'
         })
-        
-        const elements = {
-          nodes: nodes,
-          edges: []
+        if (cyRef.current) {
+          cyRef.current.elements().remove()
+        }
+        return
+      }
+      
+      const communityColors = {}
+      let colorIndex = 0
+      const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e', '#16a085', '#d35400']
+      
+      const nodes = []
+      let totalMembers = 0
+      
+      data.data.communities.forEach((community, idx) => {
+        if (!community.community_id) {
+          console.warn('[GraphViewer] Community missing community_id:', community)
+          return
         }
         
-        cyRef.current.elements().remove()
-        cyRef.current.add(elements)
-        applyLayout(layout)
+        const communityId = community.community_id
+        if (!communityColors[communityId]) {
+          communityColors[communityId] = colors[colorIndex % colors.length]
+          colorIndex++
+        }
         
-        setStats({
-          communities_found: data.data.communities.length,
-          total_nodes: nodes.length,
-          algorithm: data.data.algorithm || 'label_propagation'
+        const members = community.members || []
+        console.log(`[GraphViewer] Community ${communityId}: ${members.length} members`)
+        
+        if (!Array.isArray(members)) {
+          console.warn('[GraphViewer] Community members is not an array:', community)
+          return
+        }
+        
+        members.forEach(member => {
+          if (!member.satellite_id) {
+            console.warn('[GraphViewer] Member missing satellite_id:', member)
+            return
+          }
+          
+          totalMembers++
+          nodes.push({
+            data: {
+              id: member.satellite_id,
+              label: member.satellite_name || member.identifier || member.satellite_id.split('/')[1],
+              community_id: communityId,
+              orbital_band: member.orbital_band,
+              country: member.country,
+              node_size: 25
+            },
+            style: {
+              'background-color': communityColors[communityId]
+            }
+          })
         })
-        console.log('[GraphViewer] Communities graph rendered successfully')
+      })
+      
+      if (nodes.length === 0) {
+        console.warn('[GraphViewer] No valid nodes found in communities')
+        setError('No satellites found in communities')
+        setStats({ 
+          message: 'Communities found but no satellites',
+          communities_found: data.data.communities.length 
+        })
+        if (cyRef.current) {
+          cyRef.current.elements().remove()
+        }
+        return
       }
+      
+      const elements = {
+        nodes: nodes,
+        edges: []
+      }
+      
+      console.log('[GraphViewer] Rendering communities:', {
+        communitiesCount: data.data.communities.length,
+        nodesCount: nodes.length,
+        colorsUsed: colorIndex
+      })
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      setStats({
+        communities_found: data.data.communities.length,
+        total_nodes: nodes.length,
+        algorithm: data.data.algorithm || algorithm,
+        min_size_used: minSize
+      })
+      console.log('[GraphViewer] Communities graph rendered successfully')
     } catch (error) {
       console.error('[GraphViewer] Error loading communities graph:', error)
       setError(`Failed to load communities: ${error.message}`)
+      setStats({ error: error.message })
+      if (cyRef.current) {
+        cyRef.current.elements().remove()
+      }
     } finally {
       setLoading(false)
     }
@@ -1368,6 +1447,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             {stats.view_type && <span>View: {stats.view_type}</span>}
             {stats.collision_risks !== undefined && <span>Risks: {stats.collision_risks}</span>}
             {stats.communities_found !== undefined && <span>Communities: {stats.communities_found}</span>}
+            {stats.algorithm && <span>Algorithm: {stats.algorithm}</span>}
+            {stats.min_size_used !== undefined && <span>Min Size: {stats.min_size_used}</span>}
+            {stats.suggestion && <span style={{ fontStyle: 'italic' }}>💡 {stats.suggestion}</span>}
             {stats.root_satellite && <span>Root: {stats.root_satellite}</span>}
             {stats.total_ancestors !== undefined && <span>Ancestors: {stats.total_ancestors}</span>}
             {stats.total_descendants !== undefined && <span>Descendants: {stats.total_descendants}</span>}
@@ -1523,12 +1605,27 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           </>
         ) : graphType === 'communities' ? (
           <>
-            <div className="legend-item">
-              <span className="legend-node satellite"></span>
-              <span>Node (colored by community)</span>
-            </div>
-            <div className="legend-note">
-              Each color represents a different community
+            <div className="legend-section">
+              <h5>Community Colors (examples)</h5>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#3498db'}}></span>
+                <span>Community 1</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#e74c3c'}}></span>
+                <span>Community 2</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#2ecc71'}}></span>
+                <span>Community 3</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#f39c12'}}></span>
+                <span>Community 4</span>
+              </div>
+              <div className="legend-note">
+                Each color represents a different detected community. Satellites with the same color share similar orbital and functional characteristics.
+              </div>
             </div>
           </>
         ) : (

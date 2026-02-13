@@ -99,22 +99,39 @@ Implement satellite selection UI for the lineage graph:
 
 ---
 
-### [ ] Step: Improve Communities Graph
+### [x] Step: Improve Communities Graph
+<!-- chat-id: 8cb55e48-2641-422c-a1f1-1c8a4d677bcb -->
+
+**Completed:** Communities graph enhanced with parameter controls, comprehensive validation, and improved error handling
 
 Fix communities graph data handling and display:
 
-- [ ] Add validation for communities response structure
-- [ ] Handle empty communities array gracefully
-- [ ] Add "No communities found" message for empty results
-- [ ] Add console logging to debug communities endpoint
-- [ ] Test with different algorithm and min_size parameters
+- [x] Add validation for communities response structure
+- [x] Handle empty communities array gracefully
+- [x] Add "No communities found" message for empty results
+- [x] Add console logging to debug communities endpoint
+- [x] Test with different algorithm and min_size parameters
+
+**Changes Made:**
+- Added UI controls in GraphExplorer for algorithm selection (label_propagation, louvain, greedy_modularity) and minimum community size
+- Added state management for communityAlgorithm and communityMinSize in GraphExplorer
+- Updated loadCommunitiesGraph to accept algorithm and minSize parameters
+- Added comprehensive validation for response structure (data object, communities array, community members)
+- Enhanced error handling with specific error messages for each failure scenario
+- Added detailed console logging at each validation step with data structure inspection
+- Implemented graceful handling of empty communities with helpful suggestions
+- Added stats display for algorithm, min_size, and suggestion when no communities found
+- Enhanced legend with sample community colors and explanatory text
+- Increased color palette to 10 colors for better community differentiation
 
 **Verification:**
 - Navigate to Communities view
-- Verify graph loads automatically
-- Check that nodes are colored by community
-- Verify stats display correctly
-- Test with different algorithm options
+- Select different algorithms from dropdown (Label Propagation, Louvain, Greedy Modularity)
+- Adjust minimum community size slider
+- Verify graph loads with colored nodes representing communities
+- Verify stats display algorithm, min_size_used, communities_found, and total_nodes
+- Check console for detailed logging of API response and rendering process
+- Test with min_size values that return no results to verify error message and suggestion
 
 ---
 

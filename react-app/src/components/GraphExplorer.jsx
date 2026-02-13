@@ -30,6 +30,8 @@ function GraphExplorer() {
   const [satelliteSearchQuery, setSatelliteSearchQuery] = useState('')
   const [satelliteSearchResults, setSatelliteSearchResults] = useState([])
   const [searchingsatellite, setSearchingsatellite] = useState(false)
+  const [communityAlgorithm, setCommunityAlgorithm] = useState('label_propagation')
+  const [communityMinSize, setCommunityMinSize] = useState(3)
 
   useEffect(() => {
     loadGraphStats()
@@ -480,8 +482,54 @@ function GraphExplorer() {
           <div className="selector-content">
             <h3>Community Detection</h3>
             <p className="section-description">Discover clusters and communities in the satellite network</p>
-            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1rem' }}>
-              Communities will be automatically detected and visualized.
+            
+            <div style={{ marginTop: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                Detection Algorithm:
+              </label>
+              <select
+                value={communityAlgorithm}
+                onChange={(e) => setCommunityAlgorithm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.9rem',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="label_propagation">Label Propagation</option>
+                <option value="louvain">Louvain</option>
+                <option value="greedy_modularity">Greedy Modularity</option>
+              </select>
+            </div>
+            
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                Minimum Community Size:
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={communityMinSize}
+                onChange={(e) => setCommunityMinSize(parseInt(e.target.value) || 1)}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.9rem'
+                }}
+              />
+              <p style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+                Filter out communities with fewer members than this
+              </p>
+            </div>
+            
+            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1.5rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+              💡 Communities are automatically detected based on satellite relationships. Nodes with the same color belong to the same community.
             </p>
           </div>
         )}
@@ -515,6 +563,8 @@ function GraphExplorer() {
             collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
             collisionViewType={graphType === 'collision' ? collisionViewType : null}
             selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
+            communityAlgorithm={graphType === 'communities' ? communityAlgorithm : null}
+            communityMinSize={graphType === 'communities' ? communityMinSize : null}
           />
         )}
       </div>
