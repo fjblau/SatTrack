@@ -2309,8 +2309,7 @@ def get_graph_evolution_timeline(
     """
     try:
         if end_date is None:
-            import datetime
-            end_date = str(datetime.datetime.now().year)
+            end_date = str(datetime.now().year)
         
         cache_key = f"{start_date}:{end_date}:{granularity}:{','.join(edge_types) if edge_types else 'all'}"
         

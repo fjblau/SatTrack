@@ -9,7 +9,9 @@ This module provides helper functions for:
 - Multi-edge type queries
 """
 from typing import Optional, Dict, List, Any, Set
-from database.connection import db, COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK, EDGE_COLLECTION_SATELLITE_LINEAGE
+import datetime
+import database.connection as db_conn
+from database.connection import COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK, EDGE_COLLECTION_SATELLITE_LINEAGE
 
 
 def find_shortest_path(
@@ -64,7 +66,7 @@ def find_shortest_path(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'from_id': from_id,
@@ -130,7 +132,7 @@ def find_all_paths(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'from_id': from_id,
@@ -202,7 +204,7 @@ def calculate_degree_centrality(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={'limit': limit}
         )
@@ -267,7 +269,7 @@ def traverse_graph(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'start_id': start_id,
@@ -326,7 +328,7 @@ def get_neighbors(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={'vertex_id': vertex_id}
         )
@@ -379,7 +381,7 @@ def count_edges_by_type(vertex_id: str) -> Dict[str, int]:
             }}
             """
             
-            cursor = db.aql.execute(
+            cursor = db_conn.db.aql.execute(
                 query,
                 bind_vars={'vertex_id': vertex_id}
             )
@@ -477,7 +479,7 @@ def calculate_betweenness_centrality(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'limit': limit,
@@ -555,7 +557,7 @@ def calculate_closeness_centrality(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'limit': limit,
@@ -615,7 +617,7 @@ def find_connected_components(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={'min_size': min_component_size}
         )
@@ -666,7 +668,7 @@ def get_collision_risk_neighbors(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'satellite_id': satellite_id,
@@ -747,7 +749,7 @@ def analyze_collision_clusters(
             }}
         """
         
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
         return list(cursor)
         
     except Exception as e:
@@ -860,7 +862,7 @@ def find_cross_constellation_proximity(
         }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'limit': limit,
@@ -1023,7 +1025,7 @@ def find_country_cooperation_network(
         }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'limit': limit,
@@ -1183,7 +1185,7 @@ def find_function_based_clusters(
         }}
         """
         
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
         
         results = list(cursor)
         return results[0] if results else {}
@@ -1240,7 +1242,7 @@ def traverse_lineage_tree(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 "satellite_id": satellite_id,
@@ -1301,7 +1303,7 @@ def get_lineage_neighbors(
             }}
         """
         
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
         return list(cursor)
         
     except Exception as e:
@@ -1358,7 +1360,7 @@ def find_satellite_generation(satellite_id: str) -> Optional[Dict[str, Any]]:
         }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={"satellite_id": satellite_id}
         )
@@ -1417,7 +1419,7 @@ def get_lineage_family_members(family_name: str, limit: int = 100) -> List[Dict[
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 "family_name": family_name.upper(),
@@ -1576,7 +1578,7 @@ def detect_communities_label_propagation(
         RETURN communities
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'min_community_size': min_community_size,
@@ -1637,7 +1639,7 @@ def detect_communities(
                 member_details = []
                 for member_id in member_ids[:100]:
                     try:
-                        sat = db.collection(COLLECTION_NAME).get(member_id.split("/")[1])
+                        sat = db_conn.db.collection(COLLECTION_NAME).get(member_id.split("/")[1])
                         if sat:
                             member_details.append({
                                 "satellite_id": member_id,
@@ -1782,7 +1784,7 @@ def get_graph_snapshot_by_date(
             )
             """
             
-            cursor = db.aql.execute(
+            cursor = db_conn.db.aql.execute(
                 count_query,
                 bind_vars={'target_date': target_date}
             )
@@ -1795,7 +1797,7 @@ def get_graph_snapshot_by_date(
             RETURN doc
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             satellite_query,
             bind_vars={'target_date': target_date}
         )
@@ -1872,7 +1874,6 @@ def calculate_graph_evolution_timeline(
             end_year = int(end_date[:4])
             date_periods = [str(year) for year in range(start_year, end_year + 1)]
         elif granularity == 'month':
-            import datetime
             start = datetime.datetime.strptime(start_date[:7], '%Y-%m')
             end = datetime.datetime.strptime(end_date[:7], '%Y-%m')
             
@@ -2027,7 +2028,7 @@ def calculate_jaccard_similarity(
         RETURN union > 0 ? intersection / union : 0
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'satellite_id': satellite_id,
@@ -2120,7 +2121,7 @@ def get_similar_satellites(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'satellite_id': satellite_id,
@@ -2296,7 +2297,7 @@ def get_neighbor_based_recommendations(
         else:
             return []
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'satellite_id': satellite_id,
@@ -2378,7 +2379,7 @@ def get_collaborative_filtering_recommendations(
                 }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 'satellite_id': satellite_id,
