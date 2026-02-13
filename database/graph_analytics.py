@@ -1673,3 +1673,285 @@ def detect_communities(
     except Exception as e:
         print(f"Error detecting communities: {e}")
         return []
+
+
+def get_graph_snapshot_by_date(
+    target_date: str,
+    edge_types: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Get graph snapshot statistics at a specific date.
+    
+    Args:
+        target_date: Date in YYYY-MM-DD format or YYYY-MM or YYYY
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        Dictionary with node count, edge count, and density metrics
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY,
+                EDGE_COLLECTION_COLLISION_RISK,
+                EDGE_COLLECTION_SATELLITE_LINEAGE
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY,
+                EDGE_COLLECTION_COLLISION_RISK,
+                EDGE_COLLECTION_SATELLITE_LINEAGE
+            ]
+        
+        date_len = len(target_date)
+        date_filter = ""
+        
+        if date_len == 4:
+            date_filter = "STARTS_WITH(doc.canonical.launch_date, @target_date)"
+        elif date_len == 7:
+            date_filter = "STARTS_WITH(doc.canonical.launch_date, @target_date)"
+        else:
+            date_filter = "doc.canonical.launch_date <= @target_date"
+        
+        query = f"""
+        LET satellites_at_date = (
+            FOR doc IN {COLLECTION_NAME}
+                FILTER doc.canonical.launch_date != null
+                FILTER {date_filter}
+                RETURN doc
+        )
+        
+        LET node_count = LENGTH(satellites_at_date)
+        LET satellite_ids = satellites_at_date[*]._id
+        
+        LET total_edges = SUM(
+            FOR edge_collection IN @edge_collections
+                LET edge_count = LENGTH(
+                    FOR edge IN @@edge_collection_var
+                        FILTER edge._from IN satellite_ids
+                        FILTER edge._to IN satellite_ids
+                        RETURN 1
+                )
+                RETURN edge_count
+        )
+        
+        LET density = node_count > 1 ? total_edges / (node_count * (node_count - 1)) : 0
+        
+        RETURN {{
+            date: @target_date,
+            node_count: node_count,
+            edge_count: total_edges,
+            density: density,
+            avg_degree: node_count > 0 ? (total_edges * 2) / node_count : 0
+        }}
+        """
+        
+        edge_counts = {}
+        for edge_collection in edge_collections:
+            count_query = f"""
+            LET satellites_at_date = (
+                FOR doc IN {COLLECTION_NAME}
+                    FILTER doc.canonical.launch_date != null
+                    FILTER {date_filter}
+                    RETURN doc._id
+            )
+            
+            RETURN LENGTH(
+                FOR edge IN {edge_collection}
+                    FILTER edge._from IN satellites_at_date
+                    FILTER edge._to IN satellites_at_date
+                    RETURN 1
+            )
+            """
+            
+            cursor = db.aql.execute(
+                count_query,
+                bind_vars={'target_date': target_date}
+            )
+            edge_counts[edge_collection] = list(cursor)[0]
+        
+        satellite_query = f"""
+        FOR doc IN {COLLECTION_NAME}
+            FILTER doc.canonical.launch_date != null
+            FILTER {date_filter}
+            RETURN doc
+        """
+        
+        cursor = db.aql.execute(
+            satellite_query,
+            bind_vars={'target_date': target_date}
+        )
+        
+        satellites = list(cursor)
+        node_count = len(satellites)
+        total_edges = sum(edge_counts.values())
+        
+        density = total_edges / (node_count * (node_count - 1)) if node_count > 1 else 0
+        avg_degree = (total_edges * 2) / node_count if node_count > 0 else 0
+        
+        return {
+            "date": target_date,
+            "node_count": node_count,
+            "edge_count": total_edges,
+            "edge_counts_by_type": edge_counts,
+            "density": density,
+            "avg_degree": avg_degree
+        }
+        
+    except Exception as e:
+        print(f"Error getting graph snapshot: {e}")
+        return {
+            "date": target_date,
+            "node_count": 0,
+            "edge_count": 0,
+            "edge_counts_by_type": {},
+            "density": 0,
+            "avg_degree": 0
+        }
+
+
+def calculate_graph_evolution_timeline(
+    start_date: str,
+    end_date: str,
+    granularity: str = 'year',
+    edge_types: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Calculate graph evolution metrics over a time period.
+    
+    Args:
+        start_date: Start date in YYYY-MM-DD format
+        end_date: End date in YYYY-MM-DD format
+        granularity: Time granularity ('year', 'month', 'quarter')
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        List of timeline snapshots with growth metrics
+    """
+    try:
+        edge_collections = edge_types if edge_types else []
+        
+        if not edge_collections:
+            from database.connection import (
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY,
+                EDGE_COLLECTION_COLLISION_RISK,
+                EDGE_COLLECTION_SATELLITE_LINEAGE
+            )
+            edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY,
+                EDGE_COLLECTION_COLLISION_RISK,
+                EDGE_COLLECTION_SATELLITE_LINEAGE
+            ]
+        
+        edge_clause = ", ".join([f"'{edge}'" for edge in edge_collections])
+        
+        if granularity == 'year':
+            start_year = int(start_date[:4])
+            end_year = int(end_date[:4])
+            date_periods = [str(year) for year in range(start_year, end_year + 1)]
+        elif granularity == 'month':
+            import datetime
+            start = datetime.datetime.strptime(start_date[:7], '%Y-%m')
+            end = datetime.datetime.strptime(end_date[:7], '%Y-%m')
+            
+            date_periods = []
+            current = start
+            while current <= end:
+                date_periods.append(current.strftime('%Y-%m'))
+                month = current.month + 1
+                year = current.year
+                if month > 12:
+                    month = 1
+                    year += 1
+                current = datetime.datetime(year, month, 1)
+        elif granularity == 'quarter':
+            start_year = int(start_date[:4])
+            end_year = int(end_date[:4])
+            
+            date_periods = []
+            for year in range(start_year, end_year + 1):
+                for quarter in range(1, 5):
+                    date_periods.append(f"{year}-Q{quarter}")
+        else:
+            raise ValueError(f"Unknown granularity: {granularity}")
+        
+        timeline = []
+        previous_snapshot = None
+        
+        for period in date_periods:
+            if granularity == 'quarter':
+                year, quarter = period.split('-Q')
+                quarter_end_month = int(quarter) * 3
+                period_date = f"{year}-{quarter_end_month:02d}"
+            else:
+                period_date = period
+            
+            snapshot = get_graph_snapshot_by_date(period_date, edge_types)
+            
+            if previous_snapshot:
+                snapshot['node_growth'] = snapshot['node_count'] - previous_snapshot['node_count']
+                snapshot['edge_growth'] = snapshot['edge_count'] - previous_snapshot['edge_count']
+                snapshot['density_change'] = snapshot['density'] - previous_snapshot['density']
+            else:
+                snapshot['node_growth'] = snapshot['node_count']
+                snapshot['edge_growth'] = snapshot['edge_count']
+                snapshot['density_change'] = snapshot['density']
+            
+            snapshot['period'] = period
+            timeline.append(snapshot)
+            previous_snapshot = snapshot
+        
+        return timeline
+        
+    except Exception as e:
+        print(f"Error calculating graph evolution timeline: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def get_temporal_network_metrics(
+    date_ranges: List[tuple],
+    edge_types: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Calculate network metrics across multiple time periods for comparison.
+    
+    Args:
+        date_ranges: List of (start_date, end_date) tuples
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        Dictionary with comparative metrics across time periods
+    """
+    try:
+        periods_data = []
+        
+        for start_date, end_date in date_ranges:
+            snapshot = get_graph_snapshot_by_date(end_date, edge_types)
+            snapshot['period_start'] = start_date
+            snapshot['period_end'] = end_date
+            periods_data.append(snapshot)
+        
+        return {
+            "periods": periods_data,
+            "summary": {
+                "total_periods": len(periods_data),
+                "avg_density": sum(p['density'] for p in periods_data) / len(periods_data) if periods_data else 0,
+                "max_nodes": max(p['node_count'] for p in periods_data) if periods_data else 0,
+                "max_edges": max(p['edge_count'] for p in periods_data) if periods_data else 0
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error calculating temporal network metrics: {e}")
+        return {"periods": [], "summary": {}}

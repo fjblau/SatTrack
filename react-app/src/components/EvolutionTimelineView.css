@@ -1,0 +1,181 @@
+.evolution-timeline-view {
+  padding: 1rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.evolution-timeline-loading {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.timeline-controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  align-items: flex-end;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.control-group input,
+.control-group select {
+  padding: 0.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  min-width: 120px;
+}
+
+.control-group input:focus,
+.control-group select:focus {
+  outline: none;
+  border-color: #2ecc71;
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
+}
+
+.apply-button {
+  padding: 0.5rem 1.5rem;
+  background: #2ecc71;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.apply-button:hover {
+  background: #27ae60;
+}
+
+.metric-selector {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.metric-selector button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.metric-selector button:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.metric-selector button.active {
+  background: #2ecc71;
+  color: white;
+  border-color: #2ecc71;
+}
+
+.metric-chart {
+  position: relative;
+  margin: 2rem 0;
+  display: flex;
+  justify-content: center;
+}
+
+.metric-chart svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.no-data {
+  padding: 3rem;
+  text-align: center;
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+.period-tooltip {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  pointer-events: none;
+  z-index: 1000;
+  min-width: 200px;
+  transform: translate(-50%, -110%);
+  left: 50%;
+  top: 50%;
+}
+
+.period-tooltip strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  color: #2ecc71;
+}
+
+.period-tooltip div {
+  margin: 0.25rem 0;
+}
+
+.growth-metric {
+  color: #2ecc71;
+  font-weight: 600;
+  margin-top: 0.5rem !important;
+}
+
+.timeline-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.stat-card {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #2ecc71;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  color: #212529;
+  font-weight: 700;
+}

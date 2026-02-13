@@ -28,6 +28,8 @@ export const API_ENDPOINTS = {
     FUNCTION_CLUSTERS: '/v2/graphs/function-clusters',
     LINEAGE: '/v2/graphs/lineage',
     COMMUNITIES: '/v2/graphs/communities',
+    EVOLUTION_TIMELINE: '/v2/graphs/evolution/timeline',
+    EVOLUTION_SNAPSHOT: '/v2/graphs/evolution/snapshot',
   },
   
   DOCUMENTS: {

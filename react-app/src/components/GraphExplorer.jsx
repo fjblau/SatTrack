@@ -3,6 +3,7 @@ import GraphViewer from './GraphViewer'
 import PathFinderPanel from './PathFinderPanel'
 import CentralityView from './CentralityView'
 import CollisionRiskView from './CollisionRiskView'
+import EvolutionTimelineView from './EvolutionTimelineView'
 import './GraphExplorer.css'
 import { API_ENDPOINTS, GRAPH_SETTINGS, UI_TEXT } from '../config/constants'
 
@@ -24,6 +25,7 @@ function GraphExplorer() {
   const [centralityMetric, setCentralityMetric] = useState(null)
   const [collisionRiskData, setCollisionRiskData] = useState(null)
   const [collisionViewType, setCollisionViewType] = useState(null)
+  const [evolutionTimelineData, setEvolutionTimelineData] = useState(null)
 
   useEffect(() => {
     loadGraphStats()
@@ -169,6 +171,12 @@ function GraphExplorer() {
             onClick={() => setGraphType('communities')}
           >
             Communities
+          </button>
+          <button 
+            className={graphType === 'evolution' ? 'active' : ''}
+            onClick={() => setGraphType('evolution')}
+          >
+            Graph Evolution
           </button>
         </div>
 
@@ -330,22 +338,36 @@ function GraphExplorer() {
           </div>
         )}
 
+        {graphType === 'evolution' && (
+          <div className="selector-content">
+            <h3>Graph Evolution Timeline</h3>
+            <p className="section-description">Visualize how the satellite network has grown over time</p>
+            <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '1rem' }}>
+              Track node count, edge count, density, and growth metrics across different time periods.
+            </p>
+          </div>
+        )}
+
       </div>
 
       <div className="graph-main">
-        <GraphViewer 
-          graphType={graphType}
-          selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
-          selectedDocument={graphType === 'registration' ? selectedDocument : null}
-          selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
-          selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
-          selectedCountries={graphType === 'country' ? selectedCountries : null}
-          pathData={graphType === 'paths' ? pathData : null}
-          centralityData={graphType === 'centrality' ? centralityData : null}
-          centralityMetric={graphType === 'centrality' ? centralityMetric : null}
-          collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
-          collisionViewType={graphType === 'collision' ? collisionViewType : null}
-        />
+        {graphType === 'evolution' ? (
+          <EvolutionTimelineView onTimelineLoad={(data) => setEvolutionTimelineData(data)} />
+        ) : (
+          <GraphViewer 
+            graphType={graphType}
+            selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
+            selectedDocument={graphType === 'registration' ? selectedDocument : null}
+            selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
+            selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
+            selectedCountries={graphType === 'country' ? selectedCountries : null}
+            pathData={graphType === 'paths' ? pathData : null}
+            centralityData={graphType === 'centrality' ? centralityData : null}
+            centralityMetric={graphType === 'centrality' ? centralityMetric : null}
+            collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
+            collisionViewType={graphType === 'collision' ? collisionViewType : null}
+          />
+        )}
       </div>
     </div>
   )

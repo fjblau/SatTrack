@@ -24,7 +24,10 @@ from database.graph_analytics import (
     find_cross_constellation_proximity,
     find_country_cooperation_network,
     find_function_based_clusters,
-    detect_communities
+    detect_communities,
+    get_graph_snapshot_by_date,
+    calculate_graph_evolution_timeline,
+    get_temporal_network_metrics
 )
 from api.services.cache_service import get_cache
 from api.services import collision_service, lineage_service
@@ -34,6 +37,7 @@ router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
 path_cache = get_cache("path_queries", ttl=3600, max_size=1000)
 centrality_cache = get_cache("centrality_queries", ttl=86400, max_size=500)
 community_cache = get_cache("community_queries", ttl=43200, max_size=200)
+evolution_cache = get_cache("evolution_queries", ttl=86400, max_size=100)
 
 
 @router.get("/constellation/{constellation_name}")
@@ -2257,4 +2261,172 @@ def get_communities(
         raise HTTPException(
             status_code=500,
             detail=f"Error detecting communities: {str(e)}"
+        )
+
+
+@router.get("/evolution/timeline")
+def get_graph_evolution_timeline(
+    start_date: Optional[str] = Query(default="1957", description="Start date (YYYY or YYYY-MM or YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(default=None, description="End date (YYYY or YYYY-MM or YYYY-MM-DD)"),
+    granularity: str = Query(default="year", description="Time granularity (year, month, quarter)"),
+    edge_types: Optional[List[str]] = Query(default=None, description="Optional list of edge types to include")
+):
+    """
+    Get graph evolution timeline showing how the network grows over time.
+    
+    Parameters:
+        start_date: Start date for timeline (default: 1957, first satellite)
+        end_date: End date for timeline (default: current year)
+        granularity: Time granularity - 'year', 'month', or 'quarter'
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        Timeline data with node counts, edge counts, density, and growth metrics.
+        Results are cached for 24 hours to improve performance.
+    
+    Example:
+        GET /v2/graphs/evolution/timeline?start_date=2000&end_date=2024&granularity=year
+    """
+    try:
+        if end_date is None:
+            import datetime
+            end_date = str(datetime.datetime.now().year)
+        
+        cache_key = f"{start_date}:{end_date}:{granularity}:{','.join(edge_types) if edge_types else 'all'}"
+        
+        cached_result = evolution_cache.get(cache_key)
+        if cached_result is not None:
+            return {
+                "data": cached_result,
+                "cached": True,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        
+        valid_granularities = ["year", "month", "quarter"]
+        if granularity not in valid_granularities:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid granularity. Must be one of: {', '.join(valid_granularities)}"
+            )
+        
+        if granularity == "year":
+            start_formatted = f"{start_date}-01-01" if len(start_date) == 4 else start_date
+            end_formatted = f"{end_date}-12-31" if len(end_date) == 4 else end_date
+        elif granularity == "month":
+            start_formatted = f"{start_date}-01" if len(start_date) == 4 else start_date
+            end_formatted = f"{end_date}-12" if len(end_date) == 4 else end_date
+        else:
+            start_formatted = start_date
+            end_formatted = end_date
+        
+        timeline = calculate_graph_evolution_timeline(
+            start_date=start_formatted,
+            end_date=end_formatted,
+            granularity=granularity,
+            edge_types=edge_types
+        )
+        
+        if not timeline:
+            result = {
+                "timeline": [],
+                "parameters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "granularity": granularity,
+                    "edge_types": edge_types or ["all"]
+                },
+                "stats": {
+                    "total_periods": 0,
+                    "total_growth": {
+                        "nodes": 0,
+                        "edges": 0
+                    },
+                    "final_state": {
+                        "node_count": 0,
+                        "edge_count": 0,
+                        "density": 0
+                    }
+                }
+            }
+        else:
+            final_snapshot = timeline[-1]
+            initial_snapshot = timeline[0]
+            
+            result = {
+                "timeline": timeline,
+                "parameters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "granularity": granularity,
+                    "edge_types": edge_types or ["all"]
+                },
+                "stats": {
+                    "total_periods": len(timeline),
+                    "total_growth": {
+                        "nodes": final_snapshot['node_count'] - initial_snapshot['node_count'],
+                        "edges": final_snapshot['edge_count'] - initial_snapshot['edge_count']
+                    },
+                    "final_state": {
+                        "node_count": final_snapshot['node_count'],
+                        "edge_count": final_snapshot['edge_count'],
+                        "density": final_snapshot['density'],
+                        "avg_degree": final_snapshot['avg_degree']
+                    },
+                    "peak_growth_period": max(timeline, key=lambda x: x.get('node_growth', 0))['period'],
+                    "avg_density": sum(t['density'] for t in timeline) / len(timeline)
+                }
+            }
+        
+        evolution_cache.set(cache_key, result)
+        
+        return {
+            "data": result,
+            "cached": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calculating graph evolution timeline: {str(e)}"
+        )
+
+
+@router.get("/evolution/snapshot/{date}")
+def get_graph_snapshot(
+    date: str,
+    edge_types: Optional[List[str]] = Query(default=None, description="Optional list of edge types to include")
+):
+    """
+    Get graph snapshot at a specific date.
+    
+    Parameters:
+        date: Target date (YYYY or YYYY-MM or YYYY-MM-DD)
+        edge_types: Optional list of edge collections to consider
+    
+    Returns:
+        Snapshot data with node count, edge count, density, and other metrics.
+    
+    Example:
+        GET /v2/graphs/evolution/snapshot/2020-01
+    """
+    try:
+        snapshot = get_graph_snapshot_by_date(
+            target_date=date,
+            edge_types=edge_types
+        )
+        
+        return {
+            "data": snapshot,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting graph snapshot: {str(e)}"
         )
