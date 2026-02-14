@@ -192,6 +192,9 @@ def get_collision_risk_network(
     """
     Get collision risk network as nodes and edges for visualization.
     
+    Strategy: Find satellites with most collision risks (hubs) and show their
+    connected subgraph to ensure a connected network visualization.
+    
     Args:
         orbital_band: Filter by orbital band
         risk_threshold: Minimum risk score
@@ -212,10 +215,21 @@ def get_collision_risk_network(
             bind_vars['orbital_band'] = orbital_band
         
         query = f"""
+        LET hub_satellites = (
+            FOR edge IN {EDGE_COLLECTION_COLLISION_RISK}
+                {band_filter}
+                FILTER edge.risk_score >= @risk_threshold
+                COLLECT sat_id = edge._from WITH COUNT INTO edge_count
+                SORT edge_count DESC
+                LIMIT 10
+                RETURN sat_id
+        )
+        
         LET edges = (
             FOR edge IN {EDGE_COLLECTION_COLLISION_RISK}
                 {band_filter}
                 FILTER edge.risk_score >= @risk_threshold
+                FILTER edge._from IN hub_satellites OR edge._to IN hub_satellites
                 SORT edge.risk_score DESC
                 LIMIT @limit
                 RETURN edge
@@ -229,6 +243,14 @@ def get_collision_risk_network(
         LET satellites = (
             FOR sat_id IN satellite_ids
                 LET sat = DOCUMENT(sat_id)
+                LET edge_count = (
+                    FOR e IN {EDGE_COLLECTION_COLLISION_RISK}
+                        FILTER (e._from == sat_id OR e._to == sat_id)
+                        AND e.risk_score >= @risk_threshold
+                        {band_filter.replace('edge.', 'e.')}
+                        COLLECT WITH COUNT INTO cnt
+                        RETURN cnt
+                )[0]
                 RETURN {{
                     id: sat._id,
                     key: sat._key,
@@ -237,7 +259,9 @@ def get_collision_risk_network(
                     orbital_band: sat.canonical.orbital_band,
                     apogee_km: sat.canonical.orbit.apogee_km,
                     perigee_km: sat.canonical.orbit.perigee_km,
-                    inclination_degrees: sat.canonical.orbit.inclination_degrees
+                    inclination_degrees: sat.canonical.orbit.inclination_degrees,
+                    edge_count: edge_count,
+                    congestion_risk: edge_count >= 8 ? 'critical' : edge_count >= 5 ? 'high' : edge_count >= 3 ? 'medium' : 'low'
                 }}
         )
         

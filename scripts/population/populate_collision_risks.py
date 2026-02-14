@@ -150,7 +150,8 @@ def populate_collision_risks(dry_run=False, orbital_band_filter=None):
                     
                     if risk_score >= MIN_RISK_SCORE:
                         satellite_edges[sat1['_key']].append({
-                            'target': sat2['_key'],
+                            'from': sat1['_key'],
+                            'to': sat2['_key'],
                             'risk_score': risk_score,
                             'apogee_diff': apogee_diff,
                             'perigee_diff': perigee_diff,
@@ -158,29 +159,36 @@ def populate_collision_risks(dry_run=False, orbital_band_filter=None):
                         })
                         
                         satellite_edges[sat2['_key']].append({
-                            'target': sat1['_key'],
+                            'from': sat2['_key'],
+                            'to': sat1['_key'],
                             'risk_score': risk_score,
                             'apogee_diff': apogee_diff,
                             'perigee_diff': perigee_diff,
                             'inclination_diff': inclination_diff
                         })
         
+        created_pairs = set()
         for sat_key, edges in satellite_edges.items():
             edges.sort(key=lambda x: x['risk_score'], reverse=True)
             top_edges = edges[:MAX_EDGES_PER_SATELLITE]
             
-            for edge in top_edges:
-                all_edges.append({
-                    '_from': f"{db_module.COLLECTION_NAME}/{sat_key}",
-                    '_to': f"{db_module.COLLECTION_NAME}/{edge['target']}",
-                    'orbital_band': band,
-                    'risk_score': edge['risk_score'],
-                    'apogee_diff_km': round(edge['apogee_diff'], 2),
-                    'perigee_diff_km': round(edge['perigee_diff'], 2),
-                    'inclination_diff_degrees': round(edge['inclination_diff'], 2),
-                    'risk_level': 'high' if edge['risk_score'] >= 0.8 else 'medium' if edge['risk_score'] >= 0.5 else 'low'
-                })
-                edge_count_by_band[band] += 1
+            for edge_data in top_edges:
+                pair_key = tuple(sorted([edge_data['from'], edge_data['to']]))
+                
+                if pair_key not in created_pairs:
+                    created_pairs.add(pair_key)
+                    
+                    all_edges.append({
+                        '_from': f"{db_module.COLLECTION_NAME}/{edge_data['from']}",
+                        '_to': f"{db_module.COLLECTION_NAME}/{edge_data['to']}",
+                        'orbital_band': band,
+                        'risk_score': edge_data['risk_score'],
+                        'apogee_diff_km': round(edge_data['apogee_diff'], 2),
+                        'perigee_diff_km': round(edge_data['perigee_diff'], 2),
+                        'inclination_diff_degrees': round(edge_data['inclination_diff'], 2),
+                        'risk_level': 'high' if edge_data['risk_score'] >= 0.8 else 'medium' if edge_data['risk_score'] >= 0.5 else 'low'
+                    })
+                    edge_count_by_band[band] += 1
         
         print(f"  Created {edge_count_by_band[band]:,} collision risk edges for {band}")
     
