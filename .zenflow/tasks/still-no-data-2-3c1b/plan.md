@@ -55,6 +55,12 @@ Implement the bug fix.
 - Made collision risk colors relative (percentile-based) instead of absolute thresholds
 - Updated legend to reflect relative coloring (Top 25%, 50-75%, 25-50%, Bottom 25%)
 - Added risk distribution stats (min, max, p25, median, p75) to graph metadata
+- Added edge type differentiation to Satellite Neighborhood view:
+  * Orange solid lines for orbital proximity (width varies by distance, labels show km)
+  * Blue solid lines for constellation membership (labels show constellation name)
+  * Purple dashed lines for registration document links
+  * Added legend explaining edge types and node types
+  * Edge stats show breakdown by type
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
