@@ -61,6 +61,10 @@ Implement the bug fix.
   * Purple dashed lines for registration document links
   * Added legend explaining edge types and node types
   * Edge stats show breakdown by type
+- Fixed edge labels to use proximity field data (apogee_diff_km, perigee_diff_km)
+- Updated backend endpoint to return proximity_score, apogee_diff_km, perigee_diff_km, inclination_diff_degrees
+- Frontend now calculates and displays average separation in km for orbital proximity edges
+- Edge width now based on proximity_score (closer satellites = thicker lines)
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
