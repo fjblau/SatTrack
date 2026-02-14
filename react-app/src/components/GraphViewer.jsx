@@ -318,12 +318,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         evt.preventDefault()
         const node = evt.target
         const renderedPosition = evt.renderedPosition || evt.position
+        const nodeData = node.data()
+        
+        console.log('[GraphViewer] Right-click on:', nodeData.name || nodeData.label)
+        console.log('[GraphViewer] nodeData.is_hub:', nodeData.is_hub, 'type:', typeof nodeData.is_hub)
+        console.log('[GraphViewer] Full nodeData:', nodeData)
         
         setContextMenu({
           visible: true,
           x: renderedPosition.x,
           y: renderedPosition.y,
-          node: node.data()
+          node: nodeData
         })
       })
 
@@ -1156,7 +1161,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const renderConstellationBrowserGraph = (data) => {
     if (!cyRef.current) return
     
-    console.log('[GraphViewer] Rendering constellation browser graph:', { hasData: !!data, nodesCount: data?.nodes?.length || 0, edgesCount: data?.edges?.length || 0 })
+    console.log('[GraphViewer] Rendering constellation browser graph')
+    console.log('[GraphViewer] Data.nodes:', data?.nodes)
+    data?.nodes?.forEach(node => {
+      if (node.is_hub === true) {
+        console.log('[GraphViewer] HUB NODE FOUND:', node.name, 'is_hub:', node.is_hub)
+      }
+    })
     setLoading(true)
     setError(null)
     try {
@@ -1175,14 +1186,20 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const elements = {
-        nodes: (data.nodes || []).map(node => ({
-          data: {
-            ...node,
-            id: node.id || node._id,
-            label: node.name || node.identifier || (node.id?.split('/')[1]),
-            node_size: node.is_hub === true ? 45 : 30
+        nodes: (data.nodes || []).map(node => {
+          const elem = {
+            data: {
+              ...node,
+              id: node.id || node._id,
+              label: node.name || node.identifier || (node.id?.split('/')[1]),
+              node_size: node.is_hub === true ? 45 : 30
+            }
           }
-        })),
+          if (node.is_hub === true) {
+            console.log('[GraphViewer] Creating hub element:', elem.data.name, 'elem.data.is_hub:', elem.data.is_hub)
+          }
+          return elem
+        }),
         edges: (data.edges || []).map(edge => ({
           data: {
             id: edge.id || `${edge.source}_to_${edge.target}`,
