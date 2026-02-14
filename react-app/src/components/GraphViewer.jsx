@@ -1243,7 +1243,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           }
         })),
         edges: (data.edges || []).map(edge => {
+          console.log('[GraphViewer] Processing edge:', edge)
           const label = getEdgeLabel(edge)
+          console.log('[GraphViewer] Edge label:', label, 'for type:', edge.type, 'distance_km:', edge.distance_km)
           const edgeData = {
             id: edge.id || `${edge.source}_to_${edge.target}`,
             source: edge.source || edge._from,
@@ -1256,6 +1258,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           if (label) {
             edgeData.edge_label = label
           }
+          console.log('[GraphViewer] Final edge data:', edgeData)
           return { data: edgeData }
         })
       }
