@@ -56,7 +56,8 @@ def populate_collision_risks(dry_run=False, orbital_band_filter=None):
         print("❌ Failed to connect to ArangoDB")
         return False
     
-    db = db_module.db
+    import database.connection as db_conn
+    db = db_conn.db
     
     print(f"\nRisk Thresholds:")
     print(f"  Apogee: ±{APOGEE_RISK_THRESHOLD_KM} km")
