@@ -1241,15 +1241,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       
       const getProximityColor = (score) => {
         if (score == null) return '#e67e22' // Default orange
-        // Lower score = closer = better, so invert the logic
-        // Closest 25% (lowest scores) = dark green
-        // 25-50% = green
-        // 50-75% = orange
-        // Farthest 25% (highest scores) = red
-        if (score <= p25) return '#27ae60'      // Dark green (closest)
-        if (score <= p50) return '#2ecc71'      // Green
-        if (score <= p75) return '#e67e22'      // Orange
-        return '#e74c3c'                        // Red (farthest)
+        // Lower score = closer satellites = MORE DANGEROUS
+        // Closest 25% (lowest scores) = red (most dangerous)
+        // 25-50% = orange
+        // 50-75% = light green
+        // Farthest 25% (highest scores) = dark green (safest)
+        if (score <= p25) return '#e74c3c'      // Red (closest/most dangerous)
+        if (score <= p50) return '#e67e22'      // Orange
+        if (score <= p75) return '#2ecc71'      // Light green
+        return '#27ae60'                        // Dark green (farthest/safest)
       }
       
       const getEdgeLabel = (edge) => {
@@ -2020,12 +2020,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               <h5>Edge Types</h5>
               <div className="legend-item">
                 <div style={{display: 'flex', gap: '2px', alignItems: 'center'}}>
-                  <span className="legend-edge-thick" style={{backgroundColor: '#27ae60', width: '8px'}}></span>
-                  <span className="legend-edge-thick" style={{backgroundColor: '#2ecc71', width: '8px'}}></span>
-                  <span className="legend-edge-thick" style={{backgroundColor: '#e67e22', width: '8px'}}></span>
                   <span className="legend-edge-thick" style={{backgroundColor: '#e74c3c', width: '8px'}}></span>
+                  <span className="legend-edge-thick" style={{backgroundColor: '#e67e22', width: '8px'}}></span>
+                  <span className="legend-edge-thick" style={{backgroundColor: '#2ecc71', width: '8px'}}></span>
+                  <span className="legend-edge-thick" style={{backgroundColor: '#27ae60', width: '8px'}}></span>
                 </div>
-                <span>Orbital Proximity (color/width = relative distance)</span>
+                <span>Orbital Proximity (red=close/dangerous → green=far/safe)</span>
               </div>
               <div className="legend-item">
                 <span className="legend-edge-thick" style={{backgroundColor: '#3498db'}}></span>
