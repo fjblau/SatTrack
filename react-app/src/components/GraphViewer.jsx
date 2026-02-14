@@ -200,7 +200,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           {
             selector: 'edge[edge_type="orbital_proximity"]',
             style: {
-              'line-color': '#e67e22',
+              'line-color': 'data(edge_color)',
               'width': 'data(edge_width)',
               'line-style': 'solid'
             }
@@ -1209,6 +1209,26 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         return
       }
       
+      // Calculate percentiles for orbital proximity edges to enable relative coloring
+      const proximityEdges = data.edges.filter(e => e.type === 'orbital_proximity' && e.proximity_score != null)
+      const proximityScores = proximityEdges.map(e => e.proximity_score).sort((a, b) => a - b)
+      const p25 = proximityScores[Math.floor(proximityScores.length * 0.25)] || 0
+      const p50 = proximityScores[Math.floor(proximityScores.length * 0.50)] || 0
+      const p75 = proximityScores[Math.floor(proximityScores.length * 0.75)] || 0
+      
+      const getProximityColor = (score) => {
+        if (score == null) return '#e67e22' // Default orange
+        // Lower score = closer = better, so invert the logic
+        // Closest 25% (lowest scores) = dark green
+        // 25-50% = green
+        // 50-75% = orange
+        // Farthest 25% (highest scores) = red
+        if (score <= p25) return '#27ae60'      // Dark green (closest)
+        if (score <= p50) return '#2ecc71'      // Green
+        if (score <= p75) return '#e67e22'      // Orange
+        return '#e74c3c'                        // Red (farthest)
+      }
+      
       const getEdgeLabel = (edge) => {
         if (edge.type === 'orbital_proximity') {
           // Show average separation from apogee/perigee diffs
@@ -1261,6 +1281,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           if (label) {
             edgeData.edge_label = label
           }
+          // Add color for orbital proximity edges
+          if (edge.type === 'orbital_proximity') {
+            edgeData.edge_color = getProximityColor(edge.proximity_score)
+          }
           return { data: edgeData }
         })
       }
@@ -1280,6 +1304,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         neighbors: elements.nodes.length - 1,
         connections: elements.edges.length,
         edge_types: edgeTypeCounts,
+        proximity_distribution: proximityScores.length > 0 ? {
+          min: proximityScores[0]?.toFixed(4),
+          p25: p25.toFixed(4),
+          median: p50.toFixed(4),
+          p75: p75.toFixed(4),
+          max: proximityScores[proximityScores.length - 1]?.toFixed(4)
+        } : null,
         ...(data.stats || {})
       })
       console.log('[GraphViewer] Neighborhood graph rendered successfully')
@@ -1893,8 +1924,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             <div className="legend-section">
               <h5>Edge Types</h5>
               <div className="legend-item">
-                <span className="legend-edge-thick" style={{backgroundColor: '#e67e22'}}></span>
-                <span>Orbital Proximity (width = closeness)</span>
+                <div style={{display: 'flex', gap: '2px', alignItems: 'center'}}>
+                  <span className="legend-edge-thick" style={{backgroundColor: '#27ae60', width: '8px'}}></span>
+                  <span className="legend-edge-thick" style={{backgroundColor: '#2ecc71', width: '8px'}}></span>
+                  <span className="legend-edge-thick" style={{backgroundColor: '#e67e22', width: '8px'}}></span>
+                  <span className="legend-edge-thick" style={{backgroundColor: '#e74c3c', width: '8px'}}></span>
+                </div>
+                <span>Orbital Proximity (color/width = relative distance)</span>
               </div>
               <div className="legend-item">
                 <span className="legend-edge-thick" style={{backgroundColor: '#3498db'}}></span>
