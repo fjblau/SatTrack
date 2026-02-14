@@ -79,12 +79,15 @@ Implement the bug fix.
   * Right-click on registration document nodes → "Show Registration Document" option
   * Context menu fetches full data from API and displays in modal panel
   * Fixed context menu detection: registration documents now properly identified by type field
-  * Fixed hub satellite detection in renderConstellationBrowserGraph: corrected spread operator ordering (was: explicit props then ...node, now: ...node then explicit props)
+  * Fixed hub satellite detection:
+    - Backend: explicitly set is_hub=false for member nodes, is_hub=true for hub node
+    - Frontend: use strict equality (===) instead of truthy checks, preserve is_hub from backend via spread operator
+    - Frontend: removed is_hub transformation that was causing property loss
   * Hub nodes now correctly show "⭐ Show Hub Details" in context menu
   * Modal shows raw JSON data (same format as Table View's "Show Data Record")
   * Added "Copy to Clipboard" button to copy JSON data
   * Styled JSON display with monospace font, syntax highlighting background, scrollable container
-  * Removed debug logging statements
+  * Removed all debug logging statements
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
