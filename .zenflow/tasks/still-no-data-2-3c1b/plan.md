@@ -87,6 +87,8 @@ Implement the bug fix.
   * Modal shows raw JSON data (same format as Table View's "Show Data Record")
   * Added "Copy to Clipboard" button to copy JSON data
   * Styled JSON display with monospace font, syntax highlighting background, scrollable container
+  * Fixed spread operator ordering in renderNeighborhoodGraph to preserve node properties
+  * Fixed API endpoint typo: changed /v2/satellites/{id} to /v2/satellite/{id} (singular)
   * Removed all debug logging statements
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
