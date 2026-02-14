@@ -95,6 +95,11 @@ Implement the bug fix.
     - Updated API endpoint to search by identifier field first (before international_designator or registration_number)
     - Fixes issue where 73% of satellites (Kaggle-only) couldn't be found by their identifier
     - Satellites like BRO-18 (NORAD-64550) now show their data in detail panel
+  * Fixed orbital proximity color coding (Satellite Neighborhood view):
+    - Reversed color logic: lower proximity_score (closer satellites) = red (more dangerous)
+    - Color gradient: red (closest 25%) → orange → light green → dark green (farthest 25%)
+    - Updated legend to show red→green gradient with "red=close/dangerous → green=far/safe" label
+    - Closer satellites are now correctly indicated as more dangerous with red/orange colors
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
