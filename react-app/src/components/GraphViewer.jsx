@@ -318,15 +318,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         evt.preventDefault()
         const node = evt.target
         const renderedPosition = evt.renderedPosition || evt.position
-        const nodeData = node.data()
-        
-        console.log('[GraphViewer] Right-click on node:', nodeData)
         
         setContextMenu({
           visible: true,
           x: renderedPosition.x,
           y: renderedPosition.y,
-          node: nodeData
+          node: node.data()
         })
       })
 
@@ -2082,15 +2079,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
 
           {/* Satellite nodes (show if has identifier and is not a document) */}
           {contextMenu.node.identifier && contextMenu.node.type !== 'registration_document' && (
-            <>
-              {console.log('[ContextMenu] Node data:', contextMenu.node, 'is_hub value:', contextMenu.node.is_hub, 'type:', typeof contextMenu.node.is_hub)}
-              <div 
-                className="context-menu-item"
-                onClick={() => handleShowSatelliteDetails(contextMenu.node)}
-              >
-                {contextMenu.node.is_hub ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
-              </div>
-            </>
+            <div 
+              className="context-menu-item"
+              onClick={() => handleShowSatelliteDetails(contextMenu.node)}
+            >
+              {contextMenu.node.is_hub ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
+            </div>
           )}
         </div>
       )}
@@ -2116,77 +2110,37 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             <div className="detail-panel-content">
               {detailPanel.type === 'satellite' && detailPanel.data && (
                 <div className="satellite-details">
-                  <div className="detail-row">
-                    <strong>Name:</strong> {detailPanel.data.canonical?.name || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Identifier:</strong> {detailPanel.data.identifier}
-                  </div>
-                  <div className="detail-row">
-                    <strong>NORAD ID:</strong> {detailPanel.data.sources?.spacetrack?.norad_id || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Country:</strong> {detailPanel.data.canonical?.country_of_origin || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Status:</strong> {detailPanel.data.canonical?.status || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Launch Date:</strong> {detailPanel.data.canonical?.date_of_launch || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Constellation:</strong> {detailPanel.data.canonical?.constellation || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Orbital Band:</strong> {detailPanel.data.canonical?.orbital_band || 'N/A'}
-                  </div>
-                  {detailPanel.data.canonical?.orbit && (
-                    <>
-                      <h4>Orbital Parameters</h4>
-                      <div className="detail-row">
-                        <strong>Apogee:</strong> {detailPanel.data.canonical.orbit.apogee_km?.toFixed(2)} km
-                      </div>
-                      <div className="detail-row">
-                        <strong>Perigee:</strong> {detailPanel.data.canonical.orbit.perigee_km?.toFixed(2)} km
-                      </div>
-                      <div className="detail-row">
-                        <strong>Inclination:</strong> {detailPanel.data.canonical.orbit.inclination_degrees?.toFixed(2)}°
-                      </div>
-                      <div className="detail-row">
-                        <strong>Period:</strong> {detailPanel.data.canonical.orbit.period_minutes?.toFixed(2)} min
-                      </div>
-                    </>
-                  )}
+                  <pre className="json-display">
+                    {JSON.stringify(detailPanel.data, null, 2)}
+                  </pre>
+                  <button 
+                    className="copy-json-button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(detailPanel.data, null, 2))
+                        .then(() => alert('Copied to clipboard!'))
+                        .catch(err => console.error('Failed to copy:', err))
+                    }}
+                  >
+                    Copy to Clipboard
+                  </button>
                 </div>
               )}
 
               {detailPanel.type === 'registration' && detailPanel.data && (
                 <div className="registration-details">
-                  <div className="detail-row">
-                    <strong>Document ID:</strong> {detailPanel.data._key || detailPanel.data.document_id}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Country:</strong> {detailPanel.data.country || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Registration Date:</strong> {detailPanel.data.registration_date || 'N/A'}
-                  </div>
-                  <div className="detail-row">
-                    <strong>Satellites:</strong> {detailPanel.data.satellite_count || 0}
-                  </div>
-                  {detailPanel.data.satellite_names && (
-                    <div className="detail-row">
-                      <strong>Satellite Names:</strong>
-                      <ul>
-                        {detailPanel.data.satellite_names.slice(0, 10).map((name, i) => (
-                          <li key={i}>{name}</li>
-                        ))}
-                        {detailPanel.data.satellite_names.length > 10 && (
-                          <li>... and {detailPanel.data.satellite_names.length - 10} more</li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
+                  <pre className="json-display">
+                    {JSON.stringify(detailPanel.data, null, 2)}
+                  </pre>
+                  <button 
+                    className="copy-json-button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(detailPanel.data, null, 2))
+                        .then(() => alert('Copied to clipboard!'))
+                        .catch(err => console.error('Failed to copy:', err))
+                    }}
+                  >
+                    Copy to Clipboard
+                  </button>
                 </div>
               )}
 
