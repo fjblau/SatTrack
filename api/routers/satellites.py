@@ -62,10 +62,12 @@ def search_satellites_v2(
 @router.get("/satellite/{identifier}")
 def get_satellite_v2(identifier: str):
     """
-    Get detailed satellite information from MongoDB.
-    Identifier can be international designator or registration number.
+    Get detailed satellite information from ArangoDB.
+    Identifier can be the document identifier, international designator, or registration number.
     """
-    sat = find_satellite(international_designator=identifier) or find_satellite(registration_number=identifier)
+    sat = (find_satellite(identifier=identifier) or 
+           find_satellite(international_designator=identifier) or 
+           find_satellite(registration_number=identifier))
     
     if sat:
         canonical = sat.get("canonical", {})

@@ -81,6 +81,7 @@ def create_satellite_document(
 
 
 def find_satellite(
+    identifier: Optional[str] = None,
     international_designator: Optional[str] = None,
     registration_number: Optional[str] = None,
     name: Optional[str] = None
@@ -88,7 +89,15 @@ def find_satellite(
     """Find a satellite document"""
     collection = get_satellites_collection()
     
-    if international_designator:
+    if identifier:
+        aql = """
+        FOR doc IN @@collection
+            FILTER doc.identifier == @value
+            LIMIT 1
+            RETURN doc
+        """
+        bind_vars = {'@collection': COLLECTION_NAME, 'value': identifier}
+    elif international_designator:
         aql = """
         FOR doc IN @@collection
             FILTER doc.canonical.international_designator == @value
