@@ -39,8 +39,12 @@ Implement the bug fix.
 - Created `/v2/graphs/satellite/{id}/neighborhood` endpoint
 - Fixed SatelliteNeighborhood component (search endpoint & response mapping)
 - Fixed ConstellationBrowser component (removed invalid depth parameter)
+- Fixed Cytoscape node_size console warnings
+- Fixed database connection bugs in collision_service.py, lineage_service.py, graph_operations.py
+- Fixed populate_collision_risks.py script (status filter, field names, database connection)
+- Populated production database with 191,000 collision risk edges
+- Fixed collision risk score display precision (2→4 decimal places)
 - All changes committed and pushed to main branch
-- Backend tested locally - endpoints returning data correctly
-- Deployment in progress
+- Verified production deployment with collision risk data showing correctly
 
 If blocked or uncertain, ask the user for direction.
