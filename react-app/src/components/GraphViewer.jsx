@@ -318,12 +318,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         evt.preventDefault()
         const node = evt.target
         const renderedPosition = evt.renderedPosition || evt.position
+        const nodeData = node.data()
+        
+        console.log('[GraphViewer] Right-click node:', nodeData.name || nodeData.label, 'is_hub:', nodeData.is_hub, 'all data:', nodeData)
         
         setContextMenu({
           visible: true,
           x: renderedPosition.x,
           y: renderedPosition.y,
-          node: node.data()
+          node: nodeData
         })
       })
 
@@ -1157,6 +1160,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     if (!cyRef.current) return
     
     console.log('[GraphViewer] Rendering constellation browser graph:', { hasData: !!data, nodesCount: data?.nodes?.length || 0, edgesCount: data?.edges?.length || 0 })
+    console.log('[GraphViewer] Full data received:', data)
+    console.log('[GraphViewer] Hub:', data?.hub)
+    console.log('[GraphViewer] Nodes:', data?.nodes)
     setLoading(true)
     setError(null)
     try {
@@ -1175,15 +1181,19 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const elements = {
-        nodes: (data.nodes || []).map(node => ({
-          data: {
+        nodes: (data.nodes || []).map(node => {
+          const nodeData = {
             ...node,
             id: node.id || node._id,
             label: node.name || node.identifier || (node.id?.split('/')[1]),
             is_hub: node.is_hub || false,
             node_size: node.is_hub ? 45 : 30
           }
-        })),
+          if (node.is_hub) {
+            console.log('[GraphViewer] Creating hub node:', node.name, 'original is_hub:', node.is_hub, 'final is_hub:', nodeData.is_hub)
+          }
+          return { data: nodeData }
+        }),
         edges: (data.edges || []).map(edge => ({
           data: {
             id: edge.id || `${edge.source}_to_${edge.target}`,

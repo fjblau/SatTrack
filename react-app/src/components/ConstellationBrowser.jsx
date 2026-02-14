@@ -20,6 +20,10 @@ function ConstellationBrowser({ constellations, onConstellationSelect }) {
       
       const result = await response.json()
       
+      console.log('[ConstellationBrowser] API Response:', result)
+      console.log('[ConstellationBrowser] Nodes:', result.data?.nodes)
+      console.log('[ConstellationBrowser] Hub node:', result.data?.hub)
+      
       if (result.data && result.data.nodes) {
         setNetworkData(result.data)
         if (onConstellationSelect) {
