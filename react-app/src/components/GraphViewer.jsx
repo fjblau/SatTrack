@@ -1231,17 +1231,20 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             ...node
           }
         })),
-        edges: (data.edges || []).map(edge => ({
-          data: {
-            id: edge.id || `${edge.source}_to_${edge.target}`,
-            source: edge.source || edge._from,
-            target: edge.target || edge._to,
-            edge_type: edge.type,
-            edge_width: getEdgeWidth(edge),
-            edge_label: getEdgeLabel(edge),
-            ...edge
+        edges: (data.edges || []).map(edge => {
+          console.log('[GraphViewer] Edge type:', edge.type, 'Full edge:', edge)
+          return {
+            data: {
+              id: edge.id || `${edge.source}_to_${edge.target}`,
+              source: edge.source || edge._from,
+              target: edge.target || edge._to,
+              ...edge,
+              edge_type: edge.type,
+              edge_width: getEdgeWidth(edge),
+              edge_label: getEdgeLabel(edge)
+            }
           }
-        }))
+        })
       }
       
       cyRef.current.elements().remove()
