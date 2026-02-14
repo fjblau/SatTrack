@@ -55,6 +55,10 @@ def populate_collision_risks(dry_run=False, orbital_band_filter=None):
     print("Collision Risk Network Population")
     print("=" * 60)
     
+    import os
+    arango_host = os.getenv('ARANGO_HOST', 'http://localhost:8529')
+    print(f"\nConnecting to: {arango_host}")
+    
     if not db_module.connect_mongodb():
         print("❌ Failed to connect to ArangoDB")
         return False
