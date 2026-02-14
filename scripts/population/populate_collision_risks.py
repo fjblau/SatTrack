@@ -82,7 +82,7 @@ def populate_collision_risks(dry_run=False, orbital_band_filter=None):
         FILTER doc.canonical.orbit.perigee_km != null
         FILTER doc.canonical.orbit.inclination_degrees != null
         FILTER doc.canonical.orbital_band != null
-        FILTER doc.canonical.status IN ["Active", "Unknown"]
+        FILTER doc.canonical.status IN ["in orbit", "in GSO"] OR doc.canonical.status == null
         {filter_clause}
         SORT doc.identifier ASC
         RETURN {{
@@ -93,7 +93,7 @@ def populate_collision_risks(dry_run=False, orbital_band_filter=None):
             apogee_km: doc.canonical.orbit.apogee_km,
             perigee_km: doc.canonical.orbit.perigee_km,
             inclination_degrees: doc.canonical.orbit.inclination_degrees,
-            launch_date: doc.canonical.launch_date
+            launch_date: doc.canonical.date_of_launch
         }}
     """
     
