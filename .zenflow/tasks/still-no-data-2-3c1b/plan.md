@@ -44,7 +44,10 @@ Implement the bug fix.
 - Fixed populate_collision_risks.py script (status filter, field names, database connection)
 - Populated production database with 191,000 collision risk edges
 - Fixed collision risk score display precision (2→4 decimal places)
-- All changes committed and pushed to main branch
-- Verified production deployment with collision risk data showing correctly
+- Wired Constellation Browser and Satellite Neighborhood to GraphViewer component
+- Added renderConstellationBrowserGraph() and renderNeighborhoodGraph() functions
+- Added styling for source nodes in neighborhood view (green with border)
+- Updated GraphExplorer state management to pass data to GraphViewer
+- Ready for deployment
 
 If blocked or uncertain, ask the user for direction.

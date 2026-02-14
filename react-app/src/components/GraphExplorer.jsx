@@ -27,6 +27,8 @@ function GraphExplorer() {
   const [satelliteSearchQuery, setSatelliteSearchQuery] = useState('')
   const [satelliteSearchResults, setSatelliteSearchResults] = useState([])
   const [searchingsatellite, setSearchingsatellite] = useState(false)
+  const [constellationBrowserData, setConstellationBrowserData] = useState(null)
+  const [neighborhoodData, setNeighborhoodData] = useState(null)
 
   useEffect(() => {
     loadGraphStats()
@@ -342,7 +344,7 @@ function GraphExplorer() {
             <ConstellationBrowser 
               constellations={constellations}
               onConstellationSelect={(data, name) => {
-                // Data is passed to GraphViewer via the component itself
+                setConstellationBrowserData(data)
               }}
             />
           </div>
@@ -352,7 +354,7 @@ function GraphExplorer() {
           <div className="selector-content">
             <SatelliteNeighborhood 
               onNeighborhoodLoad={(data, satellite) => {
-                // Data is passed to GraphViewer via the component itself
+                setNeighborhoodData(data)
               }}
             />
           </div>
@@ -484,25 +486,20 @@ function GraphExplorer() {
       </div>
 
       <div className="graph-main">
-        {graphType === 'constellation-browser' || graphType === 'neighborhood' ? (
-          <div className="info-message">
-            <p>Interactive graph visualization appears in the left panel for these views.</p>
-            <p>Select an item to explore the network connections.</p>
-          </div>
-        ) : (
-          <GraphViewer 
-            graphType={graphType}
-            selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
-            selectedDocument={graphType === 'registration' ? selectedDocument : null}
-            selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
-            selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
-            selectedCountries={graphType === 'country' ? selectedCountries : null}
-            pathData={graphType === 'paths' ? pathData : null}
-            collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
-            collisionViewType={graphType === 'collision' ? collisionViewType : null}
-            selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
-          />
-        )}
+        <GraphViewer 
+          graphType={graphType}
+          selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
+          selectedDocument={graphType === 'registration' ? selectedDocument : null}
+          selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
+          selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
+          selectedCountries={graphType === 'country' ? selectedCountries : null}
+          pathData={graphType === 'paths' ? pathData : null}
+          collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
+          collisionViewType={graphType === 'collision' ? collisionViewType : null}
+          selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
+          constellationBrowserData={graphType === 'constellation-browser' ? constellationBrowserData : null}
+          neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : null}
+        />
       </div>
     </div>
   )

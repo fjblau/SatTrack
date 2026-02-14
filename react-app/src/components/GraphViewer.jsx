@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -49,6 +49,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               'width': 50,
               'height': 50,
               'font-size': '12px',
+              'font-weight': 'bold'
+            }
+          },
+          {
+            selector: 'node[is_source]',
+            style: {
+              'background-color': '#2ecc71',
+              'border-width': 4,
+              'border-color': '#27ae60',
               'font-weight': 'bold'
             }
           },
@@ -304,8 +313,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       if (cyRef.current) {
         cyRef.current.elements().remove()
       }
+    } else if (graphType === 'constellation-browser' && constellationBrowserData) {
+      renderConstellationBrowserGraph(constellationBrowserData)
+    } else if (graphType === 'neighborhood' && neighborhoodData) {
+      renderNeighborhoodGraph(neighborhoodData)
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite, communityAlgorithm, communityMinSize])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -1047,6 +1060,128 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     } catch (error) {
       console.error('[GraphViewer] Error rendering collision risk graph:', error)
       setError(`Failed to render collision risks: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderConstellationBrowserGraph = (data) => {
+    if (!cyRef.current) return
+    
+    console.log('[GraphViewer] Rendering constellation browser graph:', { hasData: !!data, nodesCount: data?.nodes?.length || 0, edgesCount: data?.edges?.length || 0 })
+    setLoading(true)
+    setError(null)
+    try {
+      if (!data) {
+        setError('No constellation data provided')
+        setStats({ message: 'Select a constellation to view its network' })
+        setLoading(false)
+        return
+      }
+      
+      if (!data.nodes || data.nodes.length === 0) {
+        setError('No satellites found in this constellation')
+        setStats({ message: 'No data available for this constellation' })
+        setLoading(false)
+        return
+      }
+      
+      const elements = {
+        nodes: (data.nodes || []).map(node => ({
+          data: {
+            id: node.id || node._id,
+            label: node.name || node.identifier || (node.id?.split('/')[1]),
+            is_hub: node.is_hub,
+            node_size: node.is_hub ? 45 : 30,
+            ...node
+          }
+        })),
+        edges: (data.edges || []).map(edge => ({
+          data: {
+            id: edge.id || `${edge.source}_to_${edge.target}`,
+            source: edge.source || edge._from,
+            target: edge.target || edge._to,
+            ...edge
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      setStats({
+        constellation: data.constellation_name,
+        satellites: elements.nodes.length,
+        connections: elements.edges.length,
+        ...(data.stats || {})
+      })
+      console.log('[GraphViewer] Constellation browser graph rendered successfully')
+    } catch (error) {
+      console.error('[GraphViewer] Error rendering constellation browser graph:', error)
+      setError(`Failed to render constellation: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderNeighborhoodGraph = (data) => {
+    if (!cyRef.current) return
+    
+    console.log('[GraphViewer] Rendering neighborhood graph:', { hasData: !!data, nodesCount: data?.nodes?.length || 0, edgesCount: data?.edges?.length || 0 })
+    setLoading(true)
+    setError(null)
+    try {
+      if (!data) {
+        setError('No neighborhood data provided')
+        setStats({ message: 'Select a satellite to view its neighborhood' })
+        setLoading(false)
+        return
+      }
+      
+      if (!data.nodes || data.nodes.length === 0) {
+        setError('No neighbors found for this satellite')
+        setStats({ message: 'No data available for this satellite' })
+        setLoading(false)
+        return
+      }
+      
+      const elements = {
+        nodes: (data.nodes || []).map(node => ({
+          data: {
+            id: node.id || node._id,
+            label: node.name || node.identifier || (node.id?.split('/')[1]),
+            is_source: node.is_source,
+            distance: node.distance,
+            node_size: node.is_source ? 50 : (40 - (node.distance * 5)),
+            ...node
+          }
+        })),
+        edges: (data.edges || []).map(edge => ({
+          data: {
+            id: edge.id || `${edge.source}_to_${edge.target}`,
+            source: edge.source || edge._from,
+            target: edge.target || edge._to,
+            edge_type: edge.type,
+            ...edge
+          }
+        }))
+      }
+      
+      cyRef.current.elements().remove()
+      cyRef.current.add(elements)
+      applyLayout(layout)
+      
+      setStats({
+        source_satellite: data.source_satellite?.name,
+        neighbors: elements.nodes.length - 1,
+        connections: elements.edges.length,
+        ...(data.stats || {})
+      })
+      console.log('[GraphViewer] Neighborhood graph rendered successfully')
+    } catch (error) {
+      console.error('[GraphViewer] Error rendering neighborhood graph:', error)
+      setError(`Failed to render neighborhood: ${error.message}`)
     } finally {
       setLoading(false)
     }
