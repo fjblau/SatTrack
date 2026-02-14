@@ -65,6 +65,22 @@ Implement the bug fix.
 - Updated backend endpoint to return proximity_score, apogee_diff_km, perigee_diff_km, inclination_diff_degrees
 - Frontend now calculates and displays average separation in km for orbital proximity edges
 - Edge width now based on proximity_score (closer satellites = thicker lines)
+- Fixed filter button text color (white text on white background issue)
+- Fixed edge type naming mismatch (constellation_membership, registration_links vs constellation_edges, registration_edges)
+- Added relative color coding for orbital proximity edges in neighborhood view:
+  * Dark green = closest 25% (lowest proximity scores)
+  * Green = 25-50%
+  * Orange = 50-75%
+  * Red = farthest 25% (highest proximity scores)
+  * Updated legend to show color gradient
+  * Added proximity distribution stats to metadata
+- Added right-click context menus to graph visualization:
+  * Right-click on satellite nodes → "Show Satellite Details" option
+  * Right-click on registration document nodes → "Show Registration Document" option
+  * Context menu fetches full data from API and displays in modal panel
+  * Satellite details include: name, identifier, NORAD ID, country, status, launch date, constellation, orbital band, and orbital parameters
+  * Registration document details include: document ID, country, registration date, satellite count, and satellite names
+  * Styled context menu and detail panel with proper overlay and close functionality
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
