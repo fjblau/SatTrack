@@ -1728,22 +1728,38 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       // Extract satellite ID from node data
       const satelliteId = nodeData.identifier || nodeData.key || nodeData.id?.split('/')[1]
       
+      console.log('[handleShowSatelliteDetails] nodeData:', nodeData)
+      console.log('[handleShowSatelliteDetails] Extracted satelliteId:', satelliteId)
+      console.log('[handleShowSatelliteDetails] Will fetch from:', `/v2/satellites/${satelliteId}`)
+      
       if (!satelliteId) {
-        console.error('No satellite identifier found')
+        console.error('No satellite identifier found in nodeData')
+        setDetailPanel({
+          visible: true,
+          type: 'error',
+          data: { message: 'No satellite identifier found' }
+        })
         return
       }
       
       const response = await fetch(`/v2/satellites/${satelliteId}`)
-      if (!response.ok) throw new Error('Failed to fetch satellite details')
+      console.log('[handleShowSatelliteDetails] Response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[handleShowSatelliteDetails] Error response:', errorText)
+        throw new Error(`Failed to fetch satellite details (${response.status})`)
+      }
       
       const result = await response.json()
+      console.log('[handleShowSatelliteDetails] Success, got data:', result.data)
       setDetailPanel({
         visible: true,
         type: 'satellite',
         data: result.data
       })
     } catch (error) {
-      console.error('Error fetching satellite details:', error)
+      console.error('[handleShowSatelliteDetails] Error:', error)
       setDetailPanel({
         visible: true,
         type: 'error',
