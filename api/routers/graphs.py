@@ -236,6 +236,7 @@ def get_satellite_neighborhood(
             [{{
                 id: source._id,
                 key: source._key,
+                type: "satellite",
                 identifier: source.identifier,
                 name: source.canonical.name,
                 country: source.canonical.country_of_origin,
@@ -248,9 +249,19 @@ def get_satellite_neighborhood(
             }}],
             (
                 FOR n IN neighbors
-                    RETURN {{
+                    LET is_reg_doc = STARTS_WITH(n.vertex._id, "registration_documents/")
+                    RETURN is_reg_doc ? {{
                         id: n.vertex._id,
                         key: n.vertex._key,
+                        type: "registration_document",
+                        name: n.vertex.document_title,
+                        url: n.vertex.url,
+                        is_source: false,
+                        distance: n.path_length
+                    }} : {{
+                        id: n.vertex._id,
+                        key: n.vertex._key,
+                        type: "satellite",
                         identifier: n.vertex.identifier,
                         name: n.vertex.canonical.name,
                         country: n.vertex.canonical.country_of_origin,
