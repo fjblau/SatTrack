@@ -78,9 +78,12 @@ Implement the bug fix.
   * Right-click on satellite nodes → "Show Satellite Details" option
   * Right-click on registration document nodes → "Show Registration Document" option
   * Context menu fetches full data from API and displays in modal panel
-  * Satellite details include: name, identifier, NORAD ID, country, status, launch date, constellation, orbital band, and orbital parameters
-  * Registration document details include: document ID, country, registration date, satellite count, and satellite names
-  * Styled context menu and detail panel with proper overlay and close functionality
+  * Fixed context menu detection: registration documents now properly identified by type field
+  * Fixed hub satellite detection: corrected spread operator ordering to prevent is_hub overwrite
+  * Modal shows raw JSON data (same format as Table View's "Show Data Record")
+  * Added "Copy to Clipboard" button to copy JSON data
+  * Styled JSON display with monospace font, syntax highlighting background
+  * Removed debug logging statements
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
