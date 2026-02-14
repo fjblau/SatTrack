@@ -206,7 +206,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
-            selector: 'edge[edge_type="constellation_edges"]',
+            selector: 'edge[edge_type="constellation_membership"]',
             style: {
               'line-color': '#3498db',
               'width': 3,
@@ -214,7 +214,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
-            selector: 'edge[edge_type="registration_edges"]',
+            selector: 'edge[edge_type="registration_links"]',
             style: {
               'line-color': '#9b59b6',
               'width': 2.5,
@@ -1238,9 +1238,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           } else if (edge.proximity_score != null) {
             return `${edge.proximity_score.toFixed(2)}`
           }
-        } else if (edge.type === 'constellation_edges' && edge.constellation) {
+        } else if (edge.type === 'constellation_membership' && edge.constellation) {
           return edge.constellation
-        } else if (edge.type === 'registration_edges') {
+        } else if (edge.type === 'registration_links') {
           return 'Registration'
         }
         return ''
