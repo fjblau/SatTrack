@@ -1012,15 +1012,36 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         return
       }
       
+      // Calculate percentiles for relative coloring
+      const riskScores = (data.edges || [])
+        .map(e => e.risk_score || e.proximity_score || 0)
+        .filter(s => s > 0)
+        .sort((a, b) => a - b)
+      
+      const getPercentile = (arr, p) => {
+        if (arr.length === 0) return 0
+        const index = Math.ceil(arr.length * p) - 1
+        return arr[Math.max(0, index)]
+      }
+      
+      const p25 = getPercentile(riskScores, 0.25)
+      const p50 = getPercentile(riskScores, 0.50)
+      const p75 = getPercentile(riskScores, 0.75)
+      const minScore = riskScores.length > 0 ? riskScores[0] : 0
+      const maxScore = riskScores.length > 0 ? riskScores[riskScores.length - 1] : 1
+      
+      console.log('[GraphViewer] Risk score distribution:', { minScore, p25, p50, p75, maxScore })
+      
       const getRiskColor = (riskScore) => {
-        if (riskScore > 0.8) return '#c0392b'
-        if (riskScore > 0.6) return '#e74c3c'
-        if (riskScore > 0.4) return '#f39c12'
-        return '#27ae60'
+        if (riskScore >= p75) return '#c0392b'  // Top 25%: Dark red
+        if (riskScore >= p50) return '#e74c3c'  // 50-75%: Red
+        if (riskScore >= p25) return '#f39c12'  // 25-50%: Orange
+        return '#27ae60'                         // Bottom 25%: Green
       }
       
       const getRiskWidth = (riskScore) => {
-        return 2 + (riskScore * 6)
+        const normalized = (riskScore - minScore) / (maxScore - minScore)
+        return 2 + (normalized * 6)
       }
       
       const elements = {
@@ -1054,6 +1075,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         view_type: viewType,
         satellites: elements.nodes.length,
         collision_risks: elements.edges.length,
+        risk_range: {
+          min: minScore.toFixed(4),
+          max: maxScore.toFixed(4),
+          p25: p25.toFixed(4),
+          median: p50.toFixed(4),
+          p75: p75.toFixed(4)
+        },
         ...(data.stats || {})
       })
       console.log('[GraphViewer] Collision risk graph rendered successfully')
@@ -1708,22 +1736,25 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         ) : graphType === 'collision' ? (
           <>
             <div className="legend-section">
-              <h5>Risk Levels</h5>
+              <h5>Risk Levels (Relative)</h5>
               <div className="legend-item">
                 <span className="legend-edge-thick" style={{backgroundColor: '#c0392b'}}></span>
-                <span>Critical (&gt;0.8)</span>
+                <span>Highest (Top 25%)</span>
               </div>
               <div className="legend-item">
                 <span className="legend-edge-thick" style={{backgroundColor: '#e74c3c'}}></span>
-                <span>High (0.6-0.8)</span>
+                <span>High (50-75%)</span>
               </div>
               <div className="legend-item">
                 <span className="legend-edge-medium" style={{backgroundColor: '#f39c12'}}></span>
-                <span>Medium (0.4-0.6)</span>
+                <span>Medium (25-50%)</span>
               </div>
               <div className="legend-item">
                 <span className="legend-edge" style={{backgroundColor: '#27ae60'}}></span>
-                <span>Low (&lt;0.4)</span>
+                <span>Lower (Bottom 25%)</span>
+              </div>
+              <div className="legend-note">
+                Colors are relative to the current view
               </div>
             </div>
           </>
