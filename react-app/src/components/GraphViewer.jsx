@@ -318,17 +318,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         evt.preventDefault()
         const node = evt.target
         const renderedPosition = evt.renderedPosition || evt.position
-        const nodeData = node.data()
-        
-        console.log('[GraphViewer] Right-click on:', nodeData.name || nodeData.label)
-        console.log('[GraphViewer] nodeData.is_hub:', nodeData.is_hub, 'type:', typeof nodeData.is_hub)
-        console.log('[GraphViewer] Full nodeData:', nodeData)
         
         setContextMenu({
           visible: true,
           x: renderedPosition.x,
           y: renderedPosition.y,
-          node: nodeData
+          node: node.data()
         })
       })
 
@@ -1161,13 +1156,6 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const renderConstellationBrowserGraph = (data) => {
     if (!cyRef.current) return
     
-    console.log('[GraphViewer] Rendering constellation browser graph')
-    console.log('[GraphViewer] Data.nodes:', data?.nodes)
-    data?.nodes?.forEach(node => {
-      if (node.is_hub === true) {
-        console.log('[GraphViewer] HUB NODE FOUND:', node.name, 'is_hub:', node.is_hub)
-      }
-    })
     setLoading(true)
     setError(null)
     try {
@@ -1186,20 +1174,14 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const elements = {
-        nodes: (data.nodes || []).map(node => {
-          const elem = {
-            data: {
-              ...node,
-              id: node.id || node._id,
-              label: node.name || node.identifier || (node.id?.split('/')[1]),
-              node_size: node.is_hub === true ? 45 : 30
-            }
+        nodes: (data.nodes || []).map(node => ({
+          data: {
+            ...node,
+            id: node.id || node._id,
+            label: node.name || node.identifier || (node.id?.split('/')[1]),
+            node_size: node.is_hub === true ? 45 : 30
           }
-          if (node.is_hub === true) {
-            console.log('[GraphViewer] Creating hub element:', elem.data.name, 'elem.data.is_hub:', elem.data.is_hub)
-          }
-          return elem
-        }),
+        })),
         edges: (data.edges || []).map(edge => ({
           data: {
             id: edge.id || `${edge.source}_to_${edge.target}`,
@@ -1728,12 +1710,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       // Extract satellite ID from node data
       const satelliteId = nodeData.identifier || nodeData.key || nodeData.id?.split('/')[1]
       
-      console.log('[handleShowSatelliteDetails] nodeData:', nodeData)
-      console.log('[handleShowSatelliteDetails] Extracted satelliteId:', satelliteId)
-      console.log('[handleShowSatelliteDetails] Will fetch from:', `/v2/satellites/${satelliteId}`)
-      
       if (!satelliteId) {
-        console.error('No satellite identifier found in nodeData')
+        console.error('No satellite identifier found')
         setDetailPanel({
           visible: true,
           type: 'error',
@@ -1742,24 +1720,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         return
       }
       
-      const response = await fetch(`/v2/satellites/${satelliteId}`)
-      console.log('[handleShowSatelliteDetails] Response status:', response.status)
-      
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[handleShowSatelliteDetails] Error response:', errorText)
-        throw new Error(`Failed to fetch satellite details (${response.status})`)
-      }
+      const response = await fetch(`/v2/satellite/${satelliteId}`)
+      if (!response.ok) throw new Error('Failed to fetch satellite details')
       
       const result = await response.json()
-      console.log('[handleShowSatelliteDetails] Success, got data:', result.data)
       setDetailPanel({
         visible: true,
         type: 'satellite',
         data: result.data
       })
     } catch (error) {
-      console.error('[handleShowSatelliteDetails] Error:', error)
+      console.error('Error fetching satellite details:', error)
       setDetailPanel({
         visible: true,
         type: 'error',
