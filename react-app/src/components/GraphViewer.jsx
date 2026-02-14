@@ -132,7 +132,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           {
             selector: 'edge[edge_label]',
             style: {
-              'label': 'data(edge_label)'
+              'label': 'data(edge_label)',
+              'font-size': '10px',
+              'font-weight': 'bold',
+              'text-background-color': '#fff',
+              'text-background-opacity': 0.9,
+              'text-background-padding': '3px',
+              'text-background-shape': 'roundrectangle'
             }
           },
           {
