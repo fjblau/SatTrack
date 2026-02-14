@@ -1028,7 +1028,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             collision_risk: edge.risk_score || edge.proximity_score,
             risk_color: getRiskColor(edge.risk_score || edge.proximity_score || 0),
             risk_width: getRiskWidth(edge.risk_score || edge.proximity_score || 0),
-            edge_label: edge.risk_score ? edge.risk_score.toFixed(2) : ''
+            edge_label: edge.risk_score ? edge.risk_score.toFixed(4) : ''
           }
         }))
       }
