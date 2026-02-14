@@ -318,12 +318,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         evt.preventDefault()
         const node = evt.target
         const renderedPosition = evt.renderedPosition || evt.position
+        const nodeData = node.data()
+        
+        console.log('[GraphViewer] Right-click node data:', nodeData)
+        console.log('[GraphViewer] is_hub value:', nodeData.is_hub, 'type:', typeof nodeData.is_hub)
         
         setContextMenu({
           visible: true,
           x: renderedPosition.x,
           y: renderedPosition.y,
-          node: node.data()
+          node: nodeData
         })
       })
 
@@ -402,6 +406,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         nodeCount: data.data?.nodes?.length || 0,
         edgeCount: data.data?.edges?.length || 0
       })
+      console.log('[GraphViewer] Full constellation response:', data.data)
+      console.log('[GraphViewer] Nodes:', data.data.nodes)
       
       if (!data.data) {
         throw new Error('No data returned from API')
@@ -414,14 +420,18 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const elements = {
-        nodes: data.data.nodes.map(node => ({
-          data: {
+        nodes: data.data.nodes.map(node => {
+          const nodeData = {
             ...node,
             id: node.id,
             label: node.name || node.identifier,
             is_hub: node.is_hub || false
           }
-        })),
+          if (node.is_hub) {
+            console.log('[GraphViewer] Hub node found:', node.name, 'is_hub:', node.is_hub, 'final is_hub:', nodeData.is_hub)
+          }
+          return { data: nodeData }
+        }),
         edges: data.data.edges.map(edge => ({
           data: {
             id: edge.id,
@@ -2079,12 +2089,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
 
           {/* Satellite nodes (show if has identifier and is not a document) */}
           {contextMenu.node.identifier && contextMenu.node.type !== 'registration_document' && (
-            <div 
-              className="context-menu-item"
-              onClick={() => handleShowSatelliteDetails(contextMenu.node)}
-            >
-              {contextMenu.node.is_hub ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
-            </div>
+            <>
+              {console.log('[ContextMenu] Rendering menu for:', contextMenu.node.name, 'is_hub:', contextMenu.node.is_hub, 'will show:', contextMenu.node.is_hub ? 'hub' : 'satellite')}
+              <div 
+                className="context-menu-item"
+                onClick={() => handleShowSatelliteDetails(contextMenu.node)}
+              >
+                {contextMenu.node.is_hub ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
+              </div>
+            </>
           )}
         </div>
       )}
