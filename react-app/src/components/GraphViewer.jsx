@@ -187,6 +187,30 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
+            selector: 'edge[edge_type="orbital_proximity_edges"]',
+            style: {
+              'line-color': '#e67e22',
+              'width': 'data(edge_width)',
+              'line-style': 'solid'
+            }
+          },
+          {
+            selector: 'edge[edge_type="constellation_edges"]',
+            style: {
+              'line-color': '#3498db',
+              'width': 3,
+              'line-style': 'solid'
+            }
+          },
+          {
+            selector: 'edge[edge_type="registration_edges"]',
+            style: {
+              'line-color': '#9b59b6',
+              'width': 2.5,
+              'line-style': 'dashed'
+            }
+          },
+          {
             selector: 'node[type="country"]',
             style: {
               'background-color': '#9b59b6',
@@ -1174,6 +1198,28 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         return
       }
       
+      const getEdgeLabel = (edge) => {
+        if (edge.type === 'orbital_proximity_edges' && edge.distance_km) {
+          return `${edge.distance_km.toFixed(1)} km`
+        } else if (edge.type === 'constellation_edges' && edge.constellation) {
+          return edge.constellation
+        } else if (edge.type === 'registration_edges') {
+          return 'Registration'
+        }
+        return ''
+      }
+      
+      const getEdgeWidth = (edge) => {
+        if (edge.type === 'orbital_proximity_edges' && edge.distance_km) {
+          // Closer satellites get thicker lines (inverse relationship)
+          // Assume distance range 0-100km, map to width 2-6
+          const maxDist = 100
+          const normalized = 1 - Math.min(edge.distance_km / maxDist, 1)
+          return 2 + (normalized * 4)
+        }
+        return 2.5
+      }
+      
       const elements = {
         nodes: (data.nodes || []).map(node => ({
           data: {
@@ -1191,6 +1237,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             source: edge.source || edge._from,
             target: edge.target || edge._to,
             edge_type: edge.type,
+            edge_width: getEdgeWidth(edge),
+            edge_label: getEdgeLabel(edge),
             ...edge
           }
         }))
@@ -1200,10 +1248,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       cyRef.current.add(elements)
       applyLayout(layout)
       
+      const edgeTypeCounts = {}
+      elements.edges.forEach(e => {
+        const type = e.data.edge_type || 'unknown'
+        edgeTypeCounts[type] = (edgeTypeCounts[type] || 0) + 1
+      })
+      
       setStats({
         source_satellite: data.source_satellite?.name,
         neighbors: elements.nodes.length - 1,
         connections: elements.edges.length,
+        edge_types: edgeTypeCounts,
         ...(data.stats || {})
       })
       console.log('[GraphViewer] Neighborhood graph rendered successfully')
@@ -1798,6 +1853,35 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               </div>
               <div className="legend-note">
                 Each color represents a different detected community. Satellites with the same color share similar orbital and functional characteristics.
+              </div>
+            </div>
+          </>
+        ) : graphType === 'neighborhood' ? (
+          <>
+            <div className="legend-section">
+              <h5>Nodes</h5>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#2ecc71', border: '4px solid #27ae60'}}></span>
+                <span>Source Satellite</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#3498db'}}></span>
+                <span>Neighbor (size = hops away)</span>
+              </div>
+            </div>
+            <div className="legend-section">
+              <h5>Edge Types</h5>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#e67e22'}}></span>
+                <span>Orbital Proximity (width = closeness)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#3498db'}}></span>
+                <span>Same Constellation</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-medium" style={{backgroundColor: '#9b59b6', borderStyle: 'dashed'}}></span>
+                <span>Same Registration Doc</span>
               </div>
             </div>
           </>
