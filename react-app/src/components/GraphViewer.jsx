@@ -25,14 +25,21 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             style: {
               'background-color': '#3498db',
               'label': 'data(label)',
-              'width': 'data(node_size)',
-              'height': 'data(node_size)',
+              'width': 30,
+              'height': 30,
               'font-size': '10px',
               'text-valign': 'center',
               'text-halign': 'center',
               'color': '#2c3e50',
               'text-outline-width': 2,
               'text-outline-color': '#fff'
+            }
+          },
+          {
+            selector: 'node[node_size]',
+            style: {
+              'width': 'data(node_size)',
+              'height': 'data(node_size)'
             }
           },
           {
