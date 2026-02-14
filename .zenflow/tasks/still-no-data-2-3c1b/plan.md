@@ -90,6 +90,11 @@ Implement the bug fix.
   * Fixed spread operator ordering in renderNeighborhoodGraph to preserve node properties
   * Fixed API endpoint typo: changed /v2/satellites/{id} to /v2/satellite/{id} (singular)
   * Removed all debug logging statements
+  * Fixed satellite detail lookup for Kaggle-only satellites:
+    - Added identifier parameter to find_satellite() database function
+    - Updated API endpoint to search by identifier field first (before international_designator or registration_number)
+    - Fixes issue where 73% of satellites (Kaggle-only) couldn't be found by their identifier
+    - Satellites like BRO-18 (NORAD-64550) now show their data in detail panel
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
