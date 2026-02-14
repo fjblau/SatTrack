@@ -100,6 +100,12 @@ Implement the bug fix.
     - Color gradient: red (closest 25%) → orange → light green → dark green (farthest 25%)
     - Updated legend to show red→green gradient with "red=close/dangerous → green=far/safe" label
     - Closer satellites are now correctly indicated as more dangerous with red/orange colors
+  * Fixed registration document context menu in Satellite Neighborhood view:
+    - Backend now detects node type (registration_document vs satellite) based on _id prefix
+    - Registration document nodes get type='registration_document' with document_title and url
+    - Satellite nodes get type='satellite' with full canonical fields
+    - Right-click context menu now appears for registration documents
+    - "Show Registration Document" option now works correctly
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
