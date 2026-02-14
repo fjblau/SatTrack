@@ -16,6 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import database as db_module
 
 APOGEE_RISK_THRESHOLD_KM = 20
