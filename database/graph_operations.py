@@ -1,5 +1,6 @@
 from typing import Optional, Dict, List, Any
-from database.connection import db, GRAPH_NAME
+import database.connection as db_conn
+from database.connection import GRAPH_NAME
 
 
 def create_edge_collection(edge_collection_name: str) -> bool:
@@ -13,13 +14,12 @@ def create_edge_collection(edge_collection_name: str) -> bool:
         True if created or already exists, False on error
     """
     try:
-        from database.connection import db as current_db
-        if current_db is None:
+        if db_conn.db is None:
             print(f"Database not connected. Call connect_arangodb() first.")
             return False
         
-        if not current_db.has_collection(edge_collection_name):
-            current_db.create_collection(edge_collection_name, edge=True)
+        if not db_conn.db.has_collection(edge_collection_name):
+            db_conn.db.create_collection(edge_collection_name, edge=True)
             print(f"Created edge collection: {edge_collection_name}")
         else:
             print(f"Edge collection already exists: {edge_collection_name}")
@@ -40,8 +40,8 @@ def create_document_collection(collection_name: str) -> bool:
         True if created or already exists, False on error
     """
     try:
-        if not db.has_collection(collection_name):
-            db.create_collection(collection_name, edge=False)
+        if not db_conn.db.has_collection(collection_name):
+            db_conn.db.create_collection(collection_name, edge=False)
             print(f"Created document collection: {collection_name}")
         else:
             print(f"Document collection already exists: {collection_name}")
@@ -71,11 +71,11 @@ def create_graph(
         True if created or already exists, False on error
     """
     try:
-        if db.has_graph(graph_name):
+        if db_conn.db.has_graph(graph_name):
             print(f"Graph already exists: {graph_name}")
             return True
         
-        db.create_graph(
+        db_conn.db.create_graph(
             name=graph_name,
             edge_definitions=edge_definitions
         )
@@ -97,8 +97,8 @@ def get_edge_collection(edge_collection_name: str):
         Edge collection object or None
     """
     try:
-        if db.has_collection(edge_collection_name):
-            return db.collection(edge_collection_name)
+        if db_conn.db.has_collection(edge_collection_name):
+            return db_conn.db.collection(edge_collection_name)
         else:
             print(f"Edge collection not found: {edge_collection_name}")
             return None
@@ -204,8 +204,8 @@ def get_graph():
         Graph object or None
     """
     try:
-        if db.has_graph(GRAPH_NAME):
-            return db.graph(GRAPH_NAME)
+        if db_conn.db.has_graph(GRAPH_NAME):
+            return db_conn.db.graph(GRAPH_NAME)
         else:
             print(f"Graph not found: {GRAPH_NAME}")
             return None

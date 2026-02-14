@@ -5,7 +5,8 @@ Provides functions for analyzing collision risks between satellites,
 including risk scoring, filtering, and network analysis.
 """
 from typing import List, Dict, Any, Optional
-from database.connection import db, COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK
+import database.connection as db_conn
+from database.connection import COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK
 
 
 def calculate_collision_risk_score(
@@ -107,7 +108,7 @@ def get_collision_risks(
             }}
         """
         
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
         return list(cursor)
         
     except Exception as e:
@@ -175,7 +176,7 @@ def get_collision_risks_for_satellite(
             }}
         """
         
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
         return list(cursor)
         
     except Exception as e:
@@ -261,12 +262,12 @@ def get_collision_risk_network(
                 total_satellites: LENGTH(satellites),
                 total_edges: LENGTH(formatted_edges),
                 risk_threshold: @risk_threshold,
-                orbital_band: @orbital_band
+                orbital_band: {'@orbital_band' if orbital_band else 'null'}
             }}
         }}
         """
         
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
         results = list(cursor)
         return results[0] if results else {
             "nodes": [],
@@ -350,7 +351,7 @@ def get_collision_risk_statistics(
         }}
         """
         
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
         results = list(cursor)
         return results[0] if results else {}
         

@@ -6,7 +6,8 @@ based on naming patterns, manufacturers, and technological generations.
 """
 import re
 from typing import List, Dict, Any, Optional, Set, Tuple
-from database.connection import db, COLLECTION_NAME, EDGE_COLLECTION_SATELLITE_LINEAGE
+import database.connection as db_conn
+from database.connection import COLLECTION_NAME, EDGE_COLLECTION_SATELLITE_LINEAGE
 
 
 SATELLITE_FAMILIES = {
@@ -220,7 +221,7 @@ def get_satellite_lineage(
         if "/" not in satellite_id:
             satellite_id = f"{COLLECTION_NAME}/{satellite_id}"
         
-        root_sat = db.aql.execute(
+        root_sat = db_conn.db.aql.execute(
             f"RETURN DOCUMENT(@id)",
             bind_vars={"id": satellite_id}
         )
@@ -314,7 +315,7 @@ def _traverse_lineage(
             }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 "start_id": start_id,
@@ -371,7 +372,7 @@ def get_lineage_statistics() -> Dict[str, Any]:
         }}
         """
         
-        cursor = db.aql.execute(query)
+        cursor = db_conn.db.aql.execute(query)
         results = list(cursor)
         return results[0] if results else {}
         
@@ -443,7 +444,7 @@ def get_satellite_family_tree(family_name: str, limit: int = 100) -> Dict[str, A
         }}
         """
         
-        cursor = db.aql.execute(
+        cursor = db_conn.db.aql.execute(
             query,
             bind_vars={
                 "family_name": family_name.upper(),
