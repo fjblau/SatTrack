@@ -318,12 +318,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         evt.preventDefault()
         const node = evt.target
         const renderedPosition = evt.renderedPosition || evt.position
+        const nodeData = node.data()
+        
+        console.log('[GraphViewer] Right-click on node:', nodeData)
         
         setContextMenu({
           visible: true,
           x: renderedPosition.x,
           y: renderedPosition.y,
-          node: node.data()
+          node: nodeData
         })
       })
 
@@ -1741,10 +1744,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     
     try {
       // Extract document ID from node data
-      const docId = nodeData.document_id || nodeData.key || nodeData.id?.split('/')[1]
+      const docId = nodeData.key || nodeData.id?.split('/')[1]
       
       if (!docId) {
-        console.error('No document identifier found')
+        console.error('No document identifier found', nodeData)
+        setDetailPanel({
+          visible: true,
+          type: 'error',
+          data: { message: 'No document identifier found' }
+        })
         return
       }
       
@@ -2062,18 +2070,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             zIndex: 1000
           }}
         >
-          {/* Satellite nodes */}
-          {contextMenu.node.identifier && (
-            <div 
-              className="context-menu-item"
-              onClick={() => handleShowSatelliteDetails(contextMenu.node)}
-            >
-              📊 Show Satellite Details
-            </div>
-          )}
-          
           {/* Registration document nodes */}
-          {contextMenu.node.document_id && (
+          {contextMenu.node.type === 'registration_document' && (
             <div 
               className="context-menu-item"
               onClick={() => handleShowRegistrationDocument(contextMenu.node)}
@@ -2082,13 +2080,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             </div>
           )}
 
-          {/* Hub nodes in constellation view */}
-          {contextMenu.node.is_hub && (
+          {/* Satellite nodes (show if has identifier and is not a document) */}
+          {contextMenu.node.identifier && contextMenu.node.type !== 'registration_document' && (
             <div 
               className="context-menu-item"
               onClick={() => handleShowSatelliteDetails(contextMenu.node)}
             >
-              ⭐ Show Hub Details
+              {contextMenu.node.is_hub === true ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
             </div>
           )}
         </div>
