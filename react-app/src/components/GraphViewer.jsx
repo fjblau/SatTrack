@@ -419,10 +419,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       const elements = {
         nodes: data.data.nodes.map(node => ({
           data: {
+            ...node,
             id: node.id,
             label: node.name || node.identifier,
-            is_hub: node.is_hub,
-            ...node
+            is_hub: node.is_hub || false
           }
         })),
         edges: data.data.edges.map(edge => ({
@@ -2082,12 +2082,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
 
           {/* Satellite nodes (show if has identifier and is not a document) */}
           {contextMenu.node.identifier && contextMenu.node.type !== 'registration_document' && (
-            <div 
-              className="context-menu-item"
-              onClick={() => handleShowSatelliteDetails(contextMenu.node)}
-            >
-              {contextMenu.node.is_hub ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
-            </div>
+            <>
+              {console.log('[ContextMenu] Node data:', contextMenu.node, 'is_hub value:', contextMenu.node.is_hub, 'type:', typeof contextMenu.node.is_hub)}
+              <div 
+                className="context-menu-item"
+                onClick={() => handleShowSatelliteDetails(contextMenu.node)}
+              >
+                {contextMenu.node.is_hub ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
+              </div>
+            </>
           )}
         </div>
       )}
