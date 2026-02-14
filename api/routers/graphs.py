@@ -92,7 +92,8 @@ def get_constellation_graph(
             country: v.canonical.country_of_origin,
             orbital_band: v.canonical.orbital_band,
             status: v.canonical.status,
-            launch_date: v.canonical.date_of_launch
+            launch_date: v.canonical.date_of_launch,
+            is_hub: false
         }}
     )
     
