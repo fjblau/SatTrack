@@ -14,6 +14,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const [layout, setLayout] = useState('cola')
   const [countryGraphData, setCountryGraphData] = useState(null)
   const [functionGraphData, setFunctionGraphData] = useState(null)
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, node: null })
+  const [detailPanel, setDetailPanel] = useState({ visible: false, type: null, data: null })
 
   useEffect(() => {
     if (containerRef.current && !cyRef.current) {
@@ -307,6 +309,29 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       cyRef.current.on('tap', 'node', (evt) => {
         const node = evt.target
         console.log('Node clicked:', node.data())
+        // Close context menu on regular click
+        setContextMenu({ visible: false, x: 0, y: 0, node: null })
+      })
+
+      // Right-click context menu
+      cyRef.current.on('cxttap', 'node', (evt) => {
+        evt.preventDefault()
+        const node = evt.target
+        const renderedPosition = evt.renderedPosition || evt.position
+        
+        setContextMenu({
+          visible: true,
+          x: renderedPosition.x,
+          y: renderedPosition.y,
+          node: node.data()
+        })
+      })
+
+      // Close context menu on background click
+      cyRef.current.on('tap', (evt) => {
+        if (evt.target === cyRef.current) {
+          setContextMenu({ visible: false, x: 0, y: 0, node: null })
+        }
       })
     }
 
@@ -1680,6 +1705,68 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     }
   }
 
+  const handleShowSatelliteDetails = async (nodeData) => {
+    setContextMenu({ visible: false, x: 0, y: 0, node: null })
+    
+    try {
+      // Extract satellite ID from node data
+      const satelliteId = nodeData.identifier || nodeData.key || nodeData.id?.split('/')[1]
+      
+      if (!satelliteId) {
+        console.error('No satellite identifier found')
+        return
+      }
+      
+      const response = await fetch(`/v2/satellites/${satelliteId}`)
+      if (!response.ok) throw new Error('Failed to fetch satellite details')
+      
+      const result = await response.json()
+      setDetailPanel({
+        visible: true,
+        type: 'satellite',
+        data: result.data
+      })
+    } catch (error) {
+      console.error('Error fetching satellite details:', error)
+      setDetailPanel({
+        visible: true,
+        type: 'error',
+        data: { message: error.message }
+      })
+    }
+  }
+
+  const handleShowRegistrationDocument = async (nodeData) => {
+    setContextMenu({ visible: false, x: 0, y: 0, node: null })
+    
+    try {
+      // Extract document ID from node data
+      const docId = nodeData.document_id || nodeData.key || nodeData.id?.split('/')[1]
+      
+      if (!docId) {
+        console.error('No document identifier found')
+        return
+      }
+      
+      const response = await fetch(`/v2/registration-documents/${docId}`)
+      if (!response.ok) throw new Error('Failed to fetch registration document')
+      
+      const result = await response.json()
+      setDetailPanel({
+        visible: true,
+        type: 'registration',
+        data: result.data
+      })
+    } catch (error) {
+      console.error('Error fetching registration document:', error)
+      setDetailPanel({
+        visible: true,
+        type: 'error',
+        data: { message: error.message }
+      })
+    }
+  }
+
   return (
     <div className="graph-viewer">
       <div className="graph-controls">
@@ -1963,6 +2050,154 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           </>
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu.visible && contextMenu.node && (
+        <div 
+          className="graph-context-menu"
+          style={{
+            position: 'absolute',
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            zIndex: 1000
+          }}
+        >
+          {/* Satellite nodes */}
+          {contextMenu.node.identifier && (
+            <div 
+              className="context-menu-item"
+              onClick={() => handleShowSatelliteDetails(contextMenu.node)}
+            >
+              📊 Show Satellite Details
+            </div>
+          )}
+          
+          {/* Registration document nodes */}
+          {contextMenu.node.document_id && (
+            <div 
+              className="context-menu-item"
+              onClick={() => handleShowRegistrationDocument(contextMenu.node)}
+            >
+              📄 Show Registration Document
+            </div>
+          )}
+
+          {/* Hub nodes in constellation view */}
+          {contextMenu.node.is_hub && (
+            <div 
+              className="context-menu-item"
+              onClick={() => handleShowSatelliteDetails(contextMenu.node)}
+            >
+              ⭐ Show Hub Details
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Detail Panel */}
+      {detailPanel.visible && (
+        <div className="detail-panel-overlay" onClick={() => setDetailPanel({ visible: false, type: null, data: null })}>
+          <div className="detail-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="detail-panel-header">
+              <h3>
+                {detailPanel.type === 'satellite' && '📡 Satellite Details'}
+                {detailPanel.type === 'registration' && '📄 Registration Document'}
+                {detailPanel.type === 'error' && '⚠️ Error'}
+              </h3>
+              <button 
+                className="close-button"
+                onClick={() => setDetailPanel({ visible: false, type: null, data: null })}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="detail-panel-content">
+              {detailPanel.type === 'satellite' && detailPanel.data && (
+                <div className="satellite-details">
+                  <div className="detail-row">
+                    <strong>Name:</strong> {detailPanel.data.canonical?.name || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Identifier:</strong> {detailPanel.data.identifier}
+                  </div>
+                  <div className="detail-row">
+                    <strong>NORAD ID:</strong> {detailPanel.data.sources?.spacetrack?.norad_id || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Country:</strong> {detailPanel.data.canonical?.country_of_origin || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Status:</strong> {detailPanel.data.canonical?.status || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Launch Date:</strong> {detailPanel.data.canonical?.date_of_launch || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Constellation:</strong> {detailPanel.data.canonical?.constellation || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Orbital Band:</strong> {detailPanel.data.canonical?.orbital_band || 'N/A'}
+                  </div>
+                  {detailPanel.data.canonical?.orbit && (
+                    <>
+                      <h4>Orbital Parameters</h4>
+                      <div className="detail-row">
+                        <strong>Apogee:</strong> {detailPanel.data.canonical.orbit.apogee_km?.toFixed(2)} km
+                      </div>
+                      <div className="detail-row">
+                        <strong>Perigee:</strong> {detailPanel.data.canonical.orbit.perigee_km?.toFixed(2)} km
+                      </div>
+                      <div className="detail-row">
+                        <strong>Inclination:</strong> {detailPanel.data.canonical.orbit.inclination_degrees?.toFixed(2)}°
+                      </div>
+                      <div className="detail-row">
+                        <strong>Period:</strong> {detailPanel.data.canonical.orbit.period_minutes?.toFixed(2)} min
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {detailPanel.type === 'registration' && detailPanel.data && (
+                <div className="registration-details">
+                  <div className="detail-row">
+                    <strong>Document ID:</strong> {detailPanel.data._key || detailPanel.data.document_id}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Country:</strong> {detailPanel.data.country || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Registration Date:</strong> {detailPanel.data.registration_date || 'N/A'}
+                  </div>
+                  <div className="detail-row">
+                    <strong>Satellites:</strong> {detailPanel.data.satellite_count || 0}
+                  </div>
+                  {detailPanel.data.satellite_names && (
+                    <div className="detail-row">
+                      <strong>Satellite Names:</strong>
+                      <ul>
+                        {detailPanel.data.satellite_names.slice(0, 10).map((name, i) => (
+                          <li key={i}>{name}</li>
+                        ))}
+                        {detailPanel.data.satellite_names.length > 10 && (
+                          <li>... and {detailPanel.data.satellite_names.length - 10} more</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {detailPanel.type === 'error' && (
+                <div className="error-details">
+                  <p>{detailPanel.data?.message || 'An unknown error occurred'}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
