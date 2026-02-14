@@ -262,7 +262,7 @@ def get_collision_risk_network(
                 total_satellites: LENGTH(satellites),
                 total_edges: LENGTH(formatted_edges),
                 risk_threshold: @risk_threshold,
-                orbital_band: {'@orbital_band' if orbital_band else 'null'}
+                orbital_band: {f'@orbital_band' if orbital_band else 'null'}
             }}
         }}
         """

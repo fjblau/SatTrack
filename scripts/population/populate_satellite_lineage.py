@@ -14,12 +14,15 @@ import sys
 import re
 from collections import defaultdict
 from datetime import datetime
-import database as db_module
-
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import database.connection as db_conn
+import database as db_module
 from api.services.lineage_service import detect_satellite_family, detect_lineage_relationships
 
 
@@ -103,11 +106,15 @@ def populate_satellite_lineage(dry_run=False):
     print("Satellite Lineage Network Population")
     print("=" * 60)
     
-    if not db_module.connect_mongodb():
+    if not db_conn.connect_mongodb():
         print("❌ Failed to connect to ArangoDB")
         return False
     
-    db = db_module.db
+    db = db_conn.db
+    
+    if db is None:
+        print("❌ Database connection is None")
+        return False
     
     print("\n" + "=" * 60)
     print("Step 1: Extract Satellites and Family Information")
@@ -130,7 +137,7 @@ def populate_satellite_lineage(dry_run=False):
     
     cursor = db.aql.execute(
         query,
-        bind_vars={'@collection': db_module.COLLECTION_NAME}
+        bind_vars={'@collection': db_conn.COLLECTION_NAME}
     )
     
     satellites = list(cursor)
@@ -144,7 +151,7 @@ def populate_satellite_lineage(dry_run=False):
     for sat in satellites:
         family_info = detect_satellite_family(sat['name'])
         if family_info:
-            sat['_id'] = f"{db_module.COLLECTION_NAME}/{sat['_key']}"
+            sat['_id'] = f"{db_conn.COLLECTION_NAME}/{sat['_key']}"
             sat['family_name'] = family_info[0]
             sat['variant'] = family_info[1]
             sat['generation'] = family_info[2]
@@ -205,13 +212,13 @@ def populate_satellite_lineage(dry_run=False):
     print("Step 4: Create Satellite Lineage Edge Collection")
     print("=" * 60)
     
-    if not db_module.create_edge_collection(db_module.EDGE_COLLECTION_SATELLITE_LINEAGE):
+    if not db_module.create_edge_collection(db_conn.EDGE_COLLECTION_SATELLITE_LINEAGE):
         print("❌ Failed to create satellite lineage edge collection")
         return False
     
-    edge_collection = db.collection(db_module.EDGE_COLLECTION_SATELLITE_LINEAGE)
+    edge_collection = db.collection(db_conn.EDGE_COLLECTION_SATELLITE_LINEAGE)
     
-    existing_edge_query = f"RETURN LENGTH({db_module.EDGE_COLLECTION_SATELLITE_LINEAGE})"
+    existing_edge_query = f"RETURN LENGTH({db_conn.EDGE_COLLECTION_SATELLITE_LINEAGE})"
     cursor = db.aql.execute(existing_edge_query)
     existing_edges = list(cursor)[0]
     
@@ -246,7 +253,7 @@ def populate_satellite_lineage(dry_run=False):
     print("Step 5: Add Edge Indexes")
     print("=" * 60)
     
-    db_module.add_edge_indexes(db_module.EDGE_COLLECTION_SATELLITE_LINEAGE)
+    db_module.add_edge_indexes(db_conn.EDGE_COLLECTION_SATELLITE_LINEAGE)
     
     edge_collection.add_persistent_index(fields=['family_name'], unique=False)
     print("✓ Added family_name index")
@@ -272,7 +279,7 @@ def populate_satellite_lineage(dry_run=False):
     print(f"  - GET /v2/graphs/lineage/{{satellite_id}}")
     print(f"  - GET /v2/graphs/lineage/family/{{family_name}}")
     
-    db_module.disconnect_mongodb()
+    db_conn.disconnect_mongodb()
     return True
 
 
