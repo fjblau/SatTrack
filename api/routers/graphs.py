@@ -271,7 +271,10 @@ def get_satellite_neighborhood(
                     target: n.edge._to,
                     type: SPLIT(n.edge._id, "/")[0],
                     constellation: n.edge.constellation_name,
-                    distance_km: n.edge.distance_km
+                    proximity_score: n.edge.proximity_score,
+                    apogee_diff_km: n.edge.apogee_diff_km,
+                    perigee_diff_km: n.edge.perigee_diff_km,
+                    inclination_diff_degrees: n.edge.inclination_diff_degrees
                 }}
         )
         

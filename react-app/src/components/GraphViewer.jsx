@@ -1210,8 +1210,14 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const getEdgeLabel = (edge) => {
-        if (edge.type === 'orbital_proximity' && edge.distance_km) {
-          return `${edge.distance_km.toFixed(1)} km`
+        if (edge.type === 'orbital_proximity') {
+          // Show average separation from apogee/perigee diffs
+          if (edge.apogee_diff_km != null && edge.perigee_diff_km != null) {
+            const avgDiff = (edge.apogee_diff_km + edge.perigee_diff_km) / 2
+            return `~${avgDiff.toFixed(1)} km`
+          } else if (edge.proximity_score != null) {
+            return `${edge.proximity_score.toFixed(2)}`
+          }
         } else if (edge.type === 'constellation_edges' && edge.constellation) {
           return edge.constellation
         } else if (edge.type === 'registration_edges') {
@@ -1221,11 +1227,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const getEdgeWidth = (edge) => {
-        if (edge.type === 'orbital_proximity' && edge.distance_km) {
-          // Closer satellites get thicker lines (inverse relationship)
-          // Assume distance range 0-100km, map to width 2-6
-          const maxDist = 100
-          const normalized = 1 - Math.min(edge.distance_km / maxDist, 1)
+        if (edge.type === 'orbital_proximity' && edge.proximity_score != null) {
+          // Lower score = closer (better proximity), so thicker line
+          // Assume score range 0-2, invert it
+          const normalized = 1 - Math.min(edge.proximity_score / 2, 1)
           return 2 + (normalized * 4)
         }
         return 2.5
@@ -1243,9 +1248,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           }
         })),
         edges: (data.edges || []).map(edge => {
-          console.log('[GraphViewer] Processing edge:', edge)
           const label = getEdgeLabel(edge)
-          console.log('[GraphViewer] Edge label:', label, 'for type:', edge.type, 'distance_km:', edge.distance_km)
           const edgeData = {
             id: edge.id || `${edge.source}_to_${edge.target}`,
             source: edge.source || edge._from,
@@ -1258,7 +1261,6 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           if (label) {
             edgeData.edge_label = label
           }
-          console.log('[GraphViewer] Final edge data:', edgeData)
           return { data: edgeData }
         })
       }
