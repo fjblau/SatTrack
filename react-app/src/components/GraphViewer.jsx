@@ -2086,7 +2086,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               className="context-menu-item"
               onClick={() => handleShowSatelliteDetails(contextMenu.node)}
             >
-              {contextMenu.node.is_hub === true ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
+              {contextMenu.node.is_hub ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
             </div>
           )}
         </div>
