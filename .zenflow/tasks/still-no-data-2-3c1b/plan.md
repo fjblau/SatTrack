@@ -50,7 +50,12 @@ Implement the bug fix.
 - Updated GraphExplorer state management to pass data to GraphViewer
 - Fixed populate_satellite_lineage.py script (import order, database connection)
 - Populated 52 satellite lineage edges (GLONASS family with generations)
+- Fixed collision risk duplicate edges (678k → 179k unique edges)
+- Improved collision risk query to show connected hubs instead of isolated pairs
+- Made collision risk colors relative (percentile-based) instead of absolute thresholds
+- Updated legend to reflect relative coloring (Top 25%, 50-75%, 25-50%, Bottom 25%)
+- Added risk distribution stats (min, max, p25, median, p75) to graph metadata
 - Pushed to main and deployed to production
-- All graph features now functional with data
+- All graph features now functional with data and proper visualizations
 
 If blocked or uncertain, ask the user for direction.
