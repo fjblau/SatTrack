@@ -123,11 +123,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               'target-arrow-color': '#95a5a6',
               'target-arrow-shape': 'none',
               'curve-style': 'bezier',
-              'label': 'data(edge_label)',
               'font-size': '8px',
               'text-background-color': '#fff',
               'text-background-opacity': 0.8,
               'text-background-padding': '2px'
+            }
+          },
+          {
+            selector: 'edge[edge_label]',
+            style: {
+              'label': 'data(edge_label)'
             }
           },
           {
@@ -187,7 +192,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             }
           },
           {
-            selector: 'edge[edge_type="orbital_proximity_edges"]',
+            selector: 'edge[edge_type="orbital_proximity"]',
             style: {
               'line-color': '#e67e22',
               'width': 'data(edge_width)',
@@ -1199,7 +1204,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const getEdgeLabel = (edge) => {
-        if (edge.type === 'orbital_proximity_edges' && edge.distance_km) {
+        if (edge.type === 'orbital_proximity' && edge.distance_km) {
           return `${edge.distance_km.toFixed(1)} km`
         } else if (edge.type === 'constellation_edges' && edge.constellation) {
           return edge.constellation
@@ -1210,7 +1215,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       }
       
       const getEdgeWidth = (edge) => {
-        if (edge.type === 'orbital_proximity_edges' && edge.distance_km) {
+        if (edge.type === 'orbital_proximity' && edge.distance_km) {
           // Closer satellites get thicker lines (inverse relationship)
           // Assume distance range 0-100km, map to width 2-6
           const maxDist = 100
@@ -1232,18 +1237,20 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           }
         })),
         edges: (data.edges || []).map(edge => {
-          console.log('[GraphViewer] Edge type:', edge.type, 'Full edge:', edge)
-          return {
-            data: {
-              id: edge.id || `${edge.source}_to_${edge.target}`,
-              source: edge.source || edge._from,
-              target: edge.target || edge._to,
-              ...edge,
-              edge_type: edge.type,
-              edge_width: getEdgeWidth(edge),
-              edge_label: getEdgeLabel(edge)
-            }
+          const label = getEdgeLabel(edge)
+          const edgeData = {
+            id: edge.id || `${edge.source}_to_${edge.target}`,
+            source: edge.source || edge._from,
+            target: edge.target || edge._to,
+            ...edge,
+            edge_type: edge.type,
+            edge_width: getEdgeWidth(edge)
           }
+          // Only add edge_label if it has a value
+          if (label) {
+            edgeData.edge_label = label
+          }
+          return { data: edgeData }
         })
       }
       
