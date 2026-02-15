@@ -86,7 +86,29 @@ Modified [./react-app/src/components/DetailPanel.css](./react-app/src/components
 - Kept `padding: 1.5em` for proper internal spacing
 - This makes the DetailPanel visually consistent with the DataTable wrapper, ensuring both have the same width and styling
 
+### Additional Fixes
+
+**CSS Class Name Collision** ([./react-app/src/components/GraphViewer.css](./react-app/src/components/GraphViewer.css)):
+- GraphViewer was using `.detail-panel` class with `max-width: 600px`
+- This conflicted with table view's DetailPanel component (same class name)
+- Renamed all GraphViewer classes to be specific:
+  - `.detail-panel` → `.graph-detail-panel`
+  - `.detail-panel-header` → `.graph-detail-panel-header`
+  - `.detail-panel-content` → `.graph-detail-panel-content`
+- Updated [./react-app/src/components/GraphViewer.jsx](./react-app/src/components/GraphViewer.jsx) to use new class names
+- This eliminates CSS conflicts between the two separate views
+
+**Media Query Adjustment**:
+- Changed media query breakpoint from `1200px` to `768px` to allow multi-column layout on desktop
+
+**Grid Layout Optimization**:
+- Reduced minimum column width from `300px` to `220px` for better space utilization
+- Changed `repeat(auto-fit)` to `repeat(auto-fill)` for consistent column layout
+- Removed `max-width: 350px` from `.detail-section:has(.orbital-data)` to allow full width
+
 ### Result
 - DetailPanel now aligns perfectly with the DataTable width
 - Both components are constrained by the same `.table-container` padding
+- Multi-column grid layout displays properly across available width
+- No CSS conflicts between GraphViewer and table DetailPanel
 - Visual consistency achieved without breaking existing styles or responsive behavior
