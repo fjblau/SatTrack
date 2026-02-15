@@ -163,10 +163,10 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 
 ## Contact
 
-**Founder**: [Your Name]  
-**Email**: [Your Email]  
-**Demo**: [Live Demo URL]  
-**GitHub**: [Repository URL]  
-**Location**: [Your City, EU]
+**Founder**: Frank Blau  
+**Email**: frank@datamio.at  
+**Demo**: https://sat-track-zeta.vercel.app/  
+**GitHub**: https://github.com/fjblau/SatTrack  
+**Location**: Feldkirch, Austria
 
 *SatTrack - Sovereign Satellite Intelligence for Europe*
