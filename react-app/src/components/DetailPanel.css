@@ -7,6 +7,7 @@
   max-height: 35vh;
   width: 100%;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .detail-panel.empty {
@@ -139,7 +140,7 @@
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1.5em;
 }
 
@@ -248,7 +249,7 @@
 }
 
 .detail-section:has(.orbital-data) {
-  max-width: 350px;
+  max-width: none;
 }
 
 .orbital-data {
