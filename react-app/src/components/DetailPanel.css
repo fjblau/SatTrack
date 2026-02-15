@@ -333,7 +333,7 @@
   border: 1px solid #b3d9ff;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 768px) {
   .detail-panel {
     max-height: none;
   }
