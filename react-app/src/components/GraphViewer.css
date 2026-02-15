@@ -360,7 +360,7 @@
   backdrop-filter: blur(2px);
 }
 
-.detail-panel {
+.detail-panel-overlay .detail-panel {
   background: white;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -371,7 +371,7 @@
   flex-direction: column;
 }
 
-.detail-panel-header {
+.detail-panel-overlay .detail-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -381,13 +381,13 @@
   border-radius: 8px 8px 0 0;
 }
 
-.detail-panel-header h3 {
+.detail-panel-overlay .detail-panel-header h3 {
   margin: 0;
   font-size: 1.25rem;
   color: #2c3e50;
 }
 
-.detail-panel-header .close-button {
+.detail-panel-overlay .detail-panel-header .close-button {
   background: none;
   border: none;
   font-size: 1.5rem;
@@ -403,12 +403,12 @@
   transition: all 0.2s;
 }
 
-.detail-panel-header .close-button:hover {
+.detail-panel-overlay .detail-panel-header .close-button:hover {
   background: #e9ecef;
   color: #495057;
 }
 
-.detail-panel-content {
+.detail-panel-overlay .detail-panel-content {
   padding: 1.5rem;
   overflow-y: auto;
   flex: 1;
