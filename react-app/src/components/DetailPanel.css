@@ -140,7 +140,7 @@
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1.5em;
 }
 
@@ -249,7 +249,7 @@
 }
 
 .detail-section:has(.orbital-data) {
-  max-width: 180px;
+  min-width: 220px;
 }
 
 .orbital-data {
@@ -300,7 +300,7 @@
 }
 
 .detail-section:has(.tle-data) {
-  min-width: 280px;
+  min-width: 350px;
 }
 
 .tle-data {
