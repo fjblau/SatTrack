@@ -107,7 +107,12 @@ def import_kaggle_catalog(csv_path):
                     
                     kaggle_data["norad_cat_id"] = norad_id
                     
-                    existing = collection.find_one({"canonical.norad_cat_id": norad_id})
+                    existing = (
+                        collection.find_one({"canonical.norad_cat_id": norad_id}) or
+                        collection.find_one({"sources.kaggle.norad_cat_id": norad_id}) or
+                        collection.find_one({"sources.spacetrack.norad_catalog_number": norad_id}) or
+                        collection.find_one({"sources.celestrak.norad_id": norad_id})
+                    )
                     
                     if existing:
                         existing["sources"]["kaggle"] = {

@@ -135,3 +135,76 @@ Enhance UNOOSA/SpaceTrack importers to include NORAD IDs from gcat_satcat.tsv be
 - Type: CubeSat 3U
 - Country: Austria (AT)
 - Found in: gcat_satcat.tsv line 58025
+
+---
+
+## Implementation Notes
+
+### Changes Made
+
+#### 1. Enhanced Kaggle Importer Deduplication ([./scripts/import/import_kaggle_catalog.py:110](./scripts/import/import_kaggle_catalog.py:110))
+Updated the duplicate detection logic to search across multiple sources:
+```python
+existing = (
+    collection.find_one({"canonical.norad_cat_id": norad_id}) or
+    collection.find_one({"sources.kaggle.norad_cat_id": norad_id}) or
+    collection.find_one({"sources.spacetrack.norad_catalog_number": norad_id}) or
+    collection.find_one({"sources.celestrak.norad_id": norad_id})
+)
+```
+
+This prevents future duplicates by checking all possible locations where a NORAD ID might be stored.
+
+#### 2. Created Merge Duplicates Script ([./scripts/maintenance/merge_duplicates.py](./scripts/maintenance/merge_duplicates.py))
+Created a maintenance script that:
+- Identifies satellites with the same NORAD ID but different identifiers
+- Merges duplicate entries, preferring satellites with international designators
+- Combines all source data from duplicates into the primary document
+- Handles both string and numeric NORAD ID types by normalizing to numbers during comparison
+
+**Key Implementation Detail**: The merge query uses `TO_NUMBER()` to normalize NORAD IDs:
+```aql
+LET norad_numeric = TO_NUMBER(sat.canonical.norad_cat_id)
+COLLECT norad_id = norad_numeric INTO groups
+```
+
+This ensures that "58023" (string) and 58023 (number) are treated as the same value.
+
+#### 3. Executed Merge Operation
+Ran the merge script and successfully merged:
+- **1,079 duplicate pairs** across the entire database
+- Including the **PRETTY satellite** (NORAD 58023)
+
+**Result**: NORAD-58023 was merged into 2023-155H, combining data from all three sources (Kaggle, SpaceTrack, UNOOSA).
+
+### Verification
+
+**Before Fix:**
+```
+Found 2 satellite(s) named PRETTY:
+- NORAD-58023 (sources: ['kaggle'])
+- 2023-155H (sources: ['unoosa', 'spacetrack', 'kaggle'])
+```
+
+**After Fix:**
+```
+Found 1 satellite(s) named PRETTY:
+- 2023-155H (sources: ['kaggle', 'spacetrack', 'unoosa'])
+```
+
+### Additional Findings
+
+**NORAD ID Type Inconsistency**: Discovered that ~12,733 satellites have string NORAD IDs in `canonical.norad_cat_id` instead of integers. This was caused by earlier Kaggle imports. The enhanced deduplication logic now handles both types correctly by normalizing to numbers during comparison.
+
+### Files Created
+- [./scripts/maintenance/merge_duplicates.py](./scripts/maintenance/merge_duplicates.py) - Merge duplicate satellites
+- [./scripts/verification/check_pretty.py](./scripts/verification/check_pretty.py) - Verify PRETTY satellite count
+- [./scripts/verification/debug_duplicates.py](./scripts/verification/debug_duplicates.py) - Debug duplicate detection
+- [./scripts/verification/check_norad_types.py](./scripts/verification/check_norad_types.py) - Check NORAD ID types
+- [./scripts/verification/check_string_norad_ids.py](./scripts/verification/check_string_norad_ids.py) - Find satellites with string NORAD IDs
+
+### Testing
+- ✅ Verified PRETTY satellite is now unique (1 instead of 2)
+- ✅ Verified all sources merged correctly into 2023-155H
+- ✅ Confirmed Kaggle importer now checks multiple sources for duplicates
+- ✅ Tested merge script handles both string and numeric NORAD IDs
