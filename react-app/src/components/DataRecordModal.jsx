@@ -30,7 +30,7 @@ export default function DataRecordModal({ data, onClose }) {
     <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-content">
         <div className="modal-header">
-          <h2>MongoDB Document</h2>
+          <h2>Data Document</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
