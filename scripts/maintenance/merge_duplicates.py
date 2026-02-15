@@ -122,12 +122,13 @@ def merge_satellites(collection, satellites, dry_run=False):
     return primary["identifier"]
 
 
-def merge_all_duplicates(dry_run=False):
+def merge_all_duplicates(dry_run=False, limit=None):
     """
     Find and merge all duplicate satellites.
     
     Args:
         dry_run: If True, only print what would be done without making changes
+        limit: Maximum number of merges to perform (for testing/safety)
         
     Returns:
         Number of merges performed
@@ -146,12 +147,19 @@ def merge_all_duplicates(dry_run=False):
         return 0
     
     print(f"\nFound {len(duplicates)} NORAD IDs with duplicate entries:")
+    if limit:
+        print(f"Limiting to first {limit} merges for safety")
     
     merged_count = 0
-    for norad_id, satellites in duplicates:
+    total = limit if limit and limit < len(duplicates) else len(duplicates)
+    
+    for i, (norad_id, satellites) in enumerate(duplicates[:limit] if limit else duplicates):
         result = merge_satellites(collection, satellites, dry_run=dry_run)
         if result:
             merged_count += 1
+        
+        if (i + 1) % 50 == 0:
+            print(f"\nProgress: {i + 1}/{total} merges completed...")
     
     print(f"\n{'[DRY RUN] ' if dry_run else ''}Summary:")
     print(f"  NORAD IDs with duplicates: {len(duplicates)}")
@@ -163,7 +171,16 @@ def merge_all_duplicates(dry_run=False):
 if __name__ == "__main__":
     dry_run = "--dry-run" in sys.argv or "-n" in sys.argv
     
+    limit = None
+    for arg in sys.argv[1:]:
+        if arg.startswith("--limit="):
+            try:
+                limit = int(arg.split("=")[1])
+            except ValueError:
+                print(f"Invalid limit value: {arg}")
+                sys.exit(1)
+    
     if dry_run:
         print("Running in DRY RUN mode - no changes will be made\n")
     
-    merge_all_duplicates(dry_run=dry_run)
+    merge_all_duplicates(dry_run=dry_run, limit=limit)
