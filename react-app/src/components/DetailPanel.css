@@ -1,7 +1,7 @@
 .detail-panel {
   background: white;
   border-top: 1px solid #ddd;
-  padding: 1.5em;
+  padding: 1em 0;
   overflow-y: auto;
   max-height: 35vh;
 }
@@ -15,7 +15,7 @@
 }
 
 .detail-header {
-  margin-bottom: 1.5em;
+  margin: 0 1.5em 1.5em 1.5em;
   padding-bottom: 1em;
   border-bottom: 2px solid #eee;
 }
@@ -138,6 +138,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2em;
+  padding: 0 1.5em;
 }
 
 .detail-section {

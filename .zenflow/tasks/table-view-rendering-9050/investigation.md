@@ -78,10 +78,18 @@ After the fix:
    - This ensures DetailPanel has the same width constraints as DataTable and pagination
 
 ### CSS Adjustments
-- **No CSS changes were needed**
-- The existing `padding: 1.5em` on `.detail-panel` provides appropriate internal spacing for the panel content
-- The panel now inherits the width constraints from its parent `.table-container`, which already has `padding: 1.5em`
-- The `border-top: 1px solid #ddd` on `.detail-panel` maintains visual separation from the table above
+Modified [./react-app/src/components/DetailPanel.css](./react-app/src/components/DetailPanel.css):
+
+1. **`.detail-panel`** (line 1-7): Changed `padding: 1.5em` to `padding: 1em 0`
+   - Removed horizontal padding to give more width for the multi-column grid layout
+   - Kept vertical padding for top/bottom spacing
+
+2. **`.detail-header`** (line 17-21): Updated margin from `margin-bottom: 1.5em` to `margin: 0 1.5em 1.5em 1.5em`
+   - Added horizontal margins to properly indent the header content
+
+3. **`.detail-grid`** (line 137-142): Added `padding: 0 1.5em`
+   - Properly indent the grid content while allowing it to use maximum width
+   - The grid columns can now spread across the full available width
 
 ### Result
 - DetailPanel now aligns perfectly with the DataTable width
