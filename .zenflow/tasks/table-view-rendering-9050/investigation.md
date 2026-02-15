@@ -80,16 +80,11 @@ After the fix:
 ### CSS Adjustments
 Modified [./react-app/src/components/DetailPanel.css](./react-app/src/components/DetailPanel.css):
 
-1. **`.detail-panel`** (line 1-7): Changed `padding: 1.5em` to `padding: 1em 0`
-   - Removed horizontal padding to give more width for the multi-column grid layout
-   - Kept vertical padding for top/bottom spacing
-
-2. **`.detail-header`** (line 17-21): Updated margin from `margin-bottom: 1.5em` to `margin: 0 1.5em 1.5em 1.5em`
-   - Added horizontal margins to properly indent the header content
-
-3. **`.detail-grid`** (line 137-142): Added `padding: 0 1.5em`
-   - Properly indent the grid content while allowing it to use maximum width
-   - The grid columns can now spread across the full available width
+**`.detail-panel`** (line 1-8): Changed from `border-top: 1px solid #ddd` to match `.data-table-wrapper` styling:
+- Changed to `border: 1px solid #ddd` (full border instead of just top)
+- Added `border-radius: 4px` to match the table wrapper
+- Kept `padding: 1.5em` for proper internal spacing
+- This makes the DetailPanel visually consistent with the DataTable wrapper, ensuring both have the same width and styling
 
 ### Result
 - DetailPanel now aligns perfectly with the DataTable width
