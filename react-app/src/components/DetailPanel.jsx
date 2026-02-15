@@ -306,7 +306,7 @@ export default function DetailPanel({ object }) {
                 <div className="detail-row">
                   <span className="detail-label">Data Source</span>
                   <span className="detail-value">
-                    {docMetadata?.metadata?.apogee_km && !object['Apogee (km)'] ? 'From registration document' : 'Static registry'}
+                    {docMetadata?.metadata?.apogee_km && !object['Apogee (km)'] ? 'From Registration' : 'Static registry'}
                   </span>
                 </div>
               )}
@@ -414,19 +414,19 @@ export default function DetailPanel({ object }) {
                     )}
                     {docMetadata.metadata.launch_vehicle && (
                       <div className="detail-row">
-                        <span className="detail-label">Launch Vehicle (from document)</span>
+                        <span className="detail-label">Launch Vehicle (from Registration)</span>
                         <span className="detail-value">{docMetadata.metadata.launch_vehicle}</span>
                       </div>
                     )}
                     {docMetadata.metadata.place_of_launch && (
                       <div className="detail-row">
-                        <span className="detail-label">Place of Launch (from document)</span>
+                        <span className="detail-label">Place of Launch (from Registration)</span>
                         <span className="detail-value">{docMetadata.metadata.place_of_launch}</span>
                       </div>
                     )}
                     {(docMetadata.metadata.apogee_km || docMetadata.metadata.perigee_km || docMetadata.metadata.inclination_degrees || docMetadata.metadata.nodal_period_minutes) && (orbitalState?.orbital_state || object['Apogee (km)']) && (
                       <div className="document-orbital-params">
-                        <h4>Orbital Parameters (from document)</h4>
+                        <h4>Orbital Parameters (from Registration)</h4>
                         {docMetadata.metadata.apogee_km && (
                           <div className="detail-row">
                             <span className="detail-label">Apogee</span>
