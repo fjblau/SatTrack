@@ -4,8 +4,6 @@
 **Ask**: Seed funding for 1-year development runway  
 **Vision**: Build and scale for strategic acquisition
 
----
-
 ## Page 1: The Opportunity
 
 ### The Problem
@@ -43,8 +41,6 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 **Serviceable Obtainable Market (SOM)**: €12M in Year 3
 - Target 2-3% capture of SAM through freemium-to-premium conversion and enterprise contracts
 
----
-
 ## Page 2: Product & Competitive Advantage
 
 ### Product Architecture
@@ -66,10 +62,10 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 
 | **Differentiator** | **SatTrack** | **US Competitors** (AGI, LeoLabs) |
 |-------------------|-------------|----------------------------------|
-| **EU Data Sovereignty** | ✅ All-EU hosting | ❌ US-based infrastructure |
-| **Open Source** | ✅ Community-driven, transparent | ❌ Proprietary, closed |
-| **Development Velocity** | ✅ AI-assisted rapid iteration | Traditional dev cycles |
-| **Multi-source Integration** | ✅ UNOOSA + CelesTrak + Space-Track | Single or limited sources |
+| **EU Data Sovereignty** | All-EU hosting | US-based infrastructure |
+| **Open Source** | Community-driven, transparent | Proprietary, closed |
+| **Development Velocity** | AI-assisted rapid iteration | Traditional dev cycles |
+| **Multi-source Integration** | UNOOSA + CelesTrak + Space-Track | Single or limited sources |
 | **Pricing** | Freemium + affordable tiers | Enterprise-only, expensive |
 
 **Strategic Moat**:
@@ -101,16 +97,14 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 **Year 2 Target**: €300K ARR  
 **Year 3 Target**: €1.2M ARR
 
----
-
 ## Page 3: Traction, Team & The Ask
 
 ### Current Traction
 
-✅ **Working MVP**: Fully functional platform with API and React frontend  
-✅ **Beta Users**: Small cohort testing and providing feedback  
-✅ **Data Integration**: Successfully aggregating UNOOSA, CelesTrak, Space-Track  
-✅ **Infrastructure**: Deployment-ready architecture with EU hosting path  
+**Working MVP**: Fully functional platform with API and React frontend  
+**Beta Users**: Small cohort testing and providing feedback  
+**Data Integration**: Successfully aggregating UNOOSA, CelesTrak, Space-Track  
+**Infrastructure**: Deployment-ready architecture with EU hosting path  
 
 **Next Milestones** (with funding):
 - Onboard 100 beta users in 3 months
@@ -167,8 +161,6 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 - Growing demand for collision avoidance as LEO becomes congested
 - AI development tools enable rapid, capital-efficient product building
 
----
-
 ## Contact
 
 **Founder**: [Your Name]  
@@ -176,7 +168,5 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 **Demo**: [Live Demo URL]  
 **GitHub**: [Repository URL]  
 **Location**: [Your City, EU]
-
----
 
 *SatTrack (Kessler) - Sovereign Satellite Intelligence for Europe*
