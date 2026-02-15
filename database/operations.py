@@ -176,6 +176,7 @@ def search_satellites(
     aql = f"""
     FOR doc IN @@collection
         {filter_clause}
+        SORT doc.identifier ASC
         LIMIT @skip, @limit
         RETURN doc
     """
