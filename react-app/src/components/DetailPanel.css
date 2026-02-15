@@ -5,6 +5,8 @@
   padding: 1.5em;
   overflow-y: auto;
   max-height: 35vh;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .detail-panel.empty {
