@@ -105,7 +105,8 @@ Implement the bug fix.
     - Registration document nodes get type='registration_document' with document_title and url
     - Satellite nodes get type='satellite' with full canonical fields
     - Right-click context menu now appears for registration documents
-    - "Show Registration Document" option now works correctly
+    - Created /v2/registration-documents/{doc_id} API endpoint to fetch document data
+    - "Show Registration Document" option now works correctly and displays document details
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
