@@ -100,7 +100,7 @@ function App() {
           'Object Name': canonical.object_name || canonical.name || '',
           'International Designator': canonical.international_designator || '',
           'Country of Origin': canonical.country || '',
-          'Date of Launch': canonical.date_of_launch || '',
+          'Date of Launch': canonical.launch_date || '',
           'Function': canonical.function || '',
           'Status': canonical.status || '',
           'Orbital Band': canonical.orbital_band || '',
