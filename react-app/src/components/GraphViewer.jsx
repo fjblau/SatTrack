@@ -2095,8 +2095,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       {/* Detail Panel */}
       {detailPanel.visible && (
         <div className="detail-panel-overlay" onClick={() => setDetailPanel({ visible: false, type: null, data: null })}>
-          <div className="detail-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="detail-panel-header">
+          <div className="graph-detail-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="graph-detail-panel-header">
               <h3>
                 {detailPanel.type === 'satellite' && '📡 Satellite Details'}
                 {detailPanel.type === 'registration' && '📄 Registration Document'}
@@ -2110,7 +2110,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               </button>
             </div>
             
-            <div className="detail-panel-content">
+            <div className="graph-detail-panel-content">
               {detailPanel.type === 'satellite' && detailPanel.data && (
                 <div className="satellite-details">
                   <pre className="json-display">
