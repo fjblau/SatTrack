@@ -3,6 +3,7 @@ from typing import Optional
 import math
 
 from database import find_satellite, search_satellites, count_satellites
+import database.connection as db_conn
 from api.utils.converters import filter_nan_values
 
 router = APIRouter(prefix="/v2", tags=["satellites"])
@@ -103,3 +104,31 @@ def get_satellite_v2(identifier: str):
         }
     else:
         return {"error": "Satellite not found"}, 404
+
+
+@router.get("/registration-documents/{doc_id}")
+def get_registration_document(doc_id: str):
+    """
+    Get registration document details from ArangoDB.
+    """
+    try:
+        # Query the registration_documents collection
+        query = """
+        FOR doc IN registration_documents
+            FILTER doc._key == @doc_id
+            LIMIT 1
+            RETURN doc
+        """
+        
+        cursor = db_conn.db.aql.execute(query, bind_vars={'doc_id': doc_id})
+        results = list(cursor)
+        
+        if results:
+            doc = results[0]
+            # Remove internal ArangoDB fields
+            clean_doc = {k: v for k, v in doc.items() if not k.startswith('_')}
+            return {"data": clean_doc}
+        else:
+            return {"error": "Registration document not found"}, 404
+    except Exception as e:
+        return {"error": f"Failed to fetch registration document: {str(e)}"}, 500
