@@ -16,6 +16,11 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
     maxDistance: 50,
     maxInclinationDiff: 5
   })
+  const [dataRanges, setDataRanges] = useState({
+    proximityScore: { min: 0.01, max: 5.0 },
+    distance: { min: 5, max: 100 },
+    inclinationDiff: { min: 0.5, max: 10 }
+  })
 
   // Re-apply filters when proximity filters change
   useEffect(() => {
@@ -24,7 +29,51 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
     }
   }, [proximityFilters])
 
-  const applyFilters = (data) => {
+  const calculateDataRanges = (data) => {
+    if (!data.edges || data.edges.length === 0) {
+      return {
+        proximityScore: { min: 0.01, max: 5.0 },
+        distance: { min: 5, max: 100 },
+        inclinationDiff: { min: 0.5, max: 10 }
+      }
+    }
+
+    const proximityEdges = data.edges.filter(e => e.type === 'orbital_proximity')
+    
+    if (proximityEdges.length === 0) {
+      return {
+        proximityScore: { min: 0.01, max: 5.0 },
+        distance: { min: 5, max: 100 },
+        inclinationDiff: { min: 0.5, max: 10 }
+      }
+    }
+
+    const proximityScores = proximityEdges.map(e => e.proximity_score).filter(v => v != null)
+    const apogees = proximityEdges.map(e => e.apogee_diff_km).filter(v => v != null)
+    const perigees = proximityEdges.map(e => e.perigee_diff_km).filter(v => v != null)
+    const distances = [...apogees, ...perigees]
+    const inclinations = proximityEdges.map(e => e.inclination_diff_degrees).filter(v => v != null)
+
+    return {
+      proximityScore: {
+        min: proximityScores.length > 0 ? Math.min(...proximityScores) : 0.01,
+        max: proximityScores.length > 0 ? Math.max(...proximityScores) : 5.0
+      },
+      distance: {
+        min: distances.length > 0 ? Math.min(...distances) : 5,
+        max: distances.length > 0 ? Math.max(...distances) : 100
+      },
+      inclinationDiff: {
+        min: inclinations.length > 0 ? Math.min(...inclinations) : 0.5,
+        max: inclinations.length > 0 ? Math.max(...inclinations) : 10
+      }
+    }
+  }
+
+  const applyFilters = (data, filters = null) => {
+    // Use provided filters or current state
+    const activeFilters = filters || proximityFilters
+    
     // Apply proximity filters if orbital_proximity edges are included
     const filteredData = {...data}
     if (edgeTypes.includes('orbital_proximity') && data.edges) {
@@ -33,20 +82,20 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
         if (edge.type !== 'orbital_proximity') return true
         
         // Apply proximity filters
-        if (edge.proximity_score != null && edge.proximity_score > proximityFilters.maxProximityScore) {
+        if (edge.proximity_score != null && edge.proximity_score > activeFilters.maxProximityScore) {
           return false
         }
         
         // Apply distance filter (check apogee and perigee differences)
-        if (edge.apogee_diff_km != null && edge.apogee_diff_km > proximityFilters.maxDistance) {
+        if (edge.apogee_diff_km != null && edge.apogee_diff_km > activeFilters.maxDistance) {
           return false
         }
-        if (edge.perigee_diff_km != null && edge.perigee_diff_km > proximityFilters.maxDistance) {
+        if (edge.perigee_diff_km != null && edge.perigee_diff_km > activeFilters.maxDistance) {
           return false
         }
         
         // Apply inclination filter
-        if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > proximityFilters.maxInclinationDiff) {
+        if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > activeFilters.maxInclinationDiff) {
           return false
         }
         
@@ -119,9 +168,21 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
       const result = await response.json()
       
       if (result.data) {
-        // Store raw data and apply filters
+        // Calculate ranges from actual data
+        const ranges = calculateDataRanges(result.data)
+        setDataRanges(ranges)
+        
+        // Initialize filters to show all data (use max values)
+        const initialFilters = {
+          maxProximityScore: ranges.proximityScore.max,
+          maxDistance: ranges.distance.max,
+          maxInclinationDiff: ranges.inclinationDiff.max
+        }
+        setProximityFilters(initialFilters)
+        
+        // Store raw data and apply filters with initial values
         setRawNeighborhoodData(result.data)
-        applyFilters(result.data)
+        applyFilters(result.data, initialFilters)
       } else {
         throw new Error('Invalid response format')
       }
@@ -242,40 +303,47 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
               <div className="filter-slider">
                 <label>
                   Max Proximity Score: <strong>{proximityFilters.maxProximityScore.toFixed(2)}</strong>
-                  <span className="filter-help">(lower = closer)</span>
+                  <span className="filter-help">
+                    (range: {dataRanges.proximityScore.min.toFixed(2)} - {dataRanges.proximityScore.max.toFixed(2)})
+                  </span>
                 </label>
                 <input
                   type="range"
-                  min="0.01"
-                  max="5.0"
-                  step="0.05"
+                  min={dataRanges.proximityScore.min}
+                  max={dataRanges.proximityScore.max}
+                  step={(dataRanges.proximityScore.max - dataRanges.proximityScore.min) / 100}
                   value={proximityFilters.maxProximityScore}
                   onChange={(e) => setProximityFilters({...proximityFilters, maxProximityScore: parseFloat(e.target.value)})}
                 />
               </div>
               <div className="filter-slider">
                 <label>
-                  Max Orbital Distance: <strong>{proximityFilters.maxDistance} km</strong>
-                  <span className="filter-help">(apogee/perigee diff)</span>
+                  Max Orbital Distance: <strong>{proximityFilters.maxDistance.toFixed(1)} km</strong>
+                  <span className="filter-help">
+                    (range: {dataRanges.distance.min.toFixed(1)} - {dataRanges.distance.max.toFixed(1)} km)
+                  </span>
                 </label>
                 <input
                   type="range"
-                  min="5"
-                  max="100"
-                  step="5"
+                  min={dataRanges.distance.min}
+                  max={dataRanges.distance.max}
+                  step={(dataRanges.distance.max - dataRanges.distance.min) / 100}
                   value={proximityFilters.maxDistance}
-                  onChange={(e) => setProximityFilters({...proximityFilters, maxDistance: parseInt(e.target.value)})}
+                  onChange={(e) => setProximityFilters({...proximityFilters, maxDistance: parseFloat(e.target.value)})}
                 />
               </div>
               <div className="filter-slider">
                 <label>
-                  Max Inclination Diff: <strong>{proximityFilters.maxInclinationDiff}°</strong>
+                  Max Inclination Diff: <strong>{proximityFilters.maxInclinationDiff.toFixed(2)}°</strong>
+                  <span className="filter-help">
+                    (range: {dataRanges.inclinationDiff.min.toFixed(2)} - {dataRanges.inclinationDiff.max.toFixed(2)}°)
+                  </span>
                 </label>
                 <input
                   type="range"
-                  min="0.5"
-                  max="10"
-                  step="0.5"
+                  min={dataRanges.inclinationDiff.min}
+                  max={dataRanges.inclinationDiff.max}
+                  step={(dataRanges.inclinationDiff.max - dataRanges.inclinationDiff.min) / 100}
                   value={proximityFilters.maxInclinationDiff}
                   onChange={(e) => setProximityFilters({...proximityFilters, maxInclinationDiff: parseFloat(e.target.value)})}
                 />
