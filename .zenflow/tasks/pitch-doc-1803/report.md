@@ -4,9 +4,10 @@
 
 Created a comprehensive 3-page pitch document for the SatTrack (Kessler) platform tailored for VCs and angel investors in the local community.
 
-## Deliverable
+## Deliverables
 
-**File**: `pitch-deck.md`
+- **Markdown**: `pitch-deck.md` (source format)
+- **Word Document**: `pitch-deck.docx` (editable format, 15KB)
 
 ## Document Structure
 
@@ -36,7 +37,9 @@ Created a comprehensive 3-page pitch document for the SatTrack (Kessler) platfor
 
 ## Next Steps
 
-The pitch document is ready for:
+The pitch documents are ready for:
+- **Immediate editing** in Microsoft Word, Google Docs, or LibreOffice
 - Conversion to PDF for email distribution
 - Use as speaker notes for in-person presentations
 - Customization with specific founder details (name, email, demo URL, GitHub link)
+- Formatting adjustments (fonts, colors, branding elements)
