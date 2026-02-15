@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './SatelliteNeighborhood.css'
 
 function SatelliteNeighborhood({ onNeighborhoodLoad }) {
@@ -8,8 +8,68 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
   const [selectedSatellite, setSelectedSatellite] = useState(null)
   const [loading, setLoading] = useState(false)
   const [neighborhoodData, setNeighborhoodData] = useState(null)
+  const [rawNeighborhoodData, setRawNeighborhoodData] = useState(null)
   const [error, setError] = useState(null)
   const [edgeTypes, setEdgeTypes] = useState(['orbital_proximity'])
+  const [proximityFilters, setProximityFilters] = useState({
+    maxProximityScore: 2.0,
+    maxDistance: 50,
+    maxInclinationDiff: 5
+  })
+
+  // Re-apply filters when proximity filters change
+  useEffect(() => {
+    if (rawNeighborhoodData) {
+      applyFilters(rawNeighborhoodData)
+    }
+  }, [proximityFilters])
+
+  const applyFilters = (data) => {
+    // Apply proximity filters if orbital_proximity edges are included
+    const filteredData = {...data}
+    if (edgeTypes.includes('orbital_proximity') && data.edges) {
+      filteredData.edges = data.edges.filter(edge => {
+        // If not an orbital proximity edge, keep it
+        if (edge.type !== 'orbital_proximity') return true
+        
+        // Apply proximity filters
+        if (edge.proximity_score != null && edge.proximity_score > proximityFilters.maxProximityScore) {
+          return false
+        }
+        
+        // Apply distance filter (check apogee and perigee differences)
+        if (edge.apogee_diff_km != null && edge.apogee_diff_km > proximityFilters.maxDistance) {
+          return false
+        }
+        if (edge.perigee_diff_km != null && edge.perigee_diff_km > proximityFilters.maxDistance) {
+          return false
+        }
+        
+        // Apply inclination filter
+        if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > proximityFilters.maxInclinationDiff) {
+          return false
+        }
+        
+        return true
+      })
+      
+      // Also filter out nodes that have no edges anymore
+      const connectedNodeIds = new Set()
+      filteredData.edges.forEach(edge => {
+        connectedNodeIds.add(edge.source || edge._from)
+        connectedNodeIds.add(edge.target || edge._to)
+      })
+      
+      filteredData.nodes = data.nodes.filter(node => {
+        return node.is_source || connectedNodeIds.has(node.id || node._id)
+      })
+    }
+    
+    setNeighborhoodData(filteredData)
+    if (onNeighborhoodLoad) {
+      onNeighborhoodLoad(filteredData, selectedSatellite)
+    }
+  }
 
   const searchSatellites = async (query) => {
     if (query.length < 2) {
@@ -59,10 +119,9 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
       const result = await response.json()
       
       if (result.data) {
-        setNeighborhoodData(result.data)
-        if (onNeighborhoodLoad) {
-          onNeighborhoodLoad(result.data, selectedSatellite)
-        }
+        // Store raw data and apply filters
+        setRawNeighborhoodData(result.data)
+        applyFilters(result.data)
       } else {
         throw new Error('Invalid response format')
       }
@@ -175,6 +234,56 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
             Registration
           </button>
         </div>
+
+        {edgeTypes.includes('orbital_proximity') && (
+          <div className="proximity-filters">
+            <label className="filter-label">Orbital Proximity Filters:</label>
+            <div className="filter-sliders">
+              <div className="filter-slider">
+                <label>
+                  Max Proximity Score: <strong>{proximityFilters.maxProximityScore.toFixed(2)}</strong>
+                  <span className="filter-help">(lower = closer)</span>
+                </label>
+                <input
+                  type="range"
+                  min="0.01"
+                  max="5.0"
+                  step="0.05"
+                  value={proximityFilters.maxProximityScore}
+                  onChange={(e) => setProximityFilters({...proximityFilters, maxProximityScore: parseFloat(e.target.value)})}
+                />
+              </div>
+              <div className="filter-slider">
+                <label>
+                  Max Orbital Distance: <strong>{proximityFilters.maxDistance} km</strong>
+                  <span className="filter-help">(apogee/perigee diff)</span>
+                </label>
+                <input
+                  type="range"
+                  min="5"
+                  max="100"
+                  step="5"
+                  value={proximityFilters.maxDistance}
+                  onChange={(e) => setProximityFilters({...proximityFilters, maxDistance: parseInt(e.target.value)})}
+                />
+              </div>
+              <div className="filter-slider">
+                <label>
+                  Max Inclination Diff: <strong>{proximityFilters.maxInclinationDiff}°</strong>
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="10"
+                  step="0.5"
+                  value={proximityFilters.maxInclinationDiff}
+                  onChange={(e) => setProximityFilters({...proximityFilters, maxInclinationDiff: parseFloat(e.target.value)})}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {selectedSatellite && (
           <button 
             className="reload-button"
