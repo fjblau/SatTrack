@@ -107,6 +107,13 @@ Implement the bug fix.
     - Right-click context menu now appears for registration documents
     - Created /v2/registration-documents/{doc_id} API endpoint to fetch document data
     - "Show Registration Document" option now works correctly and displays document details
+  * Added orbital proximity filters to Satellite Neighborhood view:
+    - Three slider filters: Max Proximity Score (0.01-5.0), Max Orbital Distance (5-100km), Max Inclination Diff (0.5-10°)
+    - Filters shown only when "Orbital Proximity" edge type is selected
+    - Client-side filtering for instant feedback without API reloads
+    - Automatically removes disconnected nodes after filtering
+    - Help text explains filter meanings (e.g., "lower = closer" for proximity score)
+    - Styled with blue sliders matching app theme
 - Pushed to main and deployed to production
 - All graph features now functional with data and proper visualizations
 
