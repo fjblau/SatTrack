@@ -1,4 +1,4 @@
-# SatTrack (Kessler) Pitch Document
+# SatTrack Pitch Document
 
 **Tagline**: European Satellite Intelligence Platform  
 **Ask**: Seed funding for 1-year development runway  
@@ -19,7 +19,7 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 
 ### The Solution
 
-**SatTrack (Kessler)** is an **EU-hosted, open-source satellite tracking and orbital debris monitoring platform** that aggregates multiple authoritative data sources into a unified, modern API and visualization interface.
+**SatTrack** is an **EU-hosted, open-source satellite tracking and orbital debris monitoring platform** that aggregates multiple authoritative data sources into a unified, modern API and visualization interface.
 
 **Key Features**:
 - Real-time satellite position tracking via Two-Line Element (TLE) data
@@ -169,4 +169,4 @@ The orbital space around Earth is becoming increasingly crowded with over **15,0
 **GitHub**: [Repository URL]  
 **Location**: [Your City, EU]
 
-*SatTrack (Kessler) - Sovereign Satellite Intelligence for Europe*
+*SatTrack - Sovereign Satellite Intelligence for Europe*
