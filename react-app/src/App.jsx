@@ -202,9 +202,9 @@ function App() {
                   </button>
                 </div>
               )}
+              
+              <DetailPanel object={selectedObject} />
             </div>
-            
-            <DetailPanel object={selectedObject} />
           </main>
         </div>
       )}
