@@ -15,7 +15,7 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
       <table className="data-table">
         <thead>
           <tr>
-            <th>Registration Number</th>
+            <th>Identifier</th>
             <th>Object Name</th>
             <th>Country of Origin</th>
             <th>Date of Launch</th>
@@ -31,7 +31,7 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
         <tbody>
           {objects.map((obj) => {
             const classNames = []
-            if (selectedObject?.['Registration Number'] === obj['Registration Number']) {
+            if (selectedObject?.['Identifier'] === obj['Identifier']) {
               classNames.push('selected')
             }
             if (obj['Status'] === SATELLITE_STATUS.DECAYED || obj['Status'] === SATELLITE_STATUS.DEORBITED) {
@@ -39,11 +39,11 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
             }
             return (
             <tr 
-              key={obj['Registration Number']}
+              key={obj['Identifier']}
               className={classNames.join(' ')}
               onClick={() => onRowClick(obj)}
             >
-              <td className="cell-reg">{obj['Registration Number']}</td>
+              <td className="cell-reg">{obj['Identifier']}</td>
               <td className="cell-name">{obj['Object Name'] || '—'}</td>
               <td>{obj['Country of Origin'] || '—'}</td>
               <td>{obj['Date of Launch'] || '—'}</td>

@@ -178,8 +178,8 @@ export default function DetailPanel({ object }) {
   return (
     <div className="detail-panel">
       <div className="detail-header">
-        <h2>{object['Object Name'] || object['Registration Number']}</h2>
-        <p className="detail-reg">{object['Registration Number']}</p>
+        <h2>{object['Object Name'] || object['Identifier']}</h2>
+        <p className="detail-reg">{object['Identifier']}</p>
         <div className="header-buttons">
           {fullDocument && (
             <button 

@@ -96,10 +96,10 @@ function App() {
         const orbit = canonical.orbit || {}
         
         return {
-          'Registration Number': canonical.registration_number || '',
+          'Identifier': item.identifier || '',
           'Object Name': canonical.object_name || canonical.name || '',
           'International Designator': canonical.international_designator || '',
-          'Country of Origin': canonical.country_of_origin || '',
+          'Country of Origin': canonical.country || '',
           'Date of Launch': canonical.date_of_launch || '',
           'Function': canonical.function || '',
           'Status': canonical.status || '',
