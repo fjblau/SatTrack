@@ -1093,7 +1093,9 @@ def get_function_similarity_graph(
     functions: Optional[str] = Query(default=None, description="Comma-separated function categories"),
     orbital_bands: Optional[str] = Query(default=None, description="Comma-separated orbital bands"),
     countries: Optional[str] = Query(default=None, description="Comma-separated countries"),
-    top_n: Optional[int] = Query(default=15, description="Number of top clusters to return")
+    top_n: Optional[int] = Query(default=15, description="Number of top clusters to return"),
+    view_mode: Optional[str] = Query(default="aggregate", description="View mode: 'aggregate' or 'detailed'"),
+    cluster_id: Optional[str] = Query(default=None, description="Specific cluster ID for detailed view")
 ):
     """
     Get function similarity graph with multi-dimensional clustering.
@@ -1106,6 +1108,8 @@ def get_function_similarity_graph(
     - orbital_bands: Filter by orbital bands (e.g., "LEO-Polar,MEO")
     - countries: Filter by countries (e.g., "USA,China")
     - top_n: Number of top clusters to return (default: 15)
+    - view_mode: 'aggregate' (cluster-level view) or 'detailed' (satellite-level view)
+    - cluster_id: Specific cluster to show in detailed view (e.g., "Communications-LEO-Polar")
     
     Function Categories:
     - Communications: satellites for telecommunications
@@ -1121,6 +1125,376 @@ def get_function_similarity_graph(
     function_filter = [f.strip() for f in functions.split(",")] if functions else None
     orbital_band_filter = [ob.strip() for ob in orbital_bands.split(",")] if orbital_bands else None
     country_filter = [c.strip() for c in countries.split(",")] if countries else None
+    
+    # Route to aggregate or detailed view
+    if view_mode == "aggregate":
+        return _get_function_similarity_aggregate(function_filter, orbital_band_filter, country_filter, top_n)
+    elif view_mode == "detailed" and cluster_id:
+        return _get_function_similarity_detailed_cluster(cluster_id, function_filter, orbital_band_filter, country_filter)
+    else:
+        # Default to current behavior for backward compatibility
+        return _get_function_similarity_detailed_all(function_filter, orbital_band_filter, country_filter, top_n)
+
+
+def _get_function_similarity_aggregate(
+    function_filter: Optional[List[str]],
+    orbital_band_filter: Optional[List[str]],
+    country_filter: Optional[List[str]],
+    top_n: int
+) -> dict:
+    """Return aggregate cluster-level view of function similarity."""
+    
+    query = f"""
+    LET satellites_with_function = (
+        FOR doc IN {COLLECTION_NAME}
+            FILTER doc.canonical.function != null
+            FILTER doc.canonical.orbital_band != null
+            LET func_lower = LOWER(doc.canonical.function)
+            LET category = (
+                func_lower LIKE '%communicat%' OR func_lower LIKE '%telecom%' ? 'Communications' :
+                func_lower LIKE '%earth%' OR func_lower LIKE '%observation%' OR func_lower LIKE '%remote sens%' OR func_lower LIKE '%resources%' ? 'Earth Observation' :
+                func_lower LIKE '%investigation%' OR func_lower LIKE '%scientific%' OR func_lower LIKE '%atmosphere%' OR func_lower LIKE '%space%' ? 'Scientific Research' :
+                func_lower LIKE '%navigation%' OR func_lower LIKE '%glonass%' OR func_lower LIKE '%gps%' OR func_lower LIKE '%position%' ? 'Navigation' :
+                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military-Defense' :
+                func_lower LIKE '%station%' OR func_lower LIKE '%mir%' OR func_lower LIKE '%iss%' OR func_lower LIKE '%delivery%' ? 'Space Station' :
+                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology-Testing' :
+                'Other'
+            )
+            FILTER @function_filter == null OR category IN @function_filter
+            FILTER @orbital_band_filter == null OR doc.canonical.orbital_band IN @orbital_band_filter
+            FILTER @country_filter == null OR doc.canonical.country IN @country_filter
+            RETURN {{
+                _id: doc._id,
+                function_category: category,
+                country: doc.canonical.country,
+                orbital_band: doc.canonical.orbital_band,
+                congestion_risk: doc.canonical.congestion_risk,
+                constellation: doc.canonical.constellation
+            }}
+    )
+    
+    LET clusters_with_metadata = (
+        FOR sat IN satellites_with_function
+            COLLECT 
+                function_cat = sat.function_category,
+                orbital_band = sat.orbital_band
+            INTO cluster_sats
+            LET satellite_ids = cluster_sats[*].sat._id
+            LET satellite_count = LENGTH(satellite_ids)
+            
+            LET constellation_edges = (
+                FOR edge IN {EDGE_COLLECTION_CONSTELLATION}
+                    FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+                    RETURN edge
+            )
+            
+            LET proximity_edges = (
+                FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+                    FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+                    RETURN edge
+            )
+            
+            LET all_edges = UNION(constellation_edges, proximity_edges)
+            LET edge_count = LENGTH(all_edges)
+            
+            FILTER satellite_count >= 5 AND edge_count >= 10
+            
+            LET countries = (
+                FOR sat IN cluster_sats
+                    COLLECT country = sat.sat.country WITH COUNT INTO count
+                    SORT count DESC
+                    LIMIT 5
+                    RETURN {{country: country, count: count}}
+            )
+            
+            LET constellations = (
+                FOR sat IN cluster_sats
+                    FILTER sat.sat.constellation != null
+                    COLLECT constellation = sat.sat.constellation WITH COUNT INTO count
+                    SORT count DESC
+                    LIMIT 5
+                    RETURN {{constellation: constellation, count: count}}
+            )
+            
+            LET congestion_risks = (
+                FOR sat IN cluster_sats
+                    FILTER sat.sat.congestion_risk != null
+                    COLLECT risk = sat.sat.congestion_risk WITH COUNT INTO count
+                    RETURN {{risk: risk, count: count}}
+            )
+            
+            LET avg_congestion = (
+                LENGTH(congestion_risks) > 0 ? (
+                    MAX([
+                        FOR r IN congestion_risks
+                            FILTER r.risk == "critical"
+                            LIMIT 1
+                            RETURN "critical"
+                    ]) OR
+                    MAX([
+                        FOR r IN congestion_risks
+                            FILTER r.risk == "high"
+                            LIMIT 1
+                            RETURN "high"
+                    ]) OR
+                    MAX([
+                        FOR r IN congestion_risks
+                            FILTER r.risk == "medium"
+                            LIMIT 1
+                            RETURN "medium"
+                    ]) OR "low"
+                ) : "unknown"
+            )
+            
+            RETURN {{
+                cluster_id: CONCAT(function_cat, '-', orbital_band),
+                function: function_cat,
+                orbital_band: orbital_band,
+                satellite_count: satellite_count,
+                edge_count: edge_count,
+                density: edge_count / (satellite_count * (satellite_count - 1) / 2),
+                satellite_ids: satellite_ids,
+                top_countries: countries[*].country,
+                top_constellations: constellations[*].constellation,
+                avg_congestion_risk: avg_congestion
+            }}
+    )
+    
+    LET top_clusters = (
+        FOR cluster IN clusters_with_metadata
+            SORT cluster.edge_count DESC
+            LIMIT @top_n
+            RETURN cluster
+    )
+    
+    LET inter_cluster_edges = (
+        FOR cluster1 IN top_clusters
+            FOR cluster2 IN top_clusters
+                FILTER cluster1.cluster_id < cluster2.cluster_id
+                
+                LET constellation_connections = LENGTH(
+                    FOR edge IN {EDGE_COLLECTION_CONSTELLATION}
+                        FILTER (edge._from IN cluster1.satellite_ids AND edge._to IN cluster2.satellite_ids) OR
+                               (edge._from IN cluster2.satellite_ids AND edge._to IN cluster1.satellite_ids)
+                        RETURN edge
+                )
+                
+                LET proximity_connections = LENGTH(
+                    FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+                        FILTER (edge._from IN cluster1.satellite_ids AND edge._to IN cluster2.satellite_ids) OR
+                               (edge._from IN cluster2.satellite_ids AND edge._to IN cluster1.satellite_ids)
+                        RETURN edge
+                )
+                
+                LET proximity_edges_detail = (
+                    FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+                        FILTER (edge._from IN cluster1.satellite_ids AND edge._to IN cluster2.satellite_ids) OR
+                               (edge._from IN cluster2.satellite_ids AND edge._to IN cluster1.satellite_ids)
+                        RETURN edge.proximity_score
+                )
+                
+                LET total_connections = constellation_connections + proximity_connections
+                FILTER total_connections > 0
+                
+                LET avg_proximity = LENGTH(proximity_edges_detail) > 0 ? AVERAGE(proximity_edges_detail) : null
+                
+                RETURN {{
+                    id: CONCAT(cluster1.cluster_id, '_to_', cluster2.cluster_id),
+                    source: cluster1.cluster_id,
+                    target: cluster2.cluster_id,
+                    connection_count: total_connections,
+                    constellation_edges: constellation_connections,
+                    proximity_edges: proximity_connections,
+                    avg_proximity_score: avg_proximity
+                }}
+    )
+    
+    LET cluster_nodes = (
+        FOR cluster IN top_clusters
+            RETURN {{
+                id: cluster.cluster_id,
+                type: "cluster",
+                function: cluster.function,
+                orbital_band: cluster.orbital_band,
+                satellite_count: cluster.satellite_count,
+                edge_count: cluster.edge_count,
+                density: cluster.density,
+                top_countries: cluster.top_countries,
+                top_constellations: cluster.top_constellations,
+                avg_congestion_risk: cluster.avg_congestion_risk
+            }}
+    )
+    
+    RETURN {{
+        nodes: cluster_nodes,
+        edges: inter_cluster_edges,
+        stats: {{
+            total_satellites: LENGTH(satellites_with_function),
+            cluster_count: LENGTH(top_clusters),
+            inter_cluster_edges: LENGTH(inter_cluster_edges)
+        }}
+    }}
+    """
+    
+    bind_vars = {
+        'function_filter': function_filter,
+        'orbital_band_filter': orbital_band_filter,
+        'country_filter': country_filter,
+        'top_n': top_n
+    }
+    
+    cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
+    results = list(cursor)
+    
+    if results:
+        return {
+            "data": results[0],
+            "view_mode": "aggregate",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "nodes": [],
+                "edges": [],
+                "stats": {"total_satellites": 0, "cluster_count": 0, "inter_cluster_edges": 0}
+            },
+            "view_mode": "aggregate",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+
+def _get_function_similarity_detailed_cluster(
+    cluster_id: str,
+    function_filter: Optional[List[str]],
+    orbital_band_filter: Optional[List[str]],
+    country_filter: Optional[List[str]]
+) -> dict:
+    """Return detailed satellite-level view for a specific cluster."""
+    
+    parts = cluster_id.split('-', 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail="Invalid cluster_id format. Expected 'Function-OrbitalBand'")
+    
+    target_function = parts[0]
+    target_orbital_band = parts[1]
+    
+    query = f"""
+    LET satellites_in_cluster = (
+        FOR doc IN {COLLECTION_NAME}
+            FILTER doc.canonical.function != null
+            FILTER doc.canonical.orbital_band != null
+            LET func_lower = LOWER(doc.canonical.function)
+            LET category = (
+                func_lower LIKE '%communicat%' OR func_lower LIKE '%telecom%' ? 'Communications' :
+                func_lower LIKE '%earth%' OR func_lower LIKE '%observation%' OR func_lower LIKE '%remote sens%' OR func_lower LIKE '%resources%' ? 'Earth Observation' :
+                func_lower LIKE '%investigation%' OR func_lower LIKE '%scientific%' OR func_lower LIKE '%atmosphere%' OR func_lower LIKE '%space%' ? 'Scientific Research' :
+                func_lower LIKE '%navigation%' OR func_lower LIKE '%glonass%' OR func_lower LIKE '%gps%' OR func_lower LIKE '%position%' ? 'Navigation' :
+                func_lower LIKE '%defense%' OR func_lower LIKE '%defence%' OR func_lower LIKE '%military%' ? 'Military-Defense' :
+                func_lower LIKE '%station%' OR func_lower LIKE '%mir%' OR func_lower LIKE '%iss%' OR func_lower LIKE '%delivery%' ? 'Space Station' :
+                func_lower LIKE '%technolog%' OR func_lower LIKE '%experiment%' OR func_lower LIKE '%test%' OR func_lower LIKE '%demonstration%' ? 'Technology-Testing' :
+                'Other'
+            )
+            FILTER category == @target_function
+            FILTER doc.canonical.orbital_band == @target_orbital_band
+            FILTER @function_filter == null OR category IN @function_filter
+            FILTER @orbital_band_filter == null OR doc.canonical.orbital_band IN @orbital_band_filter
+            FILTER @country_filter == null OR doc.canonical.country IN @country_filter
+            RETURN {{
+                _id: doc._id,
+                _key: doc._key,
+                identifier: doc.identifier,
+                name: doc.canonical.name,
+                function: doc.canonical.function,
+                function_category: category,
+                country: doc.canonical.country,
+                launch_date: doc.canonical.date_of_launch,
+                orbital_band: doc.canonical.orbital_band,
+                congestion_risk: doc.canonical.congestion_risk,
+                cluster_id: @cluster_id
+            }}
+    )
+    
+    LET satellite_ids = satellites_in_cluster[*]._id
+    
+    LET constellation_edges = (
+        FOR edge IN {EDGE_COLLECTION_CONSTELLATION}
+            FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'constellation_membership',
+                constellation_name: edge.constellation_name
+            }}
+    )
+    
+    LET proximity_edges = (
+        FOR edge IN {EDGE_COLLECTION_PROXIMITY}
+            FILTER edge._from IN satellite_ids AND edge._to IN satellite_ids
+            LIMIT 500
+            RETURN {{
+                id: edge._key,
+                source: edge._from,
+                target: edge._to,
+                relationship_type: 'orbital_proximity',
+                proximity_score: edge.proximity_score,
+                orbital_band: edge.orbital_band
+            }}
+    )
+    
+    LET edges = UNION(constellation_edges, proximity_edges)
+    
+    RETURN {{
+        cluster_id: @cluster_id,
+        nodes: satellites_in_cluster,
+        edges: edges,
+        stats: {{
+            satellite_count: LENGTH(satellites_in_cluster),
+            edge_count: LENGTH(edges)
+        }}
+    }}
+    """
+    
+    bind_vars = {
+        'cluster_id': cluster_id,
+        'target_function': target_function,
+        'target_orbital_band': target_orbital_band,
+        'function_filter': function_filter,
+        'orbital_band_filter': orbital_band_filter,
+        'country_filter': country_filter
+    }
+    
+    cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
+    results = list(cursor)
+    
+    if results and results[0]['nodes']:
+        return {
+            "data": results[0],
+            "view_mode": "detailed",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "cluster_id": cluster_id,
+                "nodes": [],
+                "edges": [],
+                "stats": {"satellite_count": 0, "edge_count": 0}
+            },
+            "view_mode": "detailed",
+            "message": f"No satellites found in cluster '{cluster_id}'",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+
+def _get_function_similarity_detailed_all(
+    function_filter: Optional[List[str]],
+    orbital_band_filter: Optional[List[str]],
+    country_filter: Optional[List[str]],
+    top_n: int
+) -> dict:
+    """Return detailed satellite-level view for all top clusters (legacy behavior)."""
     
     query = f"""
     LET satellites_with_function = (
