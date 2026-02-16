@@ -74,44 +74,79 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
     // Use provided filters or current state
     const activeFilters = filters || proximityFilters
     
-    // Apply proximity filters if orbital_proximity edges are included
-    const filteredData = {...data}
+    // Pass 1: Identify valid nodes based on orbital proximity edges
+    const validNodeIds = new Set()
+    const sourceNode = data.nodes.find(n => n.is_source)
+    if (sourceNode) {
+      validNodeIds.add(sourceNode.id || sourceNode._id)
+    }
+    
+    // Add nodes connected by valid orbital_proximity edges
     if (edgeTypes.includes('orbital_proximity') && data.edges) {
-      filteredData.edges = data.edges.filter(edge => {
-        // If not an orbital proximity edge, keep it
-        if (edge.type !== 'orbital_proximity') return true
-        
-        // Apply proximity filters
+      data.edges.forEach(edge => {
+        if (edge.type === 'orbital_proximity') {
+          // Check if edge meets proximity filters
+          let meetsFilters = true
+          
+          if (edge.proximity_score != null && edge.proximity_score > activeFilters.maxProximityScore) {
+            meetsFilters = false
+          }
+          if (edge.apogee_diff_km != null && edge.apogee_diff_km > activeFilters.maxDistance) {
+            meetsFilters = false
+          }
+          if (edge.perigee_diff_km != null && edge.perigee_diff_km > activeFilters.maxDistance) {
+            meetsFilters = false
+          }
+          if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > activeFilters.maxInclinationDiff) {
+            meetsFilters = false
+          }
+          
+          if (meetsFilters) {
+            validNodeIds.add(edge.source || edge._from)
+            validNodeIds.add(edge.target || edge._to)
+          }
+        }
+      })
+    }
+    
+    // Pass 2: Filter edges - keep only if both endpoints are valid nodes
+    const filteredEdges = data.edges ? data.edges.filter(edge => {
+      const source = edge.source || edge._from
+      const target = edge.target || edge._to
+      
+      // Both endpoints must be valid nodes
+      if (!validNodeIds.has(source) || !validNodeIds.has(target)) {
+        return false
+      }
+      
+      // For orbital_proximity edges, also check filter criteria
+      if (edge.type === 'orbital_proximity') {
         if (edge.proximity_score != null && edge.proximity_score > activeFilters.maxProximityScore) {
           return false
         }
-        
-        // Apply distance filter (check apogee and perigee differences)
         if (edge.apogee_diff_km != null && edge.apogee_diff_km > activeFilters.maxDistance) {
           return false
         }
         if (edge.perigee_diff_km != null && edge.perigee_diff_km > activeFilters.maxDistance) {
           return false
         }
-        
-        // Apply inclination filter
         if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > activeFilters.maxInclinationDiff) {
           return false
         }
-        
-        return true
-      })
+      }
       
-      // Also filter out nodes that have no edges anymore
-      const connectedNodeIds = new Set()
-      filteredData.edges.forEach(edge => {
-        connectedNodeIds.add(edge.source || edge._from)
-        connectedNodeIds.add(edge.target || edge._to)
-      })
-      
-      filteredData.nodes = data.nodes.filter(node => {
-        return node.is_source || connectedNodeIds.has(node.id || node._id)
-      })
+      return true
+    }) : []
+    
+    // Filter nodes to only valid ones
+    const filteredNodes = data.nodes.filter(node => 
+      validNodeIds.has(node.id || node._id)
+    )
+    
+    const filteredData = {
+      ...data,
+      nodes: filteredNodes,
+      edges: filteredEdges
     }
     
     setNeighborhoodData(filteredData)

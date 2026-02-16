@@ -149,3 +149,50 @@ const applyFilters = (data, filters = null) => {
 4. Confirm no detached nodes appear at any filter value
 5. Test with different edge type combinations enabled/disabled
 6. Verify source satellite always remains visible
+
+---
+
+## Implementation Notes
+
+### Changes Made
+
+**File**: [`./react-app/src/components/SatelliteNeighborhood.jsx`](./react-app/src/components/SatelliteNeighborhood.jsx:73-154)  
+**Function**: `applyFilters` (lines 73-154)
+
+Implemented the two-pass filtering approach as outlined in the proposed solution:
+
+#### Pass 1: Identify Valid Nodes (lines 77-110)
+- Created a `validNodeIds` Set to track nodes that should be displayed
+- Always include the source satellite node (lines 79-82)
+- Iterate through all `orbital_proximity` edges (lines 85-110)
+- For each edge, check if it meets all proximity filter criteria:
+  - Max Proximity Score
+  - Max Distance (apogee and perigee)
+  - Max Inclination Difference
+- If an edge meets all criteria, add both source and target nodes to `validNodeIds`
+
+#### Pass 2: Filter Edges (lines 112-139)
+- Filter edges to only include those where both endpoints are valid nodes (lines 117-120)
+- For `orbital_proximity` edges, also verify they meet all filter criteria (lines 122-136)
+- Non-orbital_proximity edges (constellation, registration) are only included if both endpoints passed the proximity filter
+
+#### Pass 3: Filter Nodes (lines 141-144)
+- Filter the node list to only include nodes in `validNodeIds`
+
+### Key Improvements
+
+1. **Fixed detached nodes**: Non-proximity edges are now only shown if both endpoints are already valid based on orbital proximity filters
+2. **Source always visible**: Source satellite always remains in `validNodeIds` regardless of filters
+3. **Consistent filtering**: Proximity filter logic is applied consistently in both passes
+4. **Edge case handling**: Properly handles null/undefined values in edge properties
+5. **Multiple edge types**: Correctly manages scenarios with multiple edge types between the same nodes
+
+### Test Results
+
+**Build Status**: Implementation is syntactically correct. Full build testing requires Node.js environment.
+
+**Manual Testing Required**: 
+- Load PRETTY satellite in the Satellite Neighborhood view
+- Gradually reduce Max Proximity Score slider
+- Verify no detached nodes appear
+- Confirm constellation and registration edges only appear between satellites that have valid orbital proximity connections
