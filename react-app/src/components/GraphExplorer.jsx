@@ -4,6 +4,7 @@ import PathFinderPanel from './PathFinderPanel'
 import CollisionRiskView from './CollisionRiskView'
 import ConstellationBrowser from './ConstellationBrowser'
 import SatelliteNeighborhood from './SatelliteNeighborhood'
+import FunctionAnalytics from './FunctionAnalytics'
 import './GraphExplorer.css'
 import { API_ENDPOINTS, GRAPH_SETTINGS, UI_TEXT } from '../config/constants'
 
@@ -247,6 +248,13 @@ function GraphExplorer() {
           >
             Satellite Lineage
           </button>
+          <button 
+            className={graphType === 'analytics' ? 'active' : ''}
+            onClick={() => setGraphType('analytics')}
+            style={{ borderLeft: '2px solid #ddd', marginLeft: '0.5rem', paddingLeft: '0.75rem' }}
+          >
+            📊 Analytics
+          </button>
         </div>
 
         {graphType === 'constellation' && (
@@ -361,6 +369,48 @@ function GraphExplorer() {
                 </button>
               </div>
             )}
+            
+            <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f5f5f5', borderRadius: '4px' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9em', color: '#666' }}>View Mode</h4>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem',
+                    background: '#3498db',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontSize: '0.85em',
+                    fontWeight: '500'
+                  }}
+                >
+                  Cluster View
+                </button>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem',
+                    background: '#e0e0e0',
+                    color: '#666',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'not-allowed',
+                    fontSize: '0.85em',
+                    fontWeight: '500',
+                    opacity: 0.6
+                  }}
+                  disabled
+                  title="Double-click a cluster in the graph to view details"
+                >
+                  Satellite View
+                </button>
+              </div>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75em', color: '#888' }}>
+                💡 Tip: Double-click a cluster node to drill down into individual satellites
+              </p>
+            </div>
             
             <h3>Top Clusters</h3>
             <p className="section-description">Showing clusters with highest edge counts</p>
@@ -591,22 +641,26 @@ function GraphExplorer() {
       </div>
 
       <div className="graph-main">
-        <GraphViewer 
-          graphType={graphType}
-          selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
-          selectedDocument={graphType === 'registration' ? selectedDocument : null}
-          selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
-          selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
-          selectedOrbitalBands={graphType === 'function' ? selectedOrbitalBands : null}
-          selectedCountries={graphType === 'country' ? selectedCountries : null}
-          pathData={graphType === 'paths' ? pathData : null}
-          collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
-          collisionViewType={graphType === 'collision' ? collisionViewType : null}
-          selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
-          constellationBrowserData={graphType === 'constellation-browser' ? constellationBrowserData : null}
-          neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : null}
-          functionClusters={graphType === 'function' ? functionClusters : null}
-        />
+        {graphType === 'analytics' ? (
+          <FunctionAnalytics />
+        ) : (
+          <GraphViewer 
+            graphType={graphType}
+            selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
+            selectedDocument={graphType === 'registration' ? selectedDocument : null}
+            selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
+            selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
+            selectedOrbitalBands={graphType === 'function' ? selectedOrbitalBands : null}
+            selectedCountries={graphType === 'country' ? selectedCountries : null}
+            pathData={graphType === 'paths' ? pathData : null}
+            collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
+            collisionViewType={graphType === 'collision' ? collisionViewType : null}
+            selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
+            constellationBrowserData={graphType === 'constellation-browser' ? constellationBrowserData : null}
+            neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : null}
+            functionClusters={graphType === 'function' ? functionClusters : null}
+          />
+        )}
       </div>
     </div>
   )
