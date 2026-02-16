@@ -74,42 +74,66 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
     // Use provided filters or current state
     const activeFilters = filters || proximityFilters
     
-    // Pass 1: Identify valid nodes based on orbital proximity edges
-    const validNodeIds = new Set()
-    const sourceNode = data.nodes.find(n => n.is_source)
-    if (sourceNode) {
-      validNodeIds.add(sourceNode.id || sourceNode._id)
+    // Helper function to check if edge meets proximity filters
+    const meetsProximityFilters = (edge) => {
+      if (edge.proximity_score != null && edge.proximity_score > activeFilters.maxProximityScore) {
+        return false
+      }
+      if (edge.apogee_diff_km != null && edge.apogee_diff_km > activeFilters.maxDistance) {
+        return false
+      }
+      if (edge.perigee_diff_km != null && edge.perigee_diff_km > activeFilters.maxDistance) {
+        return false
+      }
+      if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > activeFilters.maxInclinationDiff) {
+        return false
+      }
+      return true
     }
     
-    // Add nodes connected by valid orbital_proximity edges
+    // Pass 1: Build adjacency map of valid orbital_proximity edges
+    const adjacencyMap = new Map()
     if (edgeTypes.includes('orbital_proximity') && data.edges) {
       data.edges.forEach(edge => {
-        if (edge.type === 'orbital_proximity') {
-          // Check if edge meets proximity filters
-          let meetsFilters = true
+        if (edge.type === 'orbital_proximity' && meetsProximityFilters(edge)) {
+          const source = edge.source || edge._from
+          const target = edge.target || edge._to
           
-          if (edge.proximity_score != null && edge.proximity_score > activeFilters.maxProximityScore) {
-            meetsFilters = false
-          }
-          if (edge.apogee_diff_km != null && edge.apogee_diff_km > activeFilters.maxDistance) {
-            meetsFilters = false
-          }
-          if (edge.perigee_diff_km != null && edge.perigee_diff_km > activeFilters.maxDistance) {
-            meetsFilters = false
-          }
-          if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > activeFilters.maxInclinationDiff) {
-            meetsFilters = false
-          }
+          if (!adjacencyMap.has(source)) adjacencyMap.set(source, [])
+          if (!adjacencyMap.has(target)) adjacencyMap.set(target, [])
           
-          if (meetsFilters) {
-            validNodeIds.add(edge.source || edge._from)
-            validNodeIds.add(edge.target || edge._to)
-          }
+          adjacencyMap.get(source).push(target)
+          adjacencyMap.get(target).push(source)
         }
       })
     }
     
-    // Pass 2: Filter edges - keep only if both endpoints are valid nodes
+    // Pass 2: BFS from source node to find all reachable nodes via valid proximity edges
+    const validNodeIds = new Set()
+    const sourceNode = data.nodes.find(n => n.is_source)
+    
+    if (sourceNode) {
+      const sourceId = sourceNode.id || sourceNode._id
+      validNodeIds.add(sourceId)
+      
+      const queue = [sourceId]
+      const visited = new Set([sourceId])
+      
+      while (queue.length > 0) {
+        const currentId = queue.shift()
+        const neighbors = adjacencyMap.get(currentId) || []
+        
+        for (const neighborId of neighbors) {
+          if (!visited.has(neighborId)) {
+            visited.add(neighborId)
+            validNodeIds.add(neighborId)
+            queue.push(neighborId)
+          }
+        }
+      }
+    }
+    
+    // Pass 3: Filter edges - keep only if both endpoints are valid nodes
     const filteredEdges = data.edges ? data.edges.filter(edge => {
       const source = edge.source || edge._from
       const target = edge.target || edge._to
@@ -121,18 +145,7 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
       
       // For orbital_proximity edges, also check filter criteria
       if (edge.type === 'orbital_proximity') {
-        if (edge.proximity_score != null && edge.proximity_score > activeFilters.maxProximityScore) {
-          return false
-        }
-        if (edge.apogee_diff_km != null && edge.apogee_diff_km > activeFilters.maxDistance) {
-          return false
-        }
-        if (edge.perigee_diff_km != null && edge.perigee_diff_km > activeFilters.maxDistance) {
-          return false
-        }
-        if (edge.inclination_diff_degrees != null && edge.inclination_diff_degrees > activeFilters.maxInclinationDiff) {
-          return false
-        }
+        return meetsProximityFilters(edge)
       }
       
       return true
