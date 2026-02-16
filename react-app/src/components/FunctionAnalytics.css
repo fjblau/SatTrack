@@ -1,21 +1,25 @@
 .function-analytics {
-  padding: 2rem;
-  max-width: 1400px;
+  padding: 0.75rem 1.5rem;
+  max-width: 100%;
   margin: 0 auto;
+  height: calc(100vh - 80px);
+  overflow-y: auto;
+  font-size: 0.9em;
 }
 
 .analytics-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .analytics-header h2 {
   margin: 0;
   color: #333;
+  font-size: 1.3em;
 }
 
 .view-selector {
@@ -24,12 +28,12 @@
 }
 
 .view-selector button {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border: 1px solid #ddd;
   background: white;
   cursor: pointer;
   border-radius: 4px;
-  font-size: 0.9em;
+  font-size: 0.85em;
   transition: all 0.2s;
 }
 
@@ -53,36 +57,38 @@
 /* Matrix View */
 .matrix-container {
   background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .matrix-container h3 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.2rem 0;
   color: #333;
+  font-size: 1em;
 }
 
 .matrix-container .description {
   color: #666;
-  margin-bottom: 2rem;
-  font-size: 0.95em;
+  margin-bottom: 0.75rem;
+  font-size: 0.8em;
 }
 
 .matrix-wrapper {
   overflow-x: auto;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .connection-matrix {
   border-collapse: collapse;
   width: 100%;
   min-width: 800px;
+  font-size: 0.9em;
 }
 
 .connection-matrix th,
 .connection-matrix td {
-  padding: 0.75rem;
+  padding: 0.5rem;
   text-align: center;
   border: 1px solid #e0e0e0;
 }
@@ -96,8 +102,8 @@
 .matrix-header {
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  max-width: 50px;
-  font-size: 0.85em;
+  max-width: 40px;
+  font-size: 0.75em;
 }
 
 .matrix-row-header {
@@ -106,7 +112,7 @@
   left: 0;
   background: #f5f5f5;
   z-index: 1;
-  font-size: 0.85em;
+  font-size: 0.75em;
 }
 
 .matrix-cell {
@@ -123,34 +129,34 @@
 }
 
 .legend {
-  margin-top: 1.5rem;
-  padding: 1rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
   background: #f9f9f9;
   border-radius: 4px;
 }
 
 .legend h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.9em;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8em;
   color: #666;
 }
 
 .legend-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85em;
+  gap: 0.4rem;
+  font-size: 0.75em;
 }
 
 .legend-box {
-  width: 30px;
-  height: 20px;
+  width: 24px;
+  height: 16px;
   border: 1px solid #ddd;
   border-radius: 2px;
 }
@@ -158,92 +164,96 @@
 /* Statistics View */
 .statistics-container {
   background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .statistics-container h3 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.2rem 0;
   color: #333;
+  font-size: 1em;
 }
 
 .statistics-container .description {
   color: #666;
-  margin-bottom: 2rem;
-  font-size: 0.95em;
+  margin-bottom: 0.75rem;
+  font-size: 0.8em;
 }
 
 .summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.summary-card {
+  display: flex;
+  justify-content: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
   background: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 8px;
-  text-align: center;
+  border-radius: 4px;
   border: 1px solid #e0e0e0;
 }
 
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .card-value {
-  font-size: 2em;
+  font-size: 1.5em;
   font-weight: bold;
   color: #3498db;
-  margin-bottom: 0.25rem;
 }
 
 .card-label {
-  font-size: 0.9em;
+  font-size: 0.7em;
   color: #666;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .function-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
 }
 
 .function-group {
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1.5rem;
+  border-radius: 4px;
+  padding: 0.75rem;
   background: #fafafa;
 }
 
 .function-name {
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.4rem 0;
   color: #2c3e50;
-  font-size: 1.2em;
-  padding-bottom: 0.5rem;
+  font-size: 0.95em;
+  padding-bottom: 0.25rem;
   border-bottom: 2px solid #3498db;
+  font-weight: 600;
 }
 
 .function-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
 }
 
 .stat {
   display: flex;
-  justify-content: space-between;
-  padding: 0.5rem;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.4rem;
   background: white;
-  border-radius: 4px;
+  border-radius: 3px;
   border: 1px solid #e0e0e0;
+  font-size: 0.75em;
 }
 
 .stat-label {
   font-weight: 600;
   color: #666;
-  font-size: 0.85em;
 }
 
 .stat-value {
@@ -259,8 +269,9 @@
   width: 100%;
   border-collapse: collapse;
   background: white;
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
+  font-size: 0.75em;
 }
 
 .cluster-table thead {
@@ -270,16 +281,16 @@
 
 .cluster-table th,
 .cluster-table td {
-  padding: 0.75rem;
+  padding: 0.3rem 0.4rem;
   text-align: left;
   border-bottom: 1px solid #e0e0e0;
 }
 
 .cluster-table th {
   font-weight: 600;
-  font-size: 0.85em;
+  font-size: 0.75em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .cluster-table tbody tr:hover {

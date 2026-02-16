@@ -4,7 +4,6 @@ import PathFinderPanel from './PathFinderPanel'
 import CollisionRiskView from './CollisionRiskView'
 import ConstellationBrowser from './ConstellationBrowser'
 import SatelliteNeighborhood from './SatelliteNeighborhood'
-import FunctionAnalytics from './FunctionAnalytics'
 import './GraphExplorer.css'
 import { API_ENDPOINTS, GRAPH_SETTINGS, UI_TEXT } from '../config/constants'
 
@@ -247,13 +246,6 @@ function GraphExplorer() {
             onClick={() => setGraphType('lineage')}
           >
             Satellite Lineage
-          </button>
-          <button 
-            className={graphType === 'analytics' ? 'active' : ''}
-            onClick={() => setGraphType('analytics')}
-            style={{ borderLeft: '2px solid #ddd', marginLeft: '0.5rem', paddingLeft: '0.75rem' }}
-          >
-            📊 Analytics
           </button>
         </div>
 
@@ -641,26 +633,22 @@ function GraphExplorer() {
       </div>
 
       <div className="graph-main">
-        {graphType === 'analytics' ? (
-          <FunctionAnalytics />
-        ) : (
-          <GraphViewer 
-            graphType={graphType}
-            selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
-            selectedDocument={graphType === 'registration' ? selectedDocument : null}
-            selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
-            selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
-            selectedOrbitalBands={graphType === 'function' ? selectedOrbitalBands : null}
-            selectedCountries={graphType === 'country' ? selectedCountries : null}
-            pathData={graphType === 'paths' ? pathData : null}
-            collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
-            collisionViewType={graphType === 'collision' ? collisionViewType : null}
-            selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
-            constellationBrowserData={graphType === 'constellation-browser' ? constellationBrowserData : null}
-            neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : null}
-            functionClusters={graphType === 'function' ? functionClusters : null}
-          />
-        )}
+        <GraphViewer 
+          graphType={graphType}
+          selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
+          selectedDocument={graphType === 'registration' ? selectedDocument : null}
+          selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
+          selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
+          selectedOrbitalBands={graphType === 'function' ? selectedOrbitalBands : null}
+          selectedCountries={graphType === 'country' ? selectedCountries : null}
+          pathData={graphType === 'paths' ? pathData : null}
+          collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
+          collisionViewType={graphType === 'collision' ? collisionViewType : null}
+          selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
+          constellationBrowserData={graphType === 'constellation-browser' ? constellationBrowserData : null}
+          neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : null}
+          functionClusters={graphType === 'function' ? functionClusters : null}
+        />
       </div>
     </div>
   )
