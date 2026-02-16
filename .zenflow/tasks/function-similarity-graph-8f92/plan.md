@@ -39,7 +39,8 @@ Do not make assumptions on important decisions — get clarification first.
 
 ---
 
-### [ ] Step: Backend - Multi-Dimensional Cluster Query
+### [x] Step: Backend - Multi-Dimensional Cluster Query
+<!-- chat-id: c7ff7b84-c19a-4397-a165-6ac014d01ae8 -->
 
 Modify the `/v2/graphs/function-similarity` endpoint to compute and return multi-dimensional clusters with real edges.
 
