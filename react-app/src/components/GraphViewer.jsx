@@ -16,6 +16,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const [functionGraphData, setFunctionGraphData] = useState(null)
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, node: null })
   const [detailPanel, setDetailPanel] = useState({ visible: false, type: null, data: null })
+  const [functionViewMode, setFunctionViewMode] = useState('aggregate')
+  const [selectedClusterId, setSelectedClusterId] = useState(null)
 
   useEffect(() => {
     if (containerRef.current && !cyRef.current) {
@@ -641,9 +643,6 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       setLoading(false)
     }
   }
-
-  const [functionViewMode, setFunctionViewMode] = useState('aggregate')
-  const [selectedClusterId, setSelectedClusterId] = useState(null)
 
   const loadAllFunctionCategories = async () => {
     if (!cyRef.current) return
