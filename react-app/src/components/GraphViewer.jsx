@@ -732,7 +732,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         
         const getEdgeLabel = (edge) => {
           if (edge.relationship_type === 'orbital_proximity') {
-            if (edge.proximity_score != null) {
+            if (edge.proximity_score != null && edge.proximity_score > 0.01) {
               return `${edge.proximity_score.toFixed(2)}`
             }
           } else if (edge.relationship_type === 'constellation_membership' && edge.constellation_name) {
@@ -755,6 +755,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           return 2
         }
         
+        // Deduplicate edges (keep only one edge per node pair)
+        const seenEdges = new Set()
+        const uniqueEdges = data.data.edges.filter(edge => {
+          const pair = [edge.source, edge.target].sort().join('_')
+          if (seenEdges.has(pair)) {
+            return false
+          }
+          seenEdges.add(pair)
+          return true
+        })
+        
         const elements = {
           nodes: data.data.nodes.map(node => {
             const edgeCount = edgeCounts[node._id] || 0
@@ -775,8 +786,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               },
               classes: 'function-graph-node'
             }
-          }),
-          edges: data.data.edges.map(edge => {
+          })),
+          edges: uniqueEdges.map(edge => {
             const label = getEdgeLabel(edge)
             const edgeData = {
               id: edge.id,
