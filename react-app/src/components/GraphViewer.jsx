@@ -750,7 +750,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       
       const newStats = {
         satellites_shown: filteredNodes.length,
-        edges_shown: filteredEdges.length
+        edges_shown: filteredEdges.length,
+        total_nodes: filteredNodes.length,
+        total_edges: filteredEdges.length
       }
       
       if (categories && categories.length > 0) {
@@ -901,7 +903,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       
       const newStats = {
         countries_shown: filteredNodes.length,
-        relationships_found: filteredEdges.length
+        relationships_found: filteredEdges.length,
+        total_nodes: filteredNodes.length,
+        total_edges: filteredEdges.length
       }
       
       if (countries && countries.length > 0) {

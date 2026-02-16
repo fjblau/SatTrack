@@ -74,3 +74,23 @@ const newStats = {
 2. The graph updates to show only filtered nodes and edges
 3. The "Nodes: X" and "Edges: Y" count in the upper right updates to reflect the filtered graph
 4. When filters are cleared, the counts update back to show the full graph
+
+## Implementation Notes
+
+### Changes Made
+Updated [./react-app/src/components/GraphViewer.jsx](./react-app/src/components/GraphViewer.jsx):
+
+1. **`filterFunctionGraph()` function** (lines 751-756):
+   - Added `total_nodes: filteredNodes.length` to stats object
+   - Added `total_edges: filteredEdges.length` to stats object
+
+2. **`filterCountryGraph()` function** (lines 904-909):
+   - Added `total_nodes: filteredNodes.length` to stats object
+   - Added `total_edges: filteredEdges.length` to stats object
+
+### Testing
+The fix ensures that when filters are applied:
+- The Nodes count displays the number of filtered nodes
+- The Edges count displays the number of filtered edges
+- Both counts remain visible and update dynamically as filters change
+- When filters are cleared, counts reflect the full unfiltered graph
