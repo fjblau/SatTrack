@@ -786,7 +786,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               },
               classes: 'function-graph-node'
             }
-          })),
+          }),
           edges: uniqueEdges.map(edge => {
             const label = getEdgeLabel(edge)
             const edgeData = {
