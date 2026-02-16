@@ -1225,24 +1225,10 @@ def _get_function_similarity_aggregate(
             
             LET avg_congestion = (
                 LENGTH(congestion_risks) > 0 ? (
-                    MAX([
-                        FOR r IN congestion_risks
-                            FILTER r.risk == "critical"
-                            LIMIT 1
-                            RETURN "critical"
-                    ]) OR
-                    MAX([
-                        FOR r IN congestion_risks
-                            FILTER r.risk == "high"
-                            LIMIT 1
-                            RETURN "high"
-                    ]) OR
-                    MAX([
-                        FOR r IN congestion_risks
-                            FILTER r.risk == "medium"
-                            LIMIT 1
-                            RETURN "medium"
-                    ]) OR "low"
+                    LENGTH(FOR r IN congestion_risks FILTER r.risk == "critical" RETURN 1) > 0 ? "critical" :
+                    LENGTH(FOR r IN congestion_risks FILTER r.risk == "high" RETURN 1) > 0 ? "high" :
+                    LENGTH(FOR r IN congestion_risks FILTER r.risk == "medium" RETURN 1) > 0 ? "medium" :
+                    "low"
                 ) : "unknown"
             )
             
