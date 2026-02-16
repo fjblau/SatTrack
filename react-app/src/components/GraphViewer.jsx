@@ -382,7 +382,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     } else if (graphType === 'neighborhood' && neighborhoodData) {
       renderNeighborhoodGraph(neighborhoodData)
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
