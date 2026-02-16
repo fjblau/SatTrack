@@ -156,36 +156,44 @@ const applyFilters = (data, filters = null) => {
 
 ### Changes Made
 
-**File**: [`./react-app/src/components/SatelliteNeighborhood.jsx`](./react-app/src/components/SatelliteNeighborhood.jsx:73-154)  
-**Function**: `applyFilters` (lines 73-154)
+**File**: [`./react-app/src/components/SatelliteNeighborhood.jsx`](./react-app/src/components/SatelliteNeighborhood.jsx:73-161)  
+**Function**: `applyFilters` (lines 73-161)
 
-Implemented the two-pass filtering approach as outlined in the proposed solution:
+Implemented a **graph traversal approach** using BFS (Breadth-First Search) to ensure only nodes reachable from the source via valid proximity edges are included:
 
-#### Pass 1: Identify Valid Nodes (lines 77-110)
-- Created a `validNodeIds` Set to track nodes that should be displayed
-- Always include the source satellite node (lines 79-82)
-- Iterate through all `orbital_proximity` edges (lines 85-110)
-- For each edge, check if it meets all proximity filter criteria:
+#### Helper Function (lines 78-92)
+- `meetsProximityFilters(edge)`: Centralized filter logic checking:
   - Max Proximity Score
   - Max Distance (apogee and perigee)
   - Max Inclination Difference
-- If an edge meets all criteria, add both source and target nodes to `validNodeIds`
 
-#### Pass 2: Filter Edges (lines 112-139)
-- Filter edges to only include those where both endpoints are valid nodes (lines 117-120)
-- For `orbital_proximity` edges, also verify they meet all filter criteria (lines 122-136)
-- Non-orbital_proximity edges (constellation, registration) are only included if both endpoints passed the proximity filter
+#### Pass 1: Build Adjacency Map (lines 94-109)
+- Create an adjacency map of nodes connected by valid orbital_proximity edges
+- Only include edges that meet all filter criteria
+- Bidirectional edges (undirected graph)
 
-#### Pass 3: Filter Nodes (lines 141-144)
-- Filter the node list to only include nodes in `validNodeIds`
+#### Pass 2: BFS Traversal (lines 111-134)
+- Start from the source satellite node
+- Use BFS to traverse the graph via valid proximity edges only
+- **Key improvement**: Only nodes reachable from source are added to `validNodeIds`
+- Prevents detached clusters from appearing
+
+#### Pass 3: Filter Edges (lines 136-152)
+- Keep edges only if both endpoints are in `validNodeIds`
+- For orbital_proximity edges, verify they meet filter criteria
+- Non-proximity edges only included if both endpoints are reachable from source
+
+#### Pass 4: Filter Nodes (lines 154-157)
+- Filter node list to only include nodes in `validNodeIds`
 
 ### Key Improvements
 
-1. **Fixed detached nodes**: Non-proximity edges are now only shown if both endpoints are already valid based on orbital proximity filters
-2. **Source always visible**: Source satellite always remains in `validNodeIds` regardless of filters
-3. **Consistent filtering**: Proximity filter logic is applied consistently in both passes
-4. **Edge case handling**: Properly handles null/undefined values in edge properties
-5. **Multiple edge types**: Correctly manages scenarios with multiple edge types between the same nodes
+1. **Fixed detached clusters**: BFS traversal ensures only nodes reachable from source via valid proximity edges are shown
+2. **Graph connectivity**: Uses graph traversal (BFS) instead of simple edge filtering to maintain connectivity
+3. **Source always visible**: Source satellite always remains in `validNodeIds` as the starting point
+4. **Consistent filtering**: Centralized `meetsProximityFilters()` function ensures consistent filter application
+5. **Edge case handling**: Properly handles null/undefined values in edge properties
+6. **Multiple edge types**: Non-proximity edges only shown between nodes connected to source via proximity paths
 
 ### Test Results
 
@@ -194,5 +202,15 @@ Implemented the two-pass filtering approach as outlined in the proposed solution
 **Manual Testing Required**: 
 - Load PRETTY satellite in the Satellite Neighborhood view
 - Gradually reduce Max Proximity Score slider
-- Verify no detached nodes appear
-- Confirm constellation and registration edges only appear between satellites that have valid orbital proximity connections
+- Verify no detached nodes or clusters appear
+- Confirm only satellites reachable from PRETTY via valid proximity edges are shown
+- Verify constellation and registration edges only appear between satellites connected to PRETTY via proximity paths
+
+### Implementation History
+
+**Initial Fix**: Two-pass filtering (nodes first, then edges)
+- **Issue**: Still allowed detached clusters if they had valid proximity edges between themselves
+
+**Final Fix**: BFS graph traversal
+- **Solution**: Only include nodes reachable from source via valid proximity edge paths
+- **Result**: Eliminates all detached nodes and clusters
