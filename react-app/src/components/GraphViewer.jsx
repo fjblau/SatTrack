@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData }) {
+function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionClusters }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -42,6 +42,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             style: {
               'width': 'data(node_size)',
               'height': 'data(node_size)'
+            }
+          },
+          {
+            selector: 'node[background_color]',
+            style: {
+              'background-color': 'data(background_color)'
             }
           },
           {
@@ -350,10 +356,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       loadRegistrationGraph(selectedDocument)
     } else if (graphType === 'proximity' && selectedOrbitalBand) {
       loadProximityGraph(selectedOrbitalBand)
-    } else if (graphType === 'function' && !functionGraphData) {
+    } else if (graphType === 'function') {
       loadAllFunctionCategories()
-    } else if (graphType === 'function' && functionGraphData) {
-      filterFunctionGraph(selectedFunctionCategories)
     } else if (graphType === 'country' && !countryGraphData) {
       loadCountryGraph()
     } else if (graphType === 'country' && countryGraphData) {
@@ -378,7 +382,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     } else if (graphType === 'neighborhood' && neighborhoodData) {
       renderNeighborhoodGraph(neighborhoodData)
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData])
+  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, countryGraphData, functionGraphData, pathData, centralityData, collisionRiskData, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -618,7 +622,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     setLoading(true)
     setError(null)
     try {
-      const url = '/v2/graphs/function-similarity?limit=50'
+      const params = new URLSearchParams({ top_n: '15' })
+      
+      if (selectedFunctionCategories && selectedFunctionCategories.length > 0) {
+        params.append('functions', selectedFunctionCategories.join(','))
+      }
+      
+      if (selectedOrbitalBands && selectedOrbitalBands.length > 0) {
+        params.append('orbital_bands', selectedOrbitalBands.join(','))
+      }
+      
+      const url = `/v2/graphs/function-similarity?${params.toString()}`
       console.log('[GraphViewer] Fetching:', url)
       const response = await fetch(url)
       console.log('[GraphViewer] Response status:', response.status)
@@ -630,6 +644,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       const data = await response.json()
       console.log('[GraphViewer] Function data received:', {
         hasData: !!data.data,
+        clusterCount: data.data?.clusters?.length || 0,
         nodeCount: data.data?.nodes?.length || 0,
         edgeCount: data.data?.edges?.length || 0
       })
@@ -647,6 +662,14 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
         setFunctionGraphData(data.data)
         
+        const clusterColors = {}
+        if (data.data.clusters) {
+          const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e', '#16a085', '#27ae60', '#2980b9', '#8e44ad', '#2c3e50', '#f1c40f', '#d35400']
+          data.data.clusters.forEach((cluster, idx) => {
+            clusterColors[cluster.cluster_id] = colors[idx % colors.length]
+          })
+        }
+        
         const elements = {
           nodes: data.data.nodes.map(node => ({
             data: {
@@ -657,7 +680,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               country: node.country,
               orbital_band: node.orbital_band,
               congestion_risk: node.congestion_risk,
-              node_size: 20
+              cluster_id: node.cluster_id,
+              node_size: 20,
+              background_color: node.cluster_id ? clusterColors[node.cluster_id] : '#3498db'
             }
           })),
           edges: data.data.edges.map(edge => ({
@@ -669,7 +694,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               constellation_name: edge.constellation_name,
               registration_document: edge.registration_document,
               proximity_score: edge.proximity_score,
-              orbital_band: edge.orbital_band
+              orbital_band: edge.orbital_band,
+              edge_type: edge.relationship_type
             }
           }))
         }
@@ -677,7 +703,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         cyRef.current.elements().remove()
         cyRef.current.add(elements)
         applyLayout(layout)
-        setStats(data.data.stats)
+        setStats({
+          ...data.data.stats,
+          cluster_count: data.data.clusters?.length || 0
+        })
         console.log('[GraphViewer] Function graph rendered successfully')
       }
     } catch (error) {
@@ -1813,7 +1842,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             {stats.relationships_found !== undefined && <span>Relationships: {stats.relationships_found}</span>}
             {stats.selected_categories && <span>🔍 Categories: {stats.selected_categories}</span>}
             {stats.selected_countries && <span>🔍 Selected: {stats.selected_countries}</span>}
+            {stats.cluster_count !== undefined && <span>Clusters: {stats.cluster_count}</span>}
             {stats.satellites_shown !== undefined && <span>Satellites: {stats.satellites_shown}</span>}
+            {stats.nodes_shown !== undefined && <span>Nodes: {stats.nodes_shown}</span>}
             {stats.paths_found !== undefined && <span>Paths: {stats.paths_found}</span>}
             {stats.total_nodes !== undefined && <span>Nodes: {stats.total_nodes}</span>}
             {stats.total_edges !== undefined && <span>Edges: {stats.total_edges}</span>}
