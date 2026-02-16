@@ -23,13 +23,28 @@ LET constellation_edges = (
 )
 ```
 
-**Issue**: Satellites with similar functions often don't share constellation membership, registration documents, or orbital proximity. This results in graphs with nodes but **no edges**, making the visualization useless.
+**Issue**: Satellites grouped by function alone rarely share edges. Database analysis shows:
+- 100 satellites with same function: **0 proximity edges, 0 constellation edges**
+- Single-dimension clustering (function only) produces empty graphs
+
+### Data Analysis Results
+
+**Function + Orbital Band clusters have real edges**:
+- Communications + LEO-Polar: 617 satellites, **5,188 proximity edges**, 556 constellation edges
+- Navigation + MEO: 33 satellites, **74 proximity edges**, 28 constellation edges
+- Earth Observation + LEO-Polar: 93 satellites, **71 proximity edges**
+
+**Function + Country clusters also have real edges**:
+- Communications + United Kingdom: 569 satellites, **5,123 proximity edges** (OneWeb/Starlink)
+- Navigation + Russian Federation: 22 satellites, **66 proximity edges** (GLONASS)
+- Communications + Germany: 17 satellites, **32 proximity edges**
 
 ### Expected Behavior
-A "Function Similarity Graph" should create **synthetic similarity edges** between satellites that share the same function category, independent of existing graph relationships. This would:
-- Show clear clusters of satellites by function
-- Enable users to understand functional groupings
-- Provide meaningful visual structure to the graph
+A useful "Function Similarity Graph" should:
+1. **Initial display**: Show top multi-dimensional clusters pre-computed with real edges (Option B)
+2. **Interactive filtering**: Allow users to select combinations of function + orbital band + country (Option C)
+3. **Only show real edges**: No synthetic edges; display actual proximity/constellation relationships
+4. **Meaningful clusters**: Show clusters where satellites actually have orbital/organizational connections
 
 ## Technical Context
 
@@ -52,42 +67,65 @@ A "Function Similarity Graph" should create **synthetic similarity edges** betwe
 
 ## Implementation Approach
 
-### Strategy 1: Synthetic Similarity Edges (Recommended)
-Create synthetic edges between satellites that share the same function category. This directly addresses the "similarity" aspect of the graph.
+### Strategy: Multi-Dimensional Clustering with Real Edges
+
+Show clusters based on **function + orbital band** and/or **function + country** combinations, displaying only real proximity and constellation edges that exist in the data.
+
+#### Phase 1: Initial Display (Option B)
+Pre-compute and display top clusters sorted by edge density:
 
 **Backend Changes** ([`./api/routers/graphs.py:1091`](./api/routers/graphs.py:1091)):
-1. After categorizing satellites, generate edges between all satellites in the same category
-2. Add edge properties:
-   - `relationship_type`: `"function_similarity"`
-   - `function_category`: The shared category
-   - `similarity_score`: 1.0 (perfect similarity within category)
-3. **Optimization**: For large categories, limit edges using strategies:
-   - **Option A**: Sample pairs (e.g., max 500 edges per category)
-   - **Option B**: Create hub-spoke topology (all satellites connect to category hub)
-   - **Option C**: Create edges only within subclusters (e.g., by orbital band + function)
+1. Group satellites by (function_category, orbital_band)
+2. Count real edges (proximity + constellation) within each cluster
+3. Filter clusters with:
+   - Minimum 5 satellites
+   - Minimum 10 edges
+4. Sort by edge count DESC
+5. Return top 10-15 clusters as default view
+6. Include cluster metadata:
+   - `cluster_id`: "Communications-LEO-Polar"
+   - `satellite_count`: 617
+   - `edge_count`: 5744
+   - `density`: edges / max_possible_edges
 
-**Frontend Changes** ([`./react-app/src/components/GraphViewer.jsx`](./react-app/src/components/GraphViewer.jsx)):
-1. Add CSS styling for `function_similarity` edge type (lines 24-304)
-2. Style edges by function category with distinct colors:
-   - Communications: Blue (#3498db)
-   - Earth Observation: Green (#27ae60)
-   - Scientific Research: Purple (#9b59b6)
-   - Navigation: Orange (#e67e22)
-   - Military-Defense: Red (#c0392b)
-   - Space Station: Teal (#16a085)
-   - Technology-Testing: Yellow (#f39c12)
-   - Other: Gray (#95a5a6)
+**Response Format**:
+```json
+{
+  "data": {
+    "clusters": [
+      {
+        "cluster_id": "Communications-LEO-Polar",
+        "function": "Communications",
+        "orbital_band": "LEO-Polar",
+        "satellite_count": 617,
+        "edge_count": 5744,
+        "density": 0.031
+      },
+      ...
+    ],
+    "nodes": [...],  // Satellites from top clusters
+    "edges": [...]   // Real proximity/constellation edges only
+  }
+}
+```
 
-### Strategy 2: Enhanced Existing Edges (Alternative)
-Keep existing edges but supplement with cross-category proximity edges and improve visualization.
+#### Phase 2: Interactive Filtering (Option C)
+Allow users to filter by multiple dimensions:
 
-**Trade-offs**: Less clear representation of functional similarity, still relies on existing graph structure.
+**Frontend Changes** ([`./react-app/src/components/GraphExplorer.jsx`](./react-app/src/components/GraphExplorer.jsx)):
+1. Add multi-select controls:
+   - Function categories (checkboxes)
+   - Orbital bands (checkboxes)
+   - Countries (checkboxes)
+2. On selection change, request filtered data from backend
+3. Backend re-computes clusters matching selected criteria
+4. Show only real edges within filtered clusters
 
-### Recommended: Strategy 1 with Option C Subclustering
-Create synthetic edges within function + orbital band subclusters. This provides:
-- Clear functional groupings
-- Manageable edge count (avoids O(n²) explosion)
-- Additional dimension of similarity (orbital band)
+**User Flow**:
+1. Initial load: See "Communications + LEO-Polar" (5,744 edges)
+2. Click "Navigation": Add "Navigation + MEO" cluster (102 edges)
+3. Filter by country "Russian Federation": Show Russian navigation satellites
+4. Always see real edges, never synthetic/fake connections
 
 ## Source Code Structure Changes
 
@@ -97,157 +135,259 @@ Create synthetic edges within function + orbital band subclusters. This provides
 
 **New Query Structure**:
 ```aql
-LET satellites_with_function = (...)  # Existing categorization logic
-
-LET category_stats = (...)  # Existing stats logic
-
-LET limited_satellites = (...)  # Existing limiting logic
-
-# NEW: Generate synthetic similarity edges
-LET similarity_edges = FLATTEN(
-    FOR sat IN limited_satellites
-        COLLECT category = sat.function_category, band = sat.orbital_band INTO group
-        LET satellites_in_subcluster = group[*].sat
-        
-        # Create edges between all pairs in this subcluster
-        FOR i IN 0..LENGTH(satellites_in_subcluster)-2
-            FOR j IN i+1..LENGTH(satellites_in_subcluster)-1
-                RETURN {
-                    id: CONCAT(satellites_in_subcluster[i]._id, "_", satellites_in_subcluster[j]._id),
-                    source: satellites_in_subcluster[i]._id,
-                    target: satellites_in_subcluster[j]._id,
-                    relationship_type: 'function_similarity',
-                    function_category: category,
-                    orbital_band: band,
-                    similarity_score: 1.0
-                }
+LET satellites_with_function = (
+    FOR doc IN satellites
+        FILTER doc.canonical.function != null
+        FILTER doc.canonical.orbital_band != null
+        LET func_lower = LOWER(doc.canonical.function)
+        LET category = (...)  # Existing categorization
+        RETURN {
+            _id: doc._id,
+            function_category: category,
+            orbital_band: doc.canonical.orbital_band,
+            country: doc.canonical.country_of_origin,
+            ...
+        }
 )
 
-# OPTIONAL: Keep existing edges for additional context (constellation, registration)
-LET constellation_edges = (...)  # Keep existing
-LET registration_edges = (...)  # Keep existing
-# REMOVE proximity_edges to reduce noise
+# Compute clusters with real edge counts
+LET clusters = (
+    FOR sat IN satellites_with_function
+        COLLECT 
+            category = sat.function_category, 
+            band = sat.orbital_band 
+        INTO group
+        
+        LET cluster_sats = group[*].sat
+        LET sat_ids = cluster_sats[*]._id
+        
+        # Count REAL edges only
+        LET proximity_edges = (
+            FOR edge IN orbital_proximity
+                FILTER edge._from IN sat_ids AND edge._to IN sat_ids
+                RETURN edge
+        )
+        
+        LET constellation_edges = (
+            FOR edge IN constellation_membership
+                FILTER edge._from IN sat_ids AND edge._to IN sat_ids
+                RETURN edge
+        )
+        
+        LET total_edges = LENGTH(proximity_edges) + LENGTH(constellation_edges)
+        
+        # Filter: minimum satellites and edges
+        FILTER LENGTH(cluster_sats) >= 5
+        FILTER total_edges >= 10
+        
+        SORT total_edges DESC
+        LIMIT 15
+        
+        RETURN {
+            cluster_id: CONCAT(category, "-", band),
+            function: category,
+            orbital_band: band,
+            satellite_count: LENGTH(cluster_sats),
+            proximity_edge_count: LENGTH(proximity_edges),
+            constellation_edge_count: LENGTH(constellation_edges),
+            edge_count: total_edges,
+            satellites: cluster_sats,
+            proximity_edges: proximity_edges,
+            constellation_edges: constellation_edges
+        }
+)
 
-LET edges = UNION(similarity_edges, constellation_edges, registration_edges)
+# Extract nodes and edges from top clusters
+LET nodes = FLATTEN(clusters[*].satellites)
+LET edges = UNION(
+    FLATTEN(clusters[*].proximity_edges),
+    FLATTEN(clusters[*].constellation_edges)
+)
 
 RETURN {
-    nodes: limited_satellites,
+    clusters: clusters,  // Metadata for display
+    nodes: nodes,
     edges: edges,
-    categories: category_stats,
-    stats: {...}
+    stats: {
+        total_clusters: LENGTH(clusters),
+        total_satellites: LENGTH(nodes),
+        total_edges: LENGTH(edges)
+    }
 }
 ```
+
+### Frontend: [`./react-app/src/components/GraphExplorer.jsx`](./react-app/src/components/GraphExplorer.jsx)
+
+**New UI Controls** (add to Function Similarity section):
+1. **Cluster Display**: Show top clusters as clickable cards/pills:
+   ```jsx
+   <div className="cluster-list">
+     {clusters.map(cluster => (
+       <ClusterCard
+         key={cluster.cluster_id}
+         label={`${cluster.function} (${cluster.orbital_band})`}
+         satellites={cluster.satellite_count}
+         edges={cluster.edge_count}
+         selected={selectedClusters.includes(cluster.cluster_id)}
+         onClick={() => toggleCluster(cluster.cluster_id)}
+       />
+     ))}
+   </div>
+   ```
+
+2. **Multi-Select Filters**:
+   - Function categories (existing, keep)
+   - Orbital bands (new): LEO-Polar, LEO-Inclined, MEO, GEO
+   - Countries (new): Top 10 countries by satellite count
+
+3. **Filter Logic**:
+   - When filters change, request new data from backend
+   - Backend returns clusters matching selected criteria
+   - Graph updates with real edges from matching clusters
 
 ### Frontend: [`./react-app/src/components/GraphViewer.jsx`](./react-app/src/components/GraphViewer.jsx)
 
 **Modified Function**: `loadAllFunctionCategories` (lines 614-688)
 
 **Changes**:
-1. No structural changes needed; edge styling is declarative
-2. Ensure edges are properly passed to Cytoscape (already implemented)
+1. Parse cluster metadata from API response
+2. Store cluster info in state for display
+3. Render edges with existing relationship_type styling:
+   - `orbital_proximity`: Use existing proximity styling (color by proximity_score)
+   - `constellation_membership`: Use existing constellation styling (blue, solid)
+4. Color nodes by function_category (existing logic can be reused)
 
-**Modified Styling** (lines 24-304, add new selector):
-```javascript
-{
-    selector: 'edge[relationship_type="function_similarity"]',
-    style: {
-        'line-color': 'data(category_color)',  // Color by function category
-        'width': 2,
-        'line-style': 'solid',
-        'opacity': 0.6
-    }
-}
-```
-
-**Add Category Color Mapping** (new function):
-```javascript
-const getCategoryColor = (category) => {
-    const colors = {
-        'Communications': '#3498db',
-        'Earth Observation': '#27ae60',
-        'Scientific Research': '#9b59b6',
-        'Navigation': '#e67e22',
-        'Military-Defense': '#c0392b',
-        'Space Station': '#16a085',
-        'Technology-Testing': '#f39c12',
-        'Other': '#95a5a6'
-    }
-    return colors[category] || '#95a5a6'
-}
-```
+**No new edge styling needed**: Real edges already have proper styling in lines 147-225
 
 ## Data Model / API Changes
 
-### API Response Format (No Breaking Changes)
-The response format remains the same; only edge content changes:
+### API Response Format Changes
 
-**Before**:
+**Before** (empty edges):
 ```json
 {
     "data": {
-        "nodes": [...],
-        "edges": [
-            // Only constellation/registration/proximity edges (often empty)
-        ],
-        "categories": [...],
-        "stats": {...}
-    }
-}
-```
-
-**After**:
-```json
-{
-    "data": {
-        "nodes": [...],
-        "edges": [
-            {
-                "id": "satellites/X_satellites/Y",
-                "source": "satellites/X",
-                "target": "satellites/Y",
-                "relationship_type": "function_similarity",
-                "function_category": "Communications",
-                "orbital_band": "LEO",
-                "similarity_score": 1.0
-            },
-            // Plus optional constellation/registration edges
-        ],
+        "nodes": [...],  // 350 satellites
+        "edges": [],     // EMPTY - no edges between functional satellites
         "categories": [...],
         "stats": {
-            "total_with_function": 5000,
             "nodes_shown": 350,
-            "edges_shown": 1200,  // Now non-zero!
-            "categories_count": 7,
-            "similarity_edges": 1000,  // New stat
-            "existing_edges": 200       // New stat
+            "edges_shown": 0  // Problem!
         }
     }
 }
 ```
 
-## Edge Count Optimization
-
-### Problem: Quadratic Edge Growth
-Creating edges between all pairs in a category results in O(n²) edges:
-- Category with 100 satellites → 4,950 edges
-- Category with 200 satellites → 19,900 edges
-
-### Solution: Subclustering by Orbital Band
-Group satellites by (function_category, orbital_band) before creating edges:
-- Communications + LEO: 50 satellites → 1,225 edges
-- Communications + MEO: 30 satellites → 435 edges
-- Communications + GEO: 20 satellites → 190 edges
-- **Total**: 1,850 edges instead of 4,950
-
-### Additional Optimization: Edge Sampling
-If subclusters are still large, apply max edges per subcluster:
-```aql
-# Limit to 500 edges per subcluster
-FOR i IN 0..MIN(LENGTH(satellites_in_subcluster)-2, 31)  # √(500*2) ≈ 31
-    FOR j IN i+1..LENGTH(satellites_in_subcluster)-1
-        LIMIT 500
-        RETURN {...}
+**After** (multi-dimensional clusters with real edges):
+```json
+{
+    "data": {
+        "clusters": [
+            {
+                "cluster_id": "Communications-LEO-Polar",
+                "function": "Communications",
+                "orbital_band": "LEO-Polar",
+                "satellite_count": 617,
+                "proximity_edge_count": 5188,
+                "constellation_edge_count": 556,
+                "edge_count": 5744,
+                "density": 0.031
+            },
+            {
+                "cluster_id": "Navigation-MEO",
+                "function": "Navigation",
+                "orbital_band": "MEO",
+                "satellite_count": 33,
+                "proximity_edge_count": 74,
+                "constellation_edge_count": 28,
+                "edge_count": 102,
+                "density": 0.192
+            }
+        ],
+        "nodes": [
+            {
+                "_id": "satellites/2025-180",
+                "identifier": "2025-180",
+                "function_category": "Communications",
+                "orbital_band": "LEO-Polar",
+                "country": "United Kingdom",
+                "cluster_id": "Communications-LEO-Polar",
+                ...
+            }
+        ],
+        "edges": [
+            {
+                "id": "proximity_12345",
+                "source": "satellites/2025-180",
+                "target": "satellites/2025-181",
+                "relationship_type": "orbital_proximity",
+                "proximity_score": 0.05,
+                "orbital_band": "LEO-Polar"
+            },
+            {
+                "id": "constellation_67890",
+                "source": "satellites/2025-180",
+                "target": "satellites/constellation_hub",
+                "relationship_type": "constellation_membership",
+                "constellation_name": "OneWeb"
+            }
+        ],
+        "categories": [...],  // Keep for UI
+        "stats": {
+            "total_clusters": 10,
+            "total_satellites": 850,
+            "total_edges": 8500,      // Real edges only!
+            "avg_cluster_size": 85,
+            "avg_edge_count": 850
+        }
+    }
+}
 ```
+
+### New Query Parameters
+
+Add optional filtering parameters:
+```
+GET /v2/graphs/function-similarity?
+    functions=Communications,Navigation&
+    orbital_bands=LEO-Polar,MEO&
+    countries=United%20Kingdom,Russian%20Federation&
+    limit=50
+```
+
+## Edge Management Strategy
+
+### Real Edges Only
+All edges come from existing database collections:
+- `orbital_proximity`: Physical orbital proximity (apogee/perigee/inclination similarity)
+- `constellation_membership`: Organizational relationships
+
+**No synthetic edges are created**. Edge counts reflect actual relationships in the data.
+
+### Cluster Selection Strategy
+
+**Default (Option B)**: Show top 10-15 clusters by edge count
+- Displays most connected satellite groups
+- Guarantees non-empty, meaningful graphs
+- Example: "Communications-LEO-Polar" with 5,744 real edges
+
+**Filtered (Option C)**: Show clusters matching user selections
+- User selects: Functions=[Communications], Bands=[LEO-Polar, MEO]
+- Backend returns: All clusters matching criteria
+- Edges: Only real proximity/constellation edges within those clusters
+
+### Performance Optimization
+
+**Backend**:
+- Pre-filter satellites with `function != null AND orbital_band != null`
+- Use COLLECT to group efficiently
+- Count edges per cluster before loading satellite details
+- Return only top N clusters by edge count
+
+**Frontend**:
+- Limit initial display to 10-15 clusters (500-1000 satellites)
+- Use existing Cytoscape pagination/limiting
+- Allow users to expand by selecting more clusters
 
 ## Verification Approach
 
@@ -327,32 +467,39 @@ This is a visualization feature without critical business logic. Manual verifica
 
 ## Alternative Approaches Considered
 
-### 1. **Hub-Spoke Topology**
-Create category hub nodes; all satellites connect to their category hub.
-- **Pros**: O(n) edges, very efficient
-- **Cons**: Less visually informative, artificial hub nodes
+### 1. **Synthetic Similarity Edges** (Rejected)
+Create artificial edges between satellites with same function.
+- **Pros**: Guaranteed non-empty graphs
+- **Cons**: **Not real data** - user requirement to avoid fake edges
 
-### 2. **Proximity-Only Edges**
-Show only orbital proximity edges, color by function.
-- **Pros**: Uses real physical relationships
-- **Cons**: Doesn't solve "no edges" problem; proximity is unrelated to function
+### 2. **Single-Dimension Clustering** (Rejected - Doesn't Work)
+Show satellites grouped by function only.
+- **Pros**: Simple conceptually
+- **Cons**: Database analysis shows 0 real edges (proven empty graphs)
 
-### 3. **Full Mesh Per Category**
-Create edges between all pairs in a category (no subclustering).
-- **Pros**: Shows all functional relationships
-- **Cons**: O(n²) edges, performance issues for large categories
+### 3. **Hierarchical Filtering Only** (Option A - Considered)
+User selects function first, then orbital band/country.
+- **Pros**: Clear step-by-step workflow
+- **Cons**: Requires multiple clicks to see any graph; poor initial UX
 
-**Decision**: Use subclustering (Strategy 1, Option C) for best balance of informativeness and performance.
+### 4. **Multi-Dimensional Clusters with Real Edges** (Selected)
+Show top clusters by (function + orbital_band), allow multi-select filtering.
+- **Pros**: Immediate useful visualization, real edges only, flexible filtering
+- **Cons**: Slightly more complex initial query
+- **Decision**: Combines Option B (top clusters) + Option C (multi-select) for best UX
 
 ## Success Criteria
 
-1. ✅ Function Similarity Graph displays visible edges between satellites
-2. ✅ Edges connect satellites within the same function category
-3. ✅ Graph shows clear visual clusters for each function
-4. ✅ Edge count is non-zero in stats display
-5. ✅ Graph renders without performance degradation
-6. ✅ Filtering by category works correctly
-7. ✅ Edge styling clearly distinguishes function categories
+1. ✅ Function Similarity Graph displays visible edges between satellites (real edges only)
+2. ✅ Initial display shows top 10-15 clusters pre-computed (e.g., "Communications-LEO-Polar")
+3. ✅ Each cluster has non-zero edge count (minimum 10 edges per cluster)
+4. ✅ Graph shows clear visual clusters by function + orbital band
+5. ✅ Stats display shows actual edge counts (e.g., 5,744 edges for top cluster)
+6. ✅ Users can filter by function, orbital band, and country (multi-select)
+7. ✅ Filtering updates graph with real edges from selected clusters
+8. ✅ Graph renders without performance degradation (<2s for 500-1000 satellites)
+9. ✅ No synthetic/fake edges - all edges from database collections
+10. ✅ Cluster metadata shows satellite count, edge count, and density
 
 ## Risk Assessment
 

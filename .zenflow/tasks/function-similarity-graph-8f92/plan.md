@@ -25,108 +25,156 @@ Do not make assumptions on important decisions — get clarification first.
 
 **Difficulty Assessment**: Medium
 
-**Root Cause Identified**: The Function Similarity Graph endpoint tries to show edges between satellites with similar functions, but only includes existing constellation/registration/proximity edges. Since satellites with similar functions often don't share these relationships, the graph has nodes but no edges.
+**Root Cause Identified**: The Function Similarity Graph shows satellites grouped by function alone, but function-only grouping produces **0 real edges** (proven via database analysis). Satellites need multi-dimensional clustering (function + orbital band) to have real proximity/constellation edges.
 
-**Solution**: Create synthetic similarity edges between satellites that share the same function category and orbital band (subclustering approach).
+**Data Analysis Results**:
+- Communications + LEO-Polar: 617 satellites, **5,188 real proximity edges**
+- Navigation + MEO: 33 satellites, **74 real proximity edges**
+- Single function dimension: 100 satellites, **0 edges**
+
+**Solution**: Multi-dimensional clustering (function + orbital band + country) showing only real edges:
+- **Option B**: Pre-compute top 10-15 clusters by edge count (initial display)
+- **Option C**: Multi-select filtering (function, orbital band, country)
+- **No synthetic edges**: All edges from existing database relationships
 
 ---
 
-### [ ] Step: Implement Backend Synthetic Similarity Edges
+### [ ] Step: Backend - Multi-Dimensional Cluster Query
 
-Modify the `/v2/graphs/function-similarity` endpoint to generate synthetic edges between satellites with matching function categories.
+Modify the `/v2/graphs/function-similarity` endpoint to compute and return multi-dimensional clusters with real edges.
 
 **Files to modify**:
 - `./api/routers/graphs.py` (lines 1091-1230, function `get_function_similarity_graph`)
 
 **Implementation details**:
-1. After categorizing and limiting satellites, add AQL query logic to generate similarity edges
-2. Use subclustering by (function_category, orbital_band) to control edge count
-3. Create edges between all pairs within each subcluster
-4. Set edge properties:
-   - `relationship_type`: `"function_similarity"`
-   - `function_category`: shared category name
-   - `orbital_band`: shared orbital band
-   - `similarity_score`: 1.0
-5. Optionally keep existing constellation/registration edges for additional context
-6. Update stats to include similarity_edges and existing_edges counts
+1. Pre-filter satellites: `function != null AND orbital_band != null`
+2. Group by (function_category, orbital_band) using COLLECT
+3. For each cluster, count real edges:
+   - Query `orbital_proximity` edges where both endpoints in cluster
+   - Query `constellation_membership` edges where both endpoints in cluster
+4. Filter clusters: `satellite_count >= 5 AND edge_count >= 10`
+5. Sort by edge_count DESC, return top 15 clusters
+6. Return cluster metadata + all nodes/edges from selected clusters
+7. Add query parameters for filtering:
+   - `functions`: comma-separated function categories
+   - `orbital_bands`: comma-separated orbital bands  
+   - `countries`: comma-separated countries
+
+**Response structure**:
+```json
+{
+  "data": {
+    "clusters": [
+      {
+        "cluster_id": "Communications-LEO-Polar",
+        "function": "Communications",
+        "orbital_band": "LEO-Polar",
+        "satellite_count": 617,
+        "edge_count": 5744,
+        "density": 0.031
+      }
+    ],
+    "nodes": [...],  // Satellites from clusters
+    "edges": [...],  // Real proximity/constellation edges
+    "stats": {...}
+  }
+}
+```
 
 **Verification**:
-- Test endpoint: `curl "http://127.0.0.1:8000/v2/graphs/function-similarity?limit=50"`
-- Verify response includes non-empty edges array
-- Verify edges have `relationship_type: "function_similarity"`
-- Check that edge count is reasonable (500-2000 edges for ~350 satellites)
+- Test endpoint: `curl "http://127.0.0.1:8000/v2/graphs/function-similarity"`
+- Verify clusters array has 10-15 entries
+- Verify edges array is non-empty (expect 5000-10000 edges)
+- Verify each cluster has edge_count >= 10
+- Test with filters: `?functions=Communications&orbital_bands=LEO-Polar`
 
 ---
 
-### [ ] Step: Add Frontend Edge Styling for Function Similarity
+### [ ] Step: Frontend - Cluster Display and Multi-Select Filtering
 
-Update the GraphViewer component to properly style and render function similarity edges with category-specific colors.
+Update the UI to display cluster metadata and allow multi-dimensional filtering.
 
 **Files to modify**:
-- `./react-app/src/components/GraphViewer.jsx` (lines 24-304 for styling, 614-688 for data handling)
+- `./react-app/src/components/GraphExplorer.jsx` (function similarity section)
+- `./react-app/src/components/GraphViewer.jsx` (loadAllFunctionCategories function)
 
 **Implementation details**:
-1. Add Cytoscape CSS selector for `edge[relationship_type="function_similarity"]`
-2. Implement category color mapping function:
-   - Communications: Blue (#3498db)
-   - Earth Observation: Green (#27ae60)
-   - Scientific Research: Purple (#9b59b6)
-   - Navigation: Orange (#e67e22)
-   - Military-Defense: Red (#c0392b)
-   - Space Station: Teal (#16a085)
-   - Technology-Testing: Yellow (#f39c12)
-   - Other: Gray (#95a5a6)
-3. Apply colors to edges via `data(category_color)` or direct color mapping
-4. Set appropriate edge width (2px) and opacity (0.6) for visual clarity
-5. Ensure edges render in `loadAllFunctionCategories` and `filterFunctionGraph` functions
+
+**GraphExplorer.jsx**:
+1. Add state for orbital bands and cluster selections
+2. Add UI controls above graph:
+   - Cluster pills/cards showing "Communications (LEO-Polar) - 617 sats, 5744 edges"
+   - Orbital band checkboxes: LEO-Polar, LEO-Inclined, MEO, GEO
+   - Keep existing function category checkboxes
+   - Optional: Add country multi-select
+3. On filter change, call API with selected dimensions
+4. Pass cluster data to GraphViewer
+
+**GraphViewer.jsx**:
+1. Parse `clusters` array from API response
+2. Store cluster metadata in component state
+3. Render nodes with `cluster_id` property for coloring
+4. Edges already styled correctly (orbital_proximity, constellation_membership)
+5. Update stats display to show cluster count
 
 **Verification**:
 - Start application: `./start.sh`
-- Navigate to Function Similarity graph in UI
-- Verify edges are visible and colored by category
-- Test category filtering to ensure edges filter correctly
-- Check browser console for rendering errors
+- Navigate to Function Similarity tab
+- Verify cluster pills/cards display with satellite/edge counts
+- Click cluster pill → graph updates with that cluster
+- Select orbital band filter → clusters update
+- Select multiple function categories → see combined clusters
+- Check stats show correct cluster/edge counts
 
 ---
 
 ### [ ] Step: Manual Testing and Verification
 
-Perform end-to-end testing of the Function Similarity Graph feature.
+Perform end-to-end testing of the multi-dimensional clustering feature.
 
 **Test scenarios**:
-1. **Initial Load**:
-   - Graph displays nodes (satellites)
-   - Graph displays edges connecting satellites
-   - Edges are clearly visible and colored
-   - Stats show non-zero edge count
 
-2. **Category Filtering**:
-   - Click individual function categories
-   - Verify nodes and edges filter correctly
-   - Verify only edges within selected categories are shown
-   - Stats update properly
+1. **Initial Load (Option B)**:
+   - Graph shows top 10-15 clusters automatically
+   - Cluster metadata displays: "Communications (LEO-Polar) - 617 satellites, 5744 edges"
+   - Graph has visible nodes and edges (non-empty)
+   - Stats show: "10 clusters, 850 satellites, 8500 edges"
 
-3. **Performance**:
+2. **Cluster Selection**:
+   - Click cluster pill to highlight/select
+   - Graph focuses on that cluster
+   - Edge count matches cluster metadata
+   - Multiple cluster selection shows union
+
+3. **Multi-Dimensional Filtering (Option C)**:
+   - Select function: Communications
+   - Select orbital bands: LEO-Polar, MEO
+   - Graph shows only matching clusters
+   - Unselect filters → return to top clusters view
+
+4. **Real Edges Validation**:
+   - Verify edges are orbital_proximity (colored by proximity score) or constellation_membership (blue)
+   - NO synthetic/fake edges present
+   - Edge count matches database query results
+
+5. **Performance**:
    - Graph renders within 2 seconds
-   - Layout algorithm completes smoothly
+   - 500-1000 satellites render smoothly
+   - Filtering updates within 1 second
    - No browser console errors
-   - No UI freezing or lag
-
-4. **Visual Quality**:
-   - Clear clusters visible for each function category
-   - Edge colors distinguish categories effectively
-   - Graph is interpretable and useful
 
 **Verification checklist**:
-- [ ] Graph shows nodes and edges
-- [ ] Edge count > 0 in stats
-- [ ] Edges colored by function category
-- [ ] Category filtering works
-- [ ] Performance is acceptable
+- [ ] Top clusters display on initial load
+- [ ] Cluster metadata shows satellite/edge counts
+- [ ] Graph has non-zero real edges
+- [ ] Multi-select filtering works (function + orbital band)
+- [ ] No synthetic edges present
+- [ ] Stats accurate (cluster count, edge count)
+- [ ] Performance acceptable (<2s render)
 - [ ] No console errors
 
 **Report creation**:
 - Document findings in `.zenflow/tasks/function-similarity-graph-8f92/report.md`
-- Include screenshots if any issues found
-- Note any performance observations
-- List any edge cases or improvements for future work
+- Include cluster statistics from testing
+- Note most connected clusters found
+- List any edge cases or future improvements
