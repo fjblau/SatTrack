@@ -5,6 +5,7 @@ import DetailPanel from './components/DetailPanel'
 import Filters from './components/Filters'
 import GraphExplorer from './components/GraphExplorer'
 import TimelineChart from './components/TimelineChart'
+import FunctionAnalytics from './components/FunctionAnalytics'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
 function App() {
@@ -163,6 +164,12 @@ function App() {
           >
             Timeline
           </button>
+          <button 
+            className={activeTab === 'analytics' ? 'active' : ''}
+            onClick={() => setActiveTab('analytics')}
+          >
+            Analytics
+          </button>
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
       </header>
@@ -236,6 +243,12 @@ function App() {
           <div className="timeline-main">
             <TimelineChart selectedTimePeriod={selectedTimePeriod} />
           </div>
+        </div>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="analytics-view-container">
+          <FunctionAnalytics />
         </div>
       )}
     </div>

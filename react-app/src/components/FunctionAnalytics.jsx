@@ -183,11 +183,11 @@ function FunctionAnalytics() {
           <div className="summary-cards">
             <div className="summary-card">
               <div className="card-value">{stats.total_satellites?.toLocaleString() || 'N/A'}</div>
-              <div className="card-label">Total Satellites</div>
+              <div className="card-label">Satellites</div>
             </div>
             <div className="summary-card">
               <div className="card-value">{stats.cluster_count || 0}</div>
-              <div className="card-label">Function Clusters</div>
+              <div className="card-label">Clusters</div>
             </div>
             <div className="summary-card">
               <div className="card-value">{stats.inter_cluster_edges || 0}</div>
