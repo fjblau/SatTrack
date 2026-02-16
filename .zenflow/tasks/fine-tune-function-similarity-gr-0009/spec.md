@@ -16,11 +16,13 @@ Based on the provided screenshot and codebase review, the function similarity gr
 
 ### Current Issues
 
-1. **Poor Layout Quality**: The cola force-directed layout produces overlapping nodes and unclear cluster separation
-2. **Visual Clutter**: All node labels are visible simultaneously, causing severe text overlap
-3. **Inadequate Node Sizing**: Fixed 20px nodes are too small for the graph density
-4. **Weak Cluster Differentiation**: While nodes are colored by cluster, the spatial layout doesn't respect cluster boundaries
-5. **Suboptimal Layout Parameters**: Current settings (nodeSpacing: 50, edgeLength: 100) don't account for the multi-cluster nature of the data
+1. **Too Many Nodes Displayed Initially**: Graph loads with all 15 top clusters simultaneously, showing 100-500+ nodes at once, making it overwhelming and unreadable
+2. **Poor Layout Quality**: The cola force-directed layout produces overlapping nodes and unclear cluster separation
+3. **Visual Clutter**: All node labels are visible simultaneously, causing severe text overlap
+4. **Inadequate Node Sizing**: Fixed 20px nodes are too small for the graph density
+5. **Weak Cluster Differentiation**: While nodes are colored by cluster, the spatial layout doesn't respect cluster boundaries
+6. **Suboptimal Layout Parameters**: Current settings (nodeSpacing: 50, edgeLength: 100) don't account for the multi-cluster nature of the data
+7. **No Default Filtering**: The graph view starts with everything loaded rather than a manageable subset
 
 ### Data Structure (from API)
 
@@ -61,6 +63,57 @@ The backend API ([./api/routers/graphs.py:1091-1280](./api/routers/graphs.py:109
 - Labels always visible with outline
 
 ## Implementation Approach
+
+### 0. Initial Data Filtering Strategy
+
+**Problem**: Loading all 15 clusters (100-500+ nodes) at once creates an overwhelming, unreadable graph.
+
+**Solution**: Start with a filtered, manageable view by default
+
+**Default View Options** (pick one):
+
+**Option A: Top Clusters Only**
+- Load only top 3-5 clusters by default (instead of 15)
+- Change `top_n` parameter from 15 to 3-5 initially
+- Add "Load More Clusters" button to incrementally show additional clusters
+- Show count of hidden clusters in UI
+
+**Option B: Single Function Category**
+- Auto-select first function category on initial load
+- Show only satellites from one function (e.g., "Communications")
+- User can add more categories via sidebar
+- Clear visual indication that view is filtered
+
+**Option C: Cluster-by-Cluster Browsing**
+- Don't auto-load any graph data initially
+- Show prominent message: "Select a cluster to view its satellites"
+- User clicks a cluster in sidebar to load just that cluster
+- Can select multiple clusters to compare
+
+**Recommendation**: **Option B** - Auto-select first function category
+- Provides immediate, useful visualization (not empty)
+- Typically 50-150 nodes - manageable for layout algorithm
+- Natural extension via existing filter controls
+- User can easily add/remove categories
+
+**Implementation Changes for Option B**:
+1. Modify `GraphExplorer.jsx`:
+   - After loading function categories, auto-select the first category
+   - Set `selectedFunctionCategories` to `[functionCategories[0].category]` 
+   - Add visual indicator showing active filter (already exists with highlight)
+
+2. Modify `GraphViewer.jsx`:
+   - `loadAllFunctionCategories` already respects `selectedFunctionCategories` filter
+   - No changes needed - existing logic will handle filtered load
+
+3. Add UI indicator:
+   - Show banner/badge: "Showing: Communications only - Select more categories to expand"
+   - Add "Clear Filters" button to show all clusters
+
+**Alternative Enhancements** (can combine with above):
+- Add "Top N Clusters" dropdown in controls (3, 5, 10, 15, 25)
+- Add "Max Satellites" slider to cap total nodes shown
+- Implement pagination: "Show Next 5 Clusters"
 
 ### 1. Layout Improvements
 
@@ -152,6 +205,9 @@ The backend API ([./api/routers/graphs.py:1091-1280](./api/routers/graphs.py:109
    - Adjust control panel layout
 
 3. **[./react-app/src/components/GraphExplorer.jsx](./react-app/src/components/GraphExplorer.jsx)**
+   - **Auto-select first function category on load** in `loadFunctionCategories`
+   - Add filter indicator banner showing active filters
+   - Add "Clear Filters / Show All" button
    - Update cluster display to show more metadata
    - Add "Focus" button to cluster items
    - Optionally add label visibility toggle
@@ -175,19 +231,25 @@ All changes will be made to existing components.
 ## Verification Approach
 
 ### Visual Verification
-1. Load function similarity graph
-2. Verify nodes are well-spaced with minimal overlap
-3. Verify labels are hidden by default
-4. Hover over nodes to confirm labels appear
-5. Verify cluster colors are distinct and visible
-6. Test different layout algorithms (cola, circle, grid)
+1. Load function similarity graph - **verify only one category is auto-selected**
+2. **Verify initial node count is manageable** (50-150 nodes, not 500+)
+3. **Verify filter indicator banner** shows active filter
+4. Verify nodes are well-spaced with minimal overlap
+5. Verify labels are hidden by default
+6. Hover over nodes to confirm labels appear
+7. Verify cluster colors are distinct and visible
+8. Test different layout algorithms (cola, circle, grid)
 
 ### Functional Testing
-1. Filter by function category - verify graph updates correctly
-2. Filter by orbital band - verify filtering works
-3. Click on node - verify context menu and details panel
-4. Test with different cluster counts (top_n parameter)
-5. Verify performance with large graphs (500+ nodes)
+1. **Initial load**: Confirm first function category is auto-selected
+2. **Add categories**: Click additional categories, verify graph expands correctly
+3. **Clear filters**: Click "Show All" button, verify all clusters load
+4. **Filter indicator**: Verify banner accurately reflects active filters
+5. Filter by orbital band - verify filtering works
+6. Click on node - verify context menu and details panel
+7. Test with different cluster counts (top_n parameter if added)
+8. Verify performance with filtered view (< 3 seconds)
+9. Verify performance with full view (all 15 clusters, may be slower)
 
 ### Browser Testing
 - Test in Chrome/Edge (primary)
@@ -216,26 +278,35 @@ All changes will be made to existing components.
 
 ## Success Criteria
 
-1. **Graph is readable**: Nodes are well-separated with minimal overlap
-2. **Clusters are distinguishable**: Clear visual grouping by color and spatial layout
-3. **Labels are manageable**: No clutter, visible on hover/selection
-4. **Performance is acceptable**: Graph renders and layouts in < 3 seconds
-5. **Interactions are smooth**: Hover and click responses are immediate
+1. **Initial view is manageable**: Graph loads with filtered subset (50-150 nodes), not overwhelming
+2. **Graph is readable**: Nodes are well-separated with minimal overlap
+3. **Clusters are distinguishable**: Clear visual grouping by color and spatial layout
+4. **Labels are manageable**: No clutter, visible on hover/selection
+5. **Performance is acceptable**: Graph renders and layouts in < 3 seconds
+6. **Interactions are smooth**: Hover and click responses are immediate
+7. **Filtering is discoverable**: Users understand they can add/remove categories to explore
 
 ## Implementation Priority
 
-1. **High Priority (Must Have)**:
+1. **Critical Priority (Must Have - Fixes Core Issue)**:
+   - **Implement default filtering**: Auto-select first function category on load
+   - Add filter indicator banner showing active filters
+   - Add "Clear Filters / Show All" button
+
+2. **High Priority (Must Have - Improves Readability)**:
    - Optimize cola layout parameters
    - Hide labels by default, show on hover
    - Increase node sizes with edge-based scaling
    - Reduce edge opacity
 
-2. **Medium Priority (Should Have)**:
+3. **Medium Priority (Should Have)**:
    - Add cluster highlighting on sidebar click
    - Add neighborhood highlighting on node click
    - Add quick info tooltip on hover
+   - Add "Top N Clusters" control (3/5/10/15)
 
-3. **Low Priority (Nice to Have)**:
+4. **Low Priority (Nice to Have)**:
    - Compound nodes for clusters
    - Label visibility toggle in UI
    - Layout position caching
+   - Max satellites slider
