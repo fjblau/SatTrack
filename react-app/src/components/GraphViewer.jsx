@@ -307,6 +307,24 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               'border-width': 3,
               'border-color': '#f39c12'
             }
+          },
+          {
+            selector: 'node.function-graph-node',
+            style: {
+              'label': ''
+            }
+          },
+          {
+            selector: 'node.function-graph-node:selected, node.function-graph-node.hovered',
+            style: {
+              'label': 'data(label)'
+            }
+          },
+          {
+            selector: 'edge.function-graph-edge',
+            style: {
+              'opacity': 0.4
+            }
           }
         ],
         layout: { name: 'preset' }
@@ -338,6 +356,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
         if (evt.target === cyRef.current) {
           setContextMenu({ visible: false, x: 0, y: 0, node: null })
         }
+      })
+
+      // Hover event handlers for showing labels
+      cyRef.current.on('mouseover', 'node.function-graph-node', (evt) => {
+        evt.target.addClass('hovered')
+      })
+
+      cyRef.current.on('mouseout', 'node.function-graph-node', (evt) => {
+        evt.target.removeClass('hovered')
       })
     }
 
@@ -670,60 +697,36 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           })
         }
         
-        // Calculate percentiles for orbital proximity edges to enable relative coloring
-        const proximityEdges = data.data.edges.filter(e => e.relationship_type === 'orbital_proximity' && e.proximity_score != null)
-        const proximityScores = proximityEdges.map(e => e.proximity_score).sort((a, b) => a - b)
-        const p25 = proximityScores[Math.floor(proximityScores.length * 0.25)] || 0
-        const p50 = proximityScores[Math.floor(proximityScores.length * 0.50)] || 0
-        const p75 = proximityScores[Math.floor(proximityScores.length * 0.75)] || 0
-        
-        const getProximityColor = (score) => {
-          if (score == null) return '#e67e22'
-          if (score <= p25) return '#e74c3c'
-          if (score <= p50) return '#e67e22'
-          if (score <= p75) return '#2ecc71'
-          return '#27ae60'
-        }
-        
-        const getEdgeLabel = (edge) => {
-          if (edge.relationship_type === 'orbital_proximity') {
-            if (edge.proximity_score != null) {
-              return `${edge.proximity_score.toFixed(2)}`
-            }
-          } else if (edge.relationship_type === 'constellation_membership' && edge.constellation_name) {
-            return edge.constellation_name
-          } else if (edge.relationship_type === 'registration_links') {
-            return 'Registration'
-          }
-          return ''
-        }
-        
-        const getEdgeWidth = (edge) => {
-          if (edge.relationship_type === 'orbital_proximity' && edge.proximity_score != null) {
-            const normalized = 1 - Math.min(edge.proximity_score / 2, 1)
-            return 2 + (normalized * 4)
-          }
-          return 2.5
-        }
+        // Calculate edge count for each node
+        const edgeCounts = {}
+        data.data.edges.forEach(edge => {
+          edgeCounts[edge.source] = (edgeCounts[edge.source] || 0) + 1
+          edgeCounts[edge.target] = (edgeCounts[edge.target] || 0) + 1
+        })
         
         const elements = {
-          nodes: data.data.nodes.map(node => ({
-            data: {
-              id: node._id,
-              label: node.name || node.identifier,
-              function: node.function,
-              function_category: node.function_category,
-              country: node.country,
-              orbital_band: node.orbital_band,
-              congestion_risk: node.congestion_risk,
-              cluster_id: node.cluster_id,
-              node_size: 20,
-              background_color: node.cluster_id ? clusterColors[node.cluster_id] : '#3498db'
+          nodes: data.data.nodes.map(node => {
+            const edgeCount = edgeCounts[node._id] || 0
+            const nodeSize = Math.min(40, 25 + (edgeCount * 0.5))
+            return {
+              data: {
+                id: node._id,
+                label: node.name || node.identifier,
+                function: node.function,
+                function_category: node.function_category,
+                country: node.country,
+                orbital_band: node.orbital_band,
+                congestion_risk: node.congestion_risk,
+                cluster_id: node.cluster_id,
+                edge_count: edgeCount,
+                node_size: nodeSize,
+                background_color: node.cluster_id ? clusterColors[node.cluster_id] : '#3498db'
+              },
+              classes: 'function-graph-node'
             }
-          })),
-          edges: data.data.edges.map(edge => {
-            const label = getEdgeLabel(edge)
-            const edgeData = {
+          }),
+          edges: data.data.edges.map(edge => ({
+            data: {
               id: edge.id,
               source: edge.source,
               target: edge.target,
@@ -732,17 +735,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               registration_document: edge.registration_document,
               proximity_score: edge.proximity_score,
               orbital_band: edge.orbital_band,
-              edge_type: edge.relationship_type,
-              edge_width: getEdgeWidth(edge)
-            }
-            if (label) {
-              edgeData.edge_label = label
-            }
-            if (edge.relationship_type === 'orbital_proximity') {
-              edgeData.edge_color = getProximityColor(edge.proximity_score)
-            }
-            return { data: edgeData }
-          })
+              edge_type: edge.relationship_type
+            },
+            classes: 'function-graph-edge'
+          }))
         }
         
         cyRef.current.elements().remove()
@@ -1734,14 +1730,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   const applyLayout = (layoutName) => {
     if (!cyRef.current) return
     
+    // Use optimized parameters for function similarity graph
+    const isFunctionGraph = graphType === 'function'
+    
     const layoutOptions = {
       cola: {
         name: 'cola',
         animate: true,
         randomize: false,
         maxSimulationTime: 2000,
-        nodeSpacing: 50,
-        edgeLength: 100
+        nodeSpacing: isFunctionGraph ? 100 : 50,
+        edgeLength: isFunctionGraph ? 180 : 100
       },
       circle: {
         name: 'circle',

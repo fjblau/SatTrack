@@ -77,12 +77,18 @@ function GraphExplorer() {
         setFunctionClusters(data.data.clusters)
         
         const uniqueFunctions = [...new Set(data.data.clusters.map(c => c.function))]
-        setFunctionCategories(uniqueFunctions.map(func => ({
+        const functionCategoriesData = uniqueFunctions.map(func => ({
           category: func,
           satellite_count: data.data.clusters
             .filter(c => c.function === func)
             .reduce((sum, c) => sum + c.satellite_count, 0)
-        })))
+        }))
+        setFunctionCategories(functionCategoriesData)
+        
+        // Auto-select first function category on load
+        if (functionCategoriesData.length > 0 && selectedFunctionCategories.length === 0) {
+          setSelectedFunctionCategories([functionCategoriesData[0].category])
+        }
         
         const uniqueBands = [...new Set(data.data.clusters.map(c => c.orbital_band))]
         setAvailableOrbitalBands(uniqueBands)
@@ -313,6 +319,49 @@ function GraphExplorer() {
 
         {graphType === 'function' && (
           <div className="selector-content">
+            {(selectedFunctionCategories.length > 0 || selectedOrbitalBands.length > 0) && (
+              <div style={{ 
+                background: '#e3f2fd', 
+                border: '1px solid #2196f3', 
+                borderRadius: '4px', 
+                padding: '0.75rem', 
+                marginBottom: '1rem',
+                fontSize: '0.9em'
+              }}>
+                <div style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#1976d2' }}>
+                  Active Filters:
+                </div>
+                {selectedFunctionCategories.length > 0 && (
+                  <div style={{ marginBottom: '0.25rem' }}>
+                    <strong>Functions:</strong> {selectedFunctionCategories.join(', ')}
+                  </div>
+                )}
+                {selectedOrbitalBands.length > 0 && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <strong>Bands:</strong> {selectedOrbitalBands.join(', ')}
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedFunctionCategories([])
+                    setSelectedOrbitalBands([])
+                  }}
+                  style={{
+                    padding: '0.4rem 0.8rem',
+                    background: '#2196f3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontSize: '0.85em',
+                    fontWeight: '500'
+                  }}
+                >
+                  Show All Clusters
+                </button>
+              </div>
+            )}
+            
             <h3>Top Clusters</h3>
             <p className="section-description">Showing clusters with highest edge counts</p>
             {loading ? (
