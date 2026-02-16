@@ -670,6 +670,42 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           })
         }
         
+        // Calculate percentiles for orbital proximity edges to enable relative coloring
+        const proximityEdges = data.data.edges.filter(e => e.relationship_type === 'orbital_proximity' && e.proximity_score != null)
+        const proximityScores = proximityEdges.map(e => e.proximity_score).sort((a, b) => a - b)
+        const p25 = proximityScores[Math.floor(proximityScores.length * 0.25)] || 0
+        const p50 = proximityScores[Math.floor(proximityScores.length * 0.50)] || 0
+        const p75 = proximityScores[Math.floor(proximityScores.length * 0.75)] || 0
+        
+        const getProximityColor = (score) => {
+          if (score == null) return '#e67e22'
+          if (score <= p25) return '#e74c3c'
+          if (score <= p50) return '#e67e22'
+          if (score <= p75) return '#2ecc71'
+          return '#27ae60'
+        }
+        
+        const getEdgeLabel = (edge) => {
+          if (edge.relationship_type === 'orbital_proximity') {
+            if (edge.proximity_score != null) {
+              return `${edge.proximity_score.toFixed(2)}`
+            }
+          } else if (edge.relationship_type === 'constellation_membership' && edge.constellation_name) {
+            return edge.constellation_name
+          } else if (edge.relationship_type === 'registration_links') {
+            return 'Registration'
+          }
+          return ''
+        }
+        
+        const getEdgeWidth = (edge) => {
+          if (edge.relationship_type === 'orbital_proximity' && edge.proximity_score != null) {
+            const normalized = 1 - Math.min(edge.proximity_score / 2, 1)
+            return 2 + (normalized * 4)
+          }
+          return 2.5
+        }
+        
         const elements = {
           nodes: data.data.nodes.map(node => ({
             data: {
@@ -685,8 +721,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               background_color: node.cluster_id ? clusterColors[node.cluster_id] : '#3498db'
             }
           })),
-          edges: data.data.edges.map(edge => ({
-            data: {
+          edges: data.data.edges.map(edge => {
+            const label = getEdgeLabel(edge)
+            const edgeData = {
               id: edge.id,
               source: edge.source,
               target: edge.target,
@@ -695,9 +732,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               registration_document: edge.registration_document,
               proximity_score: edge.proximity_score,
               orbital_band: edge.orbital_band,
-              edge_type: edge.relationship_type
+              edge_type: edge.relationship_type,
+              edge_width: getEdgeWidth(edge)
             }
-          }))
+            if (label) {
+              edgeData.edge_label = label
+            }
+            if (edge.relationship_type === 'orbital_proximity') {
+              edgeData.edge_color = getProximityColor(edge.proximity_score)
+            }
+            return { data: edgeData }
+          })
         }
         
         cyRef.current.elements().remove()
