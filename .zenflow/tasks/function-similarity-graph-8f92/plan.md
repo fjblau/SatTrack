@@ -91,7 +91,8 @@ Modify the `/v2/graphs/function-similarity` endpoint to compute and return multi
 
 ---
 
-### [ ] Step: Frontend - Cluster Display and Multi-Select Filtering
+### [x] Step: Frontend - Cluster Display and Multi-Select Filtering
+<!-- chat-id: 6b5afaa1-1d87-48f6-b197-a869e72ef6b9 -->
 
 Update the UI to display cluster metadata and allow multi-dimensional filtering.
 

@@ -18,7 +18,10 @@ function GraphExplorer() {
   const [selectedDocument, setSelectedDocument] = useState('')
   const [selectedOrbitalBand, setSelectedOrbitalBand] = useState('')
   const [selectedFunctionCategories, setSelectedFunctionCategories] = useState([])
+  const [selectedOrbitalBands, setSelectedOrbitalBands] = useState([])
   const [selectedCountries, setSelectedCountries] = useState([])
+  const [functionClusters, setFunctionClusters] = useState([])
+  const [availableOrbitalBands, setAvailableOrbitalBands] = useState([])
   const [loading, setLoading] = useState(false)
   const [pathData, setPathData] = useState(null)
   const [collisionRiskData, setCollisionRiskData] = useState(null)
@@ -67,11 +70,22 @@ function GraphExplorer() {
 
   const loadFunctionCategories = async () => {
     try {
-      const response = await fetch(`${API_ENDPOINTS.GRAPHS.FUNCTION_SIMILARITY}?limit=${GRAPH_SETTINGS.FUNCTION_SIMILARITY_LIMIT}`)
+      const response = await fetch(`${API_ENDPOINTS.GRAPHS.FUNCTION_SIMILARITY}?top_n=15`)
       const data = await response.json()
       
-      if (data.data && data.data.categories) {
-        setFunctionCategories(data.data.categories)
+      if (data.data && data.data.clusters) {
+        setFunctionClusters(data.data.clusters)
+        
+        const uniqueFunctions = [...new Set(data.data.clusters.map(c => c.function))]
+        setFunctionCategories(uniqueFunctions.map(func => ({
+          category: func,
+          satellite_count: data.data.clusters
+            .filter(c => c.function === func)
+            .reduce((sum, c) => sum + c.satellite_count, 0)
+        })))
+        
+        const uniqueBands = [...new Set(data.data.clusters.map(c => c.orbital_band))]
+        setAvailableOrbitalBands(uniqueBands)
       }
     } catch (error) {
       console.error('Error loading function categories:', error)
@@ -84,6 +98,16 @@ function GraphExplorer() {
         return prev.filter(c => c !== category)
       } else {
         return [...prev, category]
+      }
+    })
+  }
+
+  const handleOrbitalBandClick = (band) => {
+    setSelectedOrbitalBands(prev => {
+      if (prev.includes(band)) {
+        return prev.filter(b => b !== band)
+      } else {
+        return [...prev, band]
       }
     })
   }
@@ -289,23 +313,55 @@ function GraphExplorer() {
 
         {graphType === 'function' && (
           <div className="selector-content">
-            <h3>Function Categories</h3>
-            <p className="section-description">{UI_TEXT.SELECT_MULTIPLE_CATEGORIES}</p>
+            <h3>Top Clusters</h3>
+            <p className="section-description">Showing clusters with highest edge counts</p>
             {loading ? (
               <p>{UI_TEXT.LOADING}</p>
             ) : (
-              <div className="item-list">
-                {functionCategories.map((category) => (
-                  <div
-                    key={category.category}
-                    className={`list-item ${selectedFunctionCategories.includes(category.category) ? 'selected' : ''}`}
-                    onClick={() => handleFunctionCategoryClick(category.category)}
-                  >
-                    <div className="item-name">{category.category}</div>
-                    <div className="item-count">{category.satellite_count.toLocaleString()} satellites</div>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="item-list" style={{ marginBottom: '1rem', maxHeight: '200px', overflowY: 'auto' }}>
+                  {functionClusters.map((cluster) => (
+                    <div
+                      key={cluster.cluster_id}
+                      className="list-item"
+                      style={{ cursor: 'default', padding: '0.75rem', marginBottom: '0.5rem' }}
+                    >
+                      <div className="item-name" style={{ fontWeight: '600' }}>{cluster.cluster_id}</div>
+                      <div className="item-count">{cluster.satellite_count} satellites, {cluster.edge_count} edges</div>
+                      <div className="item-meta" style={{ fontSize: '0.85em', color: '#666' }}>
+                        Density: {(cluster.density * 100).toFixed(2)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 style={{ marginTop: '1.5rem' }}>Filter by Function</h3>
+                <div className="item-list" style={{ marginBottom: '1rem' }}>
+                  {functionCategories.map((category) => (
+                    <div
+                      key={category.category}
+                      className={`list-item ${selectedFunctionCategories.includes(category.category) ? 'selected' : ''}`}
+                      onClick={() => handleFunctionCategoryClick(category.category)}
+                    >
+                      <div className="item-name">{category.category}</div>
+                      <div className="item-count">{category.satellite_count.toLocaleString()} satellites</div>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 style={{ marginTop: '1.5rem' }}>Filter by Orbital Band</h3>
+                <div className="item-list">
+                  {availableOrbitalBands.map((band) => (
+                    <div
+                      key={band}
+                      className={`list-item ${selectedOrbitalBands.includes(band) ? 'selected' : ''}`}
+                      onClick={() => handleOrbitalBandClick(band)}
+                    >
+                      <div className="item-name">{band}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -492,6 +548,7 @@ function GraphExplorer() {
           selectedDocument={graphType === 'registration' ? selectedDocument : null}
           selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
           selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
+          selectedOrbitalBands={graphType === 'function' ? selectedOrbitalBands : null}
           selectedCountries={graphType === 'country' ? selectedCountries : null}
           pathData={graphType === 'paths' ? pathData : null}
           collisionRiskData={graphType === 'collision' ? collisionRiskData : null}
@@ -499,6 +556,7 @@ function GraphExplorer() {
           selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
           constellationBrowserData={graphType === 'constellation-browser' ? constellationBrowserData : null}
           neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : null}
+          functionClusters={graphType === 'function' ? functionClusters : null}
         />
       </div>
     </div>
