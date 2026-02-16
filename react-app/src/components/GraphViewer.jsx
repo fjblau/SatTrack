@@ -29,7 +29,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               'label': 'data(label)',
               'width': 30,
               'height': 30,
-              'font-size': '10px',
+              'font-size': '12px',
               'text-valign': 'center',
               'text-halign': 'center',
               'color': '#2c3e50',
@@ -141,7 +141,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             selector: 'edge[edge_label]',
             style: {
               'label': 'data(edge_label)',
-              'font-size': '10px',
+              'font-size': '12px',
               'font-weight': 'bold',
               'text-background-color': '#fff',
               'text-background-opacity': 0.9,
@@ -216,16 +216,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           {
             selector: 'edge[edge_type="constellation_membership"]',
             style: {
-              'line-color': '#3498db',
-              'width': 3,
+              'line-color': 'data(edge_color)',
+              'width': 'data(edge_width)',
               'line-style': 'solid'
             }
           },
           {
             selector: 'edge[edge_type="registration_links"]',
             style: {
-              'line-color': '#9b59b6',
-              'width': 2.5,
+              'line-color': 'data(edge_color)',
+              'width': 'data(edge_width)',
               'line-style': 'dashed'
             }
           },
@@ -649,7 +649,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ top_n: '15' })
+      const params = new URLSearchParams({ top_n: '5' })
       
       if (selectedFunctionCategories && selectedFunctionCategories.length > 0) {
         params.append('functions', selectedFunctionCategories.join(','))
@@ -704,6 +704,57 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
           edgeCounts[edge.target] = (edgeCounts[edge.target] || 0) + 1
         })
         
+        // Calculate percentiles for orbital proximity edges to enable relative coloring
+        const proximityEdges = data.data.edges.filter(e => e.relationship_type === 'orbital_proximity' && e.proximity_score != null)
+        const proximityScores = proximityEdges.map(e => e.proximity_score).sort((a, b) => a - b)
+        const p25 = proximityScores[Math.floor(proximityScores.length * 0.25)] || 0
+        const p50 = proximityScores[Math.floor(proximityScores.length * 0.50)] || 0
+        const p75 = proximityScores[Math.floor(proximityScores.length * 0.75)] || 0
+        
+        const getProximityColor = (score) => {
+          if (score == null) return '#e67e22'
+          if (score <= p25) return '#e74c3c'
+          if (score <= p50) return '#e67e22'
+          if (score <= p75) return '#2ecc71'
+          return '#27ae60'
+        }
+        
+        const getEdgeColor = (edge) => {
+          if (edge.relationship_type === 'orbital_proximity') {
+            return getProximityColor(edge.proximity_score)
+          } else if (edge.relationship_type === 'constellation_membership') {
+            return '#3498db'
+          } else if (edge.relationship_type === 'registration_links') {
+            return '#9b59b6'
+          }
+          return '#95a5a6'
+        }
+        
+        const getEdgeLabel = (edge) => {
+          if (edge.relationship_type === 'orbital_proximity') {
+            if (edge.proximity_score != null) {
+              return `${edge.proximity_score.toFixed(2)}`
+            }
+          } else if (edge.relationship_type === 'constellation_membership' && edge.constellation_name) {
+            return edge.constellation_name
+          } else if (edge.relationship_type === 'registration_links') {
+            return 'Registration'
+          }
+          return ''
+        }
+        
+        const getEdgeWidth = (edge) => {
+          if (edge.relationship_type === 'orbital_proximity' && edge.proximity_score != null) {
+            const normalized = 1 - Math.min(edge.proximity_score / 2, 1)
+            return 2 + (normalized * 4)
+          } else if (edge.relationship_type === 'constellation_membership') {
+            return 3
+          } else if (edge.relationship_type === 'registration_links') {
+            return 2.5
+          }
+          return 2
+        }
+        
         const elements = {
           nodes: data.data.nodes.map(node => {
             const edgeCount = edgeCounts[node._id] || 0
@@ -711,7 +762,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
             return {
               data: {
                 id: node._id,
-                label: node.name || node.identifier,
+                label: node.name || node.identifier || node._id,
                 function: node.function,
                 function_category: node.function_category,
                 country: node.country,
@@ -725,8 +776,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               classes: 'function-graph-node'
             }
           }),
-          edges: data.data.edges.map(edge => ({
-            data: {
+          edges: data.data.edges.map(edge => {
+            const label = getEdgeLabel(edge)
+            const edgeData = {
               id: edge.id,
               source: edge.source,
               target: edge.target,
@@ -735,11 +787,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
               registration_document: edge.registration_document,
               proximity_score: edge.proximity_score,
               orbital_band: edge.orbital_band,
-              edge_type: edge.relationship_type
-            },
-            classes: 'function-graph-edge'
-          }))
+              edge_type: edge.relationship_type,
+              edge_width: getEdgeWidth(edge),
+              edge_color: getEdgeColor(edge)
+            }
+            if (label) {
+              edgeData.edge_label = label
+            }
+            return { data: edgeData, classes: 'function-graph-edge' }
+          })
         }
+
         
         cyRef.current.elements().remove()
         cyRef.current.add(elements)
