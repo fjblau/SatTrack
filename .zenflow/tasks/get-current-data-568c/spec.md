@@ -47,7 +47,13 @@
 4. **Space-Track** - TLE data (requires authentication)
    - Requires credentials, focuses on orbital elements
    
-5. **Kaggle** - Curated satellite catalog
+5. **SatNOGS** - Operational status and telemetry ✨
+   - **API**: https://db.satnogs.org/api/
+   - **Real-time data**: Operational status from ground station observations
+   - **Unique data**: Transmitter frequencies, telemetry, decay confirmation
+   - **Community-verified**: Crowdsourced observations
+   
+6. **Kaggle** - Curated satellite catalog
    - May not be most current
 
 ### Current Data Status
@@ -90,7 +96,7 @@
 
 ## Implementation Approach
 
-### Recommended Strategy: GCAT + UNOOSA (Multi-Source)
+### Recommended Strategy: GCAT + UNOOSA + SatNOGS (Multi-Source)
 
 Use both data sources to get comprehensive and current data:
 
@@ -140,24 +146,57 @@ Use both data sources to get comprehensive and current data:
      - Launch site details
      - Legal registration status
 
+#### Phase 3: Enrich with SatNOGS Operational Data (Recommended)
+
+**SatNOGS provides real-time operational status** from ground station observations:
+
+**Steps**:
+1. **Fetch from SatNOGS API**:
+   - Script: `scripts/import/import_satnogs_status.py`
+   - Query API: `https://db.satnogs.org/api/satellites/`
+   - Match by NORAD ID to existing records
+
+2. **Enrich with Operational Data**:
+   - Add `sources.satnogs` with:
+     - Operational status (alive/dead/re-entered)
+     - Transmitter frequencies and modes
+     - Last observation date
+     - Operator and website info
+     - Telemetry availability
+
+**Value**: Know which satellites are actually operational vs just cataloged
+
 #### Data Flow
 
 ```
-GCAT (gcat_satcat.tsv)
-  ↓ Parse recent launches (Sept 2025+)
-  ↓ Match by NORAD ID
-  ↓
-ArangoDB (satellites collection)
-  ├─ Existing records: Add sources.gcat
-  └─ New records: Create with sources.gcat
-  ↓
-UNOOSA (optional update)
-  ↓ Add registration data
-  ↓
-Final: Multi-source records
-  ├─ sources.gcat (technical data)
-  ├─ sources.unoosa (registration data)
-  └─ canonical (promoted fields)
+┌─────────────────────────────────────────────────────────────┐
+│                    Phase 1: GCAT Import                     │
+│  GCAT (gcat_satcat.tsv) → Parse & Match → ArangoDB          │
+│  • Add sources.gcat to existing records                     │
+│  • Create new records for unknown satellites                │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Phase 2: UNOOSA Supplementation                │
+│  UNOOSA Export → Match by intl designator → ArangoDB        │
+│  • Add sources.unoosa with registration details             │
+│  • Enrich with official function descriptions               │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Phase 3: SatNOGS Enrichment                    │
+│  SatNOGS API → Match by NORAD ID → ArangoDB                 │
+│  • Add sources.satnogs with operational status              │
+│  • Enrich with transmitter and telemetry data               │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Final: Multi-Source Documents                  │
+│  ├─ sources.gcat (technical specs & orbital data)           │
+│  ├─ sources.unoosa (official registration)                  │
+│  ├─ sources.satnogs (operational status)                    │
+│  └─ canonical (promoted/unified fields)                     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -189,6 +228,16 @@ Final: Multi-source records
    - Function: `deduplicate_records(records)`
    - Function: `save_merged_data(records, output_path)`
 
+3. **`scripts/import/import_satnogs_status.py`** (RECOMMENDED - operational status)
+   - Function: `fetch_satnogs_satellite(norad_id)`
+   - Function: `fetch_satnogs_transmitters(norad_id)`
+   - Function: `merge_satnogs_data(existing_doc, satnogs_data)`
+   - Function: `import_satnogs_to_arangodb()`
+   
+   **API Usage**:
+   - GET `https://db.satnogs.org/api/satellites/?norad_cat_id={norad_id}`
+   - GET `https://db.satnogs.org/api/transmitters/?satellite__norad_cat_id={norad_id}`
+
 ### Modified Files
 
 Potentially:
@@ -204,26 +253,61 @@ No database schema changes required. The existing multi-source document structur
 
 ```python
 {
-  "identifier": "3834-2025-015",  # Unique ID
+  "identifier": "NORAD-60123",  # Unique ID
   "sources": {
+    "gcat": {
+      "jcat_id": "S67890",
+      "norad_cat_id": 60123,
+      "launch_date": "2025 Dec 15",
+      "name": "Example Sat",
+      "mass_kg": 250,
+      "owner": "EXAMPLECO",
+      "state": "US",
+      "perigee_km": 500,
+      "apogee_km": 520,
+      "inclination_deg": 97.5,
+      # ... other GCAT technical fields
+    },
     "unoosa": {
-      "registration_number": "3834-2025-015",
-      "international_designator": "2025-207A",
+      "registration_number": "3850-2025-020",
+      "international_designator": "2025-020A",
       "object_name": "Example Satellite",
       "country_of_origin": "USA",
-      "date_of_launch": "2025-12-07",  # New data
+      "date_of_launch": "2025-12-15",
       "function": "Earth observation",
+      "launch_vehicle": "Falcon 9",
+      "place_of_launch": "Cape Canaveral",
       "status": "in orbit",
-      # ... other UNOOSA fields
+      "registration_document": "/osoindex/...",
+      # ... other UNOOSA registration fields
+    },
+    "satnogs": {
+      "sat_id": "ABCD-1234-5678-9012-3456",
+      "status": "alive",
+      "deployed": "2025-12-15T14:30:00Z",
+      "operator": "Example Corp",
+      "website": "https://example.com/sat",
+      "transmitters": [
+        {"frequency": 437500000, "mode": "BPSK", "description": "Beacon"}
+      ],
+      "last_observation": "2026-02-17T12:00:00Z",
+      # ... other SatNOGS operational fields
     }
   },
   "canonical": {
-    "launch_date": "2025-12-07",
+    "launch_date": "2025-12-15",
+    "name": "Example Sat",
+    "norad_cat_id": 60123,
     "country": "United States",
-    # ... promoted fields
+    "operator": "Example Corp",
+    "status": "operational",  # Promoted from SatNOGS
+    "perigee_km": 500,
+    "apogee_km": 520,
+    "inclination": 97.5,
+    # ... promoted fields from all sources
   },
   "metadata": {
-    "sources_available": ["unoosa"],
+    "sources_available": ["gcat", "unoosa", "satnogs"],
     "last_updated_at": "2026-02-17T14:35:00Z",
     "transformations": [...]
   }
@@ -437,10 +521,30 @@ ARANGO_PASSWORD=kessler_dev_password
 - Registration document links
 - UN registered status
 
+#### SatNOGS (For Operational Status & Communications)
+**Use for**:
+- ✅ **Real-time operational status** (alive, dead, re-entered)
+- ✅ Radio transmitter data (frequencies, modes)
+- ✅ Telemetry from ground station observations
+- ✅ Community-verified satellite activity
+- ✅ Actual decay dates (not predicted)
+
+**Provides**:
+- Operational status (from observations, not estimates)
+- Transmitter frequencies and modes
+- Deployment dates (vs just launch dates)
+- Telemetry data and observation counts
+- Website and operator information
+- Associated satellites relationships
+- Frequency violation flags
+
+**API**: Public REST API at `https://db.satnogs.org/api/satellites/`
+
 #### Complementary Nature
-- **GCAT**: Comprehensive but not official
-- **UNOOSA**: Official but delayed and incomplete (only registered objects)
-- **Together**: Complete picture - technical data + legal registration info
+- **GCAT**: Comprehensive catalog with technical specs (all objects)
+- **UNOOSA**: Official UN registration and legal details (registered only)
+- **SatNOGS**: Real-time operational status and communications data (actively tracked)
+- **Together**: Complete picture - technical + legal + operational data
 
 ### Future Updates
 
