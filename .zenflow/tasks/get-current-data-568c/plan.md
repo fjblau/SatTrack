@@ -316,6 +316,7 @@ python3 scripts/verification/check_pretty.py
 
 ### [x] Step: Production Deployment to Railway
 <!-- chat-id: c304ce6f-3b34-404a-9542-44bac141a97c -->
+<!-- completed: 2026-02-17 20:51 UTC -->
 
 **Objective**: Deploy the updated database to Railway production environment.
 
@@ -385,7 +386,30 @@ python3 scripts/import/import_to_railway.py --restore-from backup_TIMESTAMP
 - Production database updated with multi-source data
 - API serving current satellite information
 
-**Completion Status**: ✅ **Complete** (Re-deployed 2026-02-17 20:01 UTC)
+**Completion Status**: ✅ **Complete** (Final deployment: 2026-02-17 20:40 UTC)
+
+**Issues Encountered & Fixed**:
+
+1. **Issue**: GCAT/SatNOGS corrupting canonical.source_priority
+   - **Cause**: import scripts calling update_canonical() for unapproved sources
+   - **Fix**: Removed update_canonical() calls from import_gcat_launches.py and import_satnogs_status.py
+   - **Prevention**: Data governance rules documented in SAFE_UPDATE_PROCESS.md
+
+2. **Issue**: Missing canonical.name breaking graph queries
+   - **Error**: "Cannot create edge with nonexistent target"
+   - **Cause**: Populating canonical.launch_date without ensuring canonical.name exists
+   - **Fix**: Added canonical.name safety check in import_gcat_launches.py
+   - **Prevention**: Always run normalize_canonical_fields.py after imports
+
+3. **Issue**: 14,968 broken edges in orbital_proximity
+   - **Cause**: Edges referencing old satellite _keys (NORAD-58023 instead of 2023-155H)
+   - **Fix**: Created clean_broken_edges.py utility to remove broken edges
+   - **Prevention**: Never change satellite _keys after creation
+
+**Documentation Created**:
+- `.zenflow/tasks/get-current-data-568c/SAFE_UPDATE_PROCESS.md` - Complete safe import guide
+- `scripts/verification/verify_railway.py` - Automated production verification
+- `scripts/maintenance/clean_broken_edges.py` - Broken edge cleanup utility
 
 **Deployment Summary**:
 
