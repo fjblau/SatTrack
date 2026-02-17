@@ -43,14 +43,23 @@ def record_transformation(
 def update_canonical(doc: Dict[str, Any]):
     """
     Update canonical section from source nodes based on priority.
-    Source priority: UNOOSA > CelesTrak > TLE API > Kaggle
+    
+    Source priority: UNOOSA > SpaceTrack > CelesTrak > TLE API > Kaggle
+    
+    IMPORTANT: Only sources in the priority list can promote to canonical.
+    New sources (GCAT, SatNOGS) stay in sources.* until manually approved.
     """
-    source_priority = doc["metadata"].get("source_priority", ["unoosa", "celestrak", "tleapi", "kaggle"])
+    # Approved sources that can promote to canonical
+    approved_sources = ["unoosa", "spacetrack", "celestrak", "tleapi", "kaggle"]
+    
+    source_priority = doc["metadata"].get("source_priority", approved_sources)
     sources = doc["sources"]
     
-    source_priority = [s for s in source_priority if s in sources] + [s for s in sources if s not in source_priority]
+    # ONLY use sources that are in the approved list (no automatic promotion of new sources)
+    source_priority = [s for s in source_priority if s in sources and s in approved_sources]
     
-    canonical = {}
+    # Preserve existing canonical data (don't overwrite with new sources)
+    canonical = doc.get("canonical", {}).copy() if doc.get("canonical") else {}
     
     canonical_fields = [
         "name", "object_name", "country_of_origin", "international_designator",
@@ -61,7 +70,13 @@ def update_canonical(doc: Dict[str, Any]):
         "congestion_risk"
     ]
     
+    # Only populate fields that are currently empty/missing
     for field in canonical_fields:
+        # Skip if canonical already has this field populated
+        if canonical.get(field):
+            continue
+            
+        # Try to populate from approved sources only
         for source_name in source_priority:
             if source_name in sources:
                 value = sources[source_name].get(field)
@@ -79,9 +94,17 @@ def update_canonical(doc: Dict[str, Any]):
     elif canonical.get("launch_date") and not canonical.get("date_of_launch"):
         canonical["date_of_launch"] = canonical["launch_date"]
     
+    # Preserve existing orbit data
     orbital_fields = ["apogee_km", "perigee_km", "inclination_degrees", "period_minutes"]
-    canonical["orbit"] = {}
+    if "orbit" not in canonical:
+        canonical["orbit"] = {}
+    
     for field in orbital_fields:
+        # Skip if orbit field already populated
+        if canonical["orbit"].get(field):
+            continue
+            
+        # Try to populate from approved sources only
         for source_name in source_priority:
             if source_name in sources:
                 value = sources[source_name].get(field)
@@ -89,19 +112,31 @@ def update_canonical(doc: Dict[str, Any]):
                     canonical["orbit"][field] = value
                     break
     
+    # Preserve existing TLE data
     tle_fields = ["tle_line1", "tle_line2"]
-    canonical["tle"] = {}
+    if "tle" not in canonical:
+        canonical["tle"] = {}
+    
     for field in tle_fields:
+        canonical_field = "line1" if field == "tle_line1" else "line2"
+        
+        # Skip if TLE field already populated
+        if canonical["tle"].get(canonical_field):
+            continue
+            
+        # Try to populate from approved sources only
         for source_name in source_priority:
             if source_name in sources:
                 value = sources[source_name].get(field)
                 if value is not None:
-                    canonical_field = "line1" if field == "tle_line1" else "line2"
                     canonical["tle"][canonical_field] = value
                     break
     
     canonical["updated_at"] = datetime.now(timezone.utc).isoformat()
-    canonical["source_priority"] = source_priority
+    
+    # Preserve existing source_priority (don't add new unapproved sources)
+    if "source_priority" not in canonical:
+        canonical["source_priority"] = source_priority
     
     # Normalize country field using CountryNormalizer
     raw_country = canonical.get("country_of_origin")
