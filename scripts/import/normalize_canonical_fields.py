@@ -79,33 +79,29 @@ def normalize_canonical_fields(dry_run=True):
         FOR sat IN satellites
             FILTER sat.canonical.name == null OR sat.canonical.name == ""
             
-            // Try to get name from sources (priority order)
+            // Try to get name from APPROVED sources only (GCAT and SatNOGS excluded)
             LET name = (
                 sat.sources.unoosa.name ||
-                sat.sources.gcat.name ||
                 sat.sources.spacetrack.name ||
                 sat.sources.spacetrack.object_name ||
                 sat.sources.kaggle.name ||
-                sat.sources.satnogs.name ||
                 sat.identifier
             )
             
-            // Try to get country from sources
+            // Try to get country from APPROVED sources only
             LET country = (
                 sat.canonical.country ||
                 sat.sources.unoosa.country_of_origin ||
                 sat.sources.unoosa.country ||
-                sat.sources.gcat.country_of_origin ||
                 sat.sources.spacetrack.country_of_origin ||
                 sat.sources.kaggle.country ||
                 sat.canonical.country_of_origin
             )
             
-            // Try to get launch_date from sources
+            // Try to get launch_date from APPROVED sources only
             LET launch_date = (
                 sat.canonical.launch_date ||
                 sat.sources.unoosa.date_of_launch ||
-                sat.sources.gcat.date_of_launch ||
                 sat.sources.spacetrack.date_of_launch ||
                 sat.sources.kaggle.launch_date ||
                 sat.canonical.date_of_launch

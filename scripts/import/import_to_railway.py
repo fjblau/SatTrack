@@ -15,7 +15,8 @@ EXPORT_DIR = "arango_export"
 EDGE_COLLECTIONS = [
     "constellation_membership",
     "registration_links", 
-    "orbital_proximity"
+    "orbital_proximity",
+    "collision_risk_edges"
 ]
 
 def import_data():
