@@ -158,7 +158,8 @@ python3 scripts/import/import_kaggle_catalog.py /Users/frankblau/Downloads/curre
 
 ---
 
-### [ ] Step: Phase 3 - Enrich with SatNOGS Operational Status
+### [x] Step: Phase 3 - Enrich with SatNOGS Operational Status
+<!-- chat-id: 42d82427-796a-4127-9b00-e73dc438cdb1 -->
 
 **Objective**: Add real-time operational status for satellites.
 
