@@ -18,50 +18,151 @@ Do not make assumptions on important decisions — get clarification first.
 
 ## Workflow Steps
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
+<!-- chat-id: 51935bae-7aa1-432b-b07e-2335999635f7 -->
 
-Assess the task's difficulty, as underestimating it leads to poor outcomes.
-- easy: Straightforward implementation, trivial bug fix or feature
-- medium: Moderate complexity, some edge cases or caveats to consider
-- hard: Complex logic, many caveats, architectural considerations, or high-risk changes
+**Difficulty**: Medium
 
-Create a technical specification for the task that is appropriate for the complexity level:
-- Review the existing codebase architecture and identify reusable components.
-- Define the implementation approach based on established patterns in the project.
-- Identify all source code files that will be created or modified.
-- Define any necessary data model, API, or interface changes.
-- Describe verification steps using the project's test and lint commands.
+**Summary**: The satellite registry data is outdated (most recent: 2025-09-13). Need to fetch and import launches through at least 2025-12-07 from UNOOSA.
 
-Save the output to `{@artifacts_path}/spec.md` with:
-- Technical context (language, dependencies)
-- Implementation approach
-- Source code structure changes
-- Data model / API / interface changes
-- Verification approach
+**Technical Specification**: See `spec.md` for complete details.
 
-If the task is complex enough, create a detailed implementation plan based on `{@artifacts_path}/spec.md`:
-- Break down the work into concrete tasks (incrementable, testable milestones)
-- Each task should reference relevant contracts and include verification steps
-- Replace the Implementation step below with the planned tasks
-
-Rule of thumb for step size: each step should represent a coherent unit of work (e.g., implement a component, add an API endpoint, write tests for a module). Avoid steps that are too granular (single function).
-
-Important: unit tests must be part of each implementation task, not separate tasks. Each task should implement the code and its tests together, if relevant.
-
-Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warrant this breakdown, keep the Implementation step below as is.
+**Key Findings**:
+- Current data has 5,401 records with most recent launch on 2025-09-13
+- Missing ~3 months of satellite launch data (Sept-Dec 2025)
+- UNOOSA Online Index has export functionality that can be leveraged
+- Existing import infrastructure can be reused with modifications
 
 ---
 
-### [ ] Step: Implementation
+### [ ] Step: Investigate UNOOSA Data Export
 
-Implement the task according to the technical specification and general engineering best practices.
+**Objective**: Determine the best method to fetch recent UNOOSA satellite registry data.
 
-1. Break the task into steps where possible.
-2. Implement the required changes in the codebase
-3. If relevant, write unit tests alongside each change.
-4. Run relevant tests and linters in the end of each step.
-5. Perform basic manual verification if applicable.
-6. After completion, write a report to `{@artifacts_path}/report.md` describing:
-   - What was implemented
-   - How the solution was tested
-   - The biggest issues or challenges encountered
+**Tasks**:
+- [ ] Access UNOOSA Online Index (https://www.unoosa.org/oosa/osoindex/search-ng.jspx)
+- [ ] Use browser dev tools to inspect the export/download functionality
+- [ ] Identify API endpoints or export format (CSV, JSON, XML)
+- [ ] Test export with date filter (launches after 2025-09-13)
+- [ ] Document the export process and any authentication requirements
+
+**Verification**:
+- Successfully export a sample dataset
+- Verify exported data format matches existing CSV structure
+- Confirm export includes launches from Sept-Dec 2025
+
+**Output**: Documentation of export process in implementation notes
+
+---
+
+### [ ] Step: Create Data Fetch and Merge Scripts
+
+**Objective**: Build scripts to fetch new UNOOSA data and merge it with existing records.
+
+**Tasks**:
+- [ ] Create `scripts/import/fetch_unoosa_data.py` (if automated) or document manual process
+- [ ] Create `scripts/import/merge_unoosa_updates.py` to merge new data with existing CSV
+- [ ] Implement deduplication based on Registration Number and International Designator
+- [ ] Add data validation (required fields, date format, etc.)
+- [ ] Create backup of existing CSV before merge
+
+**Implementation Details**:
+- Support filtering by date range
+- Preserve existing enrichments (NORAD IDs, etc.)
+- Handle edge cases (missing fields, format changes)
+- Add logging and error handling
+
+**Verification**:
+- Test script with sample data
+- Verify no data loss in merge
+- Check for proper duplicate detection
+- Validate merged CSV structure
+
+**Output**: 
+- Working fetch/merge scripts
+- Updated CSV with new launch data
+
+---
+
+### [ ] Step: Import to ArangoDB and Enrich
+
+**Objective**: Import new data into ArangoDB and run enrichment pipelines.
+
+**Tasks**:
+- [ ] Create database backup before import
+- [ ] Run import with dry-run flag first
+- [ ] Import new/updated records to ArangoDB
+- [ ] Run NORAD enrichment if applicable
+- [ ] Run launch data enrichment scripts
+- [ ] Update canonical fields for new records
+
+**Implementation Details**:
+- Use existing `scripts/import/import_arangodb_data.py` or create new script
+- Implement upsert logic (update existing, insert new)
+- Track import statistics (new vs updated records)
+- Handle errors gracefully
+
+**Verification**:
+- Query database for record count (should be > 5,401)
+- Verify launches after 2025-09-13 exist
+- Check specific launch on 2025-12-07 is present
+- Run data integrity checks
+- Verify canonical fields are properly populated
+
+**Commands**:
+```bash
+# Import to ArangoDB
+python3 scripts/import/import_arangodb_data.py
+
+# Enrich data
+python3 scripts/maintenance/enrich_launch_data.py
+
+# Verify
+python3 scripts/verification/verify_update.py --check-latest
+```
+
+**Output**: 
+- Updated ArangoDB database with recent launches
+- Import report with statistics
+
+---
+
+### [ ] Step: Verification and Documentation
+
+**Objective**: Verify the import was successful and document the process for future updates.
+
+**Tasks**:
+- [ ] Run comprehensive verification checks
+- [ ] Verify specific launches from Sept-Dec 2025 are present
+- [ ] Check data integrity (no duplicates, no data loss)
+- [ ] Verify canonical field promotion worked correctly
+- [ ] Document the entire process and any issues encountered
+- [ ] Create report summarizing what was done
+
+**Verification Commands**:
+```bash
+# Check total record count
+python3 -c "from database import connect_arangodb, db; connect_arangodb(); print(f'Total: {db.collection(\"satellites\").count()}')"
+
+# Check for recent launches
+python3 scripts/verification/verify_update.py --check-latest --after-date 2025-09-13
+
+# Data integrity checks
+python3 scripts/verification/check_pretty.py
+```
+
+**Expected Results**:
+- Database has > 5,401 records
+- Launches from Sept-Dec 2025 are present
+- Launch date 2025-12-07 exists in database
+- No duplicate records
+- Canonical fields properly populated
+
+**Documentation**:
+- Write implementation report to `report.md`
+- Include:
+  - Data source and export method used
+  - Number of new records imported
+  - Any issues or challenges encountered
+  - Commands for future updates
+  - Verification results
