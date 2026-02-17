@@ -295,6 +295,9 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                             if "canonical" not in existing:
                                 existing["canonical"] = {}
                             existing["canonical"]["launch_date"] = launch_date
+                            # CRITICAL: Always ensure canonical.name exists (use identifier as fallback)
+                            if not existing["canonical"].get("name"):
+                                existing["canonical"]["name"] = existing.get("identifier", "Unknown")
                             existing["canonical"]["updated_at"] = datetime.now(timezone.utc).isoformat()
                         
                         collection.update(existing)
