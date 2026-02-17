@@ -1,0 +1,16 @@
+{
+  "timestamp": "20260217_175713",
+  "host": "https://arangodb-production-d6fb.up.railway.app:443",
+  "database": "kessler",
+  "total_documents": 328611,
+  "collections": [
+    "collision_risk_edges",
+    "constellation_membership",
+    "mqtt_configurations",
+    "registration_documents",
+    "satellites",
+    "orbital_proximity",
+    "satellite_lineage",
+    "registration_links"
+  ]
+}
