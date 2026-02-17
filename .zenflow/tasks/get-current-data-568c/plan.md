@@ -385,7 +385,7 @@ python3 scripts/import/import_to_railway.py --restore-from backup_TIMESTAMP
 - Production database updated with multi-source data
 - API serving current satellite information
 
-**Completion Status**: ✅ **Complete**
+**Completion Status**: ✅ **Complete** (Re-deployed 2026-02-17 20:01 UTC)
 
 **Deployment Summary**:
 
@@ -394,20 +394,28 @@ python3 scripts/import/import_to_railway.py --restore-from backup_TIMESTAMP
    - Backed up: 328,611 documents (8 collections)
    - Backup time: ~33 seconds
 
-2. **Export Local Database** ✓
+2. **Local Data Import** ✓
+   - GCAT: 1,760 satellites imported (sources.gcat only)
+   - Kaggle: 14,622 satellites imported (promoted to canonical)
+   - SatNOGS: 1,356 satellites enriched (sources.satnogs only)
+   - Local backup created: `local_backup_before_import_20260217_201743/`
+
+3. **Export Local Database** ✓
    - Exported: 466,957 documents (7 collections)
    - Export size: ~179 MB total
-   - Collections: satellites, orbital_proximity, collision_risk_edges, constellation_membership, registration_links, registration_documents, mqtt_configurations
+   - Collections: satellites (18,702), orbital_proximity (145,702), collision_risk_edges (281,867), constellation_membership (14,884), registration_links (5,054), registration_documents (745), mqtt_configurations (3)
 
-3. **Import to Railway** ✓
+4. **Import to Railway** ✓
    - Imported: 466,954 documents
    - Import time: ~2 minutes
    - Mode: Replace existing data (on_duplicate='replace')
 
-4. **Production Verification** ✓
-   - **Total satellites**: 18,702 (was 17,791, +911 satellites)
+5. **Production Verification** ✓
+   - **Total satellites**: 18,702
+   - **PRETTY satellite**: ✓ Intact (name, country, launch date verified)
+   - **Recent launches**: 77 satellites after 2025-12-07 ✓
    - **Multi-source coverage**:
-     - GCAT: 113 satellites (recent launches through 2026-01-11)
+     - GCAT: 1,596 satellites (recent launches through 2026-01-11)
      - Kaggle: 14,673 satellites (orbital analytics)
      - SatNOGS: 1,356 satellites (operational status)
      - UNOOSA: 5,059 satellites (UN registration)
