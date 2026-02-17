@@ -23,48 +23,65 @@ Do not make assumptions on important decisions — get clarification first.
 
 **Difficulty**: Medium
 
-**Summary**: The satellite registry data is outdated (most recent: 2025-09-13). Need to import launches through at least 2025-12-07.
+**Summary**: The satellite registry data is outdated (most recent: 2025-09-13). Need to import launches through at least 2025-12-07 and enrich with multi-source data.
 
 **Technical Specification**: See `spec.md` for complete details.
 
 **Key Findings**:
 - Current data has 5,401 records with most recent launch on 2025-09-13
 - Missing ~3 months of satellite launch data (Sept-Dec 2025)
-- **GCAT has 99 recent satellites** (Dec 2025 - Jan 2026) - already downloaded
-- **Multi-source strategy**: GCAT for recent launches + UNOOSA for registration data
-- Existing import infrastructure can be reused with modifications
+- **Four complementary data sources available**:
+  - **GCAT**: 99 recent satellites (Dec 2025 - Jan 2026) - already downloaded
+  - **UNOOSA**: Official UN registration data (delayed but authoritative)
+  - **SatNOGS**: Real-time operational status via API
+  - **Kaggle**: 14,623 satellites with orbital analytics - updated Feb 16, 2026
+- Existing import infrastructure can be reused (Kaggle script already exists!)
 
 ---
 
-### [ ] Step: Analyze GCAT Data and Plan Import
+### [ ] Step: Analyze Data Sources and Plan Multi-Source Import
 
-**Objective**: Understand GCAT data structure and plan the import strategy.
+**Objective**: Understand all four data sources and plan the comprehensive import strategy.
 
-**Primary Data Source**: GCAT (General Catalog) - **Already Downloaded**
-- File: `gcat_satcat.tsv` (18.2 MB)
-- Updated: Feb 15, 2026
-- Coverage: Launches through Jan 11, 2026
-- Contains: 99 satellites launched Dec 2025 or later
+**Available Data Sources**:
+
+1. **GCAT** (General Catalog) - Recent launches & tech specs
+   - File: `gcat_satcat.tsv` (18.2 MB, already downloaded)
+   - Updated: Feb 15, 2026
+   - Coverage: 99 satellites launched Dec 2025 - Jan 2026
+
+2. **Kaggle** - Orbital analytics (14,623 satellites)
+   - File: `/Users/frankblau/Downloads/current_catalog.csv`
+   - Updated: Feb 16, 2026 (yesterday!)
+   - Script: `scripts/import/import_kaggle_catalog.py` (already exists!)
+
+3. **SatNOGS** - Operational status
+   - API: `https://db.satnogs.org/api/satellites/`
+   - Real-time data
+
+4. **UNOOSA** - Official registration (optional)
+   - Will check for new registrations
 
 **Tasks**:
 - [ ] Examine GCAT TSV structure and column mapping
-- [ ] Identify key fields for matching (NORAD ID, intl designator, name)
-- [ ] Test parsing a subset of GCAT data
-- [ ] Determine matching strategy (NORAD ID primary, name fallback)
-- [ ] Plan handling of satellites not yet in database
+- [ ] Review Kaggle CSV structure and existing import script
+- [ ] Test SatNOGS API endpoint
+- [ ] Determine matching strategy across sources (NORAD ID primary)
+- [ ] Plan handling of new satellites vs enriching existing ones
+- [ ] Decide on import order (GCAT → Kaggle → SatNOGS → UNOOSA)
 
 **Verification**:
-- Successfully parse sample GCAT records
-- Extract launch date, NORAD ID, name, country for recent satellites
-- Verify 99 satellites with launch dates >= 2025-09-14
+- Successfully parse sample records from GCAT and Kaggle
+- Test SatNOGS API with a known NORAD ID
+- Verify data freshness across all sources
 
-**Output**: Understanding of GCAT structure and matching approach
+**Output**: Understanding of all data sources and matching approach
 
 ---
 
-### [ ] Step: Create GCAT Import Script
+### [ ] Step: Phase 1 - Import GCAT Launch Data
 
-**Objective**: Build script to parse GCAT data and import recent launches to ArangoDB.
+**Objective**: Import 99 recent satellite launches (Dec 2025 - Jan 2026) from GCAT.
 
 **Tasks**:
 - [ ] Create `scripts/import/import_gcat_launches.py`
@@ -74,9 +91,9 @@ Do not make assumptions on important decisions — get clarification first.
 - [ ] Implement matching logic:
   - Primary: Match by NORAD catalog ID
   - Secondary: Match by international designator
-  - Fallback: Match by name similarity
+  - Fallback: Create new record
 - [ ] Handle merge scenarios:
-  - Update existing records with GCAT source data
+  - Update existing records: Add `sources.gcat`
   - Create new records for unknown satellites
   - Preserve existing source data (UNOOSA, etc.)
 
@@ -92,76 +109,108 @@ Do not make assumptions on important decisions — get clarification first.
 - Verify date filtering works correctly
 - Test matching against existing database records
 - Validate no data corruption
+- Confirm 99+ new satellites imported
 
 **Output**: 
 - Working `import_gcat_launches.py` script
-- Successfully parsed GCAT records ready for import
+- Database updated with recent launches through Jan 2026
 
 ---
 
-### [ ] Step: Import to ArangoDB and Enrich
+### [ ] Step: Phase 2 - Import Kaggle Orbital Analytics
 
-**Objective**: Import new data into ArangoDB and run enrichment pipelines.
+**Objective**: Enrich all satellites with orbital analytics from Kaggle (14,623 satellites).
 
 **Tasks**:
-- [ ] Create database backup before import
-- [ ] Run import with dry-run flag first
-- [ ] Import new/updated records to ArangoDB
-- [ ] Run NORAD enrichment if applicable
-- [ ] Run launch data enrichment scripts
-- [ ] Update canonical fields for new records
+- [ ] Use existing `scripts/import/import_kaggle_catalog.py`
+- [ ] Run import with Kaggle CSV: `/Users/frankblau/Downloads/current_catalog.csv`
+- [ ] Match records by NORAD ID
+- [ ] Add `sources.kaggle` with:
+  - Altitude category and orbital band
+  - Congestion risk assessment
+  - Orbit lifetime category
+  - Current orbital state
+  - Constellation membership
 
 **Implementation Details**:
-- Use existing `scripts/import/import_arangodb_data.py` or create new script
-- Implement upsert logic (update existing, insert new)
-- Track import statistics (new vs updated records)
-- Handle errors gracefully
+- Script already exists - just run it!
+- Updates existing records, creates new for unknown NORAD IDs
+- Preserves all existing source data
 
 **Verification**:
-- Query database for record count (should be > 5,401)
-- Verify launches after 2025-09-13 exist
-- Check specific launch on 2025-12-07 is present
-- Run data integrity checks
-- Verify canonical fields are properly populated
+- Verify records have `sources.kaggle` data
+- Check congestion risk and orbital band fields populated
+- Confirm 14,623 satellites processed
+- Sample check: verify a recent satellite has analytics
 
 **Commands**:
 ```bash
-# Import to ArangoDB
-python3 scripts/import/import_arangodb_data.py
-
-# Enrich data
-python3 scripts/maintenance/enrich_launch_data.py
-
-# Verify
-python3 scripts/verification/verify_update.py --check-latest
+# Import Kaggle data
+python3 scripts/import/import_kaggle_catalog.py /Users/frankblau/Downloads/current_catalog.csv
 ```
 
 **Output**: 
-- Updated ArangoDB database with recent launches
-- Import report with statistics
+- Database enriched with orbital analytics for 14K+ satellites
+- Congestion risk and orbit categories available
 
 ---
 
-### [ ] Step: (Optional) Supplement with UNOOSA Registration Data
+### [ ] Step: Phase 3 - Enrich with SatNOGS Operational Status
+
+**Objective**: Add real-time operational status for satellites.
+
+**Tasks**:
+- [ ] Create `scripts/import/import_satnogs_status.py`
+- [ ] Query SatNOGS API for all satellites with NORAD IDs
+- [ ] Add `sources.satnogs` with:
+  - Operational status (alive/dead/re-entered)
+  - Transmitter frequencies and modes
+  - Last observation date
+  - Operator and website
+- [ ] Update canonical status field based on SatNOGS observations
+
+**Implementation Details**:
+- API endpoint: `https://db.satnogs.org/api/satellites/?norad_cat_id={id}`
+- Match by NORAD ID
+- Rate limit: reasonable (community API)
+- Handle satellites not in SatNOGS (not all are tracked)
+
+**Verification**:
+- Verify records have `sources.satnogs` where available
+- Check operational status reflects actual observations
+- Confirm transmitter data populated for active satellites
+
+**Commands**:
+```bash
+# Import SatNOGS status
+python3 scripts/import/import_satnogs_status.py
+```
+
+**Output**: 
+- Database enriched with real operational status
+- Know which satellites are actually transmitting
+
+---
+
+### [ ] Step: Phase 4 (Optional) - Supplement with UNOOSA Registration
 
 **Objective**: Add official UN registration information for recently launched satellites.
 
-**Context**: UNOOSA provides official registration details that GCAT doesn't have:
+**Context**: UNOOSA provides official registration details:
 - Registration documents and legal information
 - Official function descriptions
 - Launch vehicle and site details
-- UN registered status
 
 **Tasks**:
 - [ ] Check UNOOSA for newly registered satellites (Sept-Dec 2025)
-- [ ] Export any new UNOOSA registration data
+- [ ] Export any new UNOOSA registration data if available
 - [ ] Create merge script to add `sources.unoosa` to existing records
 - [ ] Import registration data to ArangoDB
 - [ ] Update canonical fields if needed
 
-**Note**: Many satellites are registered months after launch, so this can be done later if needed.
+**Note**: Many satellites are registered months after launch, so this can be done later.
 
-**Output**: Enhanced records with both GCAT technical data + UNOOSA registration info
+**Output**: Enhanced records with official UN registration data
 
 ---
 
@@ -199,21 +248,31 @@ python3 scripts/verification/check_pretty.py
 ```
 
 **Expected Results**:
-- Database has > 5,401 records (likely ~5,500 with new GCAT data)
-- Launches from Sept 2025 - Jan 2026 are present
-- Launch date 2025-12-07 exists in database
-- Records have `sources.gcat` data
-- Existing `sources.unoosa` data preserved
-- No duplicate records
-- Canonical fields properly populated
+- **Record Count**: Database has ~15,000+ records (5,401 original + Kaggle expansion)
+- **Recent Launches**: Launches from Sept 2025 - Jan 2026 present (99+ from GCAT)
+- **Multi-Source Coverage**:
+  - Records with `sources.gcat`: 99+ (recent launches)
+  - Records with `sources.kaggle`: 14,623 (orbital analytics)
+  - Records with `sources.satnogs`: Varies (actively tracked satellites)
+  - Records with `sources.unoosa`: 5,401+ (original + new registrations)
+- **Data Quality**:
+  - Launch date 2025-12-07 exists in database
+  - No duplicate records
+  - Canonical fields properly promoted from all sources
+  - Congestion risk and orbital band populated (from Kaggle)
+  - Operational status reflects SatNOGS observations
 
 **Documentation**:
 - Write implementation report to `report.md`
 - Include:
-  - Multi-source strategy used (GCAT + UNOOSA)
-  - Number of GCAT records imported (new vs updated)
-  - Data quality and completeness
+  - **Four-source strategy** used (GCAT + Kaggle + SatNOGS + UNOOSA)
+  - Number of records from each source:
+    - GCAT: 99+ recent launches
+    - Kaggle: 14,623 satellites with analytics
+    - SatNOGS: X satellites with operational status
+    - UNOOSA: 5,401+ with registration data
+  - Data quality and completeness by source
+  - Value-add from each source (launches, analytics, status, registration)
   - Any issues or challenges encountered
-  - Commands for future GCAT updates
-  - Recommendations for UNOOSA supplementation
-  - Verification results
+  - Commands for future updates of each source
+  - Verification results and statistics
