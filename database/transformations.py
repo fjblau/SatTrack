@@ -69,6 +69,16 @@ def update_canonical(doc: Dict[str, Any]):
                     canonical[field] = value
                     break
     
+    # Ensure name is always populated (fallback to identifier)
+    if not canonical.get("name"):
+        canonical["name"] = doc.get("identifier", "Unknown")
+    
+    # Ensure launch_date is populated (alias for date_of_launch)
+    if not canonical.get("launch_date") and canonical.get("date_of_launch"):
+        canonical["launch_date"] = canonical["date_of_launch"]
+    elif canonical.get("launch_date") and not canonical.get("date_of_launch"):
+        canonical["date_of_launch"] = canonical["launch_date"]
+    
     orbital_fields = ["apogee_km", "perigee_km", "inclination_degrees", "period_minutes"]
     canonical["orbit"] = {}
     for field in orbital_fields:
