@@ -19,6 +19,7 @@ function App() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
   const [filterOptions, setFilterOptions] = useState({})
+  const [sortConfig, setSortConfig] = useState([])
 
   const limit = PAGINATION.DEFAULT_PAGE_SIZE
 
@@ -141,6 +142,48 @@ function App() {
     setSelectedObject(object)
   }
 
+  const handleSort = (column) => {
+    setSortConfig(prevConfig => {
+      const existingIndex = prevConfig.findIndex(s => s.column === column)
+      
+      if (existingIndex === -1) {
+        return [...prevConfig, { column, direction: 'asc' }]
+      }
+      
+      const existing = prevConfig[existingIndex]
+      if (existing.direction === 'asc') {
+        const newConfig = [...prevConfig]
+        newConfig[existingIndex] = { column, direction: 'desc' }
+        return newConfig
+      }
+      
+      return prevConfig.filter((_, index) => index !== existingIndex)
+    })
+  }
+
+  const sortedObjects = [...objects].sort((a, b) => {
+    for (const { column, direction } of sortConfig) {
+      let aVal = a[column]
+      let bVal = b[column]
+      
+      if (aVal === null || aVal === undefined || aVal === '') aVal = ''
+      if (bVal === null || bVal === undefined || bVal === '') bVal = ''
+      
+      let comparison = 0
+      
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal))
+      }
+      
+      if (comparison !== 0) {
+        return direction === 'asc' ? comparison : -comparison
+      }
+    }
+    return 0
+  })
+
   return (
     <div className="app">
       <header className="app-header">
@@ -187,10 +230,12 @@ function App() {
           <main className="main-content">
             <div className="table-container">
               <DataTable 
-                objects={objects}
+                objects={sortedObjects}
                 selectedObject={selectedObject}
                 onRowClick={handleRowClick}
                 loading={loading}
+                sortConfig={sortConfig}
+                onSort={handleSort}
               />
               {total > limit && (
                 <div className="pagination">
