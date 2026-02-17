@@ -90,51 +90,75 @@
 
 ## Implementation Approach
 
-### Primary Approach: Use GCAT (General Catalog) - RECOMMENDED ✅
+### Recommended Strategy: GCAT + UNOOSA (Multi-Source)
 
-**GCAT is the best source** for current satellite launch data:
-- **Updated**: Feb 15, 2026 (much more current than UNOOSA)
+Use both data sources to get comprehensive and current data:
+
+#### Phase 1: Import Recent Launches from GCAT ✅
+
+**GCAT provides the most current launch data**:
+- **Updated**: Feb 15, 2026
 - **Coverage**: Launches through Jan 11, 2026
 - **Recent Data**: 99 satellites launched Dec 2025 or later
-- **Format**: TSV (tab-separated values)
-- **Location**: Already downloaded at `gcat_satcat.tsv` (18.2 MB)
-- **Source**: Jonathan McDowell's comprehensive catalog (planet4589.org/space/gcat)
+- **Location**: `gcat_satcat.tsv` (18.2 MB, already downloaded)
 
 **Steps**:
 1. **Parse GCAT Data**:
    - Script: `scripts/import/import_gcat_launches.py`
    - Parse TSV format (tab-delimited)
-   - Extract fields: Launch date, Name, NORAD ID, Owner, State, etc.
+   - Extract: Launch date, Name, NORAD ID, Owner, State, orbital params
    - Filter for launches after 2025-09-13
 
 2. **Match and Merge**:
-   - Match GCAT records to existing database records by:
-     - NORAD catalog ID (primary key)
-     - International designator
-     - Object name
-   - Enrich existing records with GCAT data
-   - Create new records for satellites not in database
+   - Match by NORAD ID (primary), international designator (secondary)
+   - Update existing records: Add `sources.gcat` data
+   - Create new records for unknown satellites
+   - Preserve existing `sources.unoosa` data
 
 3. **Import to ArangoDB**:
-   - Update existing documents with new GCAT source data
-   - Insert new documents for previously unknown satellites
-   - Preserve existing enrichments (UNOOSA, etc.)
+   - Upsert operation (update or insert)
+   - Maintain multi-source document structure
    - Update canonical fields
 
-### Alternative: UNOOSA Update (If official UN data needed)
+#### Phase 2: Supplement with UNOOSA Registration Data (Optional)
 
-If official UNOOSA registration data is required:
+**UNOOSA provides official registration details** not in GCAT:
 
 **Steps**:
-1. **Download from UNOOSA**:
-   - Manual export from https://www.unoosa.org/oosa/osoindex/search-ng.jspx
-   - Filter by launch date >= 2025-09-14
-   - Export to CSV
+1. **Check for Updated UNOOSA Data**:
+   - Visit UNOOSA Online Index
+   - Search for satellites launched Sept-Dec 2025
+   - Export any newly registered satellites
 
-2. **Merge Script**:
+2. **Merge Registration Data**:
    - Script: `scripts/import/merge_unoosa_updates.py`
-   - Merge with existing `data/unoosa_registry.csv`
-   - Preserve NORAD enrichments
+   - Match UNOOSA records to existing satellites (by intl designator, NORAD ID)
+   - Add/update `sources.unoosa` with official registration info
+   - Particularly valuable for:
+     - Registration documents
+     - Official function descriptions
+     - Launch site details
+     - Legal registration status
+
+#### Data Flow
+
+```
+GCAT (gcat_satcat.tsv)
+  ↓ Parse recent launches (Sept 2025+)
+  ↓ Match by NORAD ID
+  ↓
+ArangoDB (satellites collection)
+  ├─ Existing records: Add sources.gcat
+  └─ New records: Create with sources.gcat
+  ↓
+UNOOSA (optional update)
+  ↓ Add registration data
+  ↓
+Final: Multi-source records
+  ├─ sources.gcat (technical data)
+  ├─ sources.unoosa (registration data)
+  └─ canonical (promoted fields)
+```
 
 ---
 
@@ -376,26 +400,72 @@ ARANGO_PASSWORD=kessler_dev_password
 
 ## Notes
 
-### Why GCAT Instead of UNOOSA?
+### Multi-Source Strategy: GCAT + UNOOSA
 
-**GCAT Advantages**:
-- ✅ **3+ months more current** (Jan 2026 vs Sept 2025)
-- ✅ **Already downloaded** - no web scraping needed
-- ✅ **Well-documented** format with clear column definitions
-- ✅ **Comprehensive** - includes all space objects, not just UN-registered
-- ✅ **Maintained by expert** (Jonathan McDowell, recognized authority)
-- ✅ **Free and open** under CC-BY-4.0 license
+**Best Approach**: Use **both sources** for complementary data
 
-**UNOOSA Limitations**:
-- ⚠️ Significant lag (3+ months behind actual launches)
-- ⚠️ Only includes officially registered satellites (many are not registered)
-- ⚠️ No public API - requires web scraping or manual export
-- ⚠️ Export mechanism may change
+#### GCAT (Primary for Recent Launches)
+**Use for**:
+- ✅ Recent launch data (Sept 2025 - Jan 2026)
+- ✅ Comprehensive coverage (all space objects)
+- ✅ Technical data (mass, dimensions, orbital parameters)
+- ✅ Already downloaded and up-to-date
+
+**Provides**:
+- Launch dates
+- NORAD catalog IDs
+- Object names and types
+- Country/owner codes
+- Physical characteristics
+- Orbital parameters
+
+#### UNOOSA (Primary for Registration Data)
+**Use for**:
+- ✅ Official UN registration information
+- ✅ Registration documents and legal details
+- ✅ Launch site information
+- ✅ Function/purpose descriptions
+- ✅ Status updates (operational, decayed, etc.)
+
+**Provides**:
+- Registration numbers
+- International designators
+- Official country of origin
+- Launch vehicle details
+- Place of launch
+- Function descriptions
+- Registration document links
+- UN registered status
+
+#### Complementary Nature
+- **GCAT**: Comprehensive but not official
+- **UNOOSA**: Official but delayed and incomplete (only registered objects)
+- **Together**: Complete picture - technical data + legal registration info
 
 ### Future Updates
 
-- **GCAT** is updated regularly (latest: Feb 15, 2026)
-- Download fresh GCAT data: `wget https://planet4589.org/space/gcat/tsv/cat/satcat.tsv`
-- Re-run import script to get latest launches
-- Consider setting up periodic automated updates (weekly/monthly)
-- Document the process for future maintainers
+**Regular Update Workflow**:
+
+1. **Weekly/Monthly**: Update GCAT data (most current)
+   ```bash
+   wget https://planet4589.org/space/gcat/tsv/cat/satcat.tsv -O gcat_satcat.tsv
+   python3 scripts/import/import_gcat_launches.py --after-date 2026-01-11
+   ```
+
+2. **Quarterly**: Check UNOOSA for new registrations
+   - Many satellites are registered months after launch
+   - UNOOSA provides official legal details GCAT doesn't have
+   - Export and merge new registration data
+
+3. **Automated**: Set up cron job for GCAT updates
+   ```bash
+   # Weekly GCAT update (Sundays at 2 AM)
+   0 2 * * 0 cd /path/to/kessler && ./scripts/update_gcat.sh
+   ```
+
+**Benefits of Multi-Source Approach**:
+- ✅ Most current launch data (GCAT)
+- ✅ Official registration details (UNOOSA)
+- ✅ Comprehensive coverage (GCAT includes unregistered satellites)
+- ✅ Legal/official documentation (UNOOSA registration docs)
+- ✅ Redundancy and cross-validation

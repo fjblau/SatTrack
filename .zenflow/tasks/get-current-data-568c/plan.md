@@ -23,14 +23,15 @@ Do not make assumptions on important decisions — get clarification first.
 
 **Difficulty**: Medium
 
-**Summary**: The satellite registry data is outdated (most recent: 2025-09-13). Need to fetch and import launches through at least 2025-12-07 from UNOOSA.
+**Summary**: The satellite registry data is outdated (most recent: 2025-09-13). Need to import launches through at least 2025-12-07.
 
 **Technical Specification**: See `spec.md` for complete details.
 
 **Key Findings**:
 - Current data has 5,401 records with most recent launch on 2025-09-13
 - Missing ~3 months of satellite launch data (Sept-Dec 2025)
-- UNOOSA Online Index has export functionality that can be leveraged
+- **GCAT has 99 recent satellites** (Dec 2025 - Jan 2026) - already downloaded
+- **Multi-source strategy**: GCAT for recent launches + UNOOSA for registration data
 - Existing import infrastructure can be reused with modifications
 
 ---
@@ -141,6 +142,29 @@ python3 scripts/verification/verify_update.py --check-latest
 
 ---
 
+### [ ] Step: (Optional) Supplement with UNOOSA Registration Data
+
+**Objective**: Add official UN registration information for recently launched satellites.
+
+**Context**: UNOOSA provides official registration details that GCAT doesn't have:
+- Registration documents and legal information
+- Official function descriptions
+- Launch vehicle and site details
+- UN registered status
+
+**Tasks**:
+- [ ] Check UNOOSA for newly registered satellites (Sept-Dec 2025)
+- [ ] Export any new UNOOSA registration data
+- [ ] Create merge script to add `sources.unoosa` to existing records
+- [ ] Import registration data to ArangoDB
+- [ ] Update canonical fields if needed
+
+**Note**: Many satellites are registered months after launch, so this can be done later if needed.
+
+**Output**: Enhanced records with both GCAT technical data + UNOOSA registration info
+
+---
+
 ### [ ] Step: Verification and Documentation
 
 **Objective**: Verify the import was successful and document the process for future updates.
@@ -150,6 +174,7 @@ python3 scripts/verification/verify_update.py --check-latest
 - [ ] Verify specific launches from Sept-Dec 2025 are present
 - [ ] Check data integrity (no duplicates, no data loss)
 - [ ] Verify canonical field promotion worked correctly
+- [ ] Test multi-source records (GCAT + UNOOSA where applicable)
 - [ ] Document the entire process and any issues encountered
 - [ ] Create report summarizing what was done
 
@@ -161,22 +186,34 @@ python3 -c "from database import connect_arangodb, db; connect_arangodb(); print
 # Check for recent launches
 python3 scripts/verification/verify_update.py --check-latest --after-date 2025-09-13
 
+# Verify GCAT source data
+python3 -c "
+from database import connect_arangodb, db
+connect_arangodb()
+count = db.aql.execute('FOR doc IN satellites FILTER doc.sources.gcat != null RETURN 1').count()
+print(f'Records with GCAT data: {count}')
+"
+
 # Data integrity checks
 python3 scripts/verification/check_pretty.py
 ```
 
 **Expected Results**:
-- Database has > 5,401 records
-- Launches from Sept-Dec 2025 are present
+- Database has > 5,401 records (likely ~5,500 with new GCAT data)
+- Launches from Sept 2025 - Jan 2026 are present
 - Launch date 2025-12-07 exists in database
+- Records have `sources.gcat` data
+- Existing `sources.unoosa` data preserved
 - No duplicate records
 - Canonical fields properly populated
 
 **Documentation**:
 - Write implementation report to `report.md`
 - Include:
-  - Data source and export method used
-  - Number of new records imported
+  - Multi-source strategy used (GCAT + UNOOSA)
+  - Number of GCAT records imported (new vs updated)
+  - Data quality and completeness
   - Any issues or challenges encountered
-  - Commands for future updates
+  - Commands for future GCAT updates
+  - Recommendations for UNOOSA supplementation
   - Verification results
