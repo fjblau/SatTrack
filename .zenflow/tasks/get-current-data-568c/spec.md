@@ -53,8 +53,12 @@
    - **Unique data**: Transmitter frequencies, telemetry, decay confirmation
    - **Community-verified**: Crowdsourced observations
    
-6. **Kaggle** - Curated satellite catalog
-   - May not be most current
+6. **Kaggle** - Orbital analytics and derived metrics ✨
+   - **File**: `/Users/frankblau/Downloads/current_catalog.csv` (14,623 satellites)
+   - **Updated**: Feb 16, 2026 (yesterday!)
+   - **Source**: CelesTrak TLE data with analytics
+   - **Unique data**: Pre-calculated orbit categories, congestion risk, altitude bands
+   - **Coverage**: Very comprehensive (3x more than UNOOSA)
 
 ### Current Data Status
 - **Most recent launch**: 2025-09-13 (September 13, 2025)
@@ -96,7 +100,7 @@
 
 ## Implementation Approach
 
-### Recommended Strategy: GCAT + UNOOSA + SatNOGS (Multi-Source)
+### Recommended Strategy: GCAT + UNOOSA + SatNOGS + Kaggle (Multi-Source)
 
 Use both data sources to get comprehensive and current data:
 
@@ -166,6 +170,26 @@ Use both data sources to get comprehensive and current data:
 
 **Value**: Know which satellites are actually operational vs just cataloged
 
+#### Phase 4: Import Kaggle Orbital Analytics (High Value)
+
+**Kaggle provides pre-calculated analytics** not available elsewhere:
+
+**Steps**:
+1. **Import from Kaggle CSV**:
+   - Script: `scripts/import/import_kaggle_catalog.py` (already exists!)
+   - File: `/Users/frankblau/Downloads/current_catalog.csv`
+   - Match by NORAD ID to existing records
+
+2. **Enrich with Analytics**:
+   - Add `sources.kaggle` with:
+     - Altitude category and orbital band
+     - Congestion risk assessment
+     - Orbit lifetime category
+     - Current orbital state (epoch)
+     - Constellation membership
+
+**Value**: Risk assessment and orbital analytics for all satellites
+
 #### Data Flow
 
 ```
@@ -191,10 +215,18 @@ Use both data sources to get comprehensive and current data:
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
+│              Phase 4: Kaggle Analytics Import               │
+│  Kaggle CSV → Match by NORAD ID → ArangoDB                  │
+│  • Add sources.kaggle with orbital analytics                │
+│  • Enrich with congestion risk and orbit categories         │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
 │              Final: Multi-Source Documents                  │
-│  ├─ sources.gcat (technical specs & orbital data)           │
+│  ├─ sources.gcat (technical specs & launch data)            │
 │  ├─ sources.unoosa (official registration)                  │
 │  ├─ sources.satnogs (operational status)                    │
+│  ├─ sources.kaggle (orbital analytics)                      │
 │  └─ canonical (promoted/unified fields)                     │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -292,6 +324,22 @@ No database schema changes required. The existing multi-source document structur
       ],
       "last_observation": "2026-02-17T12:00:00Z",
       # ... other SatNOGS operational fields
+    },
+    "kaggle": {
+      "norad_cat_id": 60123,
+      "object_type": "PAYLOAD",
+      "satellite_constellation": "Example Constellation",
+      "altitude_km": 510.5,
+      "altitude_category": "Low LEO",
+      "orbital_band": "LEO-Polar",
+      "congestion_risk": "MEDIUM",
+      "inclination": 97.5,
+      "eccentricity": 0.001,
+      "orbit_lifetime_category": "1-5yr",
+      "mean_motion": 15.2,
+      "epoch": "2026-02-16 14:00:00",
+      "snapshot_date": "2026-02-16",
+      # ... other Kaggle analytics fields
     }
   },
   "canonical": {
@@ -304,10 +352,13 @@ No database schema changes required. The existing multi-source document structur
     "perigee_km": 500,
     "apogee_km": 520,
     "inclination": 97.5,
+    "altitude_km": 510.5,  # From Kaggle
+    "orbital_band": "LEO-Polar",  # From Kaggle
+    "congestion_risk": "MEDIUM",  # From Kaggle analytics
     # ... promoted fields from all sources
   },
   "metadata": {
-    "sources_available": ["gcat", "unoosa", "satnogs"],
+    "sources_available": ["gcat", "unoosa", "satnogs", "kaggle"],
     "last_updated_at": "2026-02-17T14:35:00Z",
     "transformations": [...]
   }
@@ -438,12 +489,14 @@ python3 scripts/verification/check_pretty.py
 
 ## Success Criteria
 
-1. ✅ Database contains launches up to at least 2025-12-07
-2. ✅ No data loss - all original 5,401 records preserved
-3. ✅ New records properly formatted with UNOOSA source data
-4. ✅ Canonical fields updated for new records
-5. ✅ Import process documented and repeatable
-6. ✅ Verification scripts pass all checks
+1. ✅ **GCAT Import**: Database contains launches through Jan 11, 2026 (99+ new satellites)
+2. ✅ **Data Integrity**: All original 5,401 records preserved, no data loss
+3. ✅ **Multi-Source**: Records have appropriate source data (GCAT, UNOOSA, SatNOGS, Kaggle)
+4. ✅ **Canonical Fields**: Properly promoted from all sources (launch date, status, analytics)
+5. ✅ **Kaggle Analytics**: 14,623 satellites enriched with orbit categories and congestion risk
+6. ✅ **Operational Status**: SatNOGS data shows which satellites are actually active
+7. ✅ **Repeatability**: Import process documented with scripts for future updates
+8. ✅ **Verification**: All checks pass (counts, dates, integrity)
 
 ---
 
@@ -540,11 +593,31 @@ ARANGO_PASSWORD=kessler_dev_password
 
 **API**: Public REST API at `https://db.satnogs.org/api/satellites/`
 
+#### Kaggle (For Orbital Analytics)
+**Use for**:
+- ✅ **Pre-calculated orbital analytics** (altitude categories, congestion risk)
+- ✅ Comprehensive coverage (14,623 satellites, 3x more than UNOOSA)
+- ✅ Current orbital state (updated daily from CelesTrak)
+- ✅ Derived metrics not available elsewhere
+
+**Provides**:
+- Altitude category (Very Low, Low, Medium LEO, etc.)
+- Orbital band classification (LEO-Polar, LEO-Equatorial, MEO, GEO)
+- Congestion risk level (LOW, MEDIUM, HIGH)
+- Orbit lifetime category (<1yr, 1-5yr, >5yr)
+- Current altitude, eccentricity, inclination
+- Constellation membership
+- Country of origin
+
+**File**: `/Users/frankblau/Downloads/current_catalog.csv`
+**Updated**: Daily (latest: Feb 16, 2026)
+
 #### Complementary Nature
-- **GCAT**: Comprehensive catalog with technical specs (all objects)
-- **UNOOSA**: Official UN registration and legal details (registered only)
-- **SatNOGS**: Real-time operational status and communications data (actively tracked)
-- **Together**: Complete picture - technical + legal + operational data
+- **GCAT**: Comprehensive catalog with launch data and technical specs
+- **UNOOSA**: Official UN registration and legal details
+- **SatNOGS**: Real-time operational status from observations
+- **Kaggle**: Orbital analytics and risk assessment
+- **Together**: Complete picture - launches + legal + operational + analytics
 
 ### Future Updates
 
@@ -568,8 +641,9 @@ ARANGO_PASSWORD=kessler_dev_password
    ```
 
 **Benefits of Multi-Source Approach**:
-- ✅ Most current launch data (GCAT)
-- ✅ Official registration details (UNOOSA)
-- ✅ Comprehensive coverage (GCAT includes unregistered satellites)
-- ✅ Legal/official documentation (UNOOSA registration docs)
-- ✅ Redundancy and cross-validation
+- ✅ **Most current launch data** (GCAT - through Jan 2026)
+- ✅ **Official registration** (UNOOSA - legal documentation)
+- ✅ **Real operational status** (SatNOGS - community observations)
+- ✅ **Orbital analytics** (Kaggle - congestion risk, orbit categories)
+- ✅ **Comprehensive coverage** (14,623 satellites from Kaggle)
+- ✅ **Redundancy and validation** (cross-check data across sources)
