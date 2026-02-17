@@ -214,9 +214,9 @@ python3 scripts/import/import_satnogs_status.py
 
 ---
 
-### [ ] Step: Verification and Documentation
+### [ ] Step: Local Verification and Testing
 
-**Objective**: Verify the import was successful and document the process for future updates.
+**Objective**: Verify the local import was successful before deploying to production.
 
 **Tasks**:
 - [ ] Run comprehensive verification checks
@@ -262,6 +262,93 @@ python3 scripts/verification/check_pretty.py
   - Congestion risk and orbital band populated (from Kaggle)
   - Operational status reflects SatNOGS observations
 
+**Next Steps**:
+- If all verifications pass locally, proceed to production deployment
+- If issues found, fix and re-verify before deploying
+
+---
+
+### [ ] Step: Production Deployment to Railway
+
+**Objective**: Deploy the updated database to Railway production environment.
+
+**Railway Connection**:
+- **Host**: `https://arangodb-production-d6fb.up.railway.app:443`
+- **Database**: `kessler`
+- **User**: `root`
+- **Password**: From `RAILWAY_PASSWORD` environment variable
+
+**Tasks**:
+- [ ] **Step 1: Backup Production Database**
+  - Export current Railway database to JSONL
+  - Store backup with timestamp
+  - Verify backup integrity
+  
+- [ ] **Step 2: Export Local Database**
+  - Run `scripts/import/export_arangodb.py`
+  - Verify all collections exported
+  - Check file sizes and record counts
+  
+- [ ] **Step 3: Import to Railway**
+  - Set `RAILWAY_PASSWORD` environment variable
+  - Run `scripts/import/import_to_railway.py`
+  - Monitor import progress
+  - Check for errors
+  
+- [ ] **Step 4: Verify Production Import**
+  - Query production database for record counts
+  - Verify recent launches present (2025-12-07+)
+  - Check multi-source data (GCAT, Kaggle, SatNOGS)
+  - Test API endpoints on production
+
+**Commands**:
+```bash
+# Set Railway password
+export RAILWAY_PASSWORD='your-railway-password'
+
+# Export local database
+python3 scripts/import/export_arangodb.py
+
+# Import to Railway
+python3 scripts/import/import_to_railway.py
+
+# Verify production (from production API)
+curl https://your-api.railway.app/v2/search?q=2025-12
+```
+
+**Safety Measures**:
+- Backup created before any changes
+- Dry-run verification on local copy
+- Incremental import with error handling
+- Rollback plan ready (restore from backup)
+
+**Verification on Production**:
+- Record count matches expected (~15,000+)
+- Recent satellites searchable
+- API returns data correctly
+- No performance degradation
+
+**Rollback Plan** (if issues):
+```bash
+# Restore from backup
+python3 scripts/import/import_to_railway.py --restore-from backup_TIMESTAMP
+```
+
+**Output**: 
+- Production database updated with multi-source data
+- API serving current satellite information
+
+---
+
+### [ ] Step: Final Documentation
+
+**Objective**: Document the complete process for future reference and updates.
+
+**Tasks**:
+- [ ] Write implementation report to `report.md`
+- [ ] Document production deployment steps
+- [ ] Create update guide for future data refreshes
+
 **Documentation**:
 - Write implementation report to `report.md`
 - Include:
@@ -273,6 +360,8 @@ python3 scripts/verification/check_pretty.py
     - UNOOSA: 5,401+ with registration data
   - Data quality and completeness by source
   - Value-add from each source (launches, analytics, status, registration)
+  - **Production deployment** steps and verification
   - Any issues or challenges encountered
   - Commands for future updates of each source
-  - Verification results and statistics
+  - Rollback procedure if needed
+  - Verification results and statistics (local + production)

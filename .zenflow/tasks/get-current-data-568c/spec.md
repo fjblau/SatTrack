@@ -233,6 +233,92 @@ Use both data sources to get comprehensive and current data:
 
 ---
 
+## Deployment Strategy
+
+### Development → Production Workflow
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                  LOCAL DEVELOPMENT                         │
+│  1. Import GCAT → 2. Import Kaggle → 3. Import SatNOGS    │
+│  4. Verify data integrity and completeness                 │
+└─────────────────────────┬──────────────────────────────────┘
+                          ↓
+┌────────────────────────────────────────────────────────────┐
+│                  EXPORT LOCAL DATA                         │
+│  scripts/import/export_arangodb.py                         │
+│  → Creates arango_export/*.jsonl files                     │
+└─────────────────────────┬──────────────────────────────────┘
+                          ↓
+┌────────────────────────────────────────────────────────────┐
+│              BACKUP PRODUCTION (Railway)                   │
+│  Export current production database                        │
+│  → Store with timestamp for rollback                       │
+└─────────────────────────┬──────────────────────────────────┘
+                          ↓
+┌────────────────────────────────────────────────────────────┐
+│              IMPORT TO PRODUCTION                          │
+│  scripts/import/import_to_railway.py                       │
+│  → Uploads JSONL files to Railway ArangoDB                 │
+└─────────────────────────┬──────────────────────────────────┘
+                          ↓
+┌────────────────────────────────────────────────────────────┐
+│              VERIFY PRODUCTION                             │
+│  - Query record counts                                     │
+│  - Test API endpoints                                      │
+│  - Verify recent satellites searchable                     │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Railway Production Environment
+
+**Connection Details**:
+- **Host**: `https://arangodb-production-d6fb.up.railway.app:443`
+- **Database**: `kessler`
+- **User**: `root`
+- **Password**: Set via `RAILWAY_PASSWORD` environment variable
+
+**Existing Infrastructure**:
+- ✅ Export script: `scripts/import/export_arangodb.py`
+- ✅ Import script: `scripts/import/import_to_railway.py`
+- ✅ Railway deployment active and accessible
+
+**Safety Practices**:
+1. **Always backup production first** - Export before any import
+2. **Test locally first** - Never deploy untested data
+3. **Incremental import** - Import handles errors gracefully
+4. **Verification required** - Check counts and API after import
+5. **Rollback ready** - Keep backup for quick restore
+
+### Deployment Checklist
+
+**Pre-Deployment**:
+- [ ] All local imports completed successfully
+- [ ] Local verification passed
+- [ ] Export local database to JSONL
+- [ ] Verify export file sizes and counts
+
+**Deployment**:
+- [ ] Export/backup current production database
+- [ ] Set `RAILWAY_PASSWORD` environment variable
+- [ ] Run import to Railway
+- [ ] Monitor import progress (no errors)
+
+**Post-Deployment**:
+- [ ] Verify production record counts
+- [ ] Test production API endpoints
+- [ ] Search for recent satellites (2025-12+)
+- [ ] Check multi-source data present
+- [ ] Monitor for performance issues
+
+**Rollback** (if needed):
+- [ ] Stop production API (if necessary)
+- [ ] Restore from backup
+- [ ] Verify restoration
+- [ ] Resume API
+
+---
+
 ## Source Code Structure Changes
 
 ### New Files
@@ -489,14 +575,23 @@ python3 scripts/verification/check_pretty.py
 
 ## Success Criteria
 
+### Local Development
 1. ✅ **GCAT Import**: Database contains launches through Jan 11, 2026 (99+ new satellites)
 2. ✅ **Data Integrity**: All original 5,401 records preserved, no data loss
 3. ✅ **Multi-Source**: Records have appropriate source data (GCAT, UNOOSA, SatNOGS, Kaggle)
 4. ✅ **Canonical Fields**: Properly promoted from all sources (launch date, status, analytics)
 5. ✅ **Kaggle Analytics**: 14,623 satellites enriched with orbit categories and congestion risk
 6. ✅ **Operational Status**: SatNOGS data shows which satellites are actually active
-7. ✅ **Repeatability**: Import process documented with scripts for future updates
-8. ✅ **Verification**: All checks pass (counts, dates, integrity)
+7. ✅ **Verification**: All checks pass (counts, dates, integrity)
+
+### Production Deployment (Railway)
+8. ✅ **Export**: Local database successfully exported to JSONL format
+9. ✅ **Production Backup**: Railway database backed up before import
+10. ✅ **Production Import**: Data successfully imported to Railway ArangoDB
+11. ✅ **Production Verification**: All verification checks pass on production
+12. ✅ **API Functional**: Production API serves updated data correctly
+13. ✅ **Rollback Plan**: Backup available for quick restore if issues arise
+14. ✅ **Documentation**: Deployment process documented for future updates
 
 ---
 
@@ -516,22 +611,40 @@ beautifulsoup4>=4.12.0  # If web scraping needed
 - **UNOOSA** (optional): https://www.unoosa.org/oosa/osoindex/search-ng.jspx
 
 ### Environment Variables
+
+**Local Development**:
 ```bash
 ARANGO_HOST=http://localhost:8529
 ARANGO_USER=root
 ARANGO_PASSWORD=kessler_dev_password
 ```
 
+**Production (Railway)**:
+```bash
+RAILWAY_HOST=https://arangodb-production-d6fb.up.railway.app:443
+RAILWAY_PASSWORD=<your-railway-password>
+```
+
 ---
 
 ## Timeline Estimate
 
-- **GCAT Analysis** (understand TSV format, column mapping): 30 minutes
-- **Script Development** (parse/match/import): 2-3 hours
-- **Testing & Verification**: 1 hour
-- **Total**: 3-4 hours
+### Local Development
+- **Data Source Analysis** (GCAT, Kaggle, SatNOGS): 30 minutes
+- **Script Development** (GCAT parser, SatNOGS integration): 2-3 hours
+- **Local Import & Testing**: 1-2 hours
+- **Local Verification**: 30 minutes
 
-**Note**: Much faster than UNOOSA approach since data is already downloaded and well-documented
+### Production Deployment
+- **Export Local Database**: 15 minutes
+- **Backup Production Database**: 15 minutes
+- **Import to Production**: 30 minutes
+- **Production Verification**: 30 minutes
+- **Contingency/Issues**: 30 minutes
+
+**Total**: 5-7 hours
+
+**Note**: Kaggle script already exists, saving significant time
 
 ---
 
