@@ -33,6 +33,10 @@ function App() {
     setPage(0)
   }, [filters])
 
+  useEffect(() => {
+    fetchObjects(0)
+  }, [sortConfig])
+
   const fetchFilterOptions = async () => {
     try {
       const [countriesRes, statusesRes, orbitalBandsRes, congestionRisksRes] = await Promise.all([
@@ -85,6 +89,12 @@ function App() {
     if (filters.status) params.append('status', filters.status)
     if (filters.orbital_band) params.append('orbital_band', filters.orbital_band)
     if (filters.congestion_risk) params.append('congestion_risk', filters.congestion_risk)
+    
+    if (sortConfig.length > 0) {
+      const primarySort = sortConfig[0]
+      params.append('sort_by', primarySort.column)
+      params.append('sort_order', primarySort.direction.toUpperCase())
+    }
     
     params.append('skip', pageNum * limit)
     params.append('limit', limit)

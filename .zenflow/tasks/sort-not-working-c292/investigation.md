@@ -133,10 +133,10 @@ useEffect(() => {
 ## Implementation Order
 
 1. ✅ Complete investigation and create this document
-2. ⏳ Update `database/operations.py` - add sort parameters and dynamic sorting
-3. ⏳ Update `api/routers/satellites.py` - add sort query parameters
-4. ⏳ Update `react-app/src/App.jsx` - send sort to backend and refetch on sort change
-5. ⏳ Test all sorting scenarios
+2. ✅ Update `database/operations.py` - add sort parameters and dynamic sorting
+3. ✅ Update `api/routers/satellites.py` - add sort query parameters
+4. ✅ Update `react-app/src/App.jsx` - send sort to backend and refetch on sort change
+5. ✅ Test all sorting scenarios
 6. ⏳ Verify with user that "Date of Launch" descending shows recent launches
 
 ## Expected Result
@@ -145,3 +145,62 @@ After the fix:
 - Clicking "Date of Launch ▼" (descending) should show the most recent satellite launches at the top across ALL pages
 - Pagination should maintain the sort order
 - All 18,000+ satellites should be sorted correctly by the database, not just the current page
+
+---
+
+## Implementation Notes
+
+### Changes Made
+
+1. **[./database/operations.py:132-206](./database/operations.py:132-206)** - Updated `search_satellites()` function:
+   - Added `sort_by` and `sort_order` parameters
+   - Created `SORT_FIELD_MAPPING` dictionary to map frontend column names to backend field paths
+   - Built dynamic AQL SORT clause based on sort parameters
+   - Defaults to `doc.identifier ASC` if no sort provided (backward compatible)
+
+2. **[./api/routers/satellites.py:12-39](./api/routers/satellites.py:12-39)** - Updated `/v2/search` endpoint:
+   - Added `sort_by` and `sort_order` query parameters
+   - Updated docstring to document sorting capability
+   - Passed sort parameters to `search_satellites()` function
+
+3. **[./react-app/src/App.jsx:36-38](./react-app/src/App.jsx:36-38)** and **[./react-app/src/App.jsx:93-97](./react-app/src/App.jsx:93-97)** - Updated frontend:
+   - Added `useEffect` hook to refetch data when `sortConfig` changes
+   - Modified `fetchObjects()` to send `sort_by` and `sort_order` parameters to API
+   - Uses primary sort column from `sortConfig` array
+   - Automatically resets to page 0 when sort changes (via existing filter behavior)
+
+### Test Results
+
+✅ **Sort by Date of Launch (DESC)**:
+- API tested with: `/v2/search?sort_by=Date%20of%20Launch&sort_order=DESC&limit=5`
+- Result: Shows most recent launches (2025-12-14, 2025-12-11, etc.) at the top
+- Total dataset: 17,791 satellites
+
+✅ **Sort by Date of Launch (ASC)**:
+- API tested with: `/v2/search?sort_by=Date%20of%20Launch&sort_order=ASC&limit=5`
+- Result: Shows satellites without launch dates (null values) first, then oldest dates
+
+✅ **Pagination with Sorting**:
+- Tested Page 1 (skip=0) and Page 2 (skip=3) with DESC sorting
+- Result: Sort order is maintained across pages (2025-12-14 → 2025-12-11 → 2025-12-11)
+- Confirms sorting happens on full dataset, not per-page
+
+✅ **Different Column Sorting**:
+- Tested sorting by Status (DESC)
+- Result: Returns correctly sorted data
+
+✅ **Services Running**:
+- Backend API: http://localhost:8000 ✅
+- Frontend: http://localhost:3000 ✅
+- Both services started successfully
+
+### Backward Compatibility
+
+- If no sort parameters provided, defaults to `doc.identifier ASC` (original behavior)
+- Existing API calls without sort parameters continue to work unchanged
+
+### Known Behavior
+
+- Null/empty values in sort fields appear first when sorting in ASC order
+- Frontend supports multi-column sorting, but only the primary sort is sent to backend
+- Sort is reset when filters change (existing behavior maintained)
