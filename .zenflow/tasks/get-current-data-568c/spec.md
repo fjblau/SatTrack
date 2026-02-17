@@ -22,11 +22,33 @@
 ## Current State Analysis
 
 ### Data Sources
-- **Primary Source**: UNOOSA Online Index (https://www.unoosa.org/oosa/osoindex/search-ng.jspx)
-- **Current Data Files**:
-  - `data/unoosa_registry.csv` (5,401 records)
-  - `data/unoosa_registry_with_norad.csv` (5,401 records with NORAD enrichment)
-  - `data/unoosa_registry_import.csv` (5,392 records)
+
+### Available Sources (Ranked by Currentness)
+
+1. **GCAT (General Catalog)** - ✅ BEST FOR RECENT DATA
+   - **File**: `gcat_satcat.tsv` (18.2 MB, already downloaded)
+   - **Updated**: Feb 15, 2026
+   - **Coverage**: Through Jan 11, 2026
+   - **Format**: TSV (tab-separated)
+   - **Recent launches**: 99 satellites from Dec 2025 onward
+   - **Source**: Jonathan McDowell (planet4589.org/space/gcat)
+
+2. **UNOOSA (UN Registry)** - Official but delayed
+   - **Files**: 
+     - `data/unoosa_registry.csv` (5,401 records)
+     - `data/unoosa_registry_with_norad.csv` (with NORAD enrichment)
+   - **Updated**: Unknown (most recent launch: Sept 13, 2025)
+   - **Gap**: Missing ~3 months of data
+   - **Source**: https://www.unoosa.org/oosa/osoindex/search-ng.jspx
+
+3. **CelesTrak** - TLE orbital elements (not launch registry)
+   - Real-time orbital data, not comprehensive launch registry
+   
+4. **Space-Track** - TLE data (requires authentication)
+   - Requires credentials, focuses on orbital elements
+   
+5. **Kaggle** - Curated satellite catalog
+   - May not be most current
 
 ### Current Data Status
 - **Most recent launch**: 2025-09-13 (September 13, 2025)
@@ -68,44 +90,51 @@
 
 ## Implementation Approach
 
-### Option 1: UNOOSA Web Export (Recommended)
+### Primary Approach: Use GCAT (General Catalog) - RECOMMENDED ✅
 
-The UNOOSA Online Index appears to have an "EXPORTING RESULTS" feature in the web interface.
-
-**Steps**:
-1. **Investigate Export Mechanism**:
-   - Use browser developer tools to inspect the export functionality
-   - Identify the API endpoint or download URL
-   - Determine export format (CSV, JSON, XML)
-   
-2. **Create Fetch Script**:
-   - Script: `scripts/import/fetch_unoosa_data.py`
-   - Automate the data download process
-   - Support filtering by date range (e.g., launches after 2025-09-13)
-   - Save to temporary file or update existing CSV
-
-3. **Update Import Script**:
-   - Modify or create script to merge new data with existing
-   - Preserve existing enrichments (NORAD IDs, etc.)
-   - Handle duplicate detection
-
-### Option 2: Manual Export + Import
-
-If automated export is not feasible:
+**GCAT is the best source** for current satellite launch data:
+- **Updated**: Feb 15, 2026 (much more current than UNOOSA)
+- **Coverage**: Launches through Jan 11, 2026
+- **Recent Data**: 99 satellites launched Dec 2025 or later
+- **Format**: TSV (tab-separated values)
+- **Location**: Already downloaded at `gcat_satcat.tsv` (18.2 MB)
+- **Source**: Jonathan McDowell's comprehensive catalog (planet4589.org/space/gcat)
 
 **Steps**:
-1. **Manual Export**:
-   - Visit UNOOSA Online Index
+1. **Parse GCAT Data**:
+   - Script: `scripts/import/import_gcat_launches.py`
+   - Parse TSV format (tab-delimited)
+   - Extract fields: Launch date, Name, NORAD ID, Owner, State, etc.
+   - Filter for launches after 2025-09-13
+
+2. **Match and Merge**:
+   - Match GCAT records to existing database records by:
+     - NORAD catalog ID (primary key)
+     - International designator
+     - Object name
+   - Enrich existing records with GCAT data
+   - Create new records for satellites not in database
+
+3. **Import to ArangoDB**:
+   - Update existing documents with new GCAT source data
+   - Insert new documents for previously unknown satellites
+   - Preserve existing enrichments (UNOOSA, etc.)
+   - Update canonical fields
+
+### Alternative: UNOOSA Update (If official UN data needed)
+
+If official UNOOSA registration data is required:
+
+**Steps**:
+1. **Download from UNOOSA**:
+   - Manual export from https://www.unoosa.org/oosa/osoindex/search-ng.jspx
    - Filter by launch date >= 2025-09-14
-   - Export results to CSV
-   - Save as `data/unoosa_registry_update.csv`
+   - Export to CSV
 
 2. **Merge Script**:
    - Script: `scripts/import/merge_unoosa_updates.py`
-   - Read new data
-   - Deduplicate against existing data
-   - Append new records to main CSV
-   - Import to ArangoDB
+   - Merge with existing `data/unoosa_registry.csv`
+   - Preserve NORAD enrichments
 
 ---
 
@@ -113,22 +142,28 @@ If automated export is not feasible:
 
 ### New Files
 
-1. **`scripts/import/fetch_unoosa_data.py`** (if automated)
-   - Function: `fetch_unoosa_export(start_date, end_date)`
-   - Function: `save_export_data(data, output_file)`
-   - Function: `validate_export_data(data)`
+1. **`scripts/import/import_gcat_launches.py`** (PRIMARY)
+   - Function: `parse_gcat_tsv(tsv_path, after_date=None)`
+   - Function: `extract_launch_data(gcat_row)`
+   - Function: `match_to_existing(gcat_record, collection)`
+   - Function: `merge_gcat_data(existing_doc, gcat_data)`
+   - Function: `import_gcat_to_arangodb(tsv_path, after_date)`
+   
+   **GCAT TSV Column Mapping**:
+   - Column 7 (LDate): Launch date
+   - Column 1 (JCAT): GCAT internal ID
+   - Column 2 (Satcat): NORAD catalog number
+   - Column 6 (Name): Satellite name
+   - Column 15 (Owner): Owner organization code
+   - Column 16 (State): Country/state code
+   - Columns 33-37: Orbital parameters
 
-2. **`scripts/import/merge_unoosa_updates.py`**
+2. **`scripts/import/merge_unoosa_updates.py`** (OPTIONAL - if UNOOSA update needed)
    - Function: `load_existing_data(csv_path)`
    - Function: `load_update_data(update_csv_path)`
    - Function: `merge_datasets(existing, updates)`
    - Function: `deduplicate_records(records)`
    - Function: `save_merged_data(records, output_path)`
-
-3. **`scripts/import/import_unoosa_updates.py`**
-   - Function: `import_to_arangodb(csv_path)`
-   - Function: `update_existing_records(records)`
-   - Function: `insert_new_records(records)`
 
 ### Modified Files
 
@@ -315,8 +350,9 @@ beautifulsoup4>=4.12.0  # If web scraping needed
 ```
 
 ### External Services
-- UNOOSA Online Index: https://www.unoosa.org/oosa/osoindex/search-ng.jspx
-- ArangoDB instance (local or remote)
+- **GCAT**: https://planet4589.org/space/gcat (data already downloaded)
+- **ArangoDB** instance (local or remote)
+- **UNOOSA** (optional): https://www.unoosa.org/oosa/osoindex/search-ng.jspx
 
 ### Environment Variables
 ```bash
@@ -329,16 +365,37 @@ ARANGO_PASSWORD=kessler_dev_password
 
 ## Timeline Estimate
 
-- **Investigation** (UNOOSA export mechanism): 30-60 minutes
-- **Script Development** (fetch/merge/import): 2-3 hours
-- **Testing & Verification**: 1-2 hours
-- **Total**: 4-6 hours
+- **GCAT Analysis** (understand TSV format, column mapping): 30 minutes
+- **Script Development** (parse/match/import): 2-3 hours
+- **Testing & Verification**: 1 hour
+- **Total**: 3-4 hours
+
+**Note**: Much faster than UNOOSA approach since data is already downloaded and well-documented
 
 ---
 
 ## Notes
 
-- The UNOOSA registry is updated regularly but not real-time
-- Manual verification may be needed for critical launches
-- Consider setting up periodic automated updates (cron job)
-- Document the process for future updates
+### Why GCAT Instead of UNOOSA?
+
+**GCAT Advantages**:
+- ✅ **3+ months more current** (Jan 2026 vs Sept 2025)
+- ✅ **Already downloaded** - no web scraping needed
+- ✅ **Well-documented** format with clear column definitions
+- ✅ **Comprehensive** - includes all space objects, not just UN-registered
+- ✅ **Maintained by expert** (Jonathan McDowell, recognized authority)
+- ✅ **Free and open** under CC-BY-4.0 license
+
+**UNOOSA Limitations**:
+- ⚠️ Significant lag (3+ months behind actual launches)
+- ⚠️ Only includes officially registered satellites (many are not registered)
+- ⚠️ No public API - requires web scraping or manual export
+- ⚠️ Export mechanism may change
+
+### Future Updates
+
+- **GCAT** is updated regularly (latest: Feb 15, 2026)
+- Download fresh GCAT data: `wget https://planet4589.org/space/gcat/tsv/cat/satcat.tsv`
+- Re-run import script to get latest launches
+- Consider setting up periodic automated updates (weekly/monthly)
+- Document the process for future maintainers

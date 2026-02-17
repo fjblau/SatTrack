@@ -35,52 +35,66 @@ Do not make assumptions on important decisions — get clarification first.
 
 ---
 
-### [ ] Step: Investigate UNOOSA Data Export
+### [ ] Step: Analyze GCAT Data and Plan Import
 
-**Objective**: Determine the best method to fetch recent UNOOSA satellite registry data.
+**Objective**: Understand GCAT data structure and plan the import strategy.
+
+**Primary Data Source**: GCAT (General Catalog) - **Already Downloaded**
+- File: `gcat_satcat.tsv` (18.2 MB)
+- Updated: Feb 15, 2026
+- Coverage: Launches through Jan 11, 2026
+- Contains: 99 satellites launched Dec 2025 or later
 
 **Tasks**:
-- [ ] Access UNOOSA Online Index (https://www.unoosa.org/oosa/osoindex/search-ng.jspx)
-- [ ] Use browser dev tools to inspect the export/download functionality
-- [ ] Identify API endpoints or export format (CSV, JSON, XML)
-- [ ] Test export with date filter (launches after 2025-09-13)
-- [ ] Document the export process and any authentication requirements
+- [ ] Examine GCAT TSV structure and column mapping
+- [ ] Identify key fields for matching (NORAD ID, intl designator, name)
+- [ ] Test parsing a subset of GCAT data
+- [ ] Determine matching strategy (NORAD ID primary, name fallback)
+- [ ] Plan handling of satellites not yet in database
 
 **Verification**:
-- Successfully export a sample dataset
-- Verify exported data format matches existing CSV structure
-- Confirm export includes launches from Sept-Dec 2025
+- Successfully parse sample GCAT records
+- Extract launch date, NORAD ID, name, country for recent satellites
+- Verify 99 satellites with launch dates >= 2025-09-14
 
-**Output**: Documentation of export process in implementation notes
+**Output**: Understanding of GCAT structure and matching approach
 
 ---
 
-### [ ] Step: Create Data Fetch and Merge Scripts
+### [ ] Step: Create GCAT Import Script
 
-**Objective**: Build scripts to fetch new UNOOSA data and merge it with existing records.
+**Objective**: Build script to parse GCAT data and import recent launches to ArangoDB.
 
 **Tasks**:
-- [ ] Create `scripts/import/fetch_unoosa_data.py` (if automated) or document manual process
-- [ ] Create `scripts/import/merge_unoosa_updates.py` to merge new data with existing CSV
-- [ ] Implement deduplication based on Registration Number and International Designator
-- [ ] Add data validation (required fields, date format, etc.)
-- [ ] Create backup of existing CSV before merge
+- [ ] Create `scripts/import/import_gcat_launches.py`
+- [ ] Implement TSV parser for GCAT format
+- [ ] Extract relevant fields (date, NORAD ID, name, country, orbital params)
+- [ ] Filter for launches after 2025-09-13
+- [ ] Implement matching logic:
+  - Primary: Match by NORAD catalog ID
+  - Secondary: Match by international designator
+  - Fallback: Match by name similarity
+- [ ] Handle merge scenarios:
+  - Update existing records with GCAT source data
+  - Create new records for unknown satellites
+  - Preserve existing source data (UNOOSA, etc.)
 
 **Implementation Details**:
-- Support filtering by date range
-- Preserve existing enrichments (NORAD IDs, etc.)
-- Handle edge cases (missing fields, format changes)
-- Add logging and error handling
+- Parse GCAT date format: "YYYY MMM DD"
+- Extract NORAD ID from column 2 (Satcat)
+- Extract country code from column 16 (State)
+- Add logging for matched vs new records
+- Dry-run mode for testing
 
 **Verification**:
-- Test script with sample data
-- Verify no data loss in merge
-- Check for proper duplicate detection
-- Validate merged CSV structure
+- Test parsing with 10 sample records
+- Verify date filtering works correctly
+- Test matching against existing database records
+- Validate no data corruption
 
 **Output**: 
-- Working fetch/merge scripts
-- Updated CSV with new launch data
+- Working `import_gcat_launches.py` script
+- Successfully parsed GCAT records ready for import
 
 ---
 
