@@ -17,11 +17,14 @@ def search_satellites_v2(
     orbital_band: Optional[str] = Query(None, description="Filter by orbital band"),
     congestion_risk: Optional[str] = Query(None, description="Filter by congestion risk"),
     limit: int = Query(100, ge=1, le=1000),
-    skip: int = Query(0, ge=0)
+    skip: int = Query(0, ge=0),
+    sort_by: Optional[str] = Query(None, description="Sort by column name"),
+    sort_order: Optional[str] = Query(None, description="Sort order (ASC or DESC)")
 ):
     """
     Search satellites in MongoDB.
     Supports filtering by country, status, orbital band, and congestion risk.
+    Supports sorting by any column with ascending or descending order.
     """
     results = search_satellites(
         query=q or "",
@@ -30,7 +33,9 @@ def search_satellites_v2(
         orbital_band=orbital_band,
         congestion_risk=congestion_risk,
         limit=limit,
-        skip=skip
+        skip=skip,
+        sort_by=sort_by,
+        sort_order=sort_order
     )
     
     total_count = count_satellites(

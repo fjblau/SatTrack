@@ -136,10 +136,26 @@ def search_satellites(
     orbital_band: Optional[str] = None,
     congestion_risk: Optional[str] = None,
     limit: int = 100,
-    skip: int = 0
+    skip: int = 0,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    """Search satellites with optional filters"""
+    """Search satellites with optional filters and sorting"""
     collection = get_satellites_collection()
+    
+    SORT_FIELD_MAPPING = {
+        'Identifier': 'doc.identifier',
+        'Object Name': 'doc.canonical.object_name',
+        'Country of Origin': 'doc.canonical.country_of_origin',
+        'Date of Launch': 'doc.canonical.launch_date',
+        'Status': 'doc.canonical.status',
+        'Orbital Band': 'doc.canonical.orbital_band',
+        'Congestion Risk': 'doc.canonical.congestion_risk',
+        'Apogee (km)': 'doc.canonical.orbit.apogee_km',
+        'Perigee (km)': 'doc.canonical.orbit.perigee_km',
+        'Inclination (degrees)': 'doc.canonical.orbit.inclination_degrees',
+        'Period (minutes)': 'doc.canonical.orbit.period_minutes'
+    }
     
     filters = []
     bind_vars = {'@collection': COLLECTION_NAME, 'limit': limit, 'skip': skip}
@@ -173,10 +189,16 @@ def search_satellites(
     if filters:
         filter_clause = "FILTER " + " AND ".join(filters)
     
+    sort_clause = "SORT doc.identifier ASC"
+    if sort_by and sort_by in SORT_FIELD_MAPPING:
+        sort_field = SORT_FIELD_MAPPING[sort_by]
+        sort_direction = "DESC" if sort_order and sort_order.upper() == "DESC" else "ASC"
+        sort_clause = f"SORT {sort_field} {sort_direction}"
+    
     aql = f"""
     FOR doc IN @@collection
         {filter_clause}
-        SORT doc.identifier ASC
+        {sort_clause}
         LIMIT @skip, @limit
         RETURN doc
     """
