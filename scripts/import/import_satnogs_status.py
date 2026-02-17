@@ -243,7 +243,8 @@ def import_satnogs_status(dry_run=False, use_db_filter=True):
                     existing["metadata"]["sources_available"] = list(existing["sources"].keys())
                     existing["metadata"]["last_updated_at"] = datetime.now(timezone.utc).isoformat()
                     
-                    update_canonical(existing)
+                    # DO NOT call update_canonical - SatNOGS is not an approved source
+                    # Data stays in sources.satnogs only
                     
                     collection.update(existing)
                     updated += 1

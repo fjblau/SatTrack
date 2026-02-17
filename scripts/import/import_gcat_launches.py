@@ -288,7 +288,8 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                         existing["metadata"]["sources_available"] = list(existing["sources"].keys())
                         existing["metadata"]["last_updated_at"] = datetime.now(timezone.utc).isoformat()
                         
-                        update_canonical(existing)
+                        # DO NOT call update_canonical - GCAT is not an approved source
+                        # Data stays in sources.gcat only
                         
                         collection.update(existing)
                         updated += 1
@@ -308,7 +309,10 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                                      .replace('(', '_')
                                      .replace(')', '_')),
                             "identifier": identifier,
-                            "canonical": {},
+                            "canonical": {
+                                "name": gcat_data.get("name") or identifier,
+                                "updated_at": datetime.now(timezone.utc).isoformat()
+                            },
                             "sources": {
                                 "gcat": {
                                     **gcat_data,
@@ -319,11 +323,14 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                                 "created_at": datetime.now(timezone.utc).isoformat(),
                                 "last_updated_at": datetime.now(timezone.utc).isoformat(),
                                 "sources_available": ["gcat"],
-                                "source_priority": ["unoosa", "gcat", "celestrak", "tleapi", "kaggle"]
+                                "source_priority": ["unoosa", "spacetrack", "celestrak", "tleapi", "kaggle"]
                             }
                         }
                         
-                        update_canonical(doc)
+                        # DO NOT call update_canonical - GCAT is not an approved source
+                        # For new satellites, set minimal canonical.name to prevent graph errors
+                        # Full canonical data will be populated when approved sources are added
+                        
                         collection.insert(doc)
                         created += 1
                         
