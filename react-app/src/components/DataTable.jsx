@@ -1,7 +1,7 @@
 import './DataTable.css'
 import { SATELLITE_STATUS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
-export default function DataTable({ objects, selectedObject, onRowClick, loading }) {
+export default function DataTable({ objects, selectedObject, onRowClick, loading, sortConfig, onSort }) {
   if (loading) {
     return <div className="loading">{UI_TEXT.LOADING}</div>
   }
@@ -10,22 +10,54 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
     return <div className="empty-state">{UI_TEXT.NO_OBJECTS_FOUND}</div>
   }
 
+  const getSortIndicator = (column) => {
+    const sortIndex = sortConfig.findIndex(s => s.column === column)
+    if (sortIndex === -1) return null
+    
+    const sort = sortConfig[sortIndex]
+    const arrow = sort.direction === 'asc' ? '↑' : '↓'
+    const badge = sortConfig.length > 1 ? ` ${sortIndex + 1}` : ''
+    
+    return <span className="sort-indicator">{arrow}{badge}</span>
+  }
+
+  const handleSort = (column) => {
+    if (onSort) {
+      onSort(column)
+    }
+  }
+
+  const columns = [
+    { key: 'Identifier', label: 'Identifier' },
+    { key: 'Object Name', label: 'Object Name' },
+    { key: 'Country of Origin', label: 'Country of Origin' },
+    { key: 'Date of Launch', label: 'Date of Launch' },
+    { key: 'Status', label: 'Status' },
+    { key: 'Orbital Band', label: 'Orbital Band' },
+    { key: 'Congestion Risk', label: 'Congestion Risk' },
+    { key: 'Apogee (km)', label: 'Apogee (km)', className: 'cell-number' },
+    { key: 'Perigee (km)', label: 'Perigee (km)', className: 'cell-number' },
+    { key: 'Inclination (degrees)', label: 'Inclination (°)', className: 'cell-number' },
+    { key: 'Period (minutes)', label: 'Period (min)', className: 'cell-number' }
+  ]
+
   return (
     <div className="data-table-wrapper">
       <table className="data-table">
         <thead>
           <tr>
-            <th>Identifier</th>
-            <th>Object Name</th>
-            <th>Country of Origin</th>
-            <th>Date of Launch</th>
-            <th>Status</th>
-            <th>Orbital Band</th>
-            <th>Congestion Risk</th>
-            <th className="cell-number">Apogee (km)</th>
-            <th className="cell-number">Perigee (km)</th>
-            <th className="cell-number">Inclination (°)</th>
-            <th className="cell-number">Period (min)</th>
+            {columns.map(col => (
+              <th 
+                key={col.key}
+                className={`${col.className || ''} sortable`}
+                onClick={() => handleSort(col.key)}
+              >
+                <div className="th-content">
+                  <span>{col.label}</span>
+                  {getSortIndicator(col.key)}
+                </div>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>

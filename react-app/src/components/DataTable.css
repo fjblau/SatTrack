@@ -28,6 +28,33 @@
   white-space: nowrap;
 }
 
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table th.sortable:hover {
+  background: #f0f0f0;
+}
+
+.data-table th .th-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+}
+
+.data-table th.cell-number .th-content {
+  justify-content: center;
+}
+
+.sort-indicator {
+  color: #0066cc;
+  font-weight: bold;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
 .data-table td {
   padding: 0.75em;
   border-bottom: 1px solid #eee;
