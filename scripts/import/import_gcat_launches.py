@@ -288,8 +288,14 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                         existing["metadata"]["sources_available"] = list(existing["sources"].keys())
                         existing["metadata"]["last_updated_at"] = datetime.now(timezone.utc).isoformat()
                         
-                        # DO NOT call update_canonical - GCAT is not an approved source
-                        # Data stays in sources.gcat only
+                        # GCAT is not an approved source, so DON'T call update_canonical()
+                        # However, if canonical.launch_date is missing, populate it from GCAT
+                        # This doesn't corrupt existing data - it fills in gaps
+                        if not existing.get("canonical", {}).get("launch_date") and launch_date:
+                            if "canonical" not in existing:
+                                existing["canonical"] = {}
+                            existing["canonical"]["launch_date"] = launch_date
+                            existing["canonical"]["updated_at"] = datetime.now(timezone.utc).isoformat()
                         
                         collection.update(existing)
                         updated += 1
@@ -311,6 +317,7 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                             "identifier": identifier,
                             "canonical": {
                                 "name": gcat_data.get("name") or identifier,
+                                "launch_date": launch_date,  # Set launch_date for new satellites
                                 "updated_at": datetime.now(timezone.utc).isoformat()
                             },
                             "sources": {
@@ -327,9 +334,9 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                             }
                         }
                         
-                        # DO NOT call update_canonical - GCAT is not an approved source
-                        # For new satellites, set minimal canonical.name to prevent graph errors
-                        # Full canonical data will be populated when approved sources are added
+                        # GCAT is not an approved source for promotion to canonical
+                        # But for NEW satellites, we need minimal canonical data to prevent errors
+                        # When approved sources are added later, they will override these values
                         
                         collection.insert(doc)
                         created += 1
