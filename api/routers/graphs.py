@@ -3174,6 +3174,106 @@ def get_satellite_recommendations(
         )
 
 
+@router.get("/registration-documents-analytics")
+def get_registration_documents_analytics(
+    sort_by: Optional[str] = Query(default="satellite_count", description="Field to sort by (url, satellite_count, created_at)"),
+    sort_order: Optional[str] = Query(default="DESC", description="Sort order (ASC or DESC)"),
+    search: Optional[str] = Query(default=None, description="Filter URLs containing search term")
+):
+    """
+    Get comprehensive analytics for all registration documents.
+    
+    Returns all registration documents with statistics including:
+    - Complete list of documents with URL, satellite count, countries, and creation date
+    - Summary statistics: total documents, total satellites, averages, top country
+    
+    Parameters:
+        sort_by: Field to sort by (url, satellite_count, created_at) - default: satellite_count
+        sort_order: Sort order (ASC or DESC) - default: DESC
+        search: Optional search term to filter URLs
+    
+    Returns:
+        Analytics data with documents array and summary statistics
+    
+    Example:
+        GET /v2/graphs/registration-documents-analytics?sort_by=satellite_count&sort_order=DESC
+        GET /v2/graphs/registration-documents-analytics?search=ST/SG
+    """
+    # Validate sort_by parameter
+    valid_sort_fields = ["url", "satellite_count", "created_at"]
+    if sort_by not in valid_sort_fields:
+        sort_by = "satellite_count"
+    
+    # Validate sort_order parameter
+    sort_order = sort_order.upper()
+    if sort_order not in ["ASC", "DESC"]:
+        sort_order = "DESC"
+    
+    query = f"""
+    LET all_docs = (
+        FOR doc IN {COLLECTION_REG_DOCS}
+            FILTER @search == null OR CONTAINS(LOWER(doc.url), LOWER(@search))
+            SORT doc[@sort_by] @sort_order
+            RETURN {{
+                key: doc._key,
+                url: doc.url,
+                satellite_count: doc.satellite_count,
+                countries: doc.countries,
+                created_at: doc.created_at
+            }}
+    )
+    
+    LET stats = {{
+        total_documents: LENGTH(all_docs),
+        total_satellites: SUM(all_docs[*].satellite_count),
+        avg_satellites_per_doc: AVG(all_docs[*].satellite_count),
+        top_country: FIRST(
+            FOR doc IN all_docs
+                FOR country IN doc.countries
+                    COLLECT c = country WITH COUNT INTO cnt
+                    SORT cnt DESC
+                    LIMIT 1
+                    RETURN c
+        )
+    }}
+    
+    RETURN {{
+        documents: all_docs,
+        stats: stats
+    }}
+    """
+    
+    cursor = db_conn.db.aql.execute(
+        query,
+        bind_vars={
+            'search': search,
+            'sort_by': sort_by,
+            'sort_order': sort_order
+        }
+    )
+    
+    results = list(cursor)
+    
+    if results and len(results) > 0:
+        return {
+            "data": results[0],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": {
+                "documents": [],
+                "stats": {
+                    "total_documents": 0,
+                    "total_satellites": 0,
+                    "avg_satellites_per_doc": 0,
+                    "top_country": None
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+
 @router.get("/cache/stats/all")
 def get_all_cache_stats():
     """

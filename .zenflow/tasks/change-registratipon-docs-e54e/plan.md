@@ -30,7 +30,8 @@ Do not make assumptions on important decisions — get clarification first.
 
 ---
 
-### [ ] Step: Create Backend API Endpoint
+### [x] Step: Create Backend API Endpoint
+<!-- chat-id: b0ca44ed-dc66-439c-85cf-c2343af7219a -->
 
 Create the new API endpoint for registration documents analytics in the backend.
 
