@@ -30,6 +30,11 @@ function App() {
       id: 'function-similarity',
       name: 'Function Similarity',
       description: 'Satellite function relationships and clustering'
+    },
+    {
+      id: 'registration-docs',
+      name: 'Registration Docs',
+      description: 'Registration documents analytics and statistics'
     }
   ]
 
@@ -233,12 +238,6 @@ function App() {
           >
             Analytics
           </button>
-          <button 
-            className={activeTab === 'registration-docs' ? 'active' : ''}
-            onClick={() => setActiveTab('registration-docs')}
-          >
-            Registration Docs
-          </button>
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
       </header>
@@ -337,13 +336,8 @@ function App() {
           </div>
           <div className="analytics-main">
             {selectedAnalytics === 'function-similarity' && <FunctionAnalytics />}
+            {selectedAnalytics === 'registration-docs' && <RegistrationDocumentAnalytics />}
           </div>
-        </div>
-      )}
-
-      {activeTab === 'registration-docs' && (
-        <div className="analytics-view-container">
-          <RegistrationDocumentAnalytics />
         </div>
       )}
     </div>
