@@ -10,12 +10,10 @@ import { API_ENDPOINTS, GRAPH_SETTINGS, UI_TEXT } from '../config/constants'
 function GraphExplorer() {
   const [graphType, setGraphType] = useState('constellation')
   const [constellations, setConstellations] = useState([])
-  const [documents, setDocuments] = useState([])
   const [orbitalBands, setOrbitalBands] = useState([])
   const [functionCategories, setFunctionCategories] = useState([])
   const [countries, setCountries] = useState([])
   const [selectedConstellation, setSelectedConstellation] = useState('')
-  const [selectedDocument, setSelectedDocument] = useState('')
   const [selectedOrbitalBand, setSelectedOrbitalBand] = useState('')
   const [selectedFunctionCategories, setSelectedFunctionCategories] = useState([])
   const [selectedOrbitalBands, setSelectedOrbitalBands] = useState([])
@@ -48,14 +46,10 @@ function GraphExplorer() {
       if (data.data) {
         const filteredConstellations = (data.data.constellations || []).filter(c => !GRAPH_SETTINGS.EXCLUDED_CONSTELLATIONS.includes(c.name))
         setConstellations(filteredConstellations)
-        setDocuments(data.data.top_registration_documents || [])
         setOrbitalBands(data.data.proximity_by_orbital_band || [])
         
         if (filteredConstellations.length > 0) {
           setSelectedConstellation(filteredConstellations[0].name)
-        }
-        if (data.data.top_registration_documents && data.data.top_registration_documents.length > 0) {
-          setSelectedDocument(data.data.top_registration_documents[0].key)
         }
         if (data.data.proximity_by_orbital_band && data.data.proximity_by_orbital_band.length > 0) {
           setSelectedOrbitalBand(data.data.proximity_by_orbital_band[0].orbital_band)
@@ -194,12 +188,6 @@ function GraphExplorer() {
             Constellations
           </button>
           <button 
-            className={graphType === 'registration' ? 'active' : ''}
-            onClick={() => setGraphType('registration')}
-          >
-            Registration Docs
-          </button>
-          <button 
             className={graphType === 'proximity' ? 'active' : ''}
             onClick={() => setGraphType('proximity')}
           >
@@ -264,29 +252,6 @@ function GraphExplorer() {
                   >
                     <div className="item-name">{constellation.name}</div>
                     <div className="item-count">{constellation.member_count.toLocaleString()} satellites</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {graphType === 'registration' && (
-          <div className="selector-content">
-            <h3>Top Registration Documents</h3>
-            {loading ? (
-              <p>{UI_TEXT.LOADING}</p>
-            ) : (
-              <div className="item-list">
-                {documents.map((doc) => (
-                  <div
-                    key={doc.key}
-                    className={`list-item ${selectedDocument === doc.key ? 'selected' : ''}`}
-                    onClick={() => setSelectedDocument(doc.key)}
-                  >
-                    <div className="item-name">{doc.url}</div>
-                    <div className="item-count">{doc.satellite_count} satellites</div>
-                    <div className="item-meta">{doc.countries.join(', ')}</div>
                   </div>
                 ))}
               </div>
@@ -636,7 +601,6 @@ function GraphExplorer() {
         <GraphViewer 
           graphType={graphType}
           selectedConstellation={graphType === 'constellation' ? selectedConstellation : null}
-          selectedDocument={graphType === 'registration' ? selectedDocument : null}
           selectedOrbitalBand={graphType === 'proximity' ? selectedOrbitalBand : null}
           selectedFunctionCategories={graphType === 'function' ? selectedFunctionCategories : null}
           selectedOrbitalBands={graphType === 'function' ? selectedOrbitalBands : null}

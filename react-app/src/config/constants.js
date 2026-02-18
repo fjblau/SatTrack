@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
     STATS: '/v2/graphs/stats',
     CONSTELLATION: '/v2/graphs/constellation',
     REGISTRATION_DOCUMENT: '/v2/graphs/registration-document',
+    REGISTRATION_DOCUMENTS_ANALYTICS: '/v2/graphs/registration-documents-analytics',
     FUNCTION_SIMILARITY: '/v2/graphs/function-similarity',
     COUNTRY_RELATIONS: '/v2/graphs/country-relations',
     TIMELINE_FILTER_OPTIONS: '/v2/graphs/timeline/filter-options',
