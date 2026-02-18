@@ -50,7 +50,8 @@ Create the new API endpoint for registration documents analytics in the backend.
 
 ---
 
-### [ ] Step: Create Registration Documents Analytics Component
+### [x] Step: Create Registration Documents Analytics Component
+<!-- chat-id: ecd67411-d9cf-41ed-821b-12e8ed70b734 -->
 
 Create the new React component for displaying registration documents analytics.
 
