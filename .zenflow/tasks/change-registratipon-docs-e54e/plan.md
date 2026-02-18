@@ -75,7 +75,8 @@ Create the new React component for displaying registration documents analytics.
 
 ---
 
-### [ ] Step: Remove Registration Docs from Graphs Tab
+### [x] Step: Remove Registration Docs from Graphs Tab
+<!-- chat-id: fb9845ef-4119-4522-adee-367980af1eca -->
 
 Remove the registration documents graph visualization from the GraphExplorer component.
 

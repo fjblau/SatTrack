@@ -5,7 +5,7 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
-function GraphViewer({ graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionClusters }) {
+function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionClusters }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -381,8 +381,6 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
   useEffect(() => {
     if (graphType === 'constellation' && selectedConstellation) {
       loadConstellationGraph(selectedConstellation)
-    } else if (graphType === 'registration' && selectedDocument) {
-      loadRegistrationGraph(selectedDocument)
     } else if (graphType === 'proximity' && selectedOrbitalBand) {
       loadProximityGraph(selectedOrbitalBand)
     } else if (graphType === 'function') {
@@ -411,7 +409,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     } else if (graphType === 'neighborhood' && neighborhoodData) {
       renderNeighborhoodGraph(neighborhoodData)
     }
-  }, [graphType, selectedConstellation, selectedDocument, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionViewMode, selectedClusterId])
+  }, [graphType, selectedConstellation, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionViewMode, selectedClusterId])
 
   const loadConstellationGraph = async (constellation) => {
     if (!cyRef.current) return
@@ -473,71 +471,6 @@ function GraphViewer({ graphType, selectedConstellation, selectedDocument, selec
     } catch (error) {
       console.error('[GraphViewer] Error loading constellation graph:', error)
       setError(`Failed to load constellation: ${error.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadRegistrationGraph = async (docKey) => {
-    if (!cyRef.current) return
-    
-    console.log('[GraphViewer] Loading registration graph:', docKey)
-    setLoading(true)
-    setError(null)
-    try {
-      const url = `/v2/graphs/registration-document/${encodeURIComponent(docKey)}?limit=50`
-      console.log('[GraphViewer] Fetching:', url)
-      const response = await fetch(url)
-      console.log('[GraphViewer] Response status:', response.status)
-      
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}: ${response.statusText}`)
-      }
-      
-      const data = await response.json()
-      console.log('[GraphViewer] Registration data received:', {
-        hasData: !!data.data,
-        nodeCount: data.data?.nodes?.length || 0,
-        edgeCount: data.data?.edges?.length || 0
-      })
-      
-      if (!data.data) {
-        throw new Error('No data returned from API')
-      }
-      
-      if (!data.data.nodes || data.data.nodes.length === 0) {
-        setError('No nodes found for this registration document')
-        setStats({ message: 'No data available' })
-        return
-      }
-      
-      const elements = {
-        nodes: data.data.nodes.map(node => ({
-          data: {
-            id: node.id,
-            label: node.name || node.url || node.identifier,
-            type: node.type,
-            ...node
-          }
-        })),
-        edges: data.data.edges.map(edge => ({
-          data: {
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            ...edge
-          }
-        }))
-      }
-      
-      cyRef.current.elements().remove()
-      cyRef.current.add(elements)
-      applyLayout(layout)
-      setStats(data.data.stats)
-      console.log('[GraphViewer] Registration graph rendered successfully')
-    } catch (error) {
-      console.error('[GraphViewer] Error loading registration graph:', error)
-      setError(`Failed to load registration document: ${error.message}`)
     } finally {
       setLoading(false)
     }
