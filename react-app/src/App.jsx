@@ -11,6 +11,7 @@ import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/con
 function App() {
   const [activeTab, setActiveTab] = useState('table')
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
+  const [selectedAnalytics, setSelectedAnalytics] = useState('function-similarity')
   const [launchYears, setLaunchYears] = useState([])
   const [objects, setObjects] = useState([])
   const [filters, setFilters] = useState({})
@@ -22,6 +23,14 @@ function App() {
   const [sortConfig, setSortConfig] = useState([])
 
   const limit = PAGINATION.DEFAULT_PAGE_SIZE
+
+  const analyticsPages = [
+    {
+      id: 'function-similarity',
+      name: 'Function Similarity',
+      description: 'Satellite function relationships and clustering'
+    }
+  ]
 
   useEffect(() => {
     fetchFilterOptions()
@@ -303,7 +312,25 @@ function App() {
 
       {activeTab === 'analytics' && (
         <div className="analytics-view-container">
-          <FunctionAnalytics />
+          <div className="analytics-sidebar">
+            <h3>Analytics</h3>
+            <p className="section-description">Select an analytics page</p>
+            <div className="item-list">
+              {analyticsPages.map((page) => (
+                <div
+                  key={page.id}
+                  className={`list-item ${selectedAnalytics === page.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedAnalytics(page.id)}
+                >
+                  <div className="item-name">{page.name}</div>
+                  <div className="item-description">{page.description}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="analytics-main">
+            {selectedAnalytics === 'function-similarity' && <FunctionAnalytics />}
+          </div>
         </div>
       )}
     </div>
