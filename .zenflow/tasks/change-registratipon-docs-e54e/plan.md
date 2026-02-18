@@ -97,7 +97,8 @@ Remove the registration documents graph visualization from the GraphExplorer com
 
 ---
 
-### [ ] Step: Integrate New Tab in Main App
+### [x] Step: Integrate New Tab in Main App
+<!-- chat-id: e15b654d-f3ee-4838-b93c-4641ca41ac05 -->
 
 Add the new Registration Docs tab to the main application navigation.
 

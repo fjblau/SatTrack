@@ -6,6 +6,7 @@ import Filters from './components/Filters'
 import GraphExplorer from './components/GraphExplorer'
 import TimelineChart from './components/TimelineChart'
 import FunctionAnalytics from './components/FunctionAnalytics'
+import RegistrationDocumentAnalytics from './components/RegistrationDocumentAnalytics'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
 function App() {
@@ -223,6 +224,12 @@ function App() {
           >
             Analytics
           </button>
+          <button 
+            className={activeTab === 'registration-docs' ? 'active' : ''}
+            onClick={() => setActiveTab('registration-docs')}
+          >
+            Registration Docs
+          </button>
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
       </header>
@@ -304,6 +311,12 @@ function App() {
       {activeTab === 'analytics' && (
         <div className="analytics-view-container">
           <FunctionAnalytics />
+        </div>
+      )}
+
+      {activeTab === 'registration-docs' && (
+        <div className="analytics-view-container">
+          <RegistrationDocumentAnalytics />
         </div>
       )}
     </div>
