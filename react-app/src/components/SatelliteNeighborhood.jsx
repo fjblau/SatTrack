@@ -350,9 +350,9 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
             <div className="filter-sliders">
               <div className="filter-slider">
                 <label>
-                  Max Proximity Score: <strong>{proximityFilters.maxProximityScore.toFixed(2)}</strong>
+                  Max Proximity Score: <strong>{proximityFilters.maxProximityScore.toFixed(4)}</strong>
                   <span className="filter-help">
-                    (range: {dataRanges.proximityScore.min.toFixed(2)} - {dataRanges.proximityScore.max.toFixed(2)})
+                    (range: {dataRanges.proximityScore.min.toFixed(4)} - {dataRanges.proximityScore.max.toFixed(4)})
                   </span>
                 </label>
                 <input

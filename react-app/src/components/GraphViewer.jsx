@@ -1183,7 +1183,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           return `Constellation Member${name}`
         }
         if (type === 'orbital_proximity') {
-          const score = edge.proximity_score !== undefined ? ` (score: ${parseFloat(edge.proximity_score).toFixed(2)})` : ''
+          const score = edge.proximity_score !== undefined ? ` (score: ${parseFloat(edge.proximity_score).toFixed(4)})` : ''
           return `Orbital Proximity${score}`
         }
         if (type === 'registration_link') return 'Shared Registration'
@@ -1572,7 +1572,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             const avgDiff = (edge.apogee_diff_km + edge.perigee_diff_km) / 2
             return `~${avgDiff.toFixed(1)} km`
           } else if (edge.proximity_score != null) {
-            return `${edge.proximity_score.toFixed(2)}`
+            return `${edge.proximity_score.toFixed(4)}`
           }
         } else if (edge.type === 'constellation_membership' && edge.constellation) {
           return edge.constellation
