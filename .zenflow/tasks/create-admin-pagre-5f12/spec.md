@@ -28,13 +28,25 @@
 4. Script runs are executed in-process via Python `subprocess` on the server; run state (status + stdout/stderr) is kept in a server-side in-memory dict keyed by a UUID run ID.
 
 ### Script Catalogue
-The admin router will expose a hardcoded catalogue of enrichment scripts drawn from:
-- `scripts/maintenance/` (enrichment / data promotion)
-- `scripts/population/` (graph edge population)
+The admin router will expose a hardcoded catalogue of enrichment scripts. Each entry contains: `id`, `name`, `description`, `path` (relative to project root), `category`.
 
-Each entry contains: `id`, `name`, `description`, `path` (relative to project root), `category`.
+**Must-include scripts** (explicitly required):
 
-Verification and import scripts are excluded from the UI to avoid accidental destructive imports.
+| id | path | category |
+|---|---|---|
+| `enrich_launch_data` | `scripts/maintenance/enrich_launch_data.py` | maintenance |
+| `promote_kaggle_orbital` | `scripts/maintenance/promote_kaggle_orbital.py` | maintenance |
+
+**Additional scripts included** from `scripts/maintenance/` and `scripts/population/`:
+- `promote_attributes` — Promote attributes across satellite records
+- `promote_launch_site` — Promote launch site data to canonical fields
+- `populate_collision_risks` — Compute and populate collision risk edges
+- `populate_constellation_network` — Build constellation membership graph
+- `populate_orbital_proximity` — Populate orbital proximity edges
+- `populate_registration_network` — Build registration linkage graph
+- `populate_satellite_lineage` — Compute satellite lineage relationships
+
+Verification and import scripts are excluded to avoid accidental destructive imports.
 
 ---
 
