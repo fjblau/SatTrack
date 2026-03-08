@@ -1043,56 +1043,81 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
   const renderPathGraph = (data) => {
     if (!cyRef.current) return
     
-    console.log('[GraphViewer] Rendering path graph:', { hasData: !!data, pathsCount: data?.paths?.length || 0 })
+    console.log('[GraphViewer] Rendering path graph:', { hasData: !!data, pathFound: data?.path_found })
     setLoading(true)
     setError(null)
     try {
-      if (!data || !data.paths) {
+      if (!data || (!data.paths && !data.path)) {
         setError('No path data provided')
         setStats({ message: 'No paths to display' })
         setLoading(false)
         return
       }
-      
-      const pathNodes = new Set()
-      const pathEdges = new Set()
-      
-      if (data.paths && data.paths.length > 0) {
-        data.paths.forEach(path => {
-          path.nodes?.forEach(node => pathNodes.add(node))
-          path.edges?.forEach(edge => pathEdges.add(JSON.stringify(edge)))
-        })
+
+      if (!data.path_found) {
+        setError(data.message || 'No path found between the two satellites')
+        setStats({ message: 'No path found' })
+        setLoading(false)
+        return
       }
-      
-      const elements = {
-        nodes: Array.from(pathNodes).map(nodeId => ({
-          data: {
-            id: nodeId,
-            label: nodeId.split('/')[1] || nodeId,
-            is_path_node: true,
-            node_size: 30
+
+      const paths = data.paths || (data.path ? [data.path] : [])
+
+      if (paths.length === 0) {
+        setError('No paths to display')
+        setStats({ message: 'No paths to display' })
+        setLoading(false)
+        return
+      }
+
+      const pathNodes = new Map()
+      const pathEdgesMap = new Map()
+
+      paths.forEach(path => {
+        const vertices = path.vertices || []
+        const edges = path.edges || []
+
+        vertices.forEach(vertex => {
+          const nodeId = vertex._id || vertex
+          if (!pathNodes.has(nodeId)) {
+            pathNodes.set(nodeId, {
+              id: nodeId,
+              label: vertex.identifier || vertex.canonical?.name || (nodeId.split('/')[1]) || nodeId,
+              is_path_node: true,
+              node_size: 30
+            })
           }
-        })),
-        edges: Array.from(pathEdges).map(edgeStr => {
-          const edge = JSON.parse(edgeStr)
-          return {
-            data: {
-              id: `${edge.source}_to_${edge.target}`,
-              source: edge.source,
-              target: edge.target,
-              is_path_edge: true,
-              edge_label: edge.relationship_type || ''
+        })
+
+        edges.forEach(edge => {
+          const source = edge._from || edge.source
+          const target = edge._to || edge.target
+          if (source && target) {
+            const edgeId = `${source}_to_${target}`
+            if (!pathEdgesMap.has(edgeId)) {
+              pathEdgesMap.set(edgeId, {
+                id: edgeId,
+                source,
+                target,
+                is_path_edge: true,
+                edge_label: edge.relationship_type || edge.constellation_name || ''
+              })
             }
           }
         })
+      })
+
+      const elements = {
+        nodes: Array.from(pathNodes.values()).map(nodeData => ({ data: nodeData })),
+        edges: Array.from(pathEdgesMap.values()).map(edgeData => ({ data: edgeData }))
       }
-      
+
       cyRef.current.elements().remove()
       cyRef.current.add(elements)
       applyLayout(layout)
-      
+
       setStats({
-        paths_found: data.paths?.length || 0,
+        paths_found: paths.length,
         total_nodes: elements.nodes.length,
         total_edges: elements.edges.length
       })

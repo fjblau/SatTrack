@@ -55,14 +55,14 @@ def find_shortest_path(
         edge_clause = ", ".join(edge_collections)
         
         query = f"""
-        FOR v, e IN 1..@max_depth OUTBOUND @from_id
+        FOR v, e, p IN 1..@max_depth ANY @from_id
             {edge_clause}
             FILTER v._id == @to_id
             LIMIT 1
             RETURN {{
-                vertices: [v],
-                edges: [e],
-                distance: LENGTH([v])
+                vertices: p.vertices,
+                edges: p.edges,
+                distance: LENGTH(p.edges)
             }}
         """
         
@@ -121,14 +121,14 @@ def find_all_paths(
         edge_clause = ", ".join(edge_collections)
         
         query = f"""
-        FOR v, e, p IN 1..@max_depth OUTBOUND @from_id
+        FOR v, e, p IN 1..@max_depth ANY @from_id
             {edge_clause}
             FILTER v._id == @to_id
             LIMIT @limit
             RETURN {{
                 vertices: p.vertices,
                 edges: p.edges,
-                distance: LENGTH(p.vertices) - 1
+                distance: LENGTH(p.edges)
             }}
         """
         
