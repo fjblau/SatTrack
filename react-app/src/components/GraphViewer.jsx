@@ -1116,7 +1116,12 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
 
       const EDGE_TYPE_META = {
         constellation_membership: {
-          label: (e) => e.constellation_name ? `Constellation: ${e.constellation_name}` : 'Constellation',
+          label: (e) => {
+            const n = e.constellation_name
+            return (n && n !== 'Other' && n !== 'Unknown' && n !== 'other')
+              ? `Constellation: ${n}`
+              : 'Constellation Member'
+          },
           color: '#3498db',
           node_type: 'constellation_hub'
         },
