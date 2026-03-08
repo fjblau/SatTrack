@@ -20,7 +20,8 @@ If you are blocked and need user clarification, mark the current step with `[!]`
 
 ## Workflow Steps
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
+<!-- chat-id: 75167f7a-691b-4936-abb0-acc5247ee4b6 -->
 
 Assess the task's difficulty, as underestimating it leads to poor outcomes.
 - easy: Straightforward implementation, trivial bug fix or feature
@@ -54,16 +55,38 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Implementation
+### [ ] Step: Implement backend admin router
 
-Implement the task according to the technical specification and general engineering best practices.
+Create `api/routers/admin.py` with:
+- Script catalogue (maintenance + population scripts with id, name, description, category, path)
+- `GET /v2/admin/scripts` — returns catalogue
+- `POST /v2/admin/scripts/{script_id}/run` — spawns subprocess via `subprocess.Popen`, stores run state in module-level dict, returns run_id (UUID)
+- `GET /v2/admin/runs/{run_id}` — reads accumulated stdout/stderr from Popen, returns status + output
 
-1. Break the task into steps where possible.
-2. Implement the required changes in the codebase
-3. If relevant, write unit tests alongside each change.
-4. Run relevant tests and linters in the end of each step.
-5. Perform basic manual verification if applicable.
-6. After completion, write a report to `{@artifacts_path}/report.md` describing:
-   - What was implemented
-   - How the solution was tested
-   - The biggest issues or challenges encountered
+Register the router in `api/main.py`.
+
+Verify: `python -m py_compile api/routers/admin.py`
+
+### [ ] Step: Implement AdminPage frontend component
+
+Create `react-app/src/components/AdminPage.jsx` and `AdminPage.css`:
+- Fetch and display script catalogue grouped by category on mount
+- Per-script card: name, description, Run button, status badge, scrollable log `<pre>`
+- On Run: POST to trigger, store run_id, poll every 2 s until status is success/error
+- Disable Run button while a run is in progress for that script
+
+Update `react-app/src/App.jsx`:
+- Import `AdminPage`
+- Add `admin` tab button to the right of Analytics in `<nav>`
+- Add conditional render block for `activeTab === 'admin'`
+
+Verify: `cd react-app && npm run build`
+
+### [ ] Step: Integration verification and report
+
+1. Start both services and manually verify:
+   - Admin tab appears to the right of Analytics
+   - Script list renders grouped by category
+   - Run button triggers execution, log output appears and updates
+   - Status badge transitions correctly (idle → running → success/error)
+2. Write `{@artifacts_path}/report.md` describing what was implemented, how it was tested, and any issues encountered.
