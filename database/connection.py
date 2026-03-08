@@ -1,5 +1,6 @@
 from arango import ArangoClient
 import os
+import sys
 
 ARANGO_HOST = os.getenv("ARANGO_HOST", "http://localhost:8529")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
@@ -42,6 +43,11 @@ def connect_arangodb():
         satellites_collection.add_persistent_index(fields=['canonical.registration_number'], unique=False)
         satellites_collection.add_persistent_index(fields=['identifier'], unique=True)
         
+        pkg = sys.modules.get('database')
+        if pkg is not None:
+            pkg.db = db
+            pkg.satellites_collection = satellites_collection
+
         print(f"Connected to ArangoDB: {DB_NAME}.{COLLECTION_NAME}")
         return True
     except Exception as e:
