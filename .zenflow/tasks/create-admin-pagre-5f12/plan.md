@@ -84,7 +84,8 @@ Update `react-app/src/App.jsx`:
 
 Verify: `cd react-app && npm run build`
 
-### [ ] Step: Integration verification and report
+### [x] Step: Integration verification and report
+<!-- chat-id: 6b1dc0fd-c449-4062-8792-6cb894039d35 -->
 
 1. Start both services and manually verify:
    - Admin tab appears to the right of Analytics
