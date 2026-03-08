@@ -11,7 +11,7 @@ This module provides helper functions for:
 from typing import Optional, Dict, List, Any, Set
 import datetime
 import database.connection as db_conn
-from database.connection import COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK, EDGE_COLLECTION_SATELLITE_LINEAGE
+from database.connection import COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK, EDGE_COLLECTION_SATELLITE_LINEAGE, EDGE_COLLECTION_REGISTRATION, COLLECTION_REG_DOCS
 
 
 def find_shortest_path(
@@ -81,9 +81,26 @@ def find_shortest_path(
                 FOR vertex IN p.vertices
                 RETURN MERGE(vertex, {{is_hub: vertex._id IN hub_ids}})
             )
+            LET reg_data = (
+                FOR vertex IN enriched_vertices
+                    FILTER STARTS_WITH(vertex._id, "satellites/")
+                    FOR reg_doc, reg_edge IN 1..1 ANY vertex._id {EDGE_COLLECTION_REGISTRATION}
+                        FILTER STARTS_WITH(reg_doc._id, "{COLLECTION_REG_DOCS}/")
+                        RETURN {{
+                            doc: MERGE(reg_doc, {{type: "registration_document"}}),
+                            edge: MERGE(reg_edge, {{relationship_type: "registration_link"}})
+                        }}
+            )
+            LET unique_reg_nodes = (
+                FOR item IN reg_data
+                    COLLECT doc_id = item.doc._id INTO grouped
+                    RETURN grouped[0].item.doc
+            )
             RETURN {{
                 vertices: enriched_vertices,
                 edges: enriched_edges,
+                supplementary_nodes: unique_reg_nodes,
+                supplementary_edges: reg_data[*].edge,
                 distance: LENGTH(p.edges)
             }}
         """
@@ -169,9 +186,26 @@ def find_all_paths(
                 FOR vertex IN p.vertices
                 RETURN MERGE(vertex, {{is_hub: vertex._id IN hub_ids}})
             )
+            LET reg_data = (
+                FOR vertex IN enriched_vertices
+                    FILTER STARTS_WITH(vertex._id, "satellites/")
+                    FOR reg_doc, reg_edge IN 1..1 ANY vertex._id {EDGE_COLLECTION_REGISTRATION}
+                        FILTER STARTS_WITH(reg_doc._id, "{COLLECTION_REG_DOCS}/")
+                        RETURN {{
+                            doc: MERGE(reg_doc, {{type: "registration_document"}}),
+                            edge: MERGE(reg_edge, {{relationship_type: "registration_link"}})
+                        }}
+            )
+            LET unique_reg_nodes = (
+                FOR item IN reg_data
+                    COLLECT doc_id = item.doc._id INTO grouped
+                    RETURN grouped[0].item.doc
+            )
             RETURN {{
                 vertices: enriched_vertices,
                 edges: enriched_edges,
+                supplementary_nodes: unique_reg_nodes,
+                supplementary_edges: reg_data[*].edge,
                 distance: LENGTH(p.edges)
             }}
         """

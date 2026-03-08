@@ -1235,6 +1235,40 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         })
       })
 
+      const supplementaryNodes = paths.flatMap(p => p.supplementary_nodes || [])
+      const supplementaryEdges = paths.flatMap(p => p.supplementary_edges || [])
+
+      supplementaryNodes.forEach(node => {
+        const nodeId = node._id || node.id
+        if (nodeId && !pathNodes.has(nodeId)) {
+          pathNodes.set(nodeId, {
+            id: nodeId,
+            label: node.document_title || node.name || nodeId.split('/')[1] || nodeId,
+            type: 'registration_document',
+            node_size: 50
+          })
+        }
+      })
+
+      supplementaryEdges.forEach(edge => {
+        const source = edge._from || edge.source
+        const target = edge._to || edge.target
+        if (source && target) {
+          const edgeId = `supp_${source}_to_${target}`
+          if (!pathEdgesMap.has(edgeId)) {
+            const label = 'Shared Registration'
+            edgeTypeCounts[label] = (edgeTypeCounts[label] || 0) + 1
+            pathEdgesMap.set(edgeId, {
+              id: edgeId,
+              source,
+              target,
+              path_edge_type: 'registration_link',
+              edge_label: label
+            })
+          }
+        }
+      })
+
       const elements = {
         nodes: Array.from(pathNodes.values()).map(nodeData => ({ data: nodeData })),
         edges: Array.from(pathEdgesMap.values()).map(edgeData => ({ data: edgeData }))
