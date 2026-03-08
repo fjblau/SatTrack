@@ -7,6 +7,7 @@ import GraphExplorer from './components/GraphExplorer'
 import TimelineChart from './components/TimelineChart'
 import FunctionAnalytics from './components/FunctionAnalytics'
 import RegistrationDocumentAnalytics from './components/RegistrationDocumentAnalytics'
+import AdminPage from './components/AdminPage'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
 function App() {
@@ -238,6 +239,12 @@ function App() {
           >
             Analytics
           </button>
+          <button 
+            className={activeTab === 'admin' ? 'active' : ''}
+            onClick={() => setActiveTab('admin')}
+          >
+            Admin
+          </button>
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
       </header>
@@ -313,6 +320,12 @@ function App() {
           <div className="timeline-main">
             <TimelineChart selectedTimePeriod={selectedTimePeriod} />
           </div>
+        </div>
+      )}
+
+      {activeTab === 'admin' && (
+        <div className="analytics-view-container">
+          <AdminPage />
         </div>
       )}
 

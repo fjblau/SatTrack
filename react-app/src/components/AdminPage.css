@@ -1,0 +1,147 @@
+.admin-page {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.admin-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.admin-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 1.3em;
+}
+
+.admin-loading {
+  text-align: center;
+  padding: 4rem;
+  color: #666;
+  font-size: 1em;
+}
+
+.script-category {
+  margin-bottom: 2rem;
+}
+
+.category-title {
+  margin: 0 0 0.75rem 0;
+  color: #2c3e50;
+  font-size: 1em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.script-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.script-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.script-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.script-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.script-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95em;
+  margin-bottom: 0.25rem;
+}
+
+.script-description {
+  color: #666;
+  font-size: 0.83em;
+}
+
+.script-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.status-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-idle {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.status-running {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-success {
+  background: #d1e7dd;
+  color: #0a3622;
+}
+
+.status-error {
+  background: #f8d7da;
+  color: #58151c;
+}
+
+.run-button {
+  padding: 0.4rem 1rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.run-button:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.run-button:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+}
+
+.script-log {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-family: 'Courier New', Courier, monospace;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
