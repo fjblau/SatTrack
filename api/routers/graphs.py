@@ -11,7 +11,8 @@ from database import (
     EDGE_COLLECTION_CONSTELLATION,
     EDGE_COLLECTION_REGISTRATION,
     EDGE_COLLECTION_PROXIMITY,
-    GRAPH_NAME
+    GRAPH_NAME,
+    find_satellite
 )
 from database.graph_analytics import (
     find_shortest_path,
@@ -36,6 +37,39 @@ from api.services.cache_service import get_cache
 from api.services import collision_service, lineage_service
 
 router = APIRouter(prefix="/v2/graphs", tags=["graphs"])
+
+
+def _resolve_satellite_doc_id(input_id: str) -> Optional[str]:
+    """
+    Resolve a user-supplied satellite identifier to a full ArangoDB document ID.
+
+    Accepts:
+    - Bare NORAD numbers: "39634"
+    - NORAD-prefixed: "NORAD-39634"
+    - Full document IDs: "satellites/NORAD-39634"
+    - International designators, registration numbers, or identifiers
+
+    Returns the full document ID (e.g. "satellites/NORAD-39634") or None.
+    """
+    stripped = input_id.strip()
+
+    if stripped.startswith("satellites/"):
+        key = stripped[len("satellites/"):]
+    else:
+        key = stripped
+
+    doc = (
+        find_satellite(identifier=key)
+        or find_satellite(identifier=f"NORAD-{key}")
+        or find_satellite(international_designator=key)
+        or find_satellite(registration_number=key)
+    )
+
+    if doc:
+        return doc["_id"]
+
+    return None
+
 
 # Optimized cache configurations based on query patterns and update frequencies
 # Path queries: frequently requested, relatively stable - increased capacity
@@ -1916,9 +1950,20 @@ def get_path_between_satellites(
     """
     if not from_id or not to_id:
         raise HTTPException(status_code=400, detail="Both from_id and to_id are required")
-    
-    from_doc_id = from_id if from_id.startswith("satellites/") else f"satellites/{from_id}"
-    to_doc_id = to_id if to_id.startswith("satellites/") else f"satellites/{to_id}"
+
+    from_doc_id = _resolve_satellite_doc_id(from_id)
+    if from_doc_id is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Satellite not found: '{from_id}'. Accepted formats: bare NORAD number (39634), NORAD-39634, or full identifier."
+        )
+
+    to_doc_id = _resolve_satellite_doc_id(to_id)
+    if to_doc_id is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Satellite not found: '{to_id}'. Accepted formats: bare NORAD number (39634), NORAD-39634, or full identifier."
+        )
     
     cache_key = hashlib.md5(
         json.dumps({
