@@ -55,7 +55,8 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Implement backend admin router
+### [x] Step: Implement backend admin router
+<!-- chat-id: b88a2335-499d-4a5e-bcb4-f31206561eb0 -->
 
 Create `api/routers/admin.py` with:
 - Script catalogue (maintenance + population scripts with id, name, description, category, path)
