@@ -4,13 +4,13 @@ Promote launch_site from Space-Track source to canonical fields.
 This script adds launch site data to canonical.launch_site.
 """
 import sys
-from datetime import datetime, timezone
-import database as db_module
-
 from pathlib import Path
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from datetime import datetime, timezone
+import database as db_module
 
 def promote_launch_site(dry_run=False):
     """Promote Space-Track launch_site to canonical.launch_site"""
