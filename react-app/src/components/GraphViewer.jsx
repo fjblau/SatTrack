@@ -272,7 +272,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             style: {
               'background-color': '#9b59b6',
               'border-width': 3,
-              'border-color': '#8e44ad'
+              'border-color': '#8e44ad',
+              'text-wrap': 'wrap',
+              'text-max-width': '120px'
             }
           },
           {
@@ -294,12 +296,23 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             }
           },
           {
+            selector: 'node[is_constellation_hub]',
+            style: {
+              'background-color': '#f1c40f',
+              'border-width': 4,
+              'border-color': '#d4ac0d',
+              'shape': 'pentagon',
+              'font-weight': 'bold',
+              'color': '#7d6608'
+            }
+          },
+          {
             selector: 'node[node_type="registration_document"][is_path_node]',
             style: {
-              'background-color': '#f39c12',
+              'background-color': '#1abc9c',
               'shape': 'diamond',
               'border-width': 3,
-              'border-color': '#d68910'
+              'border-color': '#148f77'
             }
           },
           {
@@ -1231,6 +1244,30 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         })
       })
 
+      const incomingConstellation = new Map()
+      pathEdgesMap.forEach(edgeData => {
+        if (edgeData.edge_label && edgeData.edge_label.startsWith('Constellation')) {
+          const t = edgeData.target
+          incomingConstellation.set(t, (incomingConstellation.get(t) || 0) + 1)
+        }
+      })
+      pathNodes.forEach((nodeData, nodeId) => {
+        if (!nodeData.is_source && !nodeData.is_destination) {
+          const inCount = incomingConstellation.get(nodeId) || 0
+          if (inCount >= 2) {
+            nodeData.is_constellation_hub = true
+            nodeData.label = `${nodeData.label}\n(Hub)`
+            nodeData.node_size = 44
+          }
+        }
+      })
+
+      const edgeTypeSummary = {}
+      pathEdgesMap.forEach(e => {
+        const type = e.edge_label || 'Unknown'
+        edgeTypeSummary[type] = (edgeTypeSummary[type] || 0) + 1
+      })
+
       const elements = {
         nodes: Array.from(pathNodes.values()).map(nodeData => ({ data: nodeData })),
         edges: Array.from(pathEdgesMap.values()).map(edgeData => ({ data: edgeData }))
@@ -1243,7 +1280,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       setStats({
         paths_found: paths.length,
         total_nodes: elements.nodes.length,
-        total_edges: elements.edges.length
+        total_edges: elements.edges.length,
+        edge_types: edgeTypeSummary
       })
       console.log('[GraphViewer] Path graph rendered successfully')
     } catch (error) {
@@ -2091,6 +2129,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             {stats.paths_found !== undefined && <span>Paths: {stats.paths_found}</span>}
             {stats.total_nodes !== undefined && <span>Nodes: {stats.total_nodes}</span>}
             {stats.total_edges !== undefined && <span>Edges: {stats.total_edges}</span>}
+            {stats.edge_types && Object.entries(stats.edge_types).map(([type, count]) => (
+              <span key={type}>{type}: {count}</span>
+            ))}
             {stats.metric_type && <span>Metric: {stats.metric_type}</span>}
             {stats.nodes_analyzed !== undefined && <span>Analyzed: {stats.nodes_analyzed} nodes</span>}
             {stats.max_score && <span>Max Score: {stats.max_score}</span>}
@@ -2194,13 +2235,51 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           </>
         ) : graphType === 'paths' ? (
           <>
-            <div className="legend-item">
-              <span className="legend-node" style={{backgroundColor: '#9b59b6', border: '4px solid #8e44ad'}}></span>
-              <span>Path Node</span>
+            <div className="legend-section">
+              <h5>Nodes</h5>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#2ecc71', border: '5px solid #27ae60'}}></span>
+                <span>Source satellite</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#e74c3c', border: '5px solid #c0392b'}}></span>
+                <span>Destination satellite</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#9b59b6', border: '3px solid #8e44ad'}}></span>
+                <span>Intermediate satellite</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#f1c40f', border: '4px solid #d4ac0d', clipPath: 'polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%)'}}></span>
+                <span>Constellation hub</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#1abc9c', border: '3px solid #148f77', transform: 'rotate(45deg)', borderRadius: 0}}></span>
+                <span>Registration document</span>
+              </div>
             </div>
-            <div className="legend-item">
-              <span className="legend-edge-thick" style={{backgroundColor: '#9b59b6'}}></span>
-              <span>Path Edge</span>
+            <div className="legend-section">
+              <h5>Edges</h5>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#3498db'}}></span>
+                <span>Constellation membership</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#e67e22'}}></span>
+                <span>Orbital proximity</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#27ae60'}}></span>
+                <span>Shared registration</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#e74c3c'}}></span>
+                <span>Collision risk</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#8e44ad'}}></span>
+                <span>Satellite lineage</span>
+              </div>
             </div>
           </>
         ) : graphType === 'centrality' ? (
