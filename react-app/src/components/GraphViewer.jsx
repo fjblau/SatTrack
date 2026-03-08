@@ -261,9 +261,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           {
             selector: 'node[node_role="source"]',
             style: {
-              'background-color': '#2ecc71',
+              'background-color': '#e67e22',
               'border-width': 4,
-              'border-color': '#27ae60',
+              'border-color': '#d35400',
               'font-weight': 'bold',
               'width': 40,
               'height': 40
@@ -272,9 +272,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           {
             selector: 'node[node_role="destination"]',
             style: {
-              'background-color': '#9b59b6',
+              'background-color': '#e74c3c',
               'border-width': 4,
-              'border-color': '#8e44ad',
+              'border-color': '#c0392b',
               'font-weight': 'bold',
               'width': 40,
               'height': 40
@@ -295,9 +295,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           {
             selector: 'node[node_role="intermediate"]',
             style: {
-              'background-color': '#e74c3c',
+              'background-color': '#9b59b6',
               'border-width': 3,
-              'border-color': '#c0392b',
+              'border-color': '#8e44ad',
               'width': 35,
               'height': 35
             }
@@ -317,7 +317,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             style: {
               'line-color': '#3498db',
               'target-arrow-color': '#3498db',
-              'width': 3
+              'width': 3,
+              'color': '#3498db',
+              'font-weight': 'bold'
             }
           },
           {
@@ -325,7 +327,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             style: {
               'line-color': '#e67e22',
               'target-arrow-color': '#e67e22',
-              'width': 3
+              'width': 3,
+              'color': '#e67e22',
+              'font-weight': 'bold'
             }
           },
           {
@@ -334,7 +338,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
               'line-color': '#9b59b6',
               'target-arrow-color': '#9b59b6',
               'width': 2,
-              'line-style': 'dashed'
+              'line-style': 'dashed',
+              'color': '#9b59b6',
+              'font-weight': 'bold'
             }
           },
           {
@@ -342,7 +348,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             style: {
               'line-color': '#27ae60',
               'target-arrow-color': '#27ae60',
-              'width': 2
+              'width': 2,
+              'color': '#27ae60',
+              'font-weight': 'bold'
             }
           },
           {
@@ -350,7 +358,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             style: {
               'line-color': '#e74c3c',
               'target-arrow-color': '#e74c3c',
-              'width': 3
+              'width': 3,
+              'color': '#e74c3c',
+              'font-weight': 'bold'
             }
           },
           {
@@ -2195,15 +2205,15 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             <div className="legend-section">
               <h5>Nodes</h5>
               <div className="legend-item">
-                <span className="legend-node" style={{backgroundColor: '#2ecc71', border: '4px solid #27ae60'}}></span>
+                <span className="legend-node" style={{backgroundColor: '#e67e22', border: '4px solid #d35400'}}></span>
                 <span>Source satellite</span>
               </div>
               <div className="legend-item">
-                <span className="legend-node" style={{backgroundColor: '#9b59b6', border: '4px solid #8e44ad'}}></span>
+                <span className="legend-node" style={{backgroundColor: '#e74c3c', border: '4px solid #c0392b'}}></span>
                 <span>Destination satellite</span>
               </div>
               <div className="legend-item">
-                <span className="legend-node" style={{backgroundColor: '#e74c3c', border: '3px solid #c0392b', width: '18px', height: '18px'}}></span>
+                <span className="legend-node" style={{backgroundColor: '#9b59b6', border: '3px solid #8e44ad', width: '18px', height: '18px'}}></span>
                 <span>Intermediate satellite</span>
               </div>
               <div className="legend-item">
