@@ -296,6 +296,7 @@ def _traverse_lineage(
         query = f"""
         FOR v, e, p IN 1..@max_depth {direction} @start_id
             {EDGE_COLLECTION_SATELLITE_LINEAGE}
+            FILTER v != null
             RETURN {{
                 satellite: {{
                     _id: v._id,

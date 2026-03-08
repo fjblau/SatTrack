@@ -541,7 +541,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       }
       
       const elements = {
-        nodes: data.data.nodes.map(node => ({
+        nodes: data.data.nodes.filter(node => node.id != null).map(node => ({
           data: {
             ...node,
             id: node.id,
@@ -549,7 +549,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             node_size: node.is_hub === true ? 45 : 30
           }
         })),
-        edges: data.data.edges.map(edge => ({
+        edges: data.data.edges.filter(edge => edge.source != null && edge.target != null).map(edge => ({
           data: {
             id: edge.id,
             source: edge.source,
@@ -1594,7 +1594,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       }
       
       const elements = {
-        nodes: (data.nodes || []).map(node => ({
+        nodes: (data.nodes || []).filter(node => (node.id || node._id) != null).map(node => ({
           data: {
             ...node,
             id: node.id || node._id,
@@ -1604,7 +1604,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             node_size: node.is_source ? 50 : (40 - (node.distance * 5))
           }
         })),
-        edges: (data.edges || []).map(edge => {
+        edges: (data.edges || []).filter(edge => (edge.source || edge._from) != null && (edge.target || edge._to) != null).map(edge => {
           const label = getEdgeLabel(edge)
           const edgeData = {
             id: edge.id || `${edge.source}_to_${edge.target}`,
@@ -1890,7 +1890,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           }
         })
         
-        (data.data.ancestors || []).forEach(item => {
+        (data.data.ancestors || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
           nodes.push({
             data: {
@@ -1917,7 +1917,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           }
         })
         
-        (data.data.descendants || []).forEach(item => {
+        (data.data.descendants || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
           nodes.push({
             data: {
