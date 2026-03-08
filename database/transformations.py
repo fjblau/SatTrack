@@ -138,12 +138,18 @@ def update_canonical(doc: Dict[str, Any]):
     if "source_priority" not in canonical:
         canonical["source_priority"] = source_priority
     
-    # Normalize country field using CountryNormalizer
+    # Normalize country field using CountryNormalizer.
+    # Priority: canonical.country_of_origin → sources.*.country → preserve existing
     raw_country = canonical.get("country_of_origin")
+    if not raw_country:
+        for source_name in source_priority:
+            raw_country = sources.get(source_name, {}).get("country")
+            if raw_country:
+                break
     if raw_country:
         normalizer = CountryNormalizer()
         canonical["country"] = normalizer.normalize(raw_country)
-    else:
+    elif not canonical.get("country"):
         canonical["country"] = None
     
     doc["canonical"] = canonical
