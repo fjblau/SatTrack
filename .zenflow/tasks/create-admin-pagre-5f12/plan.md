@@ -68,7 +68,8 @@ Register the router in `api/main.py`.
 
 Verify: `python -m py_compile api/routers/admin.py`
 
-### [ ] Step: Implement AdminPage frontend component
+### [x] Step: Implement AdminPage frontend component
+<!-- chat-id: 828592a7-eaa9-46ae-9367-f627d75b28e0 -->
 
 Create `react-app/src/components/AdminPage.jsx` and `AdminPage.css`:
 - Fetch and display script catalogue grouped by category on mount
