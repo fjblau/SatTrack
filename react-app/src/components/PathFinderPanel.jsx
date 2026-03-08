@@ -44,6 +44,7 @@ function PathFinderPanel({ onPathSelect }) {
       <h3>Path Finder</h3>
       <p className="panel-description">Find relationships between satellites</p>
       
+      <p className="panel-hint">Enter a bare NORAD number (e.g. <strong>39634</strong>), a prefixed ID (e.g. <strong>NORAD-39634</strong>), or an international designator.</p>
       <div className="path-form">
         <div className="form-group">
           <label>From Satellite:</label>
@@ -51,7 +52,7 @@ function PathFinderPanel({ onPathSelect }) {
             type="text"
             value={fromSatellite}
             onChange={(e) => setFromSatellite(e.target.value)}
-            placeholder="Enter satellite ID or identifier"
+            placeholder="e.g. 39634 or NORAD-39634"
           />
         </div>
 
@@ -61,7 +62,7 @@ function PathFinderPanel({ onPathSelect }) {
             type="text"
             value={toSatellite}
             onChange={(e) => setToSatellite(e.target.value)}
-            placeholder="Enter satellite ID or identifier"
+            placeholder="e.g. 42969 or NORAD-42969"
           />
         </div>
 
