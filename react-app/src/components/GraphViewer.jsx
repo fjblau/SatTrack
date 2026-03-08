@@ -143,12 +143,29 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             selector: 'edge[edge_label]',
             style: {
               'label': 'data(edge_label)',
-              'font-size': '12px',
-              'font-weight': 'bold',
+              'font-size': '11px',
+              'font-weight': 'normal',
               'text-background-color': '#fff',
               'text-background-opacity': 0.9,
               'text-background-padding': '3px',
-              'text-background-shape': 'roundrectangle'
+              'text-background-shape': 'roundrectangle',
+              'text-wrap': 'wrap',
+              'text-max-width': '160px'
+            }
+          },
+          {
+            selector: 'edge[is_path_edge][edge_label]',
+            style: {
+              'label': 'data(edge_label)',
+              'font-size': '11px',
+              'font-weight': 'bold',
+              'color': 'data(path_edge_color)',
+              'text-background-color': '#fff',
+              'text-background-opacity': 0.95,
+              'text-background-padding': '4px',
+              'text-background-shape': 'roundrectangle',
+              'text-wrap': 'wrap',
+              'text-max-width': '200px'
             }
           },
           {
@@ -254,18 +271,45 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             selector: 'node[is_path_node]',
             style: {
               'background-color': '#9b59b6',
-              'border-width': 4,
+              'border-width': 3,
               'border-color': '#8e44ad'
+            }
+          },
+          {
+            selector: 'node[is_source]',
+            style: {
+              'background-color': '#2ecc71',
+              'border-width': 5,
+              'border-color': '#27ae60',
+              'font-weight': 'bold'
+            }
+          },
+          {
+            selector: 'node[is_destination]',
+            style: {
+              'background-color': '#e74c3c',
+              'border-width': 5,
+              'border-color': '#c0392b',
+              'font-weight': 'bold'
+            }
+          },
+          {
+            selector: 'node[node_type="registration_document"][is_path_node]',
+            style: {
+              'background-color': '#f39c12',
+              'shape': 'diamond',
+              'border-width': 3,
+              'border-color': '#d68910'
             }
           },
           {
             selector: 'edge[is_path_edge]',
             style: {
-              'line-color': '#9b59b6',
-              'width': 5,
+              'line-color': 'data(path_edge_color)',
+              'width': 4,
               'line-style': 'solid',
               'target-arrow-shape': 'triangle',
-              'target-arrow-color': '#9b59b6'
+              'target-arrow-color': 'data(path_edge_color)'
             }
           },
           {
@@ -1070,6 +1114,56 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         return
       }
 
+      const EDGE_TYPE_META = {
+        constellation_membership: {
+          label: (e) => e.constellation_name ? `Constellation: ${e.constellation_name}` : 'Constellation',
+          color: '#3498db',
+          node_type: 'constellation_hub'
+        },
+        registration_links: {
+          label: () => 'Shared Registration',
+          color: '#27ae60',
+          node_type: 'registration_document'
+        },
+        orbital_proximity: {
+          label: (e) => e.proximity_score != null
+            ? `Orbital Proximity (score: ${Number(e.proximity_score).toFixed(2)})`
+            : 'Orbital Proximity',
+          color: '#e67e22',
+          node_type: 'satellite'
+        },
+        collision_risk_edges: {
+          label: (e) => e.collision_probability != null
+            ? `Collision Risk (${(e.collision_probability * 100).toFixed(2)}%)`
+            : 'Collision Risk',
+          color: '#e74c3c',
+          node_type: 'satellite'
+        },
+        satellite_lineage: {
+          label: (e) => {
+            const rel = e.relationship_type
+            if (!rel || rel === 'Other') return 'Lineage'
+            return `Lineage: ${rel}`
+          },
+          color: '#8e44ad',
+          node_type: 'satellite'
+        }
+      }
+
+      const getEdgeMeta = (edge) => {
+        const collection = (edge._id || '').split('/')[0]
+        return EDGE_TYPE_META[collection] || {
+          label: (e) => e.relationship_type && e.relationship_type !== 'Other'
+            ? e.relationship_type
+            : collection.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Related',
+          color: '#95a5a6',
+          node_type: 'satellite'
+        }
+      }
+
+      const fromId = data.from_id
+      const toId = data.to_id
+
       const pathNodes = new Map()
       const pathEdgesMap = new Map()
 
@@ -1077,14 +1171,37 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         const vertices = path.vertices || []
         const edges = path.edges || []
 
-        vertices.forEach(vertex => {
+        vertices.forEach((vertex, idx) => {
           const nodeId = vertex._id || vertex
           if (!pathNodes.has(nodeId)) {
+            const collection = nodeId.split('/')[0]
+            const isRegDoc = collection === 'registration_documents'
+            const isSource = nodeId === fromId
+            const isDest = nodeId === toId
+
+            const name = vertex.canonical?.name || vertex.canonical?.object_name
+            const identifier = vertex.identifier
+            const key = nodeId.split('/')[1] || nodeId
+
+            let label = key
+            if (identifier && identifier !== key) {
+              label = identifier
+            }
+            if (name && name !== identifier) {
+              label = name
+            }
+            if (isRegDoc) {
+              label = `Registration\n${key}`
+            }
+
             pathNodes.set(nodeId, {
               id: nodeId,
-              label: vertex.identifier || vertex.canonical?.name || (nodeId.split('/')[1]) || nodeId,
+              label,
               is_path_node: true,
-              node_size: 30
+              is_source: isSource || undefined,
+              is_destination: isDest || undefined,
+              node_type: isRegDoc ? 'registration_document' : 'satellite',
+              node_size: (isSource || isDest) ? 45 : 32
             })
           }
         })
@@ -1095,12 +1212,14 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           if (source && target) {
             const edgeId = `${source}_to_${target}`
             if (!pathEdgesMap.has(edgeId)) {
+              const meta = getEdgeMeta(edge)
               pathEdgesMap.set(edgeId, {
                 id: edgeId,
                 source,
                 target,
                 is_path_edge: true,
-                edge_label: edge.relationship_type || edge.constellation_name || ''
+                path_edge_color: meta.color,
+                edge_label: meta.label(edge)
               })
             }
           }
