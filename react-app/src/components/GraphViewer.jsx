@@ -1165,7 +1165,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       const destId = firstVertices.length > 1 ? (firstVertices[firstVertices.length - 1]._id || firstVertices[firstVertices.length - 1]) : null
 
       const formatEdgeLabel = (edge) => {
-        const type = edge.relationship_type || edge.edge_type || ''
+        const type = edge.relationship_type || edge.edge_type ||
+          (edge._id ? edge._id.split('/')[0] : '') || ''
         if (type === 'constellation_membership') {
           const name = edge.constellation_name ? ` (${edge.constellation_name})` : ''
           return `Constellation Member${name}`
@@ -1207,7 +1208,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           if (source && target) {
             const edgeId = `${source}_to_${target}`
             if (!pathEdgesMap.has(edgeId)) {
-              const edgeType = edge.relationship_type || edge.edge_type || 'other'
+              const edgeType = edge.relationship_type || edge.edge_type ||
+                (edge._id ? edge._id.split('/')[0] : 'other') || 'other'
               const label = formatEdgeLabel(edge)
               edgeTypeCounts[label] = (edgeTypeCounts[label] || 0) + 1
               pathEdgesMap.set(edgeId, {

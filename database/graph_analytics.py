@@ -59,9 +59,31 @@ def find_shortest_path(
             {edge_clause}
             FILTER v._id == @to_id
             LIMIT 1
+            LET enriched_edges = (
+                FOR edge IN p.edges
+                RETURN MERGE(edge, {{relationship_type: PARSE_IDENTIFIER(edge).collection}})
+            )
+            LET edge_counts = (
+                FOR edge IN enriched_edges
+                COLLECT node_id = edge._from INTO g
+                RETURN {{node_id: node_id, count: LENGTH(g)}}
+            )
+            LET edge_counts_to = (
+                FOR edge IN enriched_edges
+                COLLECT node_id = edge._to INTO g
+                RETURN {{node_id: node_id, count: LENGTH(g)}}
+            )
+            LET hub_ids = UNION_DISTINCT(
+                (FOR c IN edge_counts FILTER c.count > 1 RETURN c.node_id),
+                (FOR c IN edge_counts_to FILTER c.count > 1 RETURN c.node_id)
+            )
+            LET enriched_vertices = (
+                FOR vertex IN p.vertices
+                RETURN MERGE(vertex, {{is_hub: vertex._id IN hub_ids}})
+            )
             RETURN {{
-                vertices: p.vertices,
-                edges: p.edges,
+                vertices: enriched_vertices,
+                edges: enriched_edges,
                 distance: LENGTH(p.edges)
             }}
         """
@@ -125,9 +147,31 @@ def find_all_paths(
             {edge_clause}
             FILTER v._id == @to_id
             LIMIT @limit
+            LET enriched_edges = (
+                FOR edge IN p.edges
+                RETURN MERGE(edge, {{relationship_type: PARSE_IDENTIFIER(edge).collection}})
+            )
+            LET edge_counts = (
+                FOR edge IN enriched_edges
+                COLLECT node_id = edge._from INTO g
+                RETURN {{node_id: node_id, count: LENGTH(g)}}
+            )
+            LET edge_counts_to = (
+                FOR edge IN enriched_edges
+                COLLECT node_id = edge._to INTO g
+                RETURN {{node_id: node_id, count: LENGTH(g)}}
+            )
+            LET hub_ids = UNION_DISTINCT(
+                (FOR c IN edge_counts FILTER c.count > 1 RETURN c.node_id),
+                (FOR c IN edge_counts_to FILTER c.count > 1 RETURN c.node_id)
+            )
+            LET enriched_vertices = (
+                FOR vertex IN p.vertices
+                RETURN MERGE(vertex, {{is_hub: vertex._id IN hub_ids}})
+            )
             RETURN {{
-                vertices: p.vertices,
-                edges: p.edges,
+                vertices: enriched_vertices,
+                edges: enriched_edges,
                 distance: LENGTH(p.edges)
             }}
         """
