@@ -1205,6 +1205,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             else if (vertex.is_hub === true || vertex.type === 'constellation_hub') nodeRole = 'hub'
             pathNodes.set(nodeId, {
               id: nodeId,
+              identifier: vertex.identifier || nodeId.split('/')[1] || nodeId,
               label: (() => { const identifier = vertex.identifier || nodeId.split('/')[1] || nodeId; const satName = vertex.canonical?.name; return satName ? `${identifier}\n(${satName})` : identifier })(),
               is_path_node: true,
               node_role: nodeRole,
