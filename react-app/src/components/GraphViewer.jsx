@@ -259,6 +259,50 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             }
           },
           {
+            selector: 'node[node_role="source"]',
+            style: {
+              'background-color': '#2ecc71',
+              'border-width': 4,
+              'border-color': '#27ae60',
+              'font-weight': 'bold',
+              'width': 40,
+              'height': 40
+            }
+          },
+          {
+            selector: 'node[node_role="destination"]',
+            style: {
+              'background-color': '#9b59b6',
+              'border-width': 4,
+              'border-color': '#8e44ad',
+              'font-weight': 'bold',
+              'width': 40,
+              'height': 40
+            }
+          },
+          {
+            selector: 'node[node_role="hub"]',
+            style: {
+              'background-color': '#f39c12',
+              'border-width': 3,
+              'border-color': '#d68910',
+              'shape': 'pentagon',
+              'width': 50,
+              'height': 50,
+              'font-weight': 'bold'
+            }
+          },
+          {
+            selector: 'node[node_role="intermediate"]',
+            style: {
+              'background-color': '#e74c3c',
+              'border-width': 3,
+              'border-color': '#c0392b',
+              'width': 35,
+              'height': 35
+            }
+          },
+          {
             selector: 'edge[is_path_edge]',
             style: {
               'line-color': '#9b59b6',
@@ -266,6 +310,47 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
               'line-style': 'solid',
               'target-arrow-shape': 'triangle',
               'target-arrow-color': '#9b59b6'
+            }
+          },
+          {
+            selector: 'edge[path_edge_type="constellation_membership"]',
+            style: {
+              'line-color': '#3498db',
+              'target-arrow-color': '#3498db',
+              'width': 3
+            }
+          },
+          {
+            selector: 'edge[path_edge_type="orbital_proximity"]',
+            style: {
+              'line-color': '#e67e22',
+              'target-arrow-color': '#e67e22',
+              'width': 3
+            }
+          },
+          {
+            selector: 'edge[path_edge_type="registration_link"]',
+            style: {
+              'line-color': '#9b59b6',
+              'target-arrow-color': '#9b59b6',
+              'width': 2,
+              'line-style': 'dashed'
+            }
+          },
+          {
+            selector: 'edge[path_edge_type="satellite_lineage"]',
+            style: {
+              'line-color': '#27ae60',
+              'target-arrow-color': '#27ae60',
+              'width': 2
+            }
+          },
+          {
+            selector: 'edge[path_edge_type="collision_risk"]',
+            style: {
+              'line-color': '#e74c3c',
+              'target-arrow-color': '#e74c3c',
+              'width': 3
             }
           },
           {
@@ -1072,6 +1157,28 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
 
       const pathNodes = new Map()
       const pathEdgesMap = new Map()
+      const edgeTypeCounts = {}
+
+      const firstPath = paths[0]
+      const firstVertices = firstPath.vertices || []
+      const sourceId = firstVertices.length > 0 ? (firstVertices[0]._id || firstVertices[0]) : null
+      const destId = firstVertices.length > 1 ? (firstVertices[firstVertices.length - 1]._id || firstVertices[firstVertices.length - 1]) : null
+
+      const formatEdgeLabel = (edge) => {
+        const type = edge.relationship_type || edge.edge_type || ''
+        if (type === 'constellation_membership') {
+          const name = edge.constellation_name ? ` (${edge.constellation_name})` : ''
+          return `Constellation Member${name}`
+        }
+        if (type === 'orbital_proximity') {
+          const score = edge.proximity_score !== undefined ? ` (score: ${parseFloat(edge.proximity_score).toFixed(2)})` : ''
+          return `Orbital Proximity${score}`
+        }
+        if (type === 'registration_link') return 'Shared Registration'
+        if (type === 'satellite_lineage') return 'Satellite Lineage'
+        if (type === 'collision_risk') return 'Collision Risk'
+        return edge.constellation_name || type || ''
+      }
 
       paths.forEach(path => {
         const vertices = path.vertices || []
@@ -1080,11 +1187,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         vertices.forEach(vertex => {
           const nodeId = vertex._id || vertex
           if (!pathNodes.has(nodeId)) {
+            let nodeRole = 'intermediate'
+            if (nodeId === sourceId) nodeRole = 'source'
+            else if (nodeId === destId) nodeRole = 'destination'
+            else if (vertex.is_hub === true || vertex.type === 'constellation_hub') nodeRole = 'hub'
             pathNodes.set(nodeId, {
               id: nodeId,
               label: vertex.identifier || vertex.canonical?.name || (nodeId.split('/')[1]) || nodeId,
               is_path_node: true,
-              node_size: 30
+              node_role: nodeRole,
+              node_size: nodeRole === 'hub' ? 50 : (nodeRole === 'source' || nodeRole === 'destination') ? 40 : 35
             })
           }
         })
@@ -1095,12 +1207,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           if (source && target) {
             const edgeId = `${source}_to_${target}`
             if (!pathEdgesMap.has(edgeId)) {
+              const edgeType = edge.relationship_type || edge.edge_type || 'other'
+              const label = formatEdgeLabel(edge)
+              edgeTypeCounts[label] = (edgeTypeCounts[label] || 0) + 1
               pathEdgesMap.set(edgeId, {
                 id: edgeId,
                 source,
                 target,
                 is_path_edge: true,
-                edge_label: edge.relationship_type || edge.constellation_name || ''
+                path_edge_type: edgeType,
+                edge_label: label
               })
             }
           }
@@ -1119,7 +1235,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       setStats({
         paths_found: paths.length,
         total_nodes: elements.nodes.length,
-        total_edges: elements.edges.length
+        total_edges: elements.edges.length,
+        edge_type_counts: edgeTypeCounts
       })
       console.log('[GraphViewer] Path graph rendered successfully')
     } catch (error) {
@@ -1981,6 +2098,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             {stats.total_descendants !== undefined && <span>Descendants: {stats.total_descendants}</span>}
             {stats.family && <span>Family: {stats.family}</span>}
             {stats.message && <span>{stats.message}</span>}
+            {stats.edge_type_counts && Object.entries(stats.edge_type_counts).map(([type, count]) => (
+              <span key={type}>{type}: {count}</span>
+            ))}
           </div>
         )}
       </div>
@@ -2070,13 +2190,51 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           </>
         ) : graphType === 'paths' ? (
           <>
-            <div className="legend-item">
-              <span className="legend-node" style={{backgroundColor: '#9b59b6', border: '4px solid #8e44ad'}}></span>
-              <span>Path Node</span>
+            <div className="legend-section">
+              <h5>Nodes</h5>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#2ecc71', border: '4px solid #27ae60'}}></span>
+                <span>Source satellite</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#9b59b6', border: '4px solid #8e44ad'}}></span>
+                <span>Destination satellite</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#e74c3c', border: '3px solid #c0392b', width: '18px', height: '18px'}}></span>
+                <span>Intermediate satellite</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#f39c12', border: '3px solid #d68910', clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)', borderRadius: '0'}}></span>
+                <span>Constellation hub</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-node" style={{backgroundColor: '#2ecc71', borderRadius: '3px', width: '22px', height: '14px'}}></span>
+                <span>Registration document</span>
+              </div>
             </div>
-            <div className="legend-item">
-              <span className="legend-edge-thick" style={{backgroundColor: '#9b59b6'}}></span>
-              <span>Path Edge</span>
+            <div className="legend-section">
+              <h5>Edges</h5>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#3498db'}}></span>
+                <span>Constellation membership</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-thick" style={{backgroundColor: '#e67e22'}}></span>
+                <span>Orbital proximity</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-medium" style={{backgroundColor: '#9b59b6'}}></span>
+                <span>Shared registration</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-medium" style={{backgroundColor: '#e74c3c'}}></span>
+                <span>Collision risk</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-edge-medium" style={{backgroundColor: '#27ae60'}}></span>
+                <span>Satellite lineage</span>
+              </div>
             </div>
           </>
         ) : graphType === 'centrality' ? (
