@@ -117,6 +117,7 @@ def get_constellation_graph(
         FOR v, e IN 1..1 INBOUND hub
         {EDGE_COLLECTION_CONSTELLATION}
         FILTER e.constellation_name == @constellation_name
+        FILTER v != null
         {f"LIMIT {limit}" if limit else ""}
         RETURN {{
             id: v._id,
@@ -258,6 +259,7 @@ def get_satellite_neighborhood(
         LET neighbors = (
             FOR v, e, p IN 1..@depth ANY @source_id {edge_clause}
                 OPTIONS {{uniqueVertices: "global", bfs: true}}
+                FILTER v != null
                 LIMIT @limit
                 RETURN {{
                     vertex: v,
@@ -395,6 +397,7 @@ def get_registration_document_graph(
     LET satellites = reg_doc ? (
         FOR v, e IN 1..1 INBOUND @doc_id
         {EDGE_COLLECTION_REGISTRATION}
+        FILTER v != null
         {limit_clause}
         RETURN {{
             id: v._id,
