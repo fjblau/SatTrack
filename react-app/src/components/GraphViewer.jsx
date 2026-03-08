@@ -36,7 +36,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
               'text-halign': 'center',
               'color': '#2c3e50',
               'text-outline-width': 2,
-              'text-outline-color': '#fff'
+              'text-outline-color': '#fff',
+              'text-wrap': 'wrap'
             }
           },
           {
@@ -1204,7 +1205,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             else if (vertex.is_hub === true || vertex.type === 'constellation_hub') nodeRole = 'hub'
             pathNodes.set(nodeId, {
               id: nodeId,
-              label: vertex.identifier || vertex.canonical?.name || (nodeId.split('/')[1]) || nodeId,
+              label: (() => { const identifier = vertex.identifier || nodeId.split('/')[1] || nodeId; const satName = vertex.canonical?.name; return satName ? `${identifier}\n(${satName})` : identifier })(),
               is_path_node: true,
               node_role: nodeRole,
               node_size: nodeRole === 'hub' ? 50 : (nodeRole === 'source' || nodeRole === 'destination') ? 40 : 35
