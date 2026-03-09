@@ -1,11 +1,58 @@
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
 
-from api.services.tle_service import fetch_tle_by_norad_id
+from api.services.tle_service import fetch_tle_by_norad_id, parse_tle_fields
 from api.services.propagation_service import propagation_service, PropagationError
+from database.operations import update_satellite_tle
 
 router = APIRouter(prefix="/v2", tags=["tle"])
+
+
+class TlePersistRequest(BaseModel):
+    identifier: str
+
+
+@router.post("/tle/{norad_id}/persist")
+def persist_tle(norad_id: str, body: TlePersistRequest):
+    """Fetch, parse, and persist TLE data into the satellite document."""
+    tle = fetch_tle_by_norad_id(norad_id)
+
+    if not tle:
+        raise HTTPException(
+            status_code=404,
+            detail=f"TLE data not found for NORAD ID {norad_id}"
+        )
+
+    line1 = tle.get("line1")
+    line2 = tle.get("line2")
+    name = tle.get("name", f"NORAD {norad_id}")
+
+    if not line1 or not line2:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid TLE data: missing line1 or line2"
+        )
+
+    parsed = parse_tle_fields(name, line1, line2)
+
+    updated = update_satellite_tle(
+        identifier=body.identifier,
+        norad_id=norad_id,
+        tle_data=parsed,
+    )
+
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Satellite with identifier '{body.identifier}' not found in database"
+        )
+
+    return {
+        "tle": parsed,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 
 @router.get("/tle/{norad_id}")
