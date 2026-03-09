@@ -146,7 +146,20 @@ export default function DetailPanel({ object }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ identifier }),
               }
-            ).catch(err => console.error('TLE persist error:', err))
+            )
+            .then(async (res) => {
+              if (res.ok) {
+                const persistData = await res.json()
+                setFullDocument(prev => ({
+                  ...prev,
+                  canonical: {
+                    ...prev.canonical,
+                    tle: persistData.tle
+                  }
+                }))
+              }
+            })
+            .catch(err => console.error('TLE persist error:', err))
           } else {
             setCurrentTle({ _notFound: true, message: data.message })
           }

@@ -113,24 +113,26 @@ def update_canonical(doc: Dict[str, Any]):
                     break
     
     # Preserve existing TLE data
-    tle_fields = ["tle_line1", "tle_line2"]
+    tle_field_aliases = {
+        "line1": ["tle_line1", "line1"],
+        "line2": ["tle_line2", "line2"],
+    }
     if "tle" not in canonical:
         canonical["tle"] = {}
-    
-    for field in tle_fields:
-        canonical_field = "line1" if field == "tle_line1" else "line2"
-        
-        # Skip if TLE field already populated
+
+    for canonical_field, aliases in tle_field_aliases.items():
         if canonical["tle"].get(canonical_field):
             continue
-            
-        # Try to populate from approved sources only
+
         for source_name in source_priority:
             if source_name in sources:
-                value = sources[source_name].get(field)
-                if value is not None:
-                    canonical["tle"][canonical_field] = value
-                    break
+                for alias in aliases:
+                    value = sources[source_name].get(alias)
+                    if value is not None:
+                        canonical["tle"][canonical_field] = value
+                        break
+            if canonical["tle"].get(canonical_field):
+                break
     
     canonical["updated_at"] = datetime.now(timezone.utc).isoformat()
     
