@@ -138,6 +138,15 @@ export default function DetailPanel({ object }) {
           const data = await response.json()
           if (data.data) {
             setCurrentTle(data.data)
+            const identifier = object._mongodb_id || object['International Designator']
+            fetch(
+              `${API_ENDPOINTS.TLE}/${encodeURIComponent(fullDocument.canonical.norad_cat_id)}/persist`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identifier }),
+              }
+            ).catch(err => console.error('TLE persist error:', err))
           } else {
             setCurrentTle({ _notFound: true, message: data.message })
           }

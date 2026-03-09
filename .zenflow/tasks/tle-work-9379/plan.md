@@ -78,7 +78,8 @@ Add the API endpoint to wire TLE fetch + parse + persist together:
 
 ---
 
-### [ ] Step: Frontend - Call Persist Endpoint on Satellite Click
+### [x] Step: Frontend - Call Persist Endpoint on Satellite Click
+<!-- chat-id: ad420b06-6ec3-4ce8-94fa-04fd02ca76c6 -->
 
 Update the React frontend to persist TLE when a satellite is selected:
 - Add `TLE_PERSIST: '/v2/tle'` to `API_ENDPOINTS` in `react-app/src/config/constants.js`.
