@@ -1,7 +1,9 @@
 from typing import Optional, Dict
+import math
 import requests
 import time
 import logging
+from datetime import datetime, timezone
 
 from api.services.cache_service import get_tle_cache
 
@@ -112,6 +114,44 @@ def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
             return None
     
     return None
+
+
+def parse_tle_fields(name: str, line1: str, line2: str) -> Dict:
+    """
+    Parse a TLE (Two-Line Element set) into individual orbital parameter fields.
+
+    Args:
+        name: Satellite name (TLE header line)
+        line1: TLE line 1
+        line2: TLE line 2
+
+    Returns:
+        Dictionary of parsed TLE fields with human-readable units.
+    """
+    from sgp4.api import Satrec
+    sat = Satrec.twoline2rv(line1, line2)
+
+    RAD_TO_DEG = 180.0 / math.pi
+    RAD_PER_MIN_TO_REV_PER_DAY = (1440.0) / (2.0 * math.pi)
+
+    return {
+        "line1": line1,
+        "line2": line2,
+        "name": name,
+        "epoch_year": sat.epochyr,
+        "epoch_day": sat.epochdays,
+        "bstar": sat.bstar,
+        "inclination_deg": sat.inclo * RAD_TO_DEG,
+        "raan_deg": sat.nodeo * RAD_TO_DEG,
+        "eccentricity": sat.ecco,
+        "arg_of_perigee_deg": sat.argpo * RAD_TO_DEG,
+        "mean_anomaly_deg": sat.mo * RAD_TO_DEG,
+        "mean_motion_rev_per_day": sat.no_kozai * RAD_PER_MIN_TO_REV_PER_DAY,
+        "rev_number": sat.revnum,
+        "ndot": sat.ndot,
+        "nddot": sat.nddot,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:

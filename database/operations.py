@@ -326,3 +326,62 @@ def clear_collection():
     """Clear all documents from satellites collection"""
     collection = get_satellites_collection()
     collection.truncate()
+
+
+def update_satellite_tle(
+    identifier: str,
+    norad_id: str,
+    tle_data: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """
+    Persist parsed TLE data into a satellite document.
+
+    Merges raw + parsed TLE into sources["tleapi"] and overwrites
+    canonical.tle with the fresh parsed TLE fields.
+
+    Args:
+        identifier: Satellite identifier used to locate the document
+        norad_id: NORAD catalog ID
+        tle_data: Parsed TLE dictionary from parse_tle_fields()
+
+    Returns:
+        Updated document dict, or None if the satellite was not found.
+    """
+    collection = get_satellites_collection()
+
+    aql = """
+    FOR doc IN @@collection
+        FILTER doc.identifier == @identifier
+        LIMIT 1
+        RETURN doc
+    """
+    cursor = db_conn.db.aql.execute(
+        aql,
+        bind_vars={'@collection': COLLECTION_NAME, 'identifier': identifier}
+    )
+    results = list(cursor)
+    if not results:
+        return None
+
+    doc = results[0]
+    now = datetime.now(timezone.utc).isoformat()
+
+    doc.setdefault("sources", {})
+    doc["sources"]["tleapi"] = {
+        "line1": tle_data.get("line1"),
+        "line2": tle_data.get("line2"),
+        "name": tle_data.get("name"),
+        "norad_id": norad_id,
+        "fetched_at": tle_data.get("fetched_at"),
+        "updated_at": now,
+        "parsed": tle_data,
+    }
+
+    doc.setdefault("canonical", {})
+    doc["canonical"]["tle"] = tle_data
+
+    doc.setdefault("metadata", {})
+    doc["metadata"]["last_updated_at"] = now
+
+    collection.update(doc)
+    return doc

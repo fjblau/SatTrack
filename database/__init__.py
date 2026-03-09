@@ -46,6 +46,7 @@ from database.operations import (
     get_all_orbital_bands,
     get_all_congestion_risks,
     clear_collection,
+    update_satellite_tle,
 )
 
 # Transformation functions
@@ -152,6 +153,7 @@ __all__ = [
     'get_all_orbital_bands',
     'get_all_congestion_risks',
     'clear_collection',
+    'update_satellite_tle',
     
     # Transformations
     'record_transformation',

@@ -55,7 +55,8 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Backend - TLE Parsing & DB Persistence
+### [x] Step: Backend - TLE Parsing & DB Persistence
+<!-- chat-id: 50216d2d-cb8f-4567-82b4-07fa918ef98d -->
 
 Implement the backend changes for TLE persistence:
 - Add `parse_tle_fields(name, line1, line2)` in `api/services/tle_service.py` using `sgp4.api.Satrec` to extract all individual TLE parameters (inclination, eccentricity, RAAN, arg of perigee, mean anomaly, mean motion, BSTAR, epoch, etc.) converting radians to degrees where appropriate.
