@@ -66,7 +66,8 @@ Implement the backend changes for TLE persistence:
 
 ---
 
-### [ ] Step: Backend - Persist TLE API Endpoint
+### [x] Step: Backend - Persist TLE API Endpoint
+<!-- chat-id: c7fe7d89-e3e0-43ed-9e3e-2b4eb9afc0b5 -->
 
 Add the API endpoint to wire TLE fetch + parse + persist together:
 - Add `POST /v2/tle/{norad_id}/persist` in `api/routers/tle.py`.
