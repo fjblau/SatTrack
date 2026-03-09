@@ -20,7 +20,8 @@ If you are blocked and need user clarification, mark the current step with `[!]`
 
 ## Workflow Steps
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
+<!-- chat-id: 0d033743-0b77-4d8c-bd0a-31f91cf98466 -->
 
 Assess the task's difficulty, as underestimating it leads to poor outcomes.
 - easy: Straightforward implementation, trivial bug fix or feature
@@ -54,16 +55,32 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step: Implementation
+### [ ] Step: Backend - TLE Parsing & DB Persistence
 
-Implement the task according to the technical specification and general engineering best practices.
+Implement the backend changes for TLE persistence:
+- Add `parse_tle_fields(name, line1, line2)` in `api/services/tle_service.py` using `sgp4.api.Satrec` to extract all individual TLE parameters (inclination, eccentricity, RAAN, arg of perigee, mean anomaly, mean motion, BSTAR, epoch, etc.) converting radians to degrees where appropriate.
+- Add `update_satellite_tle(identifier, norad_id, tle_data)` in `database/operations.py` that finds the satellite document, merges raw+parsed TLE into `sources["tleapi"]`, and always overwrites `canonical.tle` with the fresh parsed data.
+- Export `update_satellite_tle` from `database/__init__.py`.
+- Verify: unit-test `parse_tle_fields` with a known TLE string and assert correct field values.
 
-1. Break the task into steps where possible.
-2. Implement the required changes in the codebase
-3. If relevant, write unit tests alongside each change.
-4. Run relevant tests and linters in the end of each step.
-5. Perform basic manual verification if applicable.
-6. After completion, write a report to `{@artifacts_path}/report.md` describing:
-   - What was implemented
-   - How the solution was tested
-   - The biggest issues or challenges encountered
+---
+
+### [ ] Step: Backend - Persist TLE API Endpoint
+
+Add the API endpoint to wire TLE fetch + parse + persist together:
+- Add `POST /v2/tle/{norad_id}/persist` in `api/routers/tle.py`.
+- Request body: `{ "identifier": str }`.
+- Internally: fetch TLE via `fetch_tle_by_norad_id`, parse with `parse_tle_fields`, call `update_satellite_tle`.
+- Return persisted TLE fields + timestamp on success; 404 if TLE not found or satellite not in DB.
+- Verify: manually call the endpoint (via FastAPI docs or curl) with a known NORAD ID and confirm the DB document is updated.
+
+---
+
+### [ ] Step: Frontend - Call Persist Endpoint on Satellite Click
+
+Update the React frontend to persist TLE when a satellite is selected:
+- Add `TLE_PERSIST: '/v2/tle'` to `API_ENDPOINTS` in `react-app/src/config/constants.js`.
+- In `DetailPanel.jsx`, inside `fetchCurrentTle` after a successful TLE response, fire-and-forget `POST /v2/tle/{norad_id}/persist` with `{ identifier }` — no UI blocking, errors logged to console only.
+- Verify: open the app, click a satellite with a NORAD ID, confirm the persist request appears in the network tab and the ArangoDB document's `canonical.tle` is populated with parsed fields.
+
+---
