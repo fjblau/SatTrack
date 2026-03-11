@@ -3,6 +3,7 @@ export const API_ENDPOINTS = {
   STATUSES: '/v2/statuses',
   ORBITAL_BANDS: '/v2/orbital-bands',
   CONGESTION_RISKS: '/v2/congestion-risks',
+  OBJECT_TYPES: '/v2/object-types',
   SEARCH: '/v2/search',
   SATELLITE_DETAIL: '/v2/satellite',
   TLE: '/v2/tle',
@@ -78,6 +79,7 @@ export const FILTER_LABELS = {
   ALL_STATUSES: 'All Statuses',
   ALL_ORBITAL_BANDS: 'All Orbital Bands',
   ALL_CONGESTION_RISKS: 'All Congestion Risks',
+  ALL_OBJECT_TYPES: 'All Object Types',
 }
 
 export const UI_TEXT = {

@@ -97,6 +97,20 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
         </select>
       </div>
 
+      <div className="filter-group">
+        <label htmlFor="object-type">Object Type</label>
+        <select
+          id="object-type"
+          value={localFilters.object_type || ''}
+          onChange={(e) => handleChange('object_type', e.target.value)}
+        >
+          <option value="">{FILTER_LABELS.ALL_OBJECT_TYPES}</option>
+          {filterOptions.object_types?.map(type => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+      </div>
+
       {filterOptions.apogee_range && (
         <div className="filter-group">
           <label>Apogee Range (km)</label>

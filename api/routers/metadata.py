@@ -6,6 +6,7 @@ from database import (
     get_all_statuses,
     get_all_orbital_bands,
     get_all_congestion_risks,
+    get_all_object_types,
     count_satellites
 )
 
@@ -58,6 +59,16 @@ def get_congestion_risks_v2():
     return {
         "count": len(congestion_risks),
         "congestion_risks": sorted([r for r in congestion_risks if r and r.strip()])
+    }
+
+
+@router.get("/object-types")
+def get_object_types_v2():
+    """Get list of all object types"""
+    object_types = get_all_object_types()
+    return {
+        "count": len(object_types),
+        "object_types": sorted([t for t in object_types if t and t.strip()])
     }
 
 

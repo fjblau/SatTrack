@@ -45,6 +45,7 @@ from database.operations import (
     get_all_statuses,
     get_all_orbital_bands,
     get_all_congestion_risks,
+    get_all_object_types,
     clear_collection,
     update_satellite_tle,
 )
@@ -152,6 +153,7 @@ __all__ = [
     'get_all_statuses',
     'get_all_orbital_bands',
     'get_all_congestion_risks',
+    'get_all_object_types',
     'clear_collection',
     'update_satellite_tle',
     
