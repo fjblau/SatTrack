@@ -55,22 +55,25 @@ function App() {
 
   const fetchFilterOptions = async () => {
     try {
-      const [countriesRes, statusesRes, orbitalBandsRes, congestionRisksRes] = await Promise.all([
+      const [countriesRes, statusesRes, orbitalBandsRes, congestionRisksRes, objectTypesRes] = await Promise.all([
         fetch(API_ENDPOINTS.COUNTRIES),
         fetch(API_ENDPOINTS.STATUSES),
         fetch(API_ENDPOINTS.ORBITAL_BANDS),
-        fetch(API_ENDPOINTS.CONGESTION_RISKS)
+        fetch(API_ENDPOINTS.CONGESTION_RISKS),
+        fetch(API_ENDPOINTS.OBJECT_TYPES)
       ])
       const countriesData = await countriesRes.json()
       const statusesData = await statusesRes.json()
       const orbitalBandsData = await orbitalBandsRes.json()
       const congestionRisksData = await congestionRisksRes.json()
+      const objectTypesData = await objectTypesRes.json()
       
       setFilterOptions({
         countries: countriesData.countries || [],
         statuses: statusesData.statuses || [],
         orbital_bands: orbitalBandsData.orbital_bands || [],
         congestion_risks: congestionRisksData.congestion_risks || [],
+        object_types: objectTypesData.object_types || [],
         apogee_range: [ORBITAL_RANGES.APOGEE.MIN, ORBITAL_RANGES.APOGEE.MAX],
         perigee_range: [ORBITAL_RANGES.PERIGEE.MIN, ORBITAL_RANGES.PERIGEE.MAX],
         inclination_range: [ORBITAL_RANGES.INCLINATION.MIN, ORBITAL_RANGES.INCLINATION.MAX]
@@ -105,6 +108,7 @@ function App() {
     if (filters.status) params.append('status', filters.status)
     if (filters.orbital_band) params.append('orbital_band', filters.orbital_band)
     if (filters.congestion_risk) params.append('congestion_risk', filters.congestion_risk)
+    if (filters.object_type) params.append('object_type', filters.object_type)
     
     if (sortConfig.length > 0) {
       const primarySort = sortConfig[0]
@@ -133,6 +137,7 @@ function App() {
           'Status': canonical.status || '',
           'Orbital Band': canonical.orbital_band || '',
           'Congestion Risk': canonical.congestion_risk || '',
+          'Object Type': canonical.object_type || '',
           'Apogee (km)': orbit.apogee_km,
           'Perigee (km)': orbit.perigee_km,
           'Inclination (degrees)': orbit.inclination_degrees,

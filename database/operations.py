@@ -135,6 +135,7 @@ def search_satellites(
     status: Optional[str] = None,
     orbital_band: Optional[str] = None,
     congestion_risk: Optional[str] = None,
+    object_type: Optional[str] = None,
     limit: int = 100,
     skip: int = 0,
     sort_by: Optional[str] = None,
@@ -151,6 +152,7 @@ def search_satellites(
         'Status': 'doc.canonical.status',
         'Orbital Band': 'doc.canonical.orbital_band',
         'Congestion Risk': 'doc.canonical.congestion_risk',
+        'Object Type': 'doc.canonical.object_type',
         'Apogee (km)': 'doc.canonical.orbit.apogee_km',
         'Perigee (km)': 'doc.canonical.orbit.perigee_km',
         'Inclination (degrees)': 'doc.canonical.orbit.inclination_degrees',
@@ -185,6 +187,10 @@ def search_satellites(
         filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
         bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
     
+    if object_type:
+        filters.append("LIKE(doc.canonical.object_type, @object_type_pattern, true)")
+        bind_vars['object_type_pattern'] = f'%{object_type}%'
+    
     filter_clause = ""
     if filters:
         filter_clause = "FILTER " + " AND ".join(filters)
@@ -212,7 +218,8 @@ def count_satellites(
     country: Optional[str] = None,
     status: Optional[str] = None,
     orbital_band: Optional[str] = None,
-    congestion_risk: Optional[str] = None
+    congestion_risk: Optional[str] = None,
+    object_type: Optional[str] = None
 ) -> int:
     """Count satellites with optional filters"""
     collection = get_satellites_collection()
@@ -244,6 +251,10 @@ def count_satellites(
     if congestion_risk:
         filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
         bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
+    
+    if object_type:
+        filters.append("LIKE(doc.canonical.object_type, @object_type_pattern, true)")
+        bind_vars['object_type_pattern'] = f'%{object_type}%'
     
     filter_clause = ""
     if filters:
@@ -315,6 +326,21 @@ def get_all_congestion_risks() -> List[str]:
         FOR doc IN @@collection
             FILTER doc.canonical.congestion_risk != null
             RETURN doc.canonical.congestion_risk
+    )
+    """
+    cursor = db_conn.db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
+def get_all_object_types() -> List[str]:
+    """Get list of unique object types"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.object_type != null
+            RETURN doc.canonical.object_type
     )
     """
     cursor = db_conn.db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})

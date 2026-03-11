@@ -35,6 +35,7 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
     { key: 'Status', label: 'Status' },
     { key: 'Orbital Band', label: 'Orbital Band' },
     { key: 'Congestion Risk', label: 'Congestion Risk' },
+    { key: 'Object Type', label: 'Object Type' },
     { key: 'Apogee (km)', label: 'Apogee (km)', className: 'cell-number' },
     { key: 'Perigee (km)', label: 'Perigee (km)', className: 'cell-number' },
     { key: 'Inclination (degrees)', label: 'Inclination (°)', className: 'cell-number' },
@@ -82,6 +83,7 @@ export default function DataTable({ objects, selectedObject, onRowClick, loading
               <td>{obj['Status'] || '—'}</td>
               <td>{obj['Orbital Band'] || '—'}</td>
               <td>{obj['Congestion Risk'] || '—'}</td>
+              <td>{obj['Object Type'] || '—'}</td>
               <td className="cell-number">{obj['Apogee (km)'] ? obj['Apogee (km)'].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES) : '—'}</td>
               <td className="cell-number">{obj['Perigee (km)'] ? obj['Perigee (km)'].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES) : '—'}</td>
               <td className="cell-number">{obj['Inclination (degrees)'] ? obj['Inclination (degrees)'].toFixed(NUMBER_FORMATS.ORBITAL_DECIMAL_PLACES) : '—'}</td>
