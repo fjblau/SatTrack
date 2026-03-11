@@ -58,3 +58,27 @@ To add RBSP A/B and other decommissioned/historical satellites to the dataset, o
 3. **Manual upsert** — Directly insert the two satellites from `gcat_satcat.tsv` data into the database
 
 **Note**: The GCAT import script targets ArangoDB (`connect_arangodb()`), not MongoDB, so the right database backend must be connected.
+
+## Verification
+
+The following was confirmed programmatically:
+
+1. **`gcat_satcat.tsv` contains both satellites** (lines 38754–38755):
+   - Line 38754: `S38752	38752	2012-046	2012-046A ... Radiation Belt Storm Probe A	RBSP A	2012 Aug 30 ... N ... HEO`
+   - Line 38755: `S38753	38753	2012-046	2012-046B ... Radiation Belt Storm Probe B	RBSP B	2012 Aug 30 ... N ... HEO`
+
+2. **`import_gcat_launches.py` confirmed to have the cutoff filter** (line 193):
+   ```python
+   def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
+   ```
+   And at line 269–270:
+   ```python
+   if not is_after_date(launch_date, cutoff_date):
+       skipped_old += 1
+       continue
+   ```
+   Satellites launched before `2025-09-13` are skipped — RBSP A/B launched in 2012 are filtered out.
+
+## Conclusion
+
+**NORAD IDs 38752 and 38753 are NOT in the dataset.** They exist in the GCAT source file (`gcat_satcat.tsv`) but are excluded by the `cutoff_date="2025-09-13"` filter in `import_gcat_launches.py`. They are decommissioned satellites (status `N`) that are not tracked by CelesTrak/Kaggle and are not registered in UNOOSA. To include them, the GCAT import must be run with a cutoff date earlier than `2012-08-30`.
