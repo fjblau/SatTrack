@@ -100,6 +100,36 @@ def is_after_date(launch_date, cutoff_date):
         return False
 
 
+def normalize_gcat_object_type(gcat_type):
+    """
+    Map a GCAT SatType code to a canonical object_type value.
+
+    The GCAT SatType is a 12-byte string. Byte 1 is the coarse type:
+      P = Payload             → PAYLOAD
+      S = Suborbital payload  → PAYLOAD
+      D = Fragmentation debris→ DEBRIS
+      C = Component           → ROCKET BODY
+      R = Rocket stage (R1-R5)→ ROCKET BODY
+      X = Deleted entry       → UNKNOWN
+      Z = Spurious entry      → UNKNOWN
+
+    Reference: https://planet4589.org/space/gcat/web/intro/type.html
+    """
+    if not gcat_type:
+        return "UNKNOWN"
+    t = gcat_type.strip()
+    if not t or t == "-":
+        return "UNKNOWN"
+    byte1 = t[0].upper()
+    if byte1 in ("P", "S"):
+        return "PAYLOAD"
+    if byte1 == "D":
+        return "DEBRIS"
+    if byte1 in ("C", "R"):
+        return "ROCKET BODY"
+    return "UNKNOWN"
+
+
 def find_existing_by_norad(norad_id):
     """Find existing satellite by NORAD ID"""
     if not norad_id:
@@ -212,6 +242,7 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                     launch_tag = normalize_string(fields[2])
                     piece = normalize_string(fields[3])
                     obj_type = normalize_string(fields[4])
+                    canonical_object_type = normalize_gcat_object_type(obj_type)
                     name = normalize_string(fields[5])
                     plname = normalize_string(fields[6])
                     ldate = normalize_string(fields[7])
@@ -244,7 +275,8 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                         "norad_cat_id": norad_id,
                         "international_designator": launch_tag,
                         "piece": piece,
-                        "object_type": obj_type,
+                        "object_type": canonical_object_type,
+                        "gcat_type_raw": obj_type,
                         "name": name or plname,
                         "payload_name": plname,
                         "date_of_launch": launch_date,
@@ -289,12 +321,17 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                         existing["metadata"]["last_updated_at"] = datetime.now(timezone.utc).isoformat()
                         
                         # GCAT is not an approved source, so DON'T call update_canonical()
-                        # However, if canonical.launch_date is missing, populate it from GCAT
-                        # This doesn't corrupt existing data - it fills in gaps
-                        if not existing.get("canonical", {}).get("launch_date") and launch_date:
-                            if "canonical" not in existing:
-                                existing["canonical"] = {}
+                        # However, fill in gaps where canonical fields are missing
+                        if "canonical" not in existing:
+                            existing["canonical"] = {}
+                        canonical_updated = False
+                        if not existing["canonical"].get("launch_date") and launch_date:
                             existing["canonical"]["launch_date"] = launch_date
+                            canonical_updated = True
+                        if not existing["canonical"].get("object_type") and canonical_object_type:
+                            existing["canonical"]["object_type"] = canonical_object_type
+                            canonical_updated = True
+                        if canonical_updated:
                             # CRITICAL: Always ensure canonical.name exists (use identifier as fallback)
                             if not existing["canonical"].get("name"):
                                 existing["canonical"]["name"] = existing.get("identifier", "Unknown")
@@ -320,7 +357,8 @@ def import_gcat_launches(tsv_path, cutoff_date="2025-09-13", dry_run=False):
                             "identifier": identifier,
                             "canonical": {
                                 "name": gcat_data.get("name") or identifier,
-                                "launch_date": launch_date,  # Set launch_date for new satellites
+                                "launch_date": launch_date,
+                                "object_type": canonical_object_type,
                                 "updated_at": datetime.now(timezone.utc).isoformat()
                             },
                             "sources": {
