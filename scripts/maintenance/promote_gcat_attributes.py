@@ -237,6 +237,8 @@ def run(dry_run: bool, yes: bool, verbose: bool):
             "LEO-Inclined"
         )
 
+        LET terminal_status = (status_mapped == "decayed" OR status_mapped == "heliocentric" OR status_mapped == "in disposal/graveyard orbit")
+
         LET new_canonical = MERGE(doc.canonical, {
             norad_cat_id:             doc.canonical.norad_cat_id             != null ? doc.canonical.norad_cat_id             : g.norad_cat_id,
             international_designator: doc.canonical.international_designator != null ? doc.canonical.international_designator : g.international_designator,
@@ -244,9 +246,9 @@ def run(dry_run: bool, yes: bool, verbose: bool):
             date_of_launch:           doc.canonical.date_of_launch           != null ? doc.canonical.date_of_launch           : g.date_of_launch,
             launch_date:              doc.canonical.launch_date              != null ? doc.canonical.launch_date              : g.launch_date,
             object_type:              doc.canonical.object_type              != null ? doc.canonical.object_type              : obj_type,
-            status:                   doc.canonical.status                   != null ? doc.canonical.status                   : status_mapped,
+            status:                   (terminal_status AND status_mapped != null) ? status_mapped : (doc.canonical.status != null ? doc.canonical.status : status_mapped),
             orbital_band:             doc.canonical.orbital_band             != null ? doc.canonical.orbital_band             : band,
-            date_of_decay_or_change:  doc.canonical.date_of_decay_or_change  != null ? doc.canonical.date_of_decay_or_change  : g.decay_date,
+            date_of_decay_or_change:  g.decay_date                          != null ? g.decay_date                          : doc.canonical.date_of_decay_or_change,
             object_name:              doc.canonical.object_name              != null ? doc.canonical.object_name              : g.name,
             orbit: MERGE(doc.canonical.orbit || {}, {
                 apogee_km:           (doc.canonical.orbit.apogee_km           != null) ? doc.canonical.orbit.apogee_km           : apogee,
