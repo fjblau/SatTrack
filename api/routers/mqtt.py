@@ -15,8 +15,7 @@ from database import (
     update_last_published
 )
 from database.operations import find_satellite
-from api.services.tle_service import fetch_tle_data, fetch_tle_by_norad_id
-from api.utils.converters import convert_to_norad_format
+from api.services.tle_service import fetch_tle_by_norad_id
 import mqtt_publisher
 import mqtt_scheduler
 
@@ -303,25 +302,19 @@ def cron_mqtt_publish():
                     continue
                 
                 canonical = satellite.get('canonical', {})
-                intl_desig = canonical.get('international_designator')
+                norad_id = config.get('norad_id') or canonical.get('norad_cat_id')
                 
-                if not intl_desig:
+                if not norad_id:
                     results["errors"].append({
                         "satellite_id": satellite_id,
-                        "error": "No international designator"
+                        "error": "No NORAD catalog ID"
                     })
                     results["failed"] += 1
                     continue
                 
-                tle_cache = fetch_tle_data()
-                tle_data_tuple = tle_cache.get(intl_desig)
+                tle_dict = fetch_tle_by_norad_id(str(norad_id))
                 
-                if not tle_data_tuple:
-                    norad_format = convert_to_norad_format(intl_desig)
-                    if norad_format:
-                        tle_data_tuple = tle_cache.get(norad_format)
-                
-                if not tle_data_tuple:
+                if not tle_dict or not tle_dict.get('line1') or not tle_dict.get('line2'):
                     results["errors"].append({
                         "satellite_id": satellite_id,
                         "error": "TLE data not found"
@@ -329,12 +322,7 @@ def cron_mqtt_publish():
                     results["failed"] += 1
                     continue
                 
-                tle_data = {
-                    'name': tle_data_tuple[0],
-                    'line1': tle_data_tuple[1],
-                    'line2': tle_data_tuple[2],
-                    'source': 'CelesTrak'
-                }
+                tle_data = tle_dict
                 
                 success, error_message = mqtt_publisher.publish_tle_to_mqtt(config, tle_data, satellite)
                 
