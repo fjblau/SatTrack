@@ -5,6 +5,14 @@ import MqttConfigModal from './MqttConfigModal'
 import OrbitCalculationModal from './OrbitCalculationModal'
 import { API_ENDPOINTS, EXTERNAL_URLS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
+const DEBRIS_OBJECT_TYPES = ['debris', 'rocket body', 'unknown']
+
+function isDebrisObject(object) {
+  if (!object) return false
+  const type = (object['Object Type'] || '').toLowerCase()
+  return DEBRIS_OBJECT_TYPES.some(t => type.includes(t))
+}
+
 export default function DetailPanel({ object }) {
   const [orbitalState, setOrbitalState] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -123,7 +131,11 @@ export default function DetailPanel({ object }) {
   }, [docLink])
 
   useEffect(() => {
-    if (!object || !fullDocument?.canonical?.norad_cat_id) {
+    const noradId = fullDocument?.canonical?.norad_cat_id
+    const intlDes = object?.['International Designator']
+    const debris = isDebrisObject(object)
+
+    if (!object || (!noradId && !debris)) {
       setCurrentTle(null)
       return
     }
@@ -131,16 +143,33 @@ export default function DetailPanel({ object }) {
     const fetchCurrentTle = async () => {
       setTleLoading(true)
       try {
-        const response = await fetch(
-          `${API_ENDPOINTS.TLE}/${encodeURIComponent(fullDocument.canonical.norad_cat_id)}`
-        )
-        if (response.ok) {
-          const data = await response.json()
-          if (data.data) {
-            setCurrentTle(data.data)
-            const identifier = object._mongodb_id || object['International Designator']
+        let data = null
+
+        if (noradId) {
+          const response = await fetch(
+            `${API_ENDPOINTS.TLE}/${encodeURIComponent(noradId)}`
+          )
+          if (response.ok) {
+            data = await response.json()
+          }
+        }
+
+        if ((!data?.data) && debris && intlDes) {
+          const response = await fetch(
+            `${API_ENDPOINTS.TLE_INTLDES}/${encodeURIComponent(intlDes)}`
+          )
+          if (response.ok) {
+            data = await response.json()
+          }
+        }
+
+        if (data?.data) {
+          setCurrentTle(data.data)
+          const resolvedNoradId = noradId || data.data.norad_cat_id
+          const identifier = object._mongodb_id || object['International Designator']
+          if (resolvedNoradId && identifier) {
             fetch(
-              `${API_ENDPOINTS.TLE}/${encodeURIComponent(fullDocument.canonical.norad_cat_id)}/persist`,
+              `${API_ENDPOINTS.TLE}/${encodeURIComponent(resolvedNoradId)}/persist`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -160,11 +189,9 @@ export default function DetailPanel({ object }) {
               }
             })
             .catch(err => console.error('TLE persist error:', err))
-          } else {
-            setCurrentTle({ _notFound: true, message: data.message })
           }
         } else {
-          setCurrentTle(null)
+          setCurrentTle({ _notFound: true, message: data?.message || 'TLE data not available' })
         }
       } catch (err) {
         console.error('TLE fetch error:', err)
@@ -175,7 +202,7 @@ export default function DetailPanel({ object }) {
     }
 
     fetchCurrentTle()
-  }, [fullDocument?.canonical?.norad_cat_id])
+  }, [fullDocument?.canonical?.norad_cat_id, object?.['International Designator'], object?.['Object Type']])
 
   if (!object) {
     return (
@@ -361,14 +388,20 @@ export default function DetailPanel({ object }) {
           {error && <p className="detail-error">{error}</p>}
         </div>
 
-        {fullDocument?.canonical?.norad_cat_id && (
+        {(fullDocument?.canonical?.norad_cat_id || isDebrisObject(object)) && (
           <div className="detail-section">
             <h3>Two-Line Element (TLE)</h3>
             {tleLoading && <p className="detail-loading">Loading current TLE...</p>}
-            {currentTle?._notFound ? (
+            {!tleLoading && currentTle?._notFound ? (
               <p className="detail-info">{currentTle.message}</p>
             ) : currentTle?.line1 || currentTle?.line2 ? (
               <div className="tle-data">
+                {currentTle.source && (
+                  <div className="detail-row">
+                    <span className="detail-label">Source</span>
+                    <span className="detail-value">{currentTle.source}</span>
+                  </div>
+                )}
                 {currentTle.line1 && (
                   <div className="detail-row tle-row">
                     <span className="detail-label">Line 1</span>
@@ -383,7 +416,7 @@ export default function DetailPanel({ object }) {
                 )}
               </div>
             ) : !tleLoading && !currentTle ? (
-              <p className="detail-info">TLE data not available for this satellite</p>
+              <p className="detail-info">TLE data not available for this object</p>
             ) : null}
           </div>
         )}
