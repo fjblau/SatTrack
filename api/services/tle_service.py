@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 _tle_cache_instance = get_tle_cache()
 
 CELESTRAK_GP_URL = "https://celestrak.org/NORAD/elements/gp.php"
+CELESTRAK_SATCAT_URL = "https://celestrak.org/satcat/records.php"
 
 
 def _parse_tle_text(text: str) -> list:
@@ -228,6 +229,39 @@ def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:
         return _fetch_tle_by_norad_id_uncached(norad_id)
 
     return _tle_cache_instance.get_or_fetch(cache_key, fetch_func)
+
+
+def check_decay_from_celestrak(norad_id: str) -> Optional[Dict]:
+    """
+    Query CelesTrak satellite catalog for decay status of a specific object.
+
+    Returns a dict with 'decay_date' (str, YYYY-MM-DD) and 'ops_status_code'
+    if the record is found, or None if CelesTrak does not have data for the ID.
+
+    This is intentionally not cached — it is called at most once per UI page
+    open for objects whose canonical status is "in orbit", so rate impact is low.
+    """
+    try:
+        response = requests.get(
+            CELESTRAK_SATCAT_URL,
+            params={"CATNR": norad_id, "FORMAT": "JSON"},
+            timeout=10,
+        )
+        if response.status_code != 200:
+            logger.warning(f"CelesTrak satcat returned {response.status_code} for NORAD {norad_id}")
+            return None
+        records = response.json()
+        if not records:
+            return None
+        rec = records[0]
+        return {
+            "decay_date": rec.get("DECAY_DATE"),
+            "ops_status_code": rec.get("OPS_STATUS_CODE"),
+            "object_name": rec.get("OBJECT_NAME"),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching CelesTrak satcat for NORAD {norad_id}: {e}")
+        return None
 
 
 def fetch_tle_by_intl_des(intl_des: str) -> Optional[Dict]:
