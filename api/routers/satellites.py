@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Query
 from typing import Optional
 import math
+import logging
+from datetime import datetime, timezone
 
 from database import find_satellite, search_satellites, count_satellites
 import database.connection as db_conn
 from api.utils.converters import filter_nan_values
+from api.services.tle_service import check_decay_from_celestrak
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v2", tags=["satellites"])
 
@@ -80,6 +85,52 @@ def get_satellite_v2(identifier: str):
     
     if sat:
         canonical = sat.get("canonical", {})
+
+        if canonical.get("status") == "in orbit":
+            norad_id = canonical.get("norad_cat_id")
+            if norad_id:
+                satcat = check_decay_from_celestrak(str(norad_id))
+                if satcat and satcat.get("decay_date"):
+                    ts = datetime.now(timezone.utc).isoformat()
+                    transformation = {
+                        "timestamp": ts,
+                        "source_field": "celestrak/satcat",
+                        "target_field": "canonical.status + canonical.date_of_decay_or_change",
+                        "value": {
+                            "status": "decayed",
+                            "date_of_decay_or_change": satcat["decay_date"],
+                        },
+                        "promoted_by": "lazy_celestrak_decay_check",
+                        "reason": f"CelesTrak satcat confirms decay on {satcat['decay_date']} (ops_status={satcat.get('ops_status_code')})",
+                    }
+                    try:
+                        db_conn.db.aql.execute("""
+                            FOR doc IN satellites
+                                FILTER doc._key == @key
+                                UPDATE doc WITH {
+                                    canonical: MERGE(doc.canonical, {
+                                        status: "decayed",
+                                        date_of_decay_or_change: @decay_date,
+                                        updated_at: @ts
+                                    }),
+                                    metadata: MERGE(doc.metadata, {
+                                        transformations: APPEND(doc.metadata.transformations || [], [@transformation]),
+                                        last_updated_at: @ts
+                                    })
+                                } IN satellites
+                        """, bind_vars={
+                            "key": sat["_key"],
+                            "decay_date": satcat["decay_date"],
+                            "ts": ts,
+                            "transformation": transformation,
+                        })
+                        canonical["status"] = "decayed"
+                        canonical["date_of_decay_or_change"] = satcat["decay_date"]
+                        canonical["updated_at"] = ts
+                        logger.info(f"Lazy decay update applied to {sat.get('identifier')} via CelesTrak satcat")
+                    except Exception as e:
+                        logger.error(f"Failed to persist lazy decay update for {sat.get('identifier')}: {e}")
+
         safe_canonical = {}
         for k, v in canonical.items():
             if k != '_id':
@@ -91,7 +142,7 @@ def get_satellite_v2(identifier: str):
                     safe_canonical[k] = safe_v
                 elif not (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
                     safe_canonical[k] = v
-        
+
         sources = sat.get("sources", {})
         safe_sources = {}
         for k, v in sources.items():
