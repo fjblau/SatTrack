@@ -149,3 +149,26 @@ useEffect(() => {
 5. `react-app/src/components/DetailPanel.jsx` — show TLE for DEBRIS, use norad_id from object prop
 6. `api/routers/tle.py` — optionally add intl designator endpoint
 7. `tests/unit/test_tle_service.py` — add tests for SpaceTrack fallback
+
+---
+
+## Implementation Notes
+
+### What was already implemented (pre-existing in codebase)
+At time of implementation, items 5–6 were already in place:
+- `DetailPanel.jsx` already had `DEBRIS_OBJECT_TYPES`, `isDebrisObject()`, and the full debris TLE fetch flow (including intl designator fallback and auto-persistence).
+- `tle_service.py` already used CelesTrak GP API (not `tle.ivanstanojevic.me`) via `_fetch_tle_by_intl_des_uncached`.
+- `api/routers/tle.py` already had `GET /v2/tle/intldes/{intl_des:path}`.
+- `react-app/src/config/constants.js` already had `TLE_INTLDES`.
+
+### Changes made during implementation
+1. **`config.py`** — Added `SPACETRACK_BASE_URL`, `SPACETRACK_USERNAME`, `SPACETRACK_PASSWORD` to `ExternalServicesConfig`.
+2. **`.env.example`** — Documented SpaceTrack credential env vars.
+3. **`api/services/spacetrack_service.py`** (new) — Session-based SpaceTrack client with `fetch_tle_from_spacetrack_by_norad_id()` and `fetch_tle_from_spacetrack_by_intl_des()`. Gracefully skips when credentials are absent. Reuses session within a 2-hour TTL. Re-authenticates on 401.
+4. **`api/services/tle_service.py`** — Refactored `_fetch_tle_by_norad_id_uncached()` and `_fetch_tle_by_intl_des_uncached()` to break out of the CelesTrak retry loop (instead of returning `None`) when no data is found, then fall through to SpaceTrack.
+5. **`tests/unit/test_spacetrack_service.py`** (new) — 12 unit tests covering GP entry conversion, no-credentials graceful degradation, session failure, successful fetch, exact-match selection, and tle_service fallback integration.
+
+### Test results
+```
+22 passed in 0.15s
+```

@@ -6,6 +6,10 @@ import logging
 from datetime import datetime, timezone
 
 from api.services.cache_service import get_tle_cache
+from api.services.spacetrack_service import (
+    fetch_tle_from_spacetrack_by_norad_id,
+    fetch_tle_from_spacetrack_by_intl_des,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +37,15 @@ def _celestrak_gp_to_tle_dict(entry: dict, fallback_id: str = "") -> Optional[Di
 
 def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
     """
-    Fetch fresh TLE data by NORAD ID from CelesTrak GP API.
+    Fetch fresh TLE data by NORAD ID.
+
+    First attempts CelesTrak GP API; if the object is not found there, falls
+    back to SpaceTrack which covers all catalogued objects including debris.
     Use fetch_tle_by_norad_id() instead for cached results.
     """
     params = {"CATNR": norad_id, "FORMAT": "JSON"}
     max_retries = 3
+    celestrak_found = False
     for attempt in range(max_retries):
         try:
             response = requests.get(CELESTRAK_GP_URL, params=params, timeout=10)
@@ -47,15 +55,16 @@ def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
                     result = _celestrak_gp_to_tle_dict(data[0], fallback_id=f"NORAD {norad_id}")
                     if result:
                         logger.info(f"Successfully fetched TLE for NORAD ID {norad_id} from CelesTrak")
-                    return result
+                        celestrak_found = True
+                        return result
                 logger.info(f"TLE not found for NORAD ID {norad_id} on CelesTrak")
-                return None
+                break
             elif response.status_code == 404:
                 logger.info(f"TLE not found for NORAD ID {norad_id} on CelesTrak (404)")
-                return None
+                break
             else:
                 logger.warning(f"CelesTrak GP API returned {response.status_code} for NORAD {norad_id}")
-                return None
+                break
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if attempt < max_retries - 1:
                 wait_time = 0.5 * (2 ** attempt)
@@ -63,16 +72,21 @@ def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
                 time.sleep(wait_time)
             else:
                 logger.error(f"Error fetching from CelesTrak after {max_retries} attempts: {e}")
-                return None
         except Exception as e:
             logger.error(f"Error fetching from CelesTrak GP API: {e}")
-            return None
+            break
+    if not celestrak_found:
+        logger.info(f"Falling back to SpaceTrack for NORAD ID {norad_id}")
+        return fetch_tle_from_spacetrack_by_norad_id(norad_id)
     return None
 
 
 def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
     """
-    Fetch fresh TLE data by International Designator from CelesTrak GP API.
+    Fetch fresh TLE data by International Designator.
+
+    First attempts CelesTrak GP API; if the object is not found there, falls
+    back to SpaceTrack which covers all catalogued objects including debris.
     Use fetch_tle_by_intl_des() instead for cached results.
 
     CelesTrak returns all objects associated with the launch designator (e.g. 1999-025
@@ -81,6 +95,7 @@ def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
     """
     params = {"INTDES": intl_des, "FORMAT": "JSON"}
     max_retries = 3
+    celestrak_found = False
     for attempt in range(max_retries):
         try:
             response = requests.get(CELESTRAK_GP_URL, params=params, timeout=10)
@@ -88,7 +103,7 @@ def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
                 data = response.json()
                 if not isinstance(data, list) or not data:
                     logger.info(f"TLE not found for international designator {intl_des} on CelesTrak")
-                    return None
+                    break
                 normalized = intl_des.replace(" ", "").upper()
                 exact = next(
                     (e for e in data if e.get("OBJECT_ID", "").replace(" ", "").upper() == normalized),
@@ -98,13 +113,15 @@ def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
                 result = _celestrak_gp_to_tle_dict(entry, fallback_id=intl_des)
                 if result:
                     logger.info(f"Successfully fetched TLE for intl des {intl_des} from CelesTrak")
-                return result
+                    celestrak_found = True
+                    return result
+                break
             elif response.status_code == 404:
                 logger.info(f"TLE not found for intl des {intl_des} on CelesTrak (404)")
-                return None
+                break
             else:
                 logger.warning(f"CelesTrak GP API returned {response.status_code} for intl des {intl_des}")
-                return None
+                break
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if attempt < max_retries - 1:
                 wait_time = 0.5 * (2 ** attempt)
@@ -112,10 +129,12 @@ def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
                 time.sleep(wait_time)
             else:
                 logger.error(f"Error fetching from CelesTrak after {max_retries} attempts: {e}")
-                return None
         except Exception as e:
             logger.error(f"Error fetching from CelesTrak GP API: {e}")
-            return None
+            break
+    if not celestrak_found:
+        logger.info(f"Falling back to SpaceTrack for intl des {intl_des}")
+        return fetch_tle_from_spacetrack_by_intl_des(intl_des)
     return None
 
 
