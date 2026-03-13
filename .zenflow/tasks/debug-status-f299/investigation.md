@@ -132,6 +132,41 @@ re-running promotion, `canonical.status` becomes `"decayed"` and
 
 ---
 
+## Implementation Notes
+
+### What was implemented (Investigation commits + this session)
+
+1. **`api/services/tle_service.py`** — Added `check_decay_from_celestrak(norad_id)`:
+   - Calls `https://celestrak.org/satcat/records.php?CATNR={id}&FORMAT=JSON`
+   - Returns `decay_date`, `ops_status_code`, and `object_name`
+
+2. **`api/routers/satellites.py`** — Lazy decay check in `GET /v2/satellite/{identifier}`:
+   - Fires only when `canonical.status == "in orbit"` and the object has a NORAD ID
+   - If CelesTrak satcat confirms a `decay_date`, immediately writes `status: "decayed"` + `date_of_decay_or_change` to the DB
+   - Corrected values returned in the same response (self-healing on first view)
+
+3. **`scripts/maintenance/promote_gcat_attributes.py`** — "GCAT-wins-on-decay" AQL logic:
+   - `LET terminal_status = (status_mapped == "decayed" OR status_mapped == "heliocentric" OR status_mapped == "in disposal/graveyard orbit")`
+   - Terminal statuses always override existing `canonical.status`, including stale `"in orbit"`
+   - `date_of_decay_or_change` always updated when GCAT has a `decay_date`
+
+4. **`gcat_satcat.tsv`** — Refreshed from `https://planet4589.org/space/gcat/tsv/cat/satcat.tsv` (2026-03-09 snapshot). GCAT itself still records NORAD 57687 as `O` (no decay date), confirming the lazy CelesTrak approach is the correct primary fix.
+
+5. **`tests/unit/test_decay_status.py`** — New regression tests (19 passing):
+   - `TestCheckDecayFromCelesTrak`: 6 tests for the CelesTrak satcat decay check helper
+   - `TestGcatStatusMap`: 5 tests verifying GCAT status code → canonical status mappings
+   - `TestGcatWinsOnDecayLogic`: 8 tests verifying terminal statuses override stale "in orbit"
+
+### Test results
+
+```
+tests/unit/test_decay_status.py — 19 passed, 17 subtests passed
+tests/unit/test_tle_service.py  — 24 passed
+tests/unit/test_country_normalizer.py — 15 passed, 13 subtests passed
+```
+
+---
+
 ## Edge Cases and Side Effects
 
 - The "GCAT-wins-on-decay" logic should only override with **terminal** GCAT statuses
