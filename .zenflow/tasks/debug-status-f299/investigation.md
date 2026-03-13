@@ -43,23 +43,7 @@ GCAT_STATUS_MAP = {
 The mapping itself is correct. The problem is that **the input value `"O"` is wrong** because
 the GCAT dataset hasn't recorded the re-entry yet.
 
-### 3. No SpaceTrack decay-class query
-
-`spacetrack_service.py` only queries the `gp` (General Perturbations) class:
-
-```
-/basicspacedata/query/class/gp/NORAD_CAT_ID/{norad_id}
-```
-
-SpaceTrack's `gp` class **only returns active (currently tracked) objects**. A decayed object
-returns an empty list. The current code treats this as "not found" and leaves the canonical
-status untouched — it never queries SpaceTrack's `decay` class:
-
-```
-/basicspacedata/query/class/decay/NORAD_CAT_ID/{norad_id}
-```
-
-### 4. No cross-source status reconciliation
+### 3. No cross-source status reconciliation
 
 `database/transformations.py` → `update_canonical()` only allows "approved" sources to promote
 to canonical: `["unoosa", "spacetrack", "celestrak", "tleapi", "kaggle"]`.
@@ -80,55 +64,84 @@ correct it either.
 | `gcat_satcat.tsv` | Source data — stale entry for NORAD 57687 |
 | `scripts/import/import_gcat_bulk.py` | Imports raw GCAT status into `sources.gcat.status` |
 | `scripts/maintenance/promote_gcat_attributes.py` | Promotes `sources.gcat.status` → `canonical.status` (fill-if-null, no override) |
-| `api/services/spacetrack_service.py` | Only queries `gp` class — never checks SpaceTrack `decay` class |
 | `database/transformations.py` | Canonical promotion logic — no decay inference |
 
 ---
 
 ## Proposed Fix
 
-### Option A — Targeted data patch (immediate, low risk)
+GCAT (Jonathan McDowell's General Catalog) is a **public dataset** updated regularly at
+`https://www.planet4589.org/space/gcat/`. The local `gcat_satcat.tsv` is a stale snapshot.
+Refreshing it is the correct authoritative fix — no SpaceTrack access needed.
 
-Write a maintenance script `scripts/maintenance/fix_decayed_status.py` that:
+### Step 1 — Refresh `gcat_satcat.tsv`
 
-1. Queries the SpaceTrack `decay` class for objects whose canonical status is `"in orbit"`:
-   ```
-   /basicspacedata/query/class/decay/NORAD_CAT_ID/{norad_id}/format/json
-   ```
-2. If SpaceTrack confirms a decay event, updates the document:
-   - `canonical.status` → `"decayed"`
-   - `canonical.date_of_decay_or_change` → the confirmed decay date from SpaceTrack
-   - Records a transformation entry in `metadata.transformations`
+Download the latest file from GCAT and replace the local copy:
+```
+https://www.planet4589.org/space/gcat/data/derived/satcat.tsv
+```
+The updated GCAT record for S57687 should have its decay date and a decay status code (`R`,
+`D`, etc.) by now.
 
-This directly fixes GCAT-S57687 and any other objects with the same staleness problem.
+### Step 2 — Re-run the GCAT bulk import
 
-### Option B — Enrich SpaceTrack service with decay detection (systemic fix)
+Re-running `import_gcat_bulk.py` updates `sources.gcat.status` and `sources.gcat.decay_date`
+for existing records. **This alone will not fix the canonical status** because the bulk import's
+update path only touches `sources.gcat`, not `canonical`.
 
-Extend `spacetrack_service.py` to also expose a `check_decay()` function that queries the
-`decay` class. Call it from wherever status is determined (e.g., in `tle_service.py` or a
-dedicated reconciliation job) so that future re-entries are caught automatically.
+### Step 3 — Fix the "fill-if-null" guard in `promote_gcat_attributes.py`
+
+The current promotion query uses fill-if-null semantics for status:
+```aql
+status: doc.canonical.status != null ? doc.canonical.status : status_mapped
+```
+This means once `"in orbit"` is written, it is never overridden — even when the GCAT source
+later records a decay.
+
+**The fix**: status (and `date_of_decay_or_change`) should use **GCAT-wins-on-decay** semantics.
+Specifically, when the GCAT source now maps to `"decayed"` (or another terminal state), it
+should always overwrite the canonical value regardless of what was previously stored:
+
+```aql
+status: (status_mapped != null AND status_mapped != "in orbit")
+    ? status_mapped
+    : (doc.canonical.status != null ? doc.canonical.status : status_mapped)
+```
+
+This ensures decay/heliocentric/graveyard statuses always propagate from GCAT, while
+non-terminal statuses (`"in orbit"`) still use fill-if-null to avoid overwriting richer data
+from other sources.
+
+Apply the same override logic to `date_of_decay_or_change`:
+```aql
+date_of_decay_or_change: g.decay_date != null
+    ? g.decay_date
+    : doc.canonical.date_of_decay_or_change
+```
+
+### Step 4 — Re-run `promote_gcat_attributes.py`
+
+After steps 1–3, re-running the script will propagate the correct `"decayed"` status and
+decay date to `canonical` for GCAT-S57687 and any other objects with the same staleness.
 
 ### Recommended approach
 
-Implement **Option A** as the immediate fix (targeted script to repair GCAT-S57687 and similar
-stale records), then follow up with **Option B** for long-term robustness.
-
-For the implementation step, the regression test should verify that after running the fix
-script, `canonical.status` becomes `"decayed"` and `canonical.date_of_decay_or_change` is
-set for NORAD 57687.
+Implement steps 1–4. The regression test should verify that after refreshing GCAT data and
+re-running promotion, `canonical.status` becomes `"decayed"` and
+`canonical.date_of_decay_or_change` is non-null for NORAD 57687.
 
 ---
 
 ## Edge Cases and Side Effects
 
-- Objects with GCAT status `"N"` (non-operational, in orbit) that have also decayed are
-  similarly affected — the fix script should cover all "in orbit" canonical statuses, not
-  just `"O"`.
-- The fix should only **override** status when SpaceTrack's decay class explicitly confirms
-  a re-entry, not when the GP query simply returns empty (empty GP could mean the object's
-  TLE data hasn't been updated yet, not necessarily that it decayed).
-- `canonical.date_of_decay_or_change` and `sources.gcat.decay_date` should both be updated
+- The "GCAT-wins-on-decay" logic should only override with **terminal** GCAT statuses
+  (`decayed`, `heliocentric`, `in disposal/graveyard orbit`) — not with `"in orbit"`, since
+  `"in orbit"` from GCAT could be stale, and other approved sources may have more current data.
+- Objects with GCAT status `"N"` that have also physically decayed (stale GCAT) are handled
+  automatically once the GCAT file is refreshed and they show a decay code.
+- `sources.gcat.decay_date` and `canonical.date_of_decay_or_change` should both be updated
   for consistency.
-- The `promote_gcat_attributes.py` "fill-if-null" guard means re-running it won't revert the
-  fix — but the fix script itself should use `UPDATE ... MERGE` (overwrite) semantics for the
-  status and decay date fields.
+- The `promote_gcat_attributes.py` script currently filters for `sources_available == ["gcat"]`
+  only. Objects with multiple sources (e.g., `["gcat", "celestrak"]`) are not touched by it.
+  Those objects would need a separate reconciliation pass — but GCAT-S57687 is gcat-only, so
+  this is not a blocker for the immediate fix.
