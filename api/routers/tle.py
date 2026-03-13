@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
 
-from api.services.tle_service import fetch_tle_by_norad_id, parse_tle_fields
+from api.services.tle_service import fetch_tle_by_norad_id, fetch_tle_by_intl_des, parse_tle_fields
 from api.services.propagation_service import propagation_service, PropagationError
 from database.operations import update_satellite_tle
 
@@ -72,6 +72,29 @@ def get_current_tle(norad_id: str):
             "message": f"TLE data not found for NORAD ID {norad_id}.",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }, 200
+
+
+@router.get("/tle/intldes/{intl_des:path}")
+def get_tle_by_intl_des(intl_des: str):
+    """Get current TLE data from CelesTrak by International Designator.
+
+    Useful for debris objects that may not have a NORAD ID stored locally.
+    Returns TLE data including the resolved NORAD catalog ID when available.
+    """
+    tle = fetch_tle_by_intl_des(intl_des)
+
+    if tle:
+        return {
+            "data": tle,
+            "source": "celestrak",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    else:
+        return {
+            "data": None,
+            "message": f"TLE data not found for international designator '{intl_des}' on CelesTrak.",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
 
 
 @router.get("/tle/{norad_id}/orbit")
