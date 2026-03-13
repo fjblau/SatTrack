@@ -18,21 +18,44 @@ _tle_cache_instance = get_tle_cache()
 CELESTRAK_GP_URL = "https://celestrak.org/NORAD/elements/gp.php"
 
 
-def _celestrak_gp_to_tle_dict(entry: dict, fallback_id: str = "") -> Optional[Dict]:
-    """Convert a CelesTrak GP JSON entry to the internal TLE dict format."""
-    line1 = entry.get("TLE_LINE1")
-    line2 = entry.get("TLE_LINE2")
-    if not line1 or not line2:
-        return None
-    return {
-        "name": entry.get("OBJECT_NAME", fallback_id),
-        "line1": line1,
-        "line2": line2,
-        "source": "celestrak",
-        "date": entry.get("EPOCH"),
-        "norad_cat_id": entry.get("NORAD_CAT_ID"),
-        "intl_designator": entry.get("OBJECT_ID"),
-    }
+def _parse_tle_text(text: str) -> list:
+    """
+    Parse a CelesTrak TLE text response (3-line format) into a list of dicts.
+
+    Each dict contains: name, line1, line2, norad_cat_id, intl_designator.
+    Returns an empty list if the text is empty or contains no valid TLE blocks.
+
+    International designator year conversion: YY >= 57 → 19YY, YY < 57 → 20YY.
+    """
+    lines = [l.rstrip() for l in text.strip().splitlines() if l.strip()]
+    results = []
+    i = 0
+    while i + 2 < len(lines):
+        name_line = lines[i]
+        l1 = lines[i + 1]
+        l2 = lines[i + 2]
+        if not l1.startswith("1 ") or not l2.startswith("2 "):
+            i += 1
+            continue
+        try:
+            norad_cat_id = l1[2:7].strip()
+            intl_compact = l1[9:17].strip()
+            year_2digit = int(intl_compact[:2])
+            year_4digit = (1900 + year_2digit) if year_2digit >= 57 else (2000 + year_2digit)
+            launch_num = intl_compact[2:5]
+            piece = intl_compact[5:]
+            intl_designator = f"{year_4digit}-{launch_num}{piece}"
+            results.append({
+                "name": name_line.strip(),
+                "line1": l1,
+                "line2": l2,
+                "norad_cat_id": norad_cat_id,
+                "intl_designator": intl_designator,
+            })
+            i += 3
+        except (ValueError, IndexError):
+            i += 1
+    return results
 
 
 def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
@@ -43,20 +66,27 @@ def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
     back to SpaceTrack which covers all catalogued objects including debris.
     Use fetch_tle_by_norad_id() instead for cached results.
     """
-    params = {"CATNR": norad_id, "FORMAT": "JSON"}
+    params = {"CATNR": norad_id, "FORMAT": "TLE"}
     max_retries = 3
     celestrak_found = False
     for attempt in range(max_retries):
         try:
             response = requests.get(CELESTRAK_GP_URL, params=params, timeout=10)
             if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list) and data:
-                    result = _celestrak_gp_to_tle_dict(data[0], fallback_id=f"NORAD {norad_id}")
-                    if result:
-                        logger.info(f"Successfully fetched TLE for NORAD ID {norad_id} from CelesTrak")
-                        celestrak_found = True
-                        return result
+                entries = _parse_tle_text(response.text)
+                if entries:
+                    e = entries[0]
+                    logger.info(f"Successfully fetched TLE for NORAD ID {norad_id} from CelesTrak")
+                    celestrak_found = True
+                    return {
+                        "name": e["name"],
+                        "line1": e["line1"],
+                        "line2": e["line2"],
+                        "source": "celestrak",
+                        "date": None,
+                        "norad_cat_id": e["norad_cat_id"],
+                        "intl_designator": e["intl_designator"],
+                    }
                 logger.info(f"TLE not found for NORAD ID {norad_id} on CelesTrak")
                 break
             elif response.status_code == 404:
@@ -90,32 +120,37 @@ def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
     Use fetch_tle_by_intl_des() instead for cached results.
 
     CelesTrak returns all objects associated with the launch designator (e.g. 1999-025
-    returns all fragments). This returns the best match — the entry whose OBJECT_ID
+    returns all fragments). This returns the best match — the entry whose intl_designator
     exactly matches intl_des, or the first entry if no exact match.
     """
-    params = {"INTDES": intl_des, "FORMAT": "JSON"}
+    params = {"INTDES": intl_des, "FORMAT": "TLE"}
     max_retries = 3
     celestrak_found = False
     for attempt in range(max_retries):
         try:
             response = requests.get(CELESTRAK_GP_URL, params=params, timeout=10)
             if response.status_code == 200:
-                data = response.json()
-                if not isinstance(data, list) or not data:
+                entries = _parse_tle_text(response.text)
+                if not entries:
                     logger.info(f"TLE not found for international designator {intl_des} on CelesTrak")
                     break
                 normalized = intl_des.replace(" ", "").upper()
                 exact = next(
-                    (e for e in data if e.get("OBJECT_ID", "").replace(" ", "").upper() == normalized),
+                    (e for e in entries if e["intl_designator"].replace(" ", "").upper() == normalized),
                     None
                 )
-                entry = exact or data[0]
-                result = _celestrak_gp_to_tle_dict(entry, fallback_id=intl_des)
-                if result:
-                    logger.info(f"Successfully fetched TLE for intl des {intl_des} from CelesTrak")
-                    celestrak_found = True
-                    return result
-                break
+                entry = exact or entries[0]
+                logger.info(f"Successfully fetched TLE for intl des {intl_des} from CelesTrak")
+                celestrak_found = True
+                return {
+                    "name": entry["name"],
+                    "line1": entry["line1"],
+                    "line2": entry["line2"],
+                    "source": "celestrak",
+                    "date": None,
+                    "norad_cat_id": entry["norad_cat_id"],
+                    "intl_designator": entry["intl_designator"],
+                }
             elif response.status_code == 404:
                 logger.info(f"TLE not found for intl des {intl_des} on CelesTrak (404)")
                 break
