@@ -147,3 +147,31 @@ TLE lines themselves.
 - Then fetch `FORMAT=TLE` with `CATNR={norad_id}` to get the TLE lines
 - More HTTP requests but simpler parsing
 - Rejected in favor of single-request solution above
+
+---
+
+## Implementation Notes
+
+### Changes Made
+
+**`api/services/tle_service.py`**:
+
+- **Removed** `_celestrak_gp_to_tle_dict` (expected `TLE_LINE1`/`TLE_LINE2` that CelesTrak JSON never provides)
+- **Added** `_parse_tle_text(text: str) -> list` — parses CelesTrak 3-line TLE text format into dicts with `name`, `line1`, `line2`, `norad_cat_id`, `intl_designator`; handles year rollover (YY≥57→19YY, else 20YY); returns `[]` for empty/non-TLE responses
+- **Updated** `_fetch_tle_by_norad_id_uncached` — switched `FORMAT=JSON` → `FORMAT=TLE`, replaced `response.json()` path with `_parse_tle_text(response.text)`
+- **Updated** `_fetch_tle_by_intl_des_uncached` — same format/parsing change; exact-match logic now compares parsed `intl_designator` field
+
+**`tests/unit/test_tle_service.py`**:
+
+- Added `TestParseTleText` — 7 tests covering single entry, multiple entries, SLS DEB NORAD IDs, `2022-156D/E/G` intl designators, empty text, non-TLE text, pre-2000 year rollover
+- Added `TestFetchTleByIntlDesUncached` — 4 tests (TLE text success, exact match, SpaceTrack fallback on empty, SpaceTrack fallback on non-TLE text)
+- Added `TestFetchTleByNoradIdUncached` — 3 tests (TLE text success, SpaceTrack fallback, FORMAT=TLE param verified)
+
+### Test Results
+
+```
+Ran 24 tests in 0.018s
+OK
+```
+
+All 24 tests pass (9 pre-existing + 15 new).
