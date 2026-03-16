@@ -8,6 +8,7 @@ import TimelineChart from './components/TimelineChart'
 import FunctionAnalytics from './components/FunctionAnalytics'
 import RegistrationDocumentAnalytics from './components/RegistrationDocumentAnalytics'
 import AdminPage from './components/AdminPage'
+import ObservationsView from './components/ObservationsView'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
 function App() {
@@ -227,6 +228,12 @@ function App() {
             Table View
           </button>
           <button 
+            className={activeTab === 'observations' ? 'active' : ''}
+            onClick={() => setActiveTab('observations')}
+          >
+            Observations
+          </button>
+          <button 
             className={activeTab === 'graphs' ? 'active' : ''}
             onClick={() => setActiveTab('graphs')}
           >
@@ -252,6 +259,7 @@ function App() {
           </button>
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
+        {activeTab === 'observations' && <p>Observational Data</p>}
       </header>
       
       {activeTab === 'table' && (
@@ -296,6 +304,10 @@ function App() {
             </div>
           </main>
         </div>
+      )}
+
+      {activeTab === 'observations' && (
+        <ObservationsView />
       )}
 
       {activeTab === 'graphs' && (
