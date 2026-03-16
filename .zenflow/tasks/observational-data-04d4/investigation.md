@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add a new `satellite_observations` collection to ArangoDB for real-time observational data (multiple observations per satellite, keyed by NORAD ID). Surface this data from the Satellite detail page via a new "Observations" button next to the MQTT button.
+Add a new `observations` collection to ArangoDB for real-time observational data (multiple observations per object, keyed by NORAD ID — not satellite-specific, designed to accommodate other object types in future). Surface this data from the Satellite detail page via a new "Observations" button next to the MQTT button.
 
 ## Existing Architecture
 
@@ -27,8 +27,8 @@ Add a new `satellite_observations` collection to ArangoDB for real-time observat
 
 ## Proposed Solution
 
-### 1. New ArangoDB Collection: `satellite_observations`
-- Collection name: `satellite_observations`
+### 1. New ArangoDB Collection: `observations`
+- Collection name: `observations` (generic — will hold observations for satellites and other object types)
 - Documents indexed on `norad_id` (integer, shared key with satellites collection)
 - Each document = one observation record (multiple per satellite)
 - Fields from the sample data:
@@ -56,7 +56,7 @@ Add `observational_data` field to satellite `canonical` when observations exist:
 ```
 
 ### 3. Import Sample Data
-Import the 2 PRETTY (NORAD 58023) observation records from the task description into `satellite_observations`. Also update the satellite canonical with the observational data metadata.
+Import the 2 PRETTY (NORAD 58023) observation records from the task description into `observations`. Also update the satellite canonical with the observational data metadata.
 
 ### 4. Backend API: New Router `observations.py`
 - `GET /v2/observations/{norad_id}` - returns paginated list of observations for a NORAD ID
@@ -66,7 +66,23 @@ Import the 2 PRETTY (NORAD 58023) observation records from the task description 
 ### 5. Frontend: New ObservationsModal Component
 - New file: `react-app/src/components/ObservationsModal.jsx`
 - New file: `react-app/src/components/ObservationsModal.css`
-- Flattened table view of all observations (flatten nested JSON to dotted-key columns)
+- Table with **two-line grouped headers**: section name spanning all its sub-columns on top row, individual attribute names on bottom row. Example:
+
+  ```
+  |       (top-level)        |         Attitude          |          Thermal          |  ...
+  | Epoch | Source | Mass kg | Roll deg | Pitch deg | Yaw | Temp K | Variance 30d | ...
+  ```
+
+  Sections and their columns:
+  - *(top-level)*: observation_epoch, source, object_name, object_type, origin_country, estimated_mass_kg, spin_rate_rpm, derived_health_score
+  - **Attitude**: roll_deg, pitch_deg, yaw_deg, stability_flag
+  - **Thermal**: surface_temp_K, temp_variance_30d, anomaly_flag
+  - **Material Signature**: reflectivity_index, inferred_material, confidence
+  - **Proximity State**: range_km, relative_velocity_ms
+  - **Maneuver Indicator**: delta_v_residual_ms, confidence, flag
+  - **Orbital Decay**: perigee_drift_km_per_day, estimated_perigee_km
+
+- Section header cells use `colSpan` to span their sub-columns; top-level fields have `rowSpan=2` in the header
 - Sort by `observation_epoch` descending
 - Button added in `DetailPanel.jsx` header buttons section, next to MQTT button
 - Conditional: show button only if `fullDocument?.canonical?.observational_data?.has_observations`
@@ -74,7 +90,7 @@ Import the 2 PRETTY (NORAD 58023) observation records from the task description 
 
 ## Affected Components
 
-1. `database/connection.py` - add `COLLECTION_OBSERVATIONS = 'satellite_observations'` constant
+1. `database/connection.py` - add `COLLECTION_OBSERVATIONS = 'observations'` constant
 2. `database/__init__.py` - export the new constant  
 3. `api/routers/observations.py` - new router (create)
 4. `api/main.py` - register new router
@@ -86,8 +102,9 @@ Import the 2 PRETTY (NORAD 58023) observation records from the task description 
 
 ## Implementation Notes
 
-- `norad_id` in satellite_observations should be stored as integer (matching `canonical.norad_cat_id`)
-- The flattened table should convert nested objects like `attitude.roll_deg`, `thermal.surface_temp_K`, etc.
+- `norad_id` in `observations` should be stored as integer (matching `canonical.norad_cat_id`)
+- Collection name is `observations` (not `satellite_observations`) — generic for future non-satellite objects
+- The table uses **two-row `<thead>`**: row 1 has section group headers (`colSpan` for nested groups, `rowSpan=2` for top-level scalar columns); row 2 has individual field names
 - The button should only appear when the satellite has a NORAD ID and has observations
 - Follow the same modal pattern as `MqttConfigModal.jsx` and `OrbitCalculationModal.jsx`
 - Add persistent index on `norad_id` field in the new collection for query performance

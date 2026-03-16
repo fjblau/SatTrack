@@ -24,7 +24,7 @@ Key findings:
 
 Read `.zenflow/tasks/observational-data-04d4/investigation.md` for full details.
 
-1. Create `satellite_observations` collection in ArangoDB (add constant in `database/connection.py`)
+1. Create `observations` collection in ArangoDB (add constant `COLLECTION_OBSERVATIONS = 'observations'` in `database/connection.py`)
 2. Import sample observational data for PRETTY (NORAD 58023) and update satellite canonical with metadata
 3. Create `api/routers/observations.py` with `GET /v2/observations/{norad_id}` endpoint
 4. Register observations router in `api/main.py`
