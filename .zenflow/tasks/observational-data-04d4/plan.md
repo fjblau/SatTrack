@@ -20,7 +20,8 @@ Key findings:
 - DetailPanel.jsx has header buttons area (MQTT Feed button is the target neighbor)
 - Need: new `satellite_observations` collection, backend router, frontend ObservationsModal component
 
-### [ ] Step: Implementation
+### [x] Step: Implementation
+<!-- chat-id: 5a28454e-d3e8-4504-97b8-6797bb5e761e -->
 
 Read `.zenflow/tasks/observational-data-04d4/investigation.md` for full details.
 

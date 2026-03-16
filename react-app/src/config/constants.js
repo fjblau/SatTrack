@@ -8,6 +8,7 @@ export const API_ENDPOINTS = {
   SATELLITE_DETAIL: '/v2/satellite',
   TLE: '/v2/tle',
   TLE_INTLDES: '/v2/tle/intldes',
+  OBSERVATIONS: '/v2/observations',
   
   GRAPHS: {
     STATS: '/v2/graphs/stats',
