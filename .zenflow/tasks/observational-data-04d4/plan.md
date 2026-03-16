@@ -1,40 +1,34 @@
-# Fix bug
+# Observational Data Feature
 
 ## Configuration
-- **Artifacts Path**: {@artifacts_path} → `.zenflow/tasks/{task_id}`
-
----
-
-## Agent Instructions
+- **Artifacts Path**: `.zenflow/tasks/observational-data-04d4`
 
 ---
 
 ## Workflow Steps
 
-### [ ] Step: Investigation and Planning
+### [x] Step: Investigation and Planning
+<!-- chat-id: 826c77c4-1640-4704-a277-cc011db1f91e -->
 
-Analyze the bug report and design a solution.
+Investigated codebase, ArangoDB structure, and existing satellite detail page.
 
-1. Review the bug description, error messages, and logs
-2. Clarify reproduction steps with the user if unclear
-3. Check existing tests for clues about expected behavior
-4. Locate relevant code sections and identify root cause
-5. Propose a fix based on the investigation
-6. Consider edge cases and potential side effects
+Findings saved to `.zenflow/tasks/observational-data-04d4/investigation.md`.
 
-Save findings to `{@artifacts_path}/investigation.md` with:
-- Bug summary
-- Root cause analysis
-- Affected components
-- Proposed solution
+Key findings:
+- ArangoDB `kessler` DB has satellites collection with `canonical.norad_cat_id` as shared key
+- PRETTY satellite (NORAD 58023) exists in DB
+- DetailPanel.jsx has header buttons area (MQTT Feed button is the target neighbor)
+- Need: new `satellite_observations` collection, backend router, frontend ObservationsModal component
 
 ### [ ] Step: Implementation
-Read `{@artifacts_path}/investigation.md`
-Implement the bug fix.
 
-1. Add/adjust regression test(s) that fail before the fix and pass after
-2. Implement the fix
-3. Run relevant tests
-4. Update `{@artifacts_path}/investigation.md` with implementation notes and test results
+Read `.zenflow/tasks/observational-data-04d4/investigation.md` for full details.
 
-If blocked or uncertain, ask the user for direction.
+1. Create `satellite_observations` collection in ArangoDB (add constant in `database/connection.py`)
+2. Import sample observational data for PRETTY (NORAD 58023) and update satellite canonical with metadata
+3. Create `api/routers/observations.py` with `GET /v2/observations/{norad_id}` endpoint
+4. Register observations router in `api/main.py`
+5. Add `OBSERVATIONS` to `API_ENDPOINTS` in `react-app/src/config/constants.js`
+6. Create `react-app/src/components/ObservationsModal.jsx` (flattened table of observations)
+7. Create `react-app/src/components/ObservationsModal.css`
+8. Add "Observations" button in `DetailPanel.jsx` header buttons section (next to MQTT button)
