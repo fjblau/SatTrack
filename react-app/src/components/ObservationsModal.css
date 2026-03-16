@@ -1,0 +1,149 @@
+.observations-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 2rem;
+}
+
+.observations-modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 1400px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #1a1a2e;
+}
+
+.modal-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: normal;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  padding: 0 0.25rem;
+  line-height: 1;
+  margin-left: 1rem;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  color: #1a1a2e;
+}
+
+.loading-message {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+  font-style: italic;
+}
+
+.error-message {
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: #ffebee;
+  color: #d32f2f;
+  border-left: 3px solid #d32f2f;
+  margin: 1rem 1.5rem;
+}
+
+.observations-body {
+  overflow: auto;
+  flex: 1;
+}
+
+.observations-table-wrapper {
+  overflow-x: auto;
+  padding: 1rem 1.5rem;
+}
+
+.observations-table {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.observations-table th,
+.observations-table td {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #e0e0e0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.observations-table thead th {
+  background-color: #1a1a2e;
+  color: #fff;
+  font-weight: 600;
+}
+
+.observations-table .th-section {
+  text-align: center;
+  background-color: #2d2d5e;
+}
+
+.observations-table .th-top-level {
+  background-color: #1a1a2e;
+  vertical-align: middle;
+}
+
+.observations-table .th-sub {
+  background-color: #3d3d8e;
+  font-weight: 500;
+}
+
+.observations-table .row-even {
+  background-color: #f9f9f9;
+}
+
+.observations-table .row-odd {
+  background-color: #fff;
+}
+
+.observations-table tbody tr:hover {
+  background-color: #eef2ff;
+}
+
+@media (max-width: 768px) {
+  .observations-overlay {
+    padding: 0.5rem;
+  }
+
+  .observations-modal {
+    max-width: 100%;
+    max-height: 95vh;
+  }
+}

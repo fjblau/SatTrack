@@ -15,6 +15,7 @@ EDGE_COLLECTION_PROXIMITY = "orbital_proximity"
 EDGE_COLLECTION_COLLISION_RISK = "collision_risk_edges"
 EDGE_COLLECTION_SATELLITE_LINEAGE = "satellite_lineage"
 COLLECTION_REG_DOCS = "registration_documents"
+COLLECTION_OBSERVATIONS = "observations"
 
 client = None
 db = None

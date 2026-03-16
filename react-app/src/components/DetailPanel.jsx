@@ -3,6 +3,7 @@ import './DetailPanel.css'
 import DataRecordModal from './DataRecordModal'
 import MqttConfigModal from './MqttConfigModal'
 import OrbitCalculationModal from './OrbitCalculationModal'
+import ObservationsModal from './ObservationsModal'
 import { API_ENDPOINTS, EXTERNAL_URLS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
 const DEBRIS_OBJECT_TYPES = ['debris', 'rocket body', 'unknown']
@@ -27,6 +28,7 @@ export default function DetailPanel({ object }) {
   const [tleLoading, setTleLoading] = useState(false)
   const [showMqttConfig, setShowMqttConfig] = useState(false)
   const [showOrbitCalculation, setShowOrbitCalculation] = useState(false)
+  const [showObservations, setShowObservations] = useState(false)
 
   useEffect(() => {
     if (!object) {
@@ -42,6 +44,7 @@ export default function DetailPanel({ object }) {
       setTleLoading(false)
       setShowMqttConfig(false)
       setShowOrbitCalculation(false)
+      setShowObservations(false)
       return
     }
 
@@ -247,6 +250,14 @@ export default function DetailPanel({ object }) {
             >
               Track on N2YO
             </a>
+          )}
+          {fullDocument?.canonical?.observational_data?.has_observations && fullDocument?.canonical?.norad_cat_id && (
+            <button
+              className="observations-button"
+              onClick={() => setShowObservations(true)}
+            >
+              Observations
+            </button>
           )}
           {currentTle && !currentTle._notFound && (currentTle.line1 || currentTle.line2) && (
             <button 
@@ -557,6 +568,14 @@ export default function DetailPanel({ object }) {
           satellite={fullDocument || object}
           tleData={currentTle}
           onClose={() => setShowOrbitCalculation(false)}
+        />
+      )}
+
+      {showObservations && (
+        <ObservationsModal
+          noradId={fullDocument?.canonical?.norad_cat_id}
+          objectName={fullDocument?.canonical?.name || object['Object Name']}
+          onClose={() => setShowObservations(false)}
         />
       )}
     </div>

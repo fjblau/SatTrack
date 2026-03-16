@@ -25,6 +25,7 @@ from database.connection import (
     EDGE_COLLECTION_COLLISION_RISK,
     EDGE_COLLECTION_SATELLITE_LINEAGE,
     COLLECTION_REG_DOCS,
+    COLLECTION_OBSERVATIONS,
     client,
     db,
     satellites_collection,
@@ -130,6 +131,7 @@ __all__ = [
     'EDGE_COLLECTION_COLLISION_RISK',
     'EDGE_COLLECTION_SATELLITE_LINEAGE',
     'COLLECTION_REG_DOCS',
+    'COLLECTION_OBSERVATIONS',
     'MQTT_CONFIG_COLLECTION',
     
     # Module-level variables

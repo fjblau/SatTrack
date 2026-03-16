@@ -6,7 +6,7 @@ import os
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations
 
 try:
     from dotenv import load_dotenv
@@ -52,3 +52,4 @@ app.include_router(documents.router)
 app.include_router(tle.router)
 app.include_router(mqtt.router)
 app.include_router(admin.router)
+app.include_router(observations.router)
