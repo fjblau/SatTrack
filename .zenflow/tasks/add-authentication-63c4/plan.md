@@ -48,7 +48,8 @@ Save to `{@artifacts_path}/spec.md` with:
 
 Detailed implementation plan created. Steps below replace the generic Implementation step.
 
-### [ ] Step: Backend auth router and config
+### [x] Step: Backend auth router and config
+<!-- chat-id: 0a7c9529-f98e-432a-9663-10e523ab4428 -->
 
 Implement backend authentication foundation:
 

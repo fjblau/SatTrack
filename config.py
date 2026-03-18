@@ -80,6 +80,19 @@ class OrbitalConstants:
     EARTH_RADIUS_KM: float = 6371.0
 
 
+class AuthConfig:
+    """Authentication configuration"""
+    USERNAME: str = os.getenv("APP_USERNAME", "admin")
+    PASSWORD: str = os.getenv("APP_PASSWORD", "")
+
+    def __init__(self):
+        import logging
+        if not self.PASSWORD:
+            logging.getLogger(__name__).warning(
+                "APP_PASSWORD is not set. Authentication will reject all login attempts."
+            )
+
+
 class Config:
     """Main configuration class"""
     database = DatabaseConfig()
@@ -87,6 +100,7 @@ class Config:
     api = APIConfig()
     external = ExternalServicesConfig()
     orbital = OrbitalConstants()
+    auth = AuthConfig()
 
 
 config = Config()
