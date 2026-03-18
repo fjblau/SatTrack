@@ -62,7 +62,8 @@ Implement backend authentication foundation:
 - Update `.env.example` to document `APP_USERNAME` and `APP_PASSWORD`
 - Write unit tests in `tests/unit/test_auth_router.py` covering: successful login, wrong password, logout invalidates token
 
-### [ ] Step: Backend auth middleware
+### [x] Step: Backend auth middleware
+<!-- chat-id: 2201bdf7-eeca-4fe2-bd28-4e44e2946034 -->
 
 Implement `api/middleware/auth.py` containing a Starlette middleware class that:
 
