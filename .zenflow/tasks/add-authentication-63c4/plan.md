@@ -92,7 +92,8 @@ Implement `api/middleware/auth.py` containing a Starlette middleware class that:
   `OrbitCalculationModal`, `SatelliteNeighborhood`, `DetailPanel`, `GraphExplorer`, `GraphViewer`, `MqttConfigModal`, `PathFinderPanel`, `RegistrationDocumentAnalytics`, `CentralityView`, `AdminPage`, `ObservationsModal`, `CollisionRiskView`, `EvolutionTimelineView`, `TimelineChart`, `ConstellationBrowser`, `ObservationsView`, `FunctionAnalytics`
 - Add `import apiFetch from '../utils/apiFetch'` (or relative path as appropriate) to each modified file
 
-### [ ] Step: Verification
+### [x] Step: Verification
+<!-- chat-id: b3bca599-125f-4cd9-b033-121034d1169d -->
 
 Run all checks and record results:
 
