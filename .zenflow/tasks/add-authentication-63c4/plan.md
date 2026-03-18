@@ -72,7 +72,8 @@ Implement `api/middleware/auth.py` containing a Starlette middleware class that:
 - Register the middleware in `api/main.py` (added **after** CORS middleware so CORS headers are present on 401 responses)
 - Write unit/integration tests in `tests/unit/test_auth_middleware.py` covering: unauthenticated request → 401, authenticated request → passes through, login endpoint bypassed
 
-### [ ] Step: Frontend apiFetch utility and LoginPage component
+### [x] Step: Frontend apiFetch utility and LoginPage component
+<!-- chat-id: 2de3ccf7-44a1-4c4a-b93a-577110fd8e51 -->
 
 - Create `react-app/src/utils/apiFetch.js`: wraps `fetch`, reads token from `sessionStorage`, injects `Authorization: Bearer` header; on 401 response clears `sessionStorage` and dispatches `"auth:expired"` window event; re-exports the same interface as `fetch` so callsites need minimal change
 - Create `react-app/src/components/LoginPage.jsx`: form with username + password fields; `POST /v2/auth/login`; on success calls `onLogin(token)` prop; on failure shows error message
