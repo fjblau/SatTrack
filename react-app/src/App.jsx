@@ -9,9 +9,12 @@ import FunctionAnalytics from './components/FunctionAnalytics'
 import RegistrationDocumentAnalytics from './components/RegistrationDocumentAnalytics'
 import AdminPage from './components/AdminPage'
 import ObservationsView from './components/ObservationsView'
+import LoginPage from './components/LoginPage'
+import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
 function App() {
+  const [token, setToken] = useState(() => sessionStorage.getItem('auth_token'))
   const [activeTab, setActiveTab] = useState('table')
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
   const [selectedAnalytics, setSelectedAnalytics] = useState('function-similarity')
@@ -41,6 +44,15 @@ function App() {
   ]
 
   useEffect(() => {
+    const handleAuthExpired = () => {
+      sessionStorage.removeItem('auth_token')
+      setToken(null)
+    }
+    window.addEventListener('auth:expired', handleAuthExpired)
+    return () => window.removeEventListener('auth:expired', handleAuthExpired)
+  }, [])
+
+  useEffect(() => {
     fetchFilterOptions()
     fetchLaunchYears()
   }, [])
@@ -57,11 +69,11 @@ function App() {
   const fetchFilterOptions = async () => {
     try {
       const [countriesRes, statusesRes, orbitalBandsRes, congestionRisksRes, objectTypesRes] = await Promise.all([
-        fetch(API_ENDPOINTS.COUNTRIES),
-        fetch(API_ENDPOINTS.STATUSES),
-        fetch(API_ENDPOINTS.ORBITAL_BANDS),
-        fetch(API_ENDPOINTS.CONGESTION_RISKS),
-        fetch(API_ENDPOINTS.OBJECT_TYPES)
+        apiFetch(API_ENDPOINTS.COUNTRIES),
+        apiFetch(API_ENDPOINTS.STATUSES),
+        apiFetch(API_ENDPOINTS.ORBITAL_BANDS),
+        apiFetch(API_ENDPOINTS.CONGESTION_RISKS),
+        apiFetch(API_ENDPOINTS.OBJECT_TYPES)
       ])
       const countriesData = await countriesRes.json()
       const statusesData = await statusesRes.json()
@@ -86,7 +98,7 @@ function App() {
 
   const fetchLaunchYears = async () => {
     try {
-      const response = await fetch(API_ENDPOINTS.GRAPHS.STATS)
+      const response = await apiFetch(API_ENDPOINTS.GRAPHS.STATS)
       const data = await response.json()
       
       if (data.data && data.data.recent_launch_years) {
@@ -121,7 +133,7 @@ function App() {
     params.append('limit', limit)
 
     try {
-      const response = await fetch(`${API_ENDPOINTS.SEARCH}?${params}`)
+      const response = await apiFetch(`${API_ENDPOINTS.SEARCH}?${params}`)
       const data = await response.json()
       
       const objects = data.data.map(item => {
@@ -164,6 +176,19 @@ function App() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleLogin = (newToken) => {
+    setToken(newToken)
+  }
+
+  const handleLogout = async () => {
+    try {
+      await apiFetch('/v2/auth/logout', { method: 'POST' })
+    } catch {
+    }
+    sessionStorage.removeItem('auth_token')
+    setToken(null)
   }
 
   const handleFilterChange = (newFilters) => {
@@ -216,6 +241,10 @@ function App() {
     return 0
   })
 
+  if (!token) {
+    return <LoginPage onLogin={handleLogin} />
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -260,6 +289,7 @@ function App() {
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
         {activeTab === 'observations' && <p>Observational Data</p>}
+        <button className="logout-button" onClick={handleLogout}>Logout</button>
       </header>
       
       {activeTab === 'table' && (

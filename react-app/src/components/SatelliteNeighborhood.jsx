@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './SatelliteNeighborhood.css'
 
@@ -176,7 +177,7 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
 
     setSearching(true)
     try {
-      const response = await fetch(`/v2/search?q=${encodeURIComponent(query)}&limit=10`)
+      const response = await apiFetch(`/v2/search?q=${encodeURIComponent(query)}&limit=10`)
       const result = await response.json()
       
       if (result.data && Array.isArray(result.data)) {
@@ -207,7 +208,7 @@ function SatelliteNeighborhood({ onNeighborhoodLoad }) {
       
       edgeTypes.forEach(type => params.append('edge_types', type))
       
-      const response = await fetch(`/v2/graphs/satellite/${encodeURIComponent(satelliteId)}/neighborhood?${params}`)
+      const response = await apiFetch(`/v2/graphs/satellite/${encodeURIComponent(satelliteId)}/neighborhood?${params}`)
       
       if (!response.ok) {
         throw new Error(`Failed to load neighborhood: ${response.statusText}`)

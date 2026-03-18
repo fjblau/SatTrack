@@ -79,7 +79,8 @@ Implement `api/middleware/auth.py` containing a Starlette middleware class that:
 - Create `react-app/src/components/LoginPage.jsx`: form with username + password fields; `POST /v2/auth/login`; on success calls `onLogin(token)` prop; on failure shows error message
 - Create `react-app/src/components/LoginPage.css`: basic centered card styles consistent with existing `.app-header` / component styles
 
-### [ ] Step: Wire auth into App.jsx and replace fetch in all components
+### [x] Step: Wire auth into App.jsx and replace fetch in all components
+<!-- chat-id: 1e0b6f0a-4ae8-4422-b84e-e32ef7c2c83c -->
 
 - Modify `react-app/src/App.jsx`:
   - Add `token` state initialised from `sessionStorage.getItem("auth_token")`

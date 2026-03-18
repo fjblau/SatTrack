@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './FunctionAnalytics.css'
 import { API_ENDPOINTS } from '../config/constants'
@@ -16,7 +17,7 @@ function FunctionAnalytics() {
   const loadFunctionData = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_ENDPOINTS.GRAPHS.FUNCTION_SIMILARITY}?view_mode=aggregate&top_n=20`)
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.FUNCTION_SIMILARITY}?view_mode=aggregate&top_n=20`)
       const data = await response.json()
       
       if (data.data && data.data.nodes) {

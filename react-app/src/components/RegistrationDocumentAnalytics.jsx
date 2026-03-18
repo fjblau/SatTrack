@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './RegistrationDocumentAnalytics.css'
 import { API_ENDPOINTS } from '../config/constants'
@@ -24,7 +25,7 @@ function RegistrationDocumentAnalytics() {
         params.append('search', searchTerm)
       }
 
-      const response = await fetch(`${API_ENDPOINTS.GRAPHS.REGISTRATION_DOCUMENTS_ANALYTICS}?${params}`)
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.REGISTRATION_DOCUMENTS_ANALYTICS}?${params}`)
       const data = await response.json()
       
       if (data.data) {

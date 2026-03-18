@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState } from 'react'
 import './PathFinderPanel.css'
 
@@ -24,7 +25,7 @@ function PathFinderPanel({ onPathSelect }) {
         algorithm: algorithm
       })
 
-      const response = await fetch(`/v2/graphs/paths/${encodeURIComponent(fromSatellite)}/${encodeURIComponent(toSatellite)}?${params}`)
+      const response = await apiFetch(`/v2/graphs/paths/${encodeURIComponent(fromSatellite)}/${encodeURIComponent(toSatellite)}?${params}`)
       const data = await response.json()
 
       if (response.ok && data.data) {

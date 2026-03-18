@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './EvolutionTimelineView.css'
 import { API_ENDPOINTS } from '../config/constants'
@@ -74,7 +75,7 @@ function EvolutionTimelineView({ onTimelineLoad }) {
       const url = `${API_ENDPOINTS.GRAPHS.EVOLUTION_TIMELINE}?${params}`
       console.log('[EvolutionTimelineView] Fetching:', url)
       
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       console.log('[EvolutionTimelineView] Response status:', response.status)
       
       if (!response.ok) {

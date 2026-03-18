@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState } from 'react'
 import './CentralityView.css'
 
@@ -46,7 +47,7 @@ function CentralityView({ onCentralitySelect }) {
 
       console.log(`[CentralityView] Fetching centrality: metric=${metricType}, edge_types=[${edgeTypes.join(',')}], limit=${topN}`)
       
-      const response = await fetch(`/v2/graphs/analytics/centrality?${params}`)
+      const response = await apiFetch(`/v2/graphs/analytics/centrality?${params}`)
       
       if (!response.ok) {
         const data = await response.json()

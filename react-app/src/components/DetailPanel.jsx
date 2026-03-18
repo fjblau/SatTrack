@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './DetailPanel.css'
 import DataRecordModal from './DataRecordModal'
@@ -55,7 +56,7 @@ export default function DetailPanel({ object }) {
       const fetchDocLink = async () => {
         setDocLoading(true)
         try {
-          const response = await fetch(
+          const response = await apiFetch(
             `${API_ENDPOINTS.DOCUMENTS.RESOLVE}?path=${encodeURIComponent(object['Registration Document'])}`
           )
           if (response.ok) {
@@ -81,7 +82,7 @@ export default function DetailPanel({ object }) {
       setError(null)
       try {
         const identifier = object._mongodb_id || object['International Designator']
-        const response = await fetch(`${API_ENDPOINTS.SATELLITE_DETAIL}/${encodeURIComponent(identifier)}`)
+        const response = await apiFetch(`${API_ENDPOINTS.SATELLITE_DETAIL}/${encodeURIComponent(identifier)}`)
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
         }
@@ -116,7 +117,7 @@ export default function DetailPanel({ object }) {
       const fetchMetadata = async () => {
         setMetadataLoading(true)
         try {
-          const response = await fetch(
+          const response = await apiFetch(
             `${API_ENDPOINTS.DOCUMENTS.METADATA}?url=${encodeURIComponent(docLink)}`
           )
           if (response.ok) {
@@ -149,7 +150,7 @@ export default function DetailPanel({ object }) {
         let data = null
 
         if (noradId) {
-          const response = await fetch(
+          const response = await apiFetch(
             `${API_ENDPOINTS.TLE}/${encodeURIComponent(noradId)}`
           )
           if (response.ok) {
@@ -158,7 +159,7 @@ export default function DetailPanel({ object }) {
         }
 
         if ((!data?.data) && debris && intlDes) {
-          const response = await fetch(
+          const response = await apiFetch(
             `${API_ENDPOINTS.TLE_INTLDES}/${encodeURIComponent(intlDes)}`
           )
           if (response.ok) {
@@ -171,7 +172,7 @@ export default function DetailPanel({ object }) {
           const resolvedNoradId = noradId || data.data.norad_cat_id
           const identifier = object._mongodb_id || object['International Designator']
           if (resolvedNoradId && identifier) {
-            fetch(
+           apiFetch(
               `${API_ENDPOINTS.TLE}/${encodeURIComponent(resolvedNoradId)}/persist`,
               {
                 method: 'POST',

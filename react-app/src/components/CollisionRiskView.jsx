@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './CollisionRiskView.css'
 
@@ -18,7 +19,7 @@ function CollisionRiskView({ onCollisionRiskSelect }) {
   const loadOrbitalBands = async () => {
     try {
       console.log('[CollisionRiskView] Loading orbital bands...')
-      const response = await fetch('/v2/graphs/stats')
+      const response = await apiFetch('/v2/graphs/stats')
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -74,7 +75,7 @@ function CollisionRiskView({ onCollisionRiskSelect }) {
         console.log(`[CollisionRiskView] Loading clusters: min_size=${minClusterSize}, band=${selectedOrbitalBand || 'all'}`)
       }
 
-      const response = await fetch(`${endpoint}?${params}`)
+      const response = await apiFetch(`${endpoint}?${params}`)
       
       if (!response.ok) {
         const data = await response.json()

@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './ObservationsModal.css'
 import { API_ENDPOINTS } from '../config/constants'
@@ -95,7 +96,7 @@ export default function ObservationsModal({ noradId, objectName, onClose }) {
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(`${API_ENDPOINTS.OBSERVATIONS}/${encodeURIComponent(noradId)}`)
+        const response = await apiFetch(`${API_ENDPOINTS.OBSERVATIONS}/${encodeURIComponent(noradId)}`)
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
         }

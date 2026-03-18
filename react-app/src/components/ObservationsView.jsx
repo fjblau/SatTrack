@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import ObservationsFilters from './ObservationsFilters'
 import './ObservationsModal.css'
@@ -106,7 +107,7 @@ export default function ObservationsView() {
 
   const fetchFilterOptions = async () => {
     try {
-      const response = await fetch(`${API_ENDPOINTS.OBSERVATIONS}/filter-options`)
+      const response = await apiFetch(`${API_ENDPOINTS.OBSERVATIONS}/filter-options`)
       if (!response.ok) return
       const data = await response.json()
       setFilterOptions(data)
@@ -137,7 +138,7 @@ export default function ObservationsView() {
     params.append('limit', limit)
 
     try {
-      const response = await fetch(`${API_ENDPOINTS.OBSERVATIONS}?${params}`)
+      const response = await apiFetch(`${API_ENDPOINTS.OBSERVATIONS}?${params}`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       setObservations(data.data || [])
