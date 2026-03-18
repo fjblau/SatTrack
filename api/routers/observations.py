@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, field_validator, model_validator, ConfigDict
 from typing import Optional
+from datetime import datetime
 
 import database as db_module
 from database.connection import COLLECTION_OBSERVATIONS
@@ -19,6 +21,253 @@ def get_observations_collection():
     if not db.has_collection(COLLECTION_OBSERVATIONS):
         raise HTTPException(status_code=503, detail="Observations collection not found")
     return db.collection(COLLECTION_OBSERVATIONS)
+
+
+class ThermalData(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    anomaly_flag: Optional[bool] = None
+
+
+class ObservationInput(BaseModel):
+    model_config = ConfigDict(extra='allow')
+
+    norad_id: int
+    observation_epoch: str
+    source: str
+    object_name: Optional[str] = None
+    object_type: Optional[str] = None
+    origin_country: Optional[str] = None
+    derived_health_score: Optional[float] = None
+    estimated_mass_kg: Optional[float] = None
+    spin_rate_rpm: Optional[float] = None
+    thermal: Optional[ThermalData] = None
+
+    @field_validator('norad_id')
+    @classmethod
+    def norad_id_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError('norad_id must be a positive integer')
+        return v
+
+    @field_validator('observation_epoch')
+    @classmethod
+    def valid_iso_epoch(cls, v: str) -> str:
+        try:
+            datetime.fromisoformat(v.replace('Z', '+00:00'))
+        except ValueError:
+            raise ValueError('observation_epoch must be a valid ISO 8601 datetime string')
+        return v
+
+    @field_validator('source')
+    @classmethod
+    def source_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError('source must not be empty')
+        return v.strip()
+
+    @field_validator('estimated_mass_kg')
+    @classmethod
+    def mass_non_negative(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v < 0:
+            raise ValueError('estimated_mass_kg must be non-negative')
+        return v
+
+    @field_validator('spin_rate_rpm')
+    @classmethod
+    def spin_non_negative(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v < 0:
+            raise ValueError('spin_rate_rpm must be non-negative')
+        return v
+
+    @field_validator('derived_health_score')
+    @classmethod
+    def health_score_range(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and not (0.0 <= v <= 100.0):
+            raise ValueError('derived_health_score must be between 0 and 100')
+        return v
+
+
+class ObservationImportRequest(BaseModel):
+    observations: list[ObservationInput]
+
+    @model_validator(mode='after')
+    def list_not_empty(self) -> 'ObservationImportRequest':
+        if not self.observations:
+            raise ValueError('observations list must not be empty')
+        return self
+
+
+@router.post("/v2/observations/import")
+def import_observations(body: ObservationImportRequest):
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    if not db.has_collection(COLLECTION_OBSERVATIONS):
+        raise HTTPException(status_code=503, detail="Observations collection not found")
+
+    observations = body.observations
+
+    norad_ids = list({obs.norad_id for obs in observations})
+    allowed_cursor = db.aql.execute(
+        """
+        FOR sat IN satellites
+            FILTER sat.canonical.norad_cat_id IN @norad_ids
+            FILTER sat.canonical.observations_enabled == true
+            RETURN sat.canonical.norad_cat_id
+        """,
+        bind_vars={"norad_ids": norad_ids}
+    )
+    allowed_set = set(list(allowed_cursor))
+
+    dedup_keys = [(obs.norad_id, obs.observation_epoch, obs.source) for obs in observations]
+    dedup_norad_ids = [k[0] for k in dedup_keys]
+    dedup_epochs = [k[1] for k in dedup_keys]
+    dedup_sources = [k[2] for k in dedup_keys]
+    existing_cursor = db.aql.execute(
+        """
+        FOR obs IN observations
+            FILTER obs.norad_id IN @norad_ids
+            FILTER obs.observation_epoch IN @epochs
+            FILTER obs.source IN @sources
+            RETURN {norad_id: obs.norad_id, observation_epoch: obs.observation_epoch, source: obs.source}
+        """,
+        bind_vars={
+            "norad_ids": dedup_norad_ids,
+            "epochs": dedup_epochs,
+            "sources": dedup_sources,
+        }
+    )
+    existing_set = {
+        (r["norad_id"], r["observation_epoch"], r["source"])
+        for r in list(existing_cursor)
+    }
+
+    inserted = 0
+    skipped_duplicates = 0
+    skipped_not_allowed = 0
+    errors = []
+
+    for obs in observations:
+        key = (obs.norad_id, obs.observation_epoch, obs.source)
+
+        if obs.norad_id not in allowed_set:
+            skipped_not_allowed += 1
+            errors.append({
+                "norad_id": obs.norad_id,
+                "observation_epoch": obs.observation_epoch,
+                "source": obs.source,
+                "error": "norad_id not in allowed tracking list",
+            })
+            continue
+
+        if key in existing_set:
+            skipped_duplicates += 1
+            continue
+
+        doc = obs.model_dump(exclude_none=True)
+        if doc.get("thermal") is not None:
+            doc["thermal"] = obs.thermal.model_dump(exclude_none=True)
+
+        try:
+            db.collection(COLLECTION_OBSERVATIONS).insert(doc)
+            existing_set.add(key)
+            inserted += 1
+        except Exception as e:
+            errors.append({
+                "norad_id": obs.norad_id,
+                "observation_epoch": obs.observation_epoch,
+                "source": obs.source,
+                "error": str(e),
+            })
+
+    return {
+        "inserted": inserted,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_not_allowed": skipped_not_allowed,
+        "errors": errors,
+        "total_submitted": len(observations),
+    }
+
+
+@router.get("/v2/observations/allowed-objects")
+def get_allowed_objects():
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    cursor = db.aql.execute(
+        """
+        FOR sat IN satellites
+            FILTER sat.canonical.observations_enabled == true
+            RETURN {
+                norad_id: sat.canonical.norad_cat_id,
+                name: sat.canonical.name
+            }
+        """
+    )
+    results = list(cursor)
+    return {"data": results, "total": len(results)}
+
+
+@router.put("/v2/observations/allowed-objects/{norad_id}")
+def enable_observations_for_object(norad_id: int):
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    cursor = db.aql.execute(
+        """
+        FOR sat IN satellites
+            FILTER sat.canonical.norad_cat_id == @norad_id
+            LIMIT 1
+            RETURN sat._key
+        """,
+        bind_vars={"norad_id": norad_id}
+    )
+    keys = list(cursor)
+    if not keys:
+        raise HTTPException(status_code=404, detail=f"Satellite with norad_id {norad_id} not found")
+
+    db.aql.execute(
+        """
+        FOR sat IN satellites
+            FILTER sat.canonical.norad_cat_id == @norad_id
+            UPDATE sat WITH {canonical: MERGE(sat.canonical, {observations_enabled: true})} IN satellites
+        """,
+        bind_vars={"norad_id": norad_id}
+    )
+    return {"norad_id": norad_id, "observations_enabled": True}
+
+
+@router.delete("/v2/observations/allowed-objects/{norad_id}")
+def disable_observations_for_object(norad_id: int):
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    cursor = db.aql.execute(
+        """
+        FOR sat IN satellites
+            FILTER sat.canonical.norad_cat_id == @norad_id
+            LIMIT 1
+            RETURN sat._key
+        """,
+        bind_vars={"norad_id": norad_id}
+    )
+    keys = list(cursor)
+    if not keys:
+        raise HTTPException(status_code=404, detail=f"Satellite with norad_id {norad_id} not found")
+
+    db.aql.execute(
+        """
+        FOR sat IN satellites
+            FILTER sat.canonical.norad_cat_id == @norad_id
+            UPDATE sat WITH {canonical: MERGE(sat.canonical, {observations_enabled: false})} IN satellites
+        """,
+        bind_vars={"norad_id": norad_id}
+    )
+    return {"norad_id": norad_id, "observations_enabled": False}
 
 
 @router.get("/v2/observations/filter-options")
