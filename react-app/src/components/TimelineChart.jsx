@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect, useRef } from 'react'
 import './TimelineChart.css'
 import { API_ENDPOINTS, CHART_DIMENSIONS, MONTH_NAMES, FILTER_LABELS } from '../config/constants'
@@ -43,7 +44,7 @@ function TimelineChart({ selectedTimePeriod }) {
 
   const loadFilterOptions = async () => {
     try {
-      const response = await fetch(API_ENDPOINTS.GRAPHS.TIMELINE_FILTER_OPTIONS)
+      const response = await apiFetch(API_ENDPOINTS.GRAPHS.TIMELINE_FILTER_OPTIONS)
       const result = await response.json()
       
       if (result.data) {
@@ -68,7 +69,7 @@ function TimelineChart({ selectedTimePeriod }) {
       
       console.log('Loading timeline data from:', url)
       
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       const result = await response.json()
       
       if (result.data && result.data.recent_launch_years) {
@@ -97,7 +98,7 @@ function TimelineChart({ selectedTimePeriod }) {
         ? `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN}/${year}?${params.toString()}`
         : `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN}/${year}`
       
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       const result = await response.json()
       
       if (result.data) {
@@ -121,7 +122,7 @@ function TimelineChart({ selectedTimePeriod }) {
         ? `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_MONTHLY}/${year}?${params.toString()}`
         : `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_MONTHLY}/${year}`
       
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       const result = await response.json()
       
       if (result.data && result.data.monthly_data) {
@@ -147,7 +148,7 @@ function TimelineChart({ selectedTimePeriod }) {
         ? `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN_MONTHLY}/${year}/${month}?${params.toString()}`
         : `${API_ENDPOINTS.GRAPHS.LAUNCH_TIMELINE_BREAKDOWN_MONTHLY}/${year}/${month}`
       
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       const result = await response.json()
       
       if (result.data) {

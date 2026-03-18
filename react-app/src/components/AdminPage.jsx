@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect, useRef } from 'react'
 import './AdminPage.css'
 
@@ -17,7 +18,7 @@ function AdminPage() {
   const fetchScripts = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/v2/admin/scripts')
+      const response = await apiFetch('/v2/admin/scripts')
       const data = await response.json()
       setScripts(data.scripts || [])
     } catch (error) {
@@ -29,7 +30,7 @@ function AdminPage() {
 
   const runScript = async (scriptId) => {
     try {
-      const response = await fetch(`/v2/admin/scripts/${scriptId}/run`, {
+      const response = await apiFetch(`/v2/admin/scripts/${scriptId}/run`, {
         method: 'POST'
       })
       const data = await response.json()
@@ -52,7 +53,7 @@ function AdminPage() {
 
   const pollRun = async (scriptId, runId) => {
     try {
-      const response = await fetch(`/v2/admin/runs/${runId}`)
+      const response = await apiFetch(`/v2/admin/runs/${runId}`)
       const data = await response.json()
 
       setRuns(prev => ({

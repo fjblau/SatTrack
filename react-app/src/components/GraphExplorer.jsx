@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import GraphViewer from './GraphViewer'
 import PathFinderPanel from './PathFinderPanel'
@@ -40,7 +41,7 @@ function GraphExplorer() {
   const loadGraphStats = async () => {
     setLoading(true)
     try {
-      const response = await fetch(API_ENDPOINTS.GRAPHS.STATS)
+      const response = await apiFetch(API_ENDPOINTS.GRAPHS.STATS)
       const data = await response.json()
       
       if (data.data) {
@@ -64,7 +65,7 @@ function GraphExplorer() {
 
   const loadFunctionCategories = async () => {
     try {
-      const response = await fetch(`${API_ENDPOINTS.GRAPHS.FUNCTION_SIMILARITY}?top_n=15`)
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.FUNCTION_SIMILARITY}?top_n=15`)
       const data = await response.json()
       
       if (data.data && data.data.clusters) {
@@ -114,7 +115,7 @@ function GraphExplorer() {
 
   const loadCountryRelations = async () => {
     try {
-      const response = await fetch(`${API_ENDPOINTS.GRAPHS.COUNTRY_RELATIONS}?min_satellites=${GRAPH_SETTINGS.COUNTRY_RELATIONS_MIN_SATELLITES}&limit_countries=${GRAPH_SETTINGS.COUNTRY_RELATIONS_LIMIT}`)
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.COUNTRY_RELATIONS}?min_satellites=${GRAPH_SETTINGS.COUNTRY_RELATIONS_MIN_SATELLITES}&limit_countries=${GRAPH_SETTINGS.COUNTRY_RELATIONS_LIMIT}`)
       const data = await response.json()
       
       if (data.data && data.data.nodes) {
@@ -143,7 +144,7 @@ function GraphExplorer() {
     
     setSearchingsatellite(true)
     try {
-      const response = await fetch(`${API_ENDPOINTS.SEARCH}?q=${encodeURIComponent(query)}&limit=10`)
+      const response = await apiFetch(`${API_ENDPOINTS.SEARCH}?q=${encodeURIComponent(query)}&limit=10`)
       const data = await response.json()
       
       if (data.data) {

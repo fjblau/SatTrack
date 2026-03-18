@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './MqttConfigModal.css'
 
@@ -26,7 +27,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(`/v2/mqtt/config/${encodeURIComponent(satelliteId)}`)
+        const response = await apiFetch(`/v2/mqtt/config/${encodeURIComponent(satelliteId)}`)
         if (response.ok) {
           const data = await response.json()
           if (data) {
@@ -179,7 +180,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       
       console.log('Saving MQTT config with payload:', { ...payload, mqtt_broker: { ...payload.mqtt_broker, password: '***' } })
 
-      const response = await fetch('/v2/mqtt/config', {
+      const response = await apiFetch('/v2/mqtt/config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -235,7 +236,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
 
     try {
       const satelliteId = satellite._id || satellite._mongodb_id
-      const response = await fetch(`/v2/mqtt/config/${encodeURIComponent(satelliteId)}`, {
+      const response = await apiFetch(`/v2/mqtt/config/${encodeURIComponent(satelliteId)}`, {
         method: 'DELETE'
       })
 
@@ -274,7 +275,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
     setSuccess(null)
 
     try {
-      const response = await fetch('/v2/mqtt/test-connection', {
+      const response = await apiFetch('/v2/mqtt/test-connection', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -316,7 +317,7 @@ export default function MqttConfigModal({ satellite, tleData, onClose }) {
       const satelliteId = satellite._id || satellite._mongodb_id
       console.log('Publishing now for satellite:', satelliteId)
       
-      const response = await fetch(`/v2/mqtt/publish-now/${encodeURIComponent(satelliteId)}`, {
+      const response = await apiFetch(`/v2/mqtt/publish-now/${encodeURIComponent(satelliteId)}`, {
         method: 'POST'
       })
 

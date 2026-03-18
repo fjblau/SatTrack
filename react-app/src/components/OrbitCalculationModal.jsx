@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './OrbitCalculationModal.css'
 
@@ -38,7 +39,7 @@ export default function OrbitCalculationModal({ satellite, tleData, onClose }) {
         throw new Error('NORAD ID not found')
       }
 
-      const response = await fetch(`/v2/tle/${noradId}/orbit?interval_minutes=${interval}`)
+      const response = await apiFetch(`/v2/tle/${noradId}/orbit?interval_minutes=${interval}`)
       
       if (!response.ok) {
         if (response.status === 404) {

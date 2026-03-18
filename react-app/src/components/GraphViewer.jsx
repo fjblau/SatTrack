@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useEffect, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import cola from 'cytoscape-cola'
@@ -516,7 +517,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
     try {
       const url = `/v2/graphs/constellation/${encodeURIComponent(constellation)}?limit=100`
       console.log('[GraphViewer] Fetching:', url)
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       console.log('[GraphViewer] Response status:', response.status)
       
       if (!response.ok) {
@@ -581,7 +582,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
     try {
       const url = `/v2/graphs/orbital-proximity/${encodeURIComponent(orbitalBand)}?limit=100`
       console.log('[GraphViewer] Fetching:', url)
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       console.log('[GraphViewer] Response status:', response.status)
       
       if (!response.ok) {
@@ -699,7 +700,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       
       const url = `/v2/graphs/function-similarity?${params.toString()}`
       console.log('[GraphViewer] Fetching:', url)
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       console.log('[GraphViewer] Response status:', response.status)
       
       if (!response.ok) {
@@ -992,7 +993,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
     try {
       const url = '/v2/graphs/country-relations?min_satellites=10&limit_countries=100'
       console.log('[GraphViewer] Fetching:', url)
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       console.log('[GraphViewer] Response status:', response.status)
       
       if (!response.ok) {
@@ -1670,7 +1671,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       const url = `/v2/graphs/communities?algorithm=${encodeURIComponent(algorithm)}&min_size=${minSize}`
       console.log('[GraphViewer] Fetching:', url)
       
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       console.log('[GraphViewer] Response status:', response.status)
       
       if (!response.ok) {
@@ -1835,7 +1836,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       const cleanId = satelliteId.includes('/') ? satelliteId.split('/')[1] : satelliteId
       const url = `/v2/graphs/lineage/${encodeURIComponent(cleanId)}?direction=both&max_depth=5`
       console.log('[GraphViewer] Fetching:', url)
-      const response = await fetch(url)
+      const response = await apiFetch(url)
       console.log('[GraphViewer] Response status:', response.status)
       
       if (!response.ok) {
@@ -2037,7 +2038,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         return
       }
       
-      const response = await fetch(`/v2/satellite/${satelliteId}`)
+      const response = await apiFetch(`/v2/satellite/${satelliteId}`)
       if (!response.ok) throw new Error('Failed to fetch satellite details')
       
       const result = await response.json()
@@ -2073,7 +2074,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         return
       }
       
-      const response = await fetch(`/v2/registration-documents/${docId}`)
+      const response = await apiFetch(`/v2/registration-documents/${docId}`)
       if (!response.ok) throw new Error('Failed to fetch registration document')
       
       const result = await response.json()

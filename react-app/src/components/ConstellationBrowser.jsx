@@ -1,3 +1,4 @@
+import apiFetch from '../utils/apiFetch'
 import { useState, useEffect } from 'react'
 import './ConstellationBrowser.css'
 
@@ -12,7 +13,7 @@ function ConstellationBrowser({ constellations, onConstellationSelect }) {
     setError(null)
     
     try {
-      const response = await fetch(`/v2/graphs/constellation/${encodeURIComponent(constellationName)}?limit=100`)
+      const response = await apiFetch(`/v2/graphs/constellation/${encodeURIComponent(constellationName)}?limit=100`)
       
       if (!response.ok) {
         throw new Error(`Failed to load constellation: ${response.statusText}`)

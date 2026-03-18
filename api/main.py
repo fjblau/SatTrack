@@ -6,7 +6,8 @@ import os
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth
+from api.middleware.auth import AuthMiddleware
 
 try:
     from dotenv import load_dotenv
@@ -44,7 +45,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuthMiddleware)
 
+app.include_router(auth.router)
 app.include_router(satellites.router)
 app.include_router(metadata.router)
 app.include_router(graphs.router)
