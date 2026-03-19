@@ -15,7 +15,7 @@ function isDebrisObject(object) {
   return DEBRIS_OBJECT_TYPES.some(t => type.includes(t))
 }
 
-export default function DetailPanel({ object }) {
+export default function DetailPanel({ object, isDemo = false }) {
   const [orbitalState, setOrbitalState] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -252,7 +252,7 @@ export default function DetailPanel({ object }) {
               Track on N2YO
             </a>
           )}
-          {fullDocument?.canonical?.observational_data?.has_observations && fullDocument?.canonical?.norad_cat_id && (
+          {!isDemo && fullDocument?.canonical?.observational_data?.has_observations && fullDocument?.canonical?.norad_cat_id && (
             <button
               className="observations-button"
               onClick={() => setShowObservations(true)}
