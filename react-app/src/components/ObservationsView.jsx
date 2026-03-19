@@ -128,14 +128,13 @@ export default function ObservationsView() {
   const [page, setPage] = useState(0)
   const [observations, setObservations] = useState([])
   const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const limit = PAGINATION.DEFAULT_PAGE_SIZE
 
   useEffect(() => {
     fetchFilterOptions()
-    fetchObservations(0)
   }, [])
 
   useEffect(() => {
