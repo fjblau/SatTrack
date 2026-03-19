@@ -22,7 +22,8 @@ function LoginPage({ onLogin }) {
       if (response.ok) {
         const data = await response.json()
         sessionStorage.setItem('auth_token', data.token)
-        onLogin(data.token)
+        sessionStorage.setItem('is_demo', data.is_demo ? 'true' : 'false')
+        onLogin(data.token, data.is_demo)
       } else {
         setError('Invalid username or password')
       }

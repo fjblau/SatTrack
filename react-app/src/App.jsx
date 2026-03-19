@@ -15,6 +15,7 @@ import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/con
 
 function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('auth_token'))
+  const [isDemo, setIsDemo] = useState(() => sessionStorage.getItem('is_demo') === 'true')
   const [activeTab, setActiveTab] = useState('table')
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
   const [selectedAnalytics, setSelectedAnalytics] = useState('function-similarity')
@@ -178,8 +179,9 @@ function App() {
     }
   }
 
-  const handleLogin = (newToken) => {
+  const handleLogin = (newToken, newIsDemo = false) => {
     setToken(newToken)
+    setIsDemo(newIsDemo)
   }
 
   const handleLogout = async () => {
@@ -188,7 +190,9 @@ function App() {
     } catch {
     }
     sessionStorage.removeItem('auth_token')
+    sessionStorage.removeItem('is_demo')
     setToken(null)
+    setIsDemo(false)
   }
 
   const handleFilterChange = (newFilters) => {
@@ -256,12 +260,14 @@ function App() {
           >
             Table View
           </button>
-          <button 
-            className={activeTab === 'observations' ? 'active' : ''}
-            onClick={() => setActiveTab('observations')}
-          >
-            Observations
-          </button>
+          {!isDemo && (
+            <button 
+              className={activeTab === 'observations' ? 'active' : ''}
+              onClick={() => setActiveTab('observations')}
+            >
+              Observations
+            </button>
+          )}
           <button 
             className={activeTab === 'graphs' ? 'active' : ''}
             onClick={() => setActiveTab('graphs')}
@@ -330,13 +336,13 @@ function App() {
                 </div>
               )}
               
-              <DetailPanel object={selectedObject} />
+              <DetailPanel object={selectedObject} isDemo={isDemo} />
             </div>
           </main>
         </div>
       )}
 
-      {activeTab === 'observations' && (
+      {activeTab === 'observations' && !isDemo && (
         <ObservationsView />
       )}
 
