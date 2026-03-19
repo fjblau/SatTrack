@@ -1,5 +1,5 @@
 {
-  "setup_script": "pip install -r requirements.txt && cd react-app && npm install",
+  "setup_script": "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs && pip install -r requirements.txt && cd react-app && npm install",
   "dev_script": "./start.sh",
   "copy_files": [".env"]
 }

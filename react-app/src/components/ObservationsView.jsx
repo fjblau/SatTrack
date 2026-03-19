@@ -85,6 +85,23 @@ function formatCell(value) {
   return String(value)
 }
 
+function healthScoreStyle(value) {
+  if (value === null || value === undefined || typeof value !== 'number') return {}
+  const clamped = Math.max(0, Math.min(1, value))
+  const r = Math.round(255 * (1 - clamped))
+  const g = Math.round(200 * clamped)
+  return {
+    backgroundColor: `rgb(${r}, ${g}, 40)`,
+    color: '#fff',
+    fontWeight: 600,
+    borderRadius: '4px',
+    padding: '2px 6px',
+    display: 'inline-block',
+    minWidth: '3rem',
+    textAlign: 'center',
+  }
+}
+
 export default function ObservationsView() {
   const [filters, setFilters] = useState({})
   const [filterOptions, setFilterOptions] = useState({ sources: [], object_types: [], origin_countries: [] })
@@ -204,7 +221,11 @@ export default function ObservationsView() {
                   {observations.map((obs, rowIdx) => (
                     <tr key={obs._key || rowIdx} className={rowIdx % 2 === 0 ? 'row-even' : 'row-odd'}>
                       {TOP_LEVEL_COLUMNS.map(col => (
-                        <td key={col.key}>{formatCell(obs[col.key])}</td>
+                        <td key={col.key}>
+                          {col.key === 'derived_health_score'
+                            ? <span style={healthScoreStyle(obs[col.key])}>{formatCell(obs[col.key])}</span>
+                            : formatCell(obs[col.key])}
+                        </td>
                       ))}
                       {SECTION_COLUMNS.map(sec => {
                         const nested = obs[SECTION_FIELD_KEYS[sec.section]] || {}
