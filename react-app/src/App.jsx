@@ -23,7 +23,7 @@ function App() {
   const [objects, setObjects] = useState([])
   const [filters, setFilters] = useState({})
   const [selectedObject, setSelectedObject] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
   const [filterOptions, setFilterOptions] = useState({})
