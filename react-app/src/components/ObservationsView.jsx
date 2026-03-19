@@ -242,7 +242,7 @@ export default function ObservationsView() {
                       {TOP_LEVEL_COLUMNS.map(col => (
                         <td key={col.key}>
                           {col.key === 'derived_health_score'
-                            ? <span style={healthScoreStyle(obs[col.key])}>{formatCell(obs[col.key])}</span>
+                            ? <span style={healthScoreStyle(obs[col.key])}>{typeof obs[col.key] === 'number' ? obs[col.key].toFixed(2) : '—'}</span>
                             : formatCell(obs[col.key])}
                         </td>
                       ))}
