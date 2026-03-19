@@ -85,13 +85,34 @@ function formatCell(value) {
   return String(value)
 }
 
+const HEALTH_GRADIENT = [
+  { stop: 0,   r: 0xFF, g: 0x06, b: 0x0D },
+  { stop: 20,  r: 0xFF, g: 0x4E, b: 0x11 },
+  { stop: 40,  r: 0xFF, g: 0x8E, b: 0x15 },
+  { stop: 60,  r: 0xFA, g: 0xB7, b: 0x33 },
+  { stop: 80,  r: 0xAC, g: 0xB3, b: 0x34 },
+  { stop: 100, r: 0x69, g: 0xB3, b: 0x4C },
+]
+
 function healthScoreStyle(value) {
   if (value === null || value === undefined || typeof value !== 'number') return {}
-  const clamped = Math.max(0, Math.min(100, value)) / 100
-  const hue = clamped * 120
+  const score = Math.max(0, Math.min(100, value))
+  let lo = HEALTH_GRADIENT[0], hi = HEALTH_GRADIENT[HEALTH_GRADIENT.length - 1]
+  for (let i = 0; i < HEALTH_GRADIENT.length - 1; i++) {
+    if (score >= HEALTH_GRADIENT[i].stop && score <= HEALTH_GRADIENT[i + 1].stop) {
+      lo = HEALTH_GRADIENT[i]
+      hi = HEALTH_GRADIENT[i + 1]
+      break
+    }
+  }
+  const t = (score - lo.stop) / (hi.stop - lo.stop)
+  const r = Math.round(lo.r + t * (hi.r - lo.r))
+  const g = Math.round(lo.g + t * (hi.g - lo.g))
+  const b = Math.round(lo.b + t * (hi.b - lo.b))
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
   return {
-    backgroundColor: `hsl(${hue}, 90%, 38%)`,
-    color: '#fff',
+    backgroundColor: `rgb(${r}, ${g}, ${b})`,
+    color: luminance > 0.55 ? '#333' : '#fff',
     fontWeight: 600,
     borderRadius: '4px',
     padding: '2px 6px',
