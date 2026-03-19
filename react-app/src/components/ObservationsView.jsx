@@ -88,7 +88,7 @@ function formatCell(value) {
 function healthScoreStyle(value) {
   if (value === null || value === undefined || typeof value !== 'number') return {}
   const clamped = Math.max(0, Math.min(100, value)) / 100
-  const hue = Math.round(clamped * 120)
+  const hue = clamped * 120
   return {
     backgroundColor: `hsl(${hue}, 90%, 38%)`,
     color: '#fff',
