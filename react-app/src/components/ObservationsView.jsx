@@ -87,7 +87,7 @@ function formatCell(value) {
 
 function healthScoreStyle(value) {
   if (value === null || value === undefined || typeof value !== 'number') return {}
-  const clamped = Math.max(0, Math.min(1, value))
+  const clamped = Math.max(0, Math.min(100, value)) / 100
   const r = Math.round(255 * (1 - clamped))
   const g = Math.round(200 * clamped)
   return {
