@@ -117,11 +117,8 @@ export default function ObservationGraphs() {
     }
   }, [activeView, granularity, anomalyBy])
 
-  useEffect(() => {
-    if (activeView === 'network' && noradId) {
-      fetchNeighborhoodData()
-    }
-  }, [activeView, noradId])
+  // Neighborhood fetch is triggered by the Search button or Enter key only,
+  // not by typing in the NORAD ID field.
 
   // Load graph stats when switching to any graph view
   useEffect(() => {
