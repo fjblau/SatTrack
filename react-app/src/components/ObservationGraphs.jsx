@@ -112,6 +112,7 @@ export default function ObservationGraphs() {
   ]
 
   useEffect(() => {
+    setError(null)
     if (activeView !== 'aql' && activeView !== 'network' && activeView !== 'source-network' && activeView !== 'temporal' && activeView !== 'anomaly-correlation') {
       fetchData()
     }
@@ -315,7 +316,7 @@ export default function ObservationGraphs() {
       )
     }
 
-    if (error && activeView !== 'aql') {
+    if (error && !['aql', 'network', 'source-network', 'temporal', 'anomaly-correlation'].includes(activeView)) {
       return (
         <div className="error-container">
           <div>
@@ -741,6 +742,8 @@ export default function ObservationGraphs() {
             </button>
           </div>
         </div>
+
+        {error && <div className="inline-error">{error}</div>}
 
         <div className="graph-container-wrapper">
           {neighborhoodData ? (

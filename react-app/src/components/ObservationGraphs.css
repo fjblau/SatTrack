@@ -540,6 +540,17 @@
   cursor: not-allowed;
 }
 
+/* Inline error for graph views */
+.inline-error {
+  padding: 0.6rem 1rem;
+  background-color: #ffeef0;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
 /* Header controls layout */
 .header-controls {
   display: flex;
