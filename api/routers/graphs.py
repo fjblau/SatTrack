@@ -75,6 +75,18 @@ def _resolve_satellite_doc_id(input_id: str) -> Optional[str]:
     if doc:
         return doc["_id"]
 
+    # Try resolving as a bare NORAD catalog number
+    if key.isdigit():
+        import database as db_module
+        if db_module.db:
+            cursor = db_module.db.aql.execute(
+                "FOR s IN satellites FILTER s.canonical.norad_cat_id == @norad LIMIT 1 RETURN s",
+                bind_vars={"norad": int(key)},
+            )
+            sat = next(cursor, None)
+            if sat:
+                return sat["_id"]
+
     return None
 
 
