@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import './Filters.css'
 import './ObservationsFilters.css'
 
 export default function ObservationsFilters({ filters, filterOptions, onFilterChange }) {
   const [localFilters, setLocalFilters] = useState(filters)
+  const debounceRef = useRef(null)
 
   const handleChange = (key, value) => {
     const newFilters = { ...localFilters, [key]: value }
@@ -11,9 +12,19 @@ export default function ObservationsFilters({ filters, filterOptions, onFilterCh
     onFilterChange(newFilters)
   }
 
+  const handleTextChange = useCallback((key, value) => {
+    const newFilters = { ...localFilters, [key]: value }
+    setLocalFilters(newFilters)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      onFilterChange(newFilters)
+    }, 400)
+  }, [localFilters, onFilterChange])
+
   const handleReset = () => {
     const reset = {}
     setLocalFilters(reset)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
     onFilterChange(reset)
   }
 
@@ -31,7 +42,7 @@ export default function ObservationsFilters({ filters, filterOptions, onFilterCh
           type="text"
           placeholder="Search by name..."
           value={localFilters.search || ''}
-          onChange={(e) => handleChange('search', e.target.value)}
+          onChange={(e) => handleTextChange('search', e.target.value)}
         />
       </div>
 
