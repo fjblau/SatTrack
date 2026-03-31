@@ -895,36 +895,36 @@ export default function ObservationGraphs() {
     )
   }
 
+  // Detect if AQL results contain graph data (nodes and edges) — must be at top level for hooks rules
+  const hasGraphData = useMemo(() => {
+    if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return false
+
+    if (aqlResults.data.length === 1) {
+      const item = aqlResults.data[0]
+      return item && typeof item === 'object' && item.nodes && item.edges
+    }
+
+    return false
+  }, [aqlResults])
+
+  // Collect all unique keys from all AQL result rows
+  const allKeys = useMemo(() => {
+    if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return []
+
+    if (typeof aqlResults.data[0] !== 'object' || aqlResults.data[0] === null) {
+      return ['Result']
+    }
+
+    const keys = new Set()
+    aqlResults.data.forEach(row => {
+      if (typeof row === 'object' && row !== null) {
+        Object.keys(row).forEach(k => keys.add(k))
+      }
+    })
+    return Array.from(keys)
+  }, [aqlResults])
+
   const renderAqlEditor = () => {
-    // Detect if results contain graph data (nodes and edges)
-    const hasGraphData = useMemo(() => {
-      if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return false
-
-      if (aqlResults.data.length === 1) {
-        const item = aqlResults.data[0]
-        return item && typeof item === 'object' && item.nodes && item.edges
-      }
-
-      return false
-    }, [aqlResults])
-
-    // Collect all unique keys from all rows to ensure consistent column headers
-    const allKeys = useMemo(() => {
-      if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return []
-
-      if (typeof aqlResults.data[0] !== 'object' || aqlResults.data[0] === null) {
-        return ['Result']
-      }
-
-      const keys = new Set()
-      aqlResults.data.forEach(row => {
-        if (typeof row === 'object' && row !== null) {
-          Object.keys(row).forEach(k => keys.add(k))
-        }
-      })
-      return Array.from(keys)
-    }, [aqlResults])
-
     return (
       <div className="chart-card">
         <div className="card-header-actions">
