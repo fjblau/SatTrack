@@ -257,6 +257,7 @@ export default function ObservationGraphs() {
     try {
       const response = await apiFetch(API_ENDPOINTS.OBSERVATION_ANALYTICS.AQL, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: aqlQuery })
       })
       const result = await response.json()
@@ -279,6 +280,7 @@ export default function ObservationGraphs() {
     try {
       const response = await apiFetch(API_ENDPOINTS.OBSERVATION_ANALYTICS.AQL, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: aqlQuery, format })
       })
 
