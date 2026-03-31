@@ -9,6 +9,12 @@ export const API_ENDPOINTS = {
   TLE: '/v2/tle',
   TLE_INTLDES: '/v2/tle/intldes',
   OBSERVATIONS: '/v2/observations',
+  OBSERVATION_ANALYTICS: {
+    HEALTH: '/v2/observations/analytics/health-over-time',
+    ANOMALIES: '/v2/observations/analytics/anomaly-distribution',
+    SOURCES: '/v2/observations/analytics/source-distribution',
+    AQL: '/v2/observations/aql',
+  },
   
   GRAPHS: {
     STATS: '/v2/graphs/stats',

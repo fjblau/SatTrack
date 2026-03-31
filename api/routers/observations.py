@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, field_validator, model_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
@@ -371,6 +371,106 @@ def get_all_observations(
         "skip": skip,
         "limit": limit,
     }
+
+
+class AqlQueryRequest(BaseModel):
+    query: str
+    bind_vars: Optional[dict] = None
+
+
+@router.get("/v2/observations/analytics/health-over-time")
+def get_health_over_time(granularity: Optional[str] = "daily"):
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    if granularity == "weekly":
+        # Group by year and week (calculated using day of year)
+        date_expression = "CONCAT(LEFT(obs.observation_epoch, 4), '-W', TO_STRING(FLOOR((DATE_DAYOFYEAR(obs.observation_epoch) - 1) / 7) + 1))"
+    else:
+        # Default to daily
+        date_expression = "LEFT(obs.observation_epoch, 10)"
+
+    cursor = db.aql.execute(
+        f"""
+        FOR obs IN observations
+            FILTER obs.observation_epoch != null AND obs.derived_health_score != null
+            LET period = {date_expression}
+            COLLECT date = period AGGREGATE average_health_score = AVERAGE(obs.derived_health_score)
+            SORT date ASC
+            RETURN {{ date, average_health_score }}
+        """
+    )
+    return list(cursor)
+
+
+@router.get("/v2/observations/analytics/anomaly-distribution")
+def get_anomaly_distribution(by: Optional[str] = None):
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    if by in ['source', 'object_type']:
+        query = f"""
+        FOR obs IN observations
+            FILTER obs.thermal.anomaly_flag == true
+            COLLECT group = obs.{by} WITH COUNT INTO count
+            FILTER group != null
+            SORT count DESC
+            RETURN {{ label: group, value: count }}
+        """
+    else:
+        query = """
+        FOR obs IN observations
+            COLLECT has_anomaly = (obs.thermal.anomaly_flag == true) WITH COUNT INTO count
+            RETURN { label: has_anomaly ? "Anomaly" : "Normal", value: count }
+        """
+
+    cursor = db.aql.execute(query)
+    return list(cursor)
+
+
+@router.get("/v2/observations/analytics/source-distribution")
+def get_source_distribution():
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    cursor = db.aql.execute(
+        """
+        FOR obs IN observations
+            COLLECT source = obs.source WITH COUNT INTO count
+            FILTER source != null
+            SORT count DESC
+            RETURN { label: source, value: count }
+        """
+    )
+    return list(cursor)
+
+
+@router.post("/v2/observations/aql")
+def execute_custom_aql(request: AqlQueryRequest, fast_request: Request):
+    db = db_module.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    # Security: restrict AQL execution to administrators
+    from api.routers.auth import _demo_token_store
+    auth_header = fast_request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):]
+        if token in _demo_token_store:
+            raise HTTPException(status_code=403, detail="AQL execution is restricted to administrators")
+
+    try:
+        cursor = db.aql.execute(request.query, bind_vars=request.bind_vars or {})
+        results = list(cursor)
+        return {
+            "data": results,
+            "count": len(results)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/v2/observations/{norad_id}")

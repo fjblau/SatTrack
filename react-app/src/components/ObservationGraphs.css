@@ -1,0 +1,370 @@
+.observation-graphs-container {
+  display: flex;
+  height: calc(100vh - 80px); /* Adjust based on header height */
+  background-color: #f8f9fa;
+}
+
+.observation-graphs-sidebar {
+  width: 280px;
+  background-color: white;
+  border-right: 1px solid #dee2e6;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.observation-graphs-sidebar h3 {
+  padding: 1.5rem 1.5rem 0.5rem;
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.observation-graphs-sidebar .section-description {
+  padding: 0 1.5rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+  border-bottom: 1px solid #eee;
+}
+
+.observation-graphs-menu {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 0;
+}
+
+.menu-item {
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 4px solid transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-item:hover {
+  background-color: #f1f3f5;
+}
+
+.menu-item.active {
+  background-color: #e7f5ff;
+  border-left-color: #3498db;
+}
+
+.menu-item .item-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.menu-item .item-desc {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.2rem;
+}
+
+.observation-graphs-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.chart-card h2 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+  color: #2c3e50;
+}
+
+.chart-card .chart-description {
+  color: #7f8c8d;
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+}
+
+.chart-controls {
+  margin-bottom: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.chart-controls label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.chart-controls select {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+  color: #666;
+  font-style: italic;
+}
+
+.error-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+  color: #e74c3c;
+  background-color: #fdf2f2;
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* Chart styles */
+.observation-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.grid-line {
+  stroke: #eee;
+  stroke-width: 1;
+}
+
+.axis-line {
+  stroke: #333;
+  stroke-width: 1.5;
+}
+
+.axis-text {
+  font-size: 12px;
+  fill: #666;
+}
+
+.axis-label {
+  font-size: 14px;
+  font-weight: 600;
+  fill: #333;
+}
+
+.chart-path {
+  fill: none;
+  stroke: #3498db;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-area {
+  fill: url(#chartGradient);
+  opacity: 0.3;
+}
+
+.chart-dot {
+  fill: #3498db;
+  stroke: white;
+  stroke-width: 2;
+  cursor: pointer;
+  transition: r 0.2s ease;
+}
+
+.chart-dot:hover {
+  r: 6;
+}
+
+.bar {
+  fill: #3498db;
+  transition: fill 0.2s ease;
+}
+
+.bar:hover {
+  fill: #2980b9;
+}
+
+.bar-label {
+  font-size: 11px;
+  fill: #333;
+  text-anchor: middle;
+}
+
+/* AQL Editor styles */
+.aql-editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.aql-textarea {
+  width: 100%;
+  height: 200px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 14px;
+  padding: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.aql-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.aql-error {
+  color: #e74c3c;
+  background-color: #fdf2f2;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.aql-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.clear-button {
+  padding: 0.6rem 1.5rem;
+  background-color: transparent;
+  color: #7f8c8d;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-button:hover {
+  background-color: #f8f9fa;
+  border-color: #bdc3c7;
+  color: #34495e;
+}
+
+.sample-queries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sample-queries label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.sample-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sample-chip {
+  padding: 0.3rem 0.8rem;
+  background-color: #e9ecef;
+  border: none;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sample-chip:hover {
+  background-color: #dee2e6;
+  color: #212529;
+}
+
+.results-summary {
+  padding: 0.75rem 1rem;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #eee;
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.null-val {
+  color: #adb5bd;
+  font-size: 0.8rem;
+}
+
+.json-val {
+  margin: 0;
+  font-size: 0.8rem;
+  background-color: #f8f9fa;
+  padding: 0.5rem;
+  border-radius: 4px;
+  max-width: 300px;
+  max-height: 150px;
+  overflow: auto;
+  font-family: inherit;
+}
+
+.run-button {
+  padding: 0.6rem 1.5rem;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.run-button:hover {
+  background-color: #2980b9;
+}
+
+.run-button:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.results-container {
+  margin-top: 1rem;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.results-table th, .results-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.results-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.no-results {
+  padding: 2rem;
+  text-align: center;
+  color: #999;
+  font-style: italic;
+}

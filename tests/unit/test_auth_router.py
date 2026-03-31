@@ -72,3 +72,13 @@ class TestAuthRouter(unittest.TestCase):
         response = self.client.post("/v2/auth/logout", json={"token": "nonexistent"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["detail"], "Logged out")
+
+    def test_demo_login_success(self):
+        response = self.client.post(
+            "/v2/auth/login", json={"username": "demo", "password": "demo"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("token", data)
+        self.assertTrue(data["is_demo"])
+        self.assertIn(data["token"], _token_store)

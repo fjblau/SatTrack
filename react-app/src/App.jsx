@@ -9,6 +9,7 @@ import FunctionAnalytics from './components/FunctionAnalytics'
 import RegistrationDocumentAnalytics from './components/RegistrationDocumentAnalytics'
 import AdminPage from './components/AdminPage'
 import ObservationsView from './components/ObservationsView'
+import ObservationGraphs from './components/ObservationGraphs'
 import LoginPage from './components/LoginPage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
@@ -261,12 +262,20 @@ function App() {
             Table View
           </button>
           {!isDemo && (
-            <button 
-              className={activeTab === 'observations' ? 'active' : ''}
-              onClick={() => setActiveTab('observations')}
-            >
-              Observations
-            </button>
+            <>
+              <button 
+                className={activeTab === 'observations' ? 'active' : ''}
+                onClick={() => setActiveTab('observations')}
+              >
+                Observations
+              </button>
+              <button 
+                className={activeTab === 'observation-graphs' ? 'active' : ''}
+                onClick={() => setActiveTab('observation-graphs')}
+              >
+                Observation Graphs
+              </button>
+            </>
           )}
           <button 
             className={activeTab === 'graphs' ? 'active' : ''}
@@ -295,6 +304,7 @@ function App() {
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
         {activeTab === 'observations' && <p>Observational Data</p>}
+        {activeTab === 'observation-graphs' && <p>Observation Analytics</p>}
         <button className="logout-button" onClick={handleLogout}>Logout</button>
       </header>
       
@@ -344,6 +354,10 @@ function App() {
 
       {activeTab === 'observations' && !isDemo && (
         <ObservationsView />
+      )}
+      
+      {activeTab === 'observation-graphs' && !isDemo && (
+        <ObservationGraphs />
       )}
 
       {activeTab === 'graphs' && (
