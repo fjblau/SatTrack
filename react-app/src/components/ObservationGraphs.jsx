@@ -32,9 +32,24 @@ const MENU_ITEMS = [
     desc: 'Graph view of satellite observations'
   },
   {
+    id: 'source-network',
+    label: 'Source Reliability',
+    desc: 'Sources linked to satellites by observation quality'
+  },
+  {
+    id: 'temporal',
+    label: 'Temporal Chains',
+    desc: 'Sequential observation timeline per satellite'
+  },
+  {
+    id: 'anomaly-correlation',
+    label: 'Anomaly Correlation',
+    desc: 'Cross-satellite anomaly co-occurrence'
+  },
+  {
     id: 'aql',
     label: 'AQL Editor',
-    desc: 'Custom analytics queries'
+    desc: 'Custom analytics queries with export'
   }
 ]
 
@@ -44,7 +59,7 @@ export default function ObservationGraphs() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [granularity, setGranularity] = useState('daily')
-  const [anomalyBy, setAnomalyBy] = useState('status') // source or object_type or status (null)
+  const [anomalyBy, setAnomalyBy] = useState('status')
   const [aqlQuery, setAqlQuery] = useState('FOR obs IN observations\n  SORT obs.observation_epoch DESC\n  LIMIT 10\n  RETURN obs')
   const [aqlResults, setAqlResults] = useState(null)
   const [aqlLoading, setAqlLoading] = useState(false)
@@ -52,6 +67,15 @@ export default function ObservationGraphs() {
   const [neighborhoodData, setNeighborhoodData] = useState(null)
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const [viewAsGraph, setViewAsGraph] = useState(false)
+
+  // New graph view states
+  const [sourceNetworkData, setSourceNetworkData] = useState(null)
+  const [temporalChainData, setTemporalChainData] = useState(null)
+  const [temporalNoradId, setTemporalNoradId] = useState('')
+  const [anomalyCorrData, setAnomalyCorrData] = useState(null)
+  const [graphStats, setGraphStats] = useState(null)
+  const [sourceMinObs, setSourceMinObs] = useState(5)
+  const [exportingFormat, setExportingFormat] = useState(null)
 
   const SAMPLE_QUERIES = [
     {
@@ -65,11 +89,30 @@ export default function ObservationGraphs() {
     {
       label: 'Avg Health by Source',
       query: 'FOR obs IN observations\n  FILTER obs.derived_health_score != null\n  COLLECT source = obs.source AGGREGATE avg_health = AVERAGE(obs.derived_health_score)\n  SORT avg_health DESC\n  RETURN { source, avg_health }'
+    },
+    {
+      label: 'Observation Edge Stats',
+      query: 'LET sat_edges = LENGTH(observation_satellite_edges)\nLET src_edges = LENGTH(observation_source_edges)\nLET temp_edges = LENGTH(observation_temporal_edges)\nLET corr_edges = LENGTH(observation_correlation_edges)\nRETURN { satellite_edges: sat_edges, source_edges: src_edges, temporal_edges: temp_edges, correlation_edges: corr_edges }'
+    },
+    {
+      label: 'Source-Satellite Connections',
+      query: 'FOR e IN observation_satellite_edges\n  LET obs = DOCUMENT(e._from)\n  LET sat = DOCUMENT(e._to)\n  COLLECT source = obs.source, sat_name = sat.canonical.name WITH COUNT INTO obs_count\n  SORT obs_count DESC\n  LIMIT 20\n  RETURN { source, satellite: sat_name, observations: obs_count }'
+    },
+    {
+      label: 'Temporal Health Drift',
+      query: 'FOR e IN observation_temporal_edges\n  FILTER e.health_delta != null\n  FILTER ABS(e.health_delta) > 10\n  LET from_obs = DOCUMENT(e._from)\n  LET to_obs = DOCUMENT(e._to)\n  SORT ABS(e.health_delta) DESC\n  LIMIT 20\n  RETURN { norad_id: e.norad_id, from_epoch: e.from_epoch, to_epoch: e.to_epoch, health_delta: e.health_delta, from_health: from_obs.derived_health_score, to_health: to_obs.derived_health_score }'
+    }
+  ]
+
+  const GRAPH_SAMPLE_QUERIES = [
+    {
+      label: 'Satellite Neighborhood Graph',
+      query: '// Returns Cytoscape-compatible graph — toggle to Graph view\nLET sat = FIRST(FOR s IN satellites FILTER s.canonical.norad_cat_id == 25544 LIMIT 1 RETURN s)\nLET obs = (FOR o IN observations FILTER o.norad_id == 25544 SORT o.observation_epoch DESC LIMIT 10 RETURN o)\nLET sources = (FOR o IN obs COLLECT src = o.source RETURN src)\nRETURN {\n  nodes: APPEND(\n    APPEND(\n      [{ data: { id: sat._id, label: sat.canonical.name || sat._key, type: "satellite", background_color: "#2ecc71", node_size: 45 } }],\n      obs[* RETURN { data: { id: CURRENT._id, label: SUBSTRING(CURRENT.observation_epoch, 0, 16), type: "observation", background_color: "#3498db", node_size: 30 } }]\n    ),\n    sources[* RETURN { data: { id: CONCAT("source/", CURRENT), label: CURRENT, type: "source", background_color: "#e67e22", node_size: 35 } }]\n  ),\n  edges: APPEND(\n    obs[* RETURN { data: { id: CONCAT("e_sat_", CURRENT._key), source: sat._id, target: CURRENT._id, relationship_type: "observed_by" } }],\n    obs[* RETURN { data: { id: CONCAT("e_src_", CURRENT._key), source: CURRENT._id, target: CONCAT("source/", CURRENT.source), relationship_type: "reported_by" } }]\n  )\n}'
     }
   ]
 
   useEffect(() => {
-    if (activeView !== 'aql' && activeView !== 'network') {
+    if (activeView !== 'aql' && activeView !== 'network' && activeView !== 'source-network' && activeView !== 'temporal' && activeView !== 'anomaly-correlation') {
       fetchData()
     }
   }, [activeView, granularity, anomalyBy])
@@ -79,6 +122,25 @@ export default function ObservationGraphs() {
       fetchNeighborhoodData()
     }
   }, [activeView, noradId])
+
+  // Load graph stats when switching to any graph view
+  useEffect(() => {
+    if (['source-network', 'temporal', 'anomaly-correlation'].includes(activeView) && !graphStats) {
+      fetchGraphStats()
+    }
+  }, [activeView])
+
+  const fetchGraphStats = async () => {
+    try {
+      const response = await apiFetch(API_ENDPOINTS.GRAPHS.OBSERVATION_GRAPH_STATS)
+      if (response.ok) {
+        const result = await response.json()
+        setGraphStats(result.data)
+      }
+    } catch (err) {
+      console.error('Error fetching graph stats:', err)
+    }
+  }
 
   const fetchData = async () => {
     setLoading(true)
@@ -132,6 +194,61 @@ export default function ObservationGraphs() {
     }
   }
 
+  const fetchSourceNetwork = async () => {
+    setLoading(true)
+    setError(null)
+    setSourceNetworkData(null)
+
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.OBSERVATION_SOURCE_NETWORK}?min_observations=${sourceMinObs}&limit=100`)
+      if (!response.ok) throw new Error(`Failed to fetch source network: ${response.statusText}`)
+      const result = await response.json()
+      setSourceNetworkData(result.data)
+    } catch (err) {
+      console.error('Error fetching source network:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchTemporalChain = async () => {
+    if (!temporalNoradId) return
+    setLoading(true)
+    setError(null)
+    setTemporalChainData(null)
+
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.OBSERVATION_TEMPORAL_CHAIN}?norad_id=${temporalNoradId}&limit=50`)
+      if (!response.ok) throw new Error(`Failed to fetch temporal chain: ${response.statusText}`)
+      const result = await response.json()
+      setTemporalChainData(result.data)
+    } catch (err) {
+      console.error('Error fetching temporal chain:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchAnomalyCorrelation = async () => {
+    setLoading(true)
+    setError(null)
+    setAnomalyCorrData(null)
+
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.OBSERVATION_ANOMALY_CORRELATION}?limit=100`)
+      if (!response.ok) throw new Error(`Failed to fetch anomaly correlation: ${response.statusText}`)
+      const result = await response.json()
+      setAnomalyCorrData(result.data)
+    } catch (err) {
+      console.error('Error fetching anomaly correlation:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const runAql = async () => {
     setAqlLoading(true)
     setError(null)
@@ -150,6 +267,37 @@ export default function ObservationGraphs() {
       setError(err.message)
     } finally {
       setAqlLoading(false)
+    }
+  }
+
+  const exportResults = async (format) => {
+    setExportingFormat(format)
+    try {
+      const response = await apiFetch(API_ENDPOINTS.OBSERVATION_ANALYTICS.AQL, {
+        method: 'POST',
+        body: JSON.stringify({ query: aqlQuery, format })
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.detail || 'Export failed')
+      }
+
+      const blob = await response.blob()
+      const ext = format === 'csv' ? 'csv' : 'json'
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `aql_export.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Export error:', err)
+      setError(err.message)
+    } finally {
+      setExportingFormat(null)
     }
   }
 
@@ -183,6 +331,12 @@ export default function ObservationGraphs() {
         return renderSourceStats()
       case 'network':
         return renderObservationNetwork()
+      case 'source-network':
+        return renderSourceNetwork()
+      case 'temporal':
+        return renderTemporalChain()
+      case 'anomaly-correlation':
+        return renderAnomalyCorrelation()
       case 'aql':
         return renderAqlEditor()
       default:
@@ -199,7 +353,7 @@ export default function ObservationGraphs() {
 
     const minScore = 0
     const maxScore = 100
-    
+
     const xScale = (index) => padding.left + (index / (data.length - 1)) * chartWidth
     const yScale = (score) => padding.top + chartHeight - (score / maxScore) * chartHeight
 
@@ -215,7 +369,7 @@ export default function ObservationGraphs() {
       <div className="chart-card">
         <h2>Health Trends</h2>
         <p className="chart-description">Average satellite health score over time</p>
-        
+
         <div className="chart-controls">
           <label>Granularity:</label>
           <select value={granularity} onChange={(e) => setGranularity(e.target.value)}>
@@ -235,12 +389,12 @@ export default function ObservationGraphs() {
           {/* Grid lines */}
           {[0, 20, 40, 60, 80, 100].map(v => (
             <g key={v}>
-              <line 
-                x1={padding.left} 
-                y1={yScale(v)} 
-                x2={padding.left + chartWidth} 
-                y2={yScale(v)} 
-                className="grid-line" 
+              <line
+                x1={padding.left}
+                y1={yScale(v)}
+                x2={padding.left + chartWidth}
+                y2={yScale(v)}
+                className="grid-line"
               />
               <text x={padding.left - 10} y={yScale(v)} textAnchor="end" alignmentBaseline="middle" className="axis-text">
                 {v}
@@ -252,11 +406,11 @@ export default function ObservationGraphs() {
           {data.map((d, i) => {
             if (data.length > 15 && i % Math.ceil(data.length / 15) !== 0) return null
             return (
-              <text 
-                key={i} 
-                x={xScale(i)} 
-                y={padding.top + chartHeight + 15} 
-                textAnchor="middle" 
+              <text
+                key={i}
+                x={xScale(i)}
+                y={padding.top + chartHeight + 15}
+                textAnchor="middle"
                 className="axis-text"
               >
                 {d.date.substring(5)}
@@ -268,11 +422,11 @@ export default function ObservationGraphs() {
           <path d={pathData} className="chart-path" />
 
           {data.map((d, i) => (
-            <circle 
-              key={i} 
-              cx={xScale(i)} 
-              cy={yScale(d.average_health_score)} 
-              r={hoveredIndex === i ? 6 : 4} 
+            <circle
+              key={i}
+              cx={xScale(i)}
+              cy={yScale(d.average_health_score)}
+              r={hoveredIndex === i ? 6 : 4}
               className="chart-dot"
               onMouseEnter={() => setHoveredIndex(i)}
               onMouseLeave={() => setHoveredIndex(null)}
@@ -313,25 +467,25 @@ export default function ObservationGraphs() {
             </g>
           )}
 
-          <line 
-            x1={padding.left} 
-            y1={padding.top} 
-            x2={padding.left} 
-            y2={padding.top + chartHeight} 
-            className="axis-line" 
+          <line
+            x1={padding.left}
+            y1={padding.top}
+            x2={padding.left}
+            y2={padding.top + chartHeight}
+            className="axis-line"
           />
-          <line 
-            x1={padding.left} 
-            y1={padding.top + chartHeight} 
-            x2={padding.left + chartWidth} 
-            y2={padding.top + chartHeight} 
-            className="axis-line" 
+          <line
+            x1={padding.left}
+            y1={padding.top + chartHeight}
+            x2={padding.left + chartWidth}
+            y2={padding.top + chartHeight}
+            className="axis-line"
           />
 
-          <text 
-            x={padding.left - 60} 
-            y={padding.top + chartHeight / 2} 
-            textAnchor="middle" 
+          <text
+            x={padding.left - 60}
+            y={padding.top + chartHeight / 2}
+            textAnchor="middle"
             className="axis-label"
             transform={`rotate(-90, ${padding.left - 60}, ${padding.top + chartHeight / 2})`}
           >
@@ -359,7 +513,7 @@ export default function ObservationGraphs() {
       <div className="chart-card">
         <h2>Anomaly Analysis</h2>
         <p className="chart-description">Frequency of anomalies grouped by different categories</p>
-        
+
         <div className="chart-controls">
           <label>Group By:</label>
           <select value={anomalyBy} onChange={(e) => setAnomalyBy(e.target.value)}>
@@ -375,12 +529,12 @@ export default function ObservationGraphs() {
             const val = Math.round(p * maxVal)
             return (
               <g key={p}>
-                <line 
-                  x1={padding.left} 
-                  y1={yScale(val)} 
-                  x2={padding.left + chartWidth} 
-                  y2={yScale(val)} 
-                  className="grid-line" 
+                <line
+                  x1={padding.left}
+                  y1={yScale(val)}
+                  x2={padding.left + chartWidth}
+                  y2={yScale(val)}
+                  className="grid-line"
                 />
                 <text x={padding.left - 10} y={yScale(val)} textAnchor="end" alignmentBaseline="middle" className="axis-text">
                   {val}
@@ -394,27 +548,27 @@ export default function ObservationGraphs() {
             const h = chartHeight - (yScale(d.value) - padding.top)
             return (
               <g key={i}>
-                <rect 
-                  x={x} 
-                  y={yScale(d.value)} 
-                  width={barWidth} 
-                  height={h} 
-                  className="bar anomaly-bar" 
+                <rect
+                  x={x}
+                  y={yScale(d.value)}
+                  width={barWidth}
+                  height={h}
+                  className="bar anomaly-bar"
                 >
                   <title>{`${d.label}: ${d.value}`}</title>
                 </rect>
-                <text 
-                  x={x + barWidth / 2} 
-                  y={padding.top + chartHeight + 20} 
-                  textAnchor="middle" 
+                <text
+                  x={x + barWidth / 2}
+                  y={padding.top + chartHeight + 20}
+                  textAnchor="middle"
                   className="axis-text bar-axis-label"
                 >
                   {d.label}
                 </text>
-                <text 
-                  x={x + barWidth / 2} 
-                  y={yScale(d.value) - 10} 
-                  textAnchor="middle" 
+                <text
+                  x={x + barWidth / 2}
+                  y={yScale(d.value) - 10}
+                  textAnchor="middle"
                   className="bar-label"
                 >
                   {d.value}
@@ -423,25 +577,25 @@ export default function ObservationGraphs() {
             )
           })}
 
-          <line 
-            x1={padding.left} 
-            y1={padding.top} 
-            x2={padding.left} 
-            y2={padding.top + chartHeight} 
-            className="axis-line" 
+          <line
+            x1={padding.left}
+            y1={padding.top}
+            x2={padding.left}
+            y2={padding.top + chartHeight}
+            className="axis-line"
           />
-          <line 
-            x1={padding.left} 
-            y1={padding.top + chartHeight} 
-            x2={padding.left + chartWidth} 
-            y2={padding.top + chartHeight} 
-            className="axis-line" 
+          <line
+            x1={padding.left}
+            y1={padding.top + chartHeight}
+            x2={padding.left + chartWidth}
+            y2={padding.top + chartHeight}
+            className="axis-line"
           />
 
-          <text 
-            x={padding.left - 60} 
-            y={padding.top + chartHeight / 2} 
-            textAnchor="middle" 
+          <text
+            x={padding.left - 60}
+            y={padding.top + chartHeight / 2}
+            textAnchor="middle"
             className="axis-label"
             transform={`rotate(-90, ${padding.left - 60}, ${padding.top + chartHeight / 2})`}
           >
@@ -469,19 +623,19 @@ export default function ObservationGraphs() {
       <div className="chart-card">
         <h2>Source Statistics</h2>
         <p className="chart-description">Number of observations contributed by each data source</p>
-        
+
         <svg width={width} height={height} className="observation-chart">
           {/* Grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map(p => {
             const val = Math.round(p * maxVal)
             return (
               <g key={p}>
-                <line 
-                  x1={padding.left} 
-                  y1={yScale(val)} 
-                  x2={padding.left + chartWidth} 
-                  y2={yScale(val)} 
-                  className="grid-line" 
+                <line
+                  x1={padding.left}
+                  y1={yScale(val)}
+                  x2={padding.left + chartWidth}
+                  y2={yScale(val)}
+                  className="grid-line"
                 />
                 <text x={padding.left - 10} y={yScale(val)} textAnchor="end" alignmentBaseline="middle" className="axis-text">
                   {val}
@@ -495,27 +649,27 @@ export default function ObservationGraphs() {
             const h = chartHeight - (yScale(d.value) - padding.top)
             return (
               <g key={i}>
-                <rect 
-                  x={x} 
-                  y={yScale(d.value)} 
-                  width={barWidth} 
-                  height={h} 
-                  className="bar source-bar" 
+                <rect
+                  x={x}
+                  y={yScale(d.value)}
+                  width={barWidth}
+                  height={h}
+                  className="bar source-bar"
                 >
                   <title>{`${d.label}: ${d.value}`}</title>
                 </rect>
-                <text 
-                  x={x + barWidth / 2} 
-                  y={padding.top + chartHeight + 20} 
-                  textAnchor="middle" 
+                <text
+                  x={x + barWidth / 2}
+                  y={padding.top + chartHeight + 20}
+                  textAnchor="middle"
                   className="axis-text bar-axis-label"
                 >
                   {d.label}
                 </text>
-                <text 
-                  x={x + barWidth / 2} 
-                  y={yScale(d.value) - 10} 
-                  textAnchor="middle" 
+                <text
+                  x={x + barWidth / 2}
+                  y={yScale(d.value) - 10}
+                  textAnchor="middle"
                   className="bar-label"
                 >
                   {d.value}
@@ -524,25 +678,25 @@ export default function ObservationGraphs() {
             )
           })}
 
-          <line 
-            x1={padding.left} 
-            y1={padding.top} 
-            x2={padding.left} 
-            y2={padding.top + chartHeight} 
-            className="axis-line" 
+          <line
+            x1={padding.left}
+            y1={padding.top}
+            x2={padding.left}
+            y2={padding.top + chartHeight}
+            className="axis-line"
           />
-          <line 
-            x1={padding.left} 
-            y1={padding.top + chartHeight} 
-            x2={padding.left + chartWidth} 
-            y2={padding.top + chartHeight} 
-            className="axis-line" 
+          <line
+            x1={padding.left}
+            y1={padding.top + chartHeight}
+            x2={padding.left + chartWidth}
+            y2={padding.top + chartHeight}
+            className="axis-line"
           />
 
-          <text 
-            x={padding.left - 60} 
-            y={padding.top + chartHeight / 2} 
-            textAnchor="middle" 
+          <text
+            x={padding.left - 60}
+            y={padding.top + chartHeight / 2}
+            textAnchor="middle"
             className="axis-label"
             transform={`rotate(-90, ${padding.left - 60}, ${padding.top + chartHeight / 2})`}
           >
@@ -558,14 +712,14 @@ export default function ObservationGraphs() {
       <div className="chart-card network-view">
         <h2>Observation Network</h2>
         <p className="chart-description">Visual representation of satellite observations and their sources</p>
-        
+
         <div className="chart-controls">
           <div className="search-box">
             <label htmlFor="norad-search">NORAD ID:</label>
-            <input 
+            <input
               id="norad-search"
-              type="text" 
-              placeholder="Enter NORAD ID (e.g. 25544)" 
+              type="text"
+              placeholder="Enter NORAD ID (e.g. 25544)"
               value={noradId}
               onChange={(e) => setNoradId(e.target.value)}
               className="norad-input"
@@ -573,8 +727,8 @@ export default function ObservationGraphs() {
                 if (e.key === 'Enter') fetchNeighborhoodData()
               }}
             />
-            <button 
-              onClick={fetchNeighborhoodData} 
+            <button
+              onClick={fetchNeighborhoodData}
               className="run-button"
               disabled={loading || !noradId}
             >
@@ -586,9 +740,9 @@ export default function ObservationGraphs() {
         <div className="graph-container-wrapper">
           {neighborhoodData ? (
             <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
-              <GraphViewer 
-                graphType="neighborhood" 
-                neighborhoodData={neighborhoodData} 
+              <GraphViewer
+                graphType="neighborhood"
+                neighborhoodData={neighborhoodData}
               />
             </div>
           ) : (
@@ -605,27 +759,159 @@ export default function ObservationGraphs() {
     )
   }
 
+  const renderSourceNetwork = () => {
+    return (
+      <div className="chart-card network-view">
+        <h2>Source Reliability Network</h2>
+        <p className="chart-description">Data sources connected to satellites, weighted by observation count and average health score</p>
+
+        {graphStats && (
+          <div className="graph-stats-bar">
+            <span>Satellite edges: <strong>{graphStats.satellite_edges || 0}</strong></span>
+            <span>Source edges: <strong>{graphStats.source_edges || 0}</strong></span>
+            <span>Sources: <strong>{graphStats.sources || 0}</strong></span>
+          </div>
+        )}
+
+        <div className="chart-controls">
+          <label>Min observations per link:</label>
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={sourceMinObs}
+            onChange={(e) => setSourceMinObs(parseInt(e.target.value) || 1)}
+            className="norad-input"
+            style={{ width: '80px' }}
+          />
+          <button onClick={fetchSourceNetwork} className="run-button" disabled={loading}>
+            {loading ? 'Loading...' : 'Load Network'}
+          </button>
+        </div>
+
+        <div className="graph-container-wrapper">
+          {sourceNetworkData ? (
+            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+              <GraphViewer
+                graphType="neighborhood"
+                neighborhoodData={sourceNetworkData}
+              />
+            </div>
+          ) : (
+            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+              <p>Click "Load Network" to visualize source-satellite relationships</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderTemporalChain = () => {
+    return (
+      <div className="chart-card network-view">
+        <h2>Temporal Observation Chain</h2>
+        <p className="chart-description">Sequential observations of a satellite over time. Edge colors show health score changes (green = improving, red = degrading).</p>
+
+        {graphStats && (
+          <div className="graph-stats-bar">
+            <span>Temporal edges: <strong>{graphStats.temporal_edges || 0}</strong></span>
+            <span>Total observations: <strong>{graphStats.observations || 0}</strong></span>
+          </div>
+        )}
+
+        <div className="chart-controls">
+          <div className="search-box">
+            <label htmlFor="temporal-norad">NORAD ID:</label>
+            <input
+              id="temporal-norad"
+              type="text"
+              placeholder="Enter NORAD ID (e.g. 25544)"
+              value={temporalNoradId}
+              onChange={(e) => setTemporalNoradId(e.target.value)}
+              className="norad-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') fetchTemporalChain()
+              }}
+            />
+            <button onClick={fetchTemporalChain} className="run-button" disabled={loading || !temporalNoradId}>
+              {loading ? 'Loading...' : 'Load Chain'}
+            </button>
+          </div>
+        </div>
+
+        <div className="graph-container-wrapper">
+          {temporalChainData ? (
+            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+              <GraphViewer
+                graphType="neighborhood"
+                neighborhoodData={temporalChainData}
+              />
+            </div>
+          ) : (
+            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+              <p>Enter a NORAD ID to view its observation timeline as a graph</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderAnomalyCorrelation = () => {
+    return (
+      <div className="chart-card network-view">
+        <h2>Anomaly Correlation Network</h2>
+        <p className="chart-description">Satellites linked by simultaneous thermal anomaly detections. Edge weight shows number of co-occurrences.</p>
+
+        {graphStats && (
+          <div className="graph-stats-bar">
+            <span>Correlation edges: <strong>{graphStats.correlation_edges || 0}</strong></span>
+            <span>Total observations: <strong>{graphStats.observations || 0}</strong></span>
+          </div>
+        )}
+
+        <div className="chart-controls">
+          <button onClick={fetchAnomalyCorrelation} className="run-button" disabled={loading}>
+            {loading ? 'Loading...' : 'Load Correlation Network'}
+          </button>
+        </div>
+
+        <div className="graph-container-wrapper">
+          {anomalyCorrData ? (
+            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+              <GraphViewer
+                graphType="neighborhood"
+                neighborhoodData={anomalyCorrData}
+              />
+            </div>
+          ) : (
+            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+              <p>Click "Load Correlation Network" to see cross-satellite anomaly patterns</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   const renderAqlEditor = () => {
     // Detect if results contain graph data (nodes and edges)
     const hasGraphData = useMemo(() => {
       if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return false
-      
-      // If it's a single object with nodes/edges
+
       if (aqlResults.data.length === 1) {
         const item = aqlResults.data[0]
         return item && typeof item === 'object' && item.nodes && item.edges
       }
-      
-      // If it's an array of items that might be nodes/edges
-      // (This is less common for GraphViewer but possible)
+
       return false
     }, [aqlResults])
 
     // Collect all unique keys from all rows to ensure consistent column headers
     const allKeys = useMemo(() => {
       if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return []
-      
-      // If the first result is not an object, just use a generic 'Result' header
+
       if (typeof aqlResults.data[0] !== 'object' || aqlResults.data[0] === null) {
         return ['Result']
       }
@@ -643,58 +929,63 @@ export default function ObservationGraphs() {
       <div className="chart-card">
         <div className="card-header-actions">
           <h2>AQL Editor</h2>
-          {hasGraphData && (
-            <div className="view-toggle">
-              <button 
-                className={`toggle-btn ${!viewAsGraph ? 'active' : ''}`}
-                onClick={() => setViewAsGraph(false)}
-              >
-                Table
-              </button>
-              <button 
-                className={`toggle-btn ${viewAsGraph ? 'active' : ''}`}
-                onClick={() => setViewAsGraph(true)}
-              >
-                Graph
-              </button>
-            </div>
-          )}
+          <div className="header-controls">
+            {hasGraphData && (
+              <div className="view-toggle">
+                <button
+                  className={`toggle-btn ${!viewAsGraph ? 'active' : ''}`}
+                  onClick={() => setViewAsGraph(false)}
+                >
+                  Table
+                </button>
+                <button
+                  className={`toggle-btn ${viewAsGraph ? 'active' : ''}`}
+                  onClick={() => setViewAsGraph(true)}
+                >
+                  Graph
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-        <p className="chart-description">Execute custom ArangoDB Query Language queries for deep analytics</p>
-        
+        <p className="chart-description">Execute custom ArangoDB Query Language queries for deep analytics. Export results as CSV or JSON for data science workflows.</p>
+
         <div className="aql-editor-container">
           <div className="sample-queries">
             <label>Sample Queries:</label>
             <div className="sample-chips">
               {SAMPLE_QUERIES.map((sq, i) => (
-                <button 
-                  key={i} 
-                  className="sample-chip" 
+                <button
+                  key={i}
+                  className="sample-chip"
                   onClick={() => setAqlQuery(sq.query)}
                 >
                   {sq.label}
                 </button>
               ))}
-              <button 
-                className="sample-chip challenge-chip" 
-                onClick={() => setAqlQuery('// CHALLENGE: Return a neighborhood graph\nLET sat = DOCUMENT("satellites/25544")\nLET obs = (FOR o IN observations FILTER o.norad_id == 25544 LIMIT 10 RETURN o)\nRETURN {\n  nodes: APPEND([\n    { data: { id: sat._id, label: sat.official_name || sat._key, type: "satellite" } }\n  ], obs[* RETURN { data: { id: CURRENT._id, label: CURRENT.source, type: "observation" } }]),\n  edges: obs[* RETURN { data: { id: CONCAT("e", sat._id, CURRENT._id), source: sat._id, target: CURRENT._id } }]\n}')}
-              >
-                Graph Query Example
-              </button>
+              {GRAPH_SAMPLE_QUERIES.map((sq, i) => (
+                <button
+                  key={`graph-${i}`}
+                  className="sample-chip challenge-chip"
+                  onClick={() => setAqlQuery(sq.query)}
+                >
+                  {sq.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <textarea 
+          <textarea
             className="aql-textarea"
             value={aqlQuery}
             onChange={(e) => setAqlQuery(e.target.value)}
             spellCheck="false"
           />
-          
+
           <div className="aql-actions">
             {error && <div className="aql-error">{error}</div>}
             <div className="aql-buttons">
-              <button 
+              <button
                 className="clear-button"
                 onClick={() => {
                   setAqlResults(null)
@@ -704,8 +995,26 @@ export default function ObservationGraphs() {
               >
                 Clear Results
               </button>
-              <button 
-                className="run-button" 
+              <div className="export-buttons">
+                <button
+                  className="export-button"
+                  onClick={() => exportResults('csv')}
+                  disabled={aqlLoading || exportingFormat !== null}
+                  title="Export results as CSV"
+                >
+                  {exportingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}
+                </button>
+                <button
+                  className="export-button"
+                  onClick={() => exportResults('json_file')}
+                  disabled={aqlLoading || exportingFormat !== null}
+                  title="Export results as JSON"
+                >
+                  {exportingFormat === 'json_file' ? 'Exporting...' : 'Export JSON'}
+                </button>
+              </div>
+              <button
+                className="run-button"
                 onClick={runAql}
                 disabled={aqlLoading}
               >
@@ -719,12 +1028,12 @@ export default function ObservationGraphs() {
               <div className="results-summary">
                 Found {aqlResults.count} results
               </div>
-              
+
               {viewAsGraph && hasGraphData ? (
                 <div style={{ height: '500px', borderTop: '1px solid #eee' }}>
-                  <GraphViewer 
-                    graphType="neighborhood" 
-                    neighborhoodData={aqlResults.data[0]} 
+                  <GraphViewer
+                    graphType="neighborhood"
+                    neighborhoodData={aqlResults.data[0]}
                   />
                 </div>
               ) : (
@@ -748,12 +1057,12 @@ export default function ObservationGraphs() {
                               ) : typeof val === 'object' && val !== null ? (
                                 <div className="json-wrapper">
                                   <pre className="json-val">{JSON.stringify(val, null, 2)}</pre>
-                                  <button 
+                                  <button
                                     className="copy-val-btn"
                                     onClick={() => navigator.clipboard.writeText(JSON.stringify(val, null, 2))}
                                     title="Copy JSON"
                                   >
-                                    📋
+                                    Copy
                                   </button>
                                 </div>
                               ) : (
@@ -782,10 +1091,10 @@ export default function ObservationGraphs() {
       <aside className="observation-graphs-sidebar">
         <h3>Analytics</h3>
         <p className="section-description">Select a visualization view</p>
-        
+
         <div className="observation-graphs-menu">
           {MENU_ITEMS.map(item => (
-            <div 
+            <div
               key={item.id}
               className={`menu-item ${activeView === item.id ? 'active' : ''}`}
               onClick={() => setActiveView(item.id)}
@@ -796,7 +1105,7 @@ export default function ObservationGraphs() {
           ))}
         </div>
       </aside>
-      
+
       <main className="observation-graphs-main">
         {renderContent()}
       </main>

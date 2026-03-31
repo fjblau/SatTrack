@@ -16,6 +16,13 @@ EDGE_COLLECTION_COLLISION_RISK = "collision_risk_edges"
 EDGE_COLLECTION_SATELLITE_LINEAGE = "satellite_lineage"
 COLLECTION_REG_DOCS = "registration_documents"
 COLLECTION_OBSERVATIONS = "observations"
+COLLECTION_OBSERVATION_SOURCES = "observation_sources"
+
+OBSERVATION_GRAPH_NAME = "observation_relationships"
+EDGE_COLLECTION_OBS_SATELLITE = "observation_satellite_edges"
+EDGE_COLLECTION_OBS_SOURCE = "observation_source_edges"
+EDGE_COLLECTION_OBS_CORRELATION = "observation_correlation_edges"
+EDGE_COLLECTION_OBS_TEMPORAL = "observation_temporal_edges"
 
 client = None
 db = None
@@ -43,7 +50,58 @@ def connect_arangodb():
         satellites_collection.add_persistent_index(fields=['canonical.international_designator'], unique=False)
         satellites_collection.add_persistent_index(fields=['canonical.registration_number'], unique=False)
         satellites_collection.add_persistent_index(fields=['identifier'], unique=True)
-        
+
+        # Ensure observations collection exists
+        if not db.has_collection(COLLECTION_OBSERVATIONS):
+            db.create_collection(COLLECTION_OBSERVATIONS)
+        obs_col = db.collection(COLLECTION_OBSERVATIONS)
+        obs_col.add_persistent_index(fields=['norad_id'], unique=False)
+        obs_col.add_persistent_index(fields=['source'], unique=False)
+        obs_col.add_persistent_index(fields=['observation_epoch'], unique=False)
+
+        # Ensure observation_sources vertex collection exists
+        if not db.has_collection(COLLECTION_OBSERVATION_SOURCES):
+            db.create_collection(COLLECTION_OBSERVATION_SOURCES)
+
+        # Ensure observation edge collections exist
+        obs_edge_collections = [
+            EDGE_COLLECTION_OBS_SATELLITE,
+            EDGE_COLLECTION_OBS_SOURCE,
+            EDGE_COLLECTION_OBS_CORRELATION,
+            EDGE_COLLECTION_OBS_TEMPORAL,
+        ]
+        for edge_col_name in obs_edge_collections:
+            if not db.has_collection(edge_col_name):
+                db.create_collection(edge_col_name, edge=True)
+
+        # Ensure observation graph exists
+        if not db.has_graph(OBSERVATION_GRAPH_NAME):
+            db.create_graph(
+                OBSERVATION_GRAPH_NAME,
+                edge_definitions=[
+                    {
+                        "edge_collection": EDGE_COLLECTION_OBS_SATELLITE,
+                        "from_vertex_collections": [COLLECTION_OBSERVATIONS],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_OBS_SOURCE,
+                        "from_vertex_collections": [COLLECTION_OBSERVATIONS],
+                        "to_vertex_collections": [COLLECTION_OBSERVATION_SOURCES],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_OBS_CORRELATION,
+                        "from_vertex_collections": [COLLECTION_OBSERVATIONS],
+                        "to_vertex_collections": [COLLECTION_OBSERVATIONS],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_OBS_TEMPORAL,
+                        "from_vertex_collections": [COLLECTION_OBSERVATIONS],
+                        "to_vertex_collections": [COLLECTION_OBSERVATIONS],
+                    },
+                ],
+            )
+
         pkg = sys.modules.get('database')
         if pkg is not None:
             pkg.db = db

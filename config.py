@@ -18,10 +18,19 @@ class DatabaseConfig:
     COLLECTION_SATELLITES: str = "satellites"
     COLLECTION_REG_DOCS: str = "registration_documents"
     
+    COLLECTION_OBSERVATIONS: str = "observations"
+    COLLECTION_OBSERVATION_SOURCES: str = "observation_sources"
+
     GRAPH_NAME: str = "satellite_relationships"
     EDGE_COLLECTION_CONSTELLATION: str = "constellation_membership"
     EDGE_COLLECTION_REGISTRATION: str = "registration_links"
     EDGE_COLLECTION_PROXIMITY: str = "orbital_proximity"
+
+    OBSERVATION_GRAPH_NAME: str = "observation_relationships"
+    EDGE_COLLECTION_OBS_SATELLITE: str = "observation_satellite_edges"
+    EDGE_COLLECTION_OBS_SOURCE: str = "observation_source_edges"
+    EDGE_COLLECTION_OBS_CORRELATION: str = "observation_correlation_edges"
+    EDGE_COLLECTION_OBS_TEMPORAL: str = "observation_temporal_edges"
 
 
 class CacheConfig:

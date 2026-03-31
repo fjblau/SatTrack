@@ -1,10 +1,15 @@
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator, model_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
+import csv
+import io
+import json as json_module
 
 import database as db_module
 from database.connection import COLLECTION_OBSERVATIONS
+from database.observation_graph_ops import create_edges_for_observation
 
 router = APIRouter(tags=["observations"])
 
@@ -170,9 +175,14 @@ def import_observations(body: ObservationImportRequest):
             doc["thermal"] = obs.thermal.model_dump(exclude_none=True)
 
         try:
-            db.collection(COLLECTION_OBSERVATIONS).insert(doc)
+            result = db.collection(COLLECTION_OBSERVATIONS).insert(doc, return_new=True)
             existing_set.add(key)
             inserted += 1
+            # Create graph edges for the new observation
+            try:
+                create_edges_for_observation(result["new"])
+            except Exception:
+                pass  # edge creation is best-effort; don't fail the import
         except Exception as e:
             errors.append({
                 "norad_id": obs.norad_id,
@@ -376,6 +386,7 @@ def get_all_observations(
 class AqlQueryRequest(BaseModel):
     query: str
     bind_vars: Optional[dict] = None
+    format: Optional[str] = None  # "json", "csv", or None (default JSON response)
 
 
 @router.get("/v2/observations/analytics/health-over-time")
@@ -465,6 +476,20 @@ def execute_custom_aql(request: AqlQueryRequest, fast_request: Request):
     try:
         cursor = db.aql.execute(request.query, bind_vars=request.bind_vars or {})
         results = list(cursor)
+
+        # Export as downloadable CSV
+        if request.format == "csv":
+            return _results_to_csv_response(results)
+
+        # Export as downloadable JSON file
+        if request.format == "json_file":
+            content = json_module.dumps(results, indent=2, default=str)
+            return StreamingResponse(
+                io.BytesIO(content.encode()),
+                media_type="application/json",
+                headers={"Content-Disposition": "attachment; filename=aql_export.json"},
+            )
+
         return {
             "data": results,
             "count": len(results)
@@ -504,3 +529,54 @@ def get_observations(norad_id: int, limit: Optional[int] = 100, offset: Optional
         "limit": limit,
         "offset": offset
     }
+
+
+def _results_to_csv_response(results):
+    """Convert AQL query results to a downloadable CSV StreamingResponse."""
+    if not results:
+        output = io.StringIO()
+        output.write("")
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode()),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=aql_export.csv"},
+        )
+
+    # Flatten nested dicts for CSV columns
+    def flatten(obj, parent_key=""):
+        items = {}
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                new_key = f"{parent_key}.{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.update(flatten(v, new_key))
+                elif isinstance(v, (list, tuple)):
+                    items[new_key] = json_module.dumps(v, default=str)
+                else:
+                    items[new_key] = v
+        else:
+            items[parent_key or "value"] = obj
+        return items
+
+    flat_rows = [flatten(r) for r in results]
+    all_keys = []
+    seen = set()
+    for row in flat_rows:
+        for k in row:
+            if k not in seen:
+                all_keys.append(k)
+                seen.add(k)
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=all_keys, extrasaction="ignore")
+    writer.writeheader()
+    for row in flat_rows:
+        writer.writerow(row)
+
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=aql_export.csv"},
+    )

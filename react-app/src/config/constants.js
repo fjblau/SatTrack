@@ -41,6 +41,11 @@ export const API_ENDPOINTS = {
     EVOLUTION_TIMELINE: '/v2/graphs/evolution/timeline',
     EVOLUTION_SNAPSHOT: '/v2/graphs/evolution/snapshot',
     OBSERVATION_NEIGHBORHOOD: '/v2/graphs/observations/neighborhood',
+    OBSERVATION_SOURCE_NETWORK: '/v2/graphs/observations/source-network',
+    OBSERVATION_TEMPORAL_CHAIN: '/v2/graphs/observations/temporal-chain',
+    OBSERVATION_ANOMALY_CORRELATION: '/v2/graphs/observations/anomaly-correlation',
+    OBSERVATION_GRAPH_STATS: '/v2/graphs/observations/graph-stats',
+    OBSERVATION_POPULATE_EDGES: '/v2/graphs/observations/populate-edges',
   },
   
   DOCUMENTS: {

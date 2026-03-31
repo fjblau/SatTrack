@@ -33,6 +33,13 @@ from database.graph_analytics import (
     get_neighbor_based_recommendations,
     get_collaborative_filtering_recommendations
 )
+from database.observation_graph_ops import (
+    get_source_reliability_network,
+    get_temporal_chain,
+    get_anomaly_correlation_network,
+    get_observation_graph_stats,
+    populate_all_observation_edges,
+)
 from api.services.cache_service import get_cache
 from api.services import collision_service, lineage_service
 
@@ -522,6 +529,91 @@ def get_observations_neighborhood(
             status_code=500,
             detail=f"Error retrieving observations neighborhood: {str(e)}"
         )
+
+
+@router.get("/observations/source-network")
+def get_observation_source_network(
+    min_observations: int = Query(default=5, ge=1, description="Minimum observations for a source-satellite link"),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum links to return"),
+):
+    """Source reliability network: sources connected to satellites, weighted by observation count and avg health."""
+    try:
+        data = get_source_reliability_network(min_observations=min_observations, limit=limit)
+        return {
+            "data": data,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error building source network: {str(e)}")
+
+
+@router.get("/observations/temporal-chain")
+def get_observation_temporal_chain(
+    norad_id: int = Query(..., description="NORAD ID of the satellite"),
+    limit: int = Query(default=50, ge=1, le=500, description="Maximum edges to return"),
+):
+    """Temporal observation chain for a satellite — sequential observations linked over time."""
+    try:
+        data = get_temporal_chain(norad_id=norad_id, limit=limit)
+        return {
+            "data": data,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error building temporal chain: {str(e)}")
+
+
+@router.get("/observations/anomaly-correlation")
+def get_observation_anomaly_correlation(
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum edges to return"),
+):
+    """Anomaly co-occurrence network — satellites linked by simultaneous anomalies."""
+    try:
+        data = get_anomaly_correlation_network(limit=limit)
+        return {
+            "data": data,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error building anomaly correlation network: {str(e)}")
+
+
+@router.get("/observations/graph-stats")
+def get_obs_graph_stats():
+    """Return counts for all observation graph edge collections."""
+    try:
+        stats = get_observation_graph_stats()
+        return {
+            "data": stats,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving observation graph stats: {str(e)}")
+
+
+@router.post("/observations/populate-edges")
+def populate_observation_edges_endpoint(
+    time_window_hours: int = Query(default=24, ge=1, le=168, description="Time window for anomaly correlation (hours)"),
+    request: object = None,
+):
+    """Populate all observation edge collections (admin only). Run this after bulk importing observations."""
+    try:
+        results = populate_all_observation_edges(time_window_hours=time_window_hours)
+        return {
+            "data": results,
+            "message": "Observation edges populated successfully",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error populating observation edges: {str(e)}")
 
 
 @router.get("/registration-document/{doc_key}")
