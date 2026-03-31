@@ -260,7 +260,11 @@ export default function ObservationGraphs() {
         body: JSON.stringify({ query: aqlQuery })
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.detail || 'Failed to execute AQL query')
+      if (!response.ok) {
+        const detail = result.detail
+        const msg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join('; ') : JSON.stringify(detail)
+        throw new Error(msg || 'Failed to execute AQL query')
+      }
       setAqlResults(result)
     } catch (err) {
       console.error('Error running AQL:', err)
@@ -279,8 +283,10 @@ export default function ObservationGraphs() {
       })
 
       if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.detail || 'Export failed')
+        const errData = await response.json()
+        const detail = errData.detail
+        const msg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join('; ') : JSON.stringify(detail)
+        throw new Error(msg || 'Export failed')
       }
 
       const blob = await response.blob()
