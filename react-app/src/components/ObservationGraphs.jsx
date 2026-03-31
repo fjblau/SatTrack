@@ -739,14 +739,14 @@ export default function ObservationGraphs() {
 
         <div className="graph-container-wrapper">
           {neighborhoodData ? (
-            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ height: 'calc(100vh - 320px)', minHeight: '500px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
               <GraphViewer
                 graphType="neighborhood"
                 neighborhoodData={neighborhoodData}
               />
             </div>
           ) : (
-            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+            <div className="graph-placeholder" style={{ height: 'calc(100vh - 320px)', minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
               {loading ? (
                 <p>Loading network data...</p>
               ) : (
@@ -791,14 +791,14 @@ export default function ObservationGraphs() {
 
         <div className="graph-container-wrapper">
           {sourceNetworkData ? (
-            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ height: 'calc(100vh - 320px)', minHeight: '500px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
               <GraphViewer
                 graphType="neighborhood"
                 neighborhoodData={sourceNetworkData}
               />
             </div>
           ) : (
-            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+            <div className="graph-placeholder" style={{ height: 'calc(100vh - 320px)', minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
               <p>Click "Load Network" to visualize source-satellite relationships</p>
             </div>
           )}
@@ -842,14 +842,14 @@ export default function ObservationGraphs() {
 
         <div className="graph-container-wrapper">
           {temporalChainData ? (
-            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ height: 'calc(100vh - 320px)', minHeight: '500px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
               <GraphViewer
                 graphType="neighborhood"
                 neighborhoodData={temporalChainData}
               />
             </div>
           ) : (
-            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+            <div className="graph-placeholder" style={{ height: 'calc(100vh - 320px)', minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
               <p>Enter a NORAD ID to view its observation timeline as a graph</p>
             </div>
           )}
@@ -879,14 +879,14 @@ export default function ObservationGraphs() {
 
         <div className="graph-container-wrapper">
           {anomalyCorrData ? (
-            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ height: 'calc(100vh - 320px)', minHeight: '500px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
               <GraphViewer
                 graphType="neighborhood"
                 neighborhoodData={anomalyCorrData}
               />
             </div>
           ) : (
-            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+            <div className="graph-placeholder" style={{ height: 'calc(100vh - 320px)', minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
               <p>Click "Load Correlation Network" to see cross-satellite anomaly patterns</p>
             </div>
           )}
