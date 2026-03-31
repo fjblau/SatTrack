@@ -434,39 +434,33 @@ def get_source_reliability_network(min_observations: int = 5, limit: int = 100):
         src_id = f"source/{row['source_name']}"
         if src_id not in source_nodes:
             source_nodes[src_id] = {
-                "data": {
-                    "id": src_id,
-                    "label": row["source_name"],
-                    "type": "source",
-                    "background_color": "#e67e22",
-                    "node_size": 40,
-                }
+                "id": src_id,
+                "name": row["source_name"],
+                "type": "source",
+                "background_color": "#e67e22",
+                "node_size": 40,
             }
 
         sat_id = row["sat_id"]
         if sat_id not in sat_nodes:
             sat_nodes[sat_id] = {
-                "data": {
-                    "id": sat_id,
-                    "label": row["sat_name"] or str(row["norad"]),
-                    "type": "satellite",
-                    "background_color": "#2ecc71",
-                    "node_size": 30,
-                    "norad_id": row["norad"],
-                }
+                "id": sat_id,
+                "name": row["sat_name"] or str(row["norad"]),
+                "type": "satellite",
+                "background_color": "#2ecc71",
+                "node_size": 30,
+                "norad_id": row["norad"],
             }
 
         edges.append({
-            "data": {
-                "id": f"e_{row['source_name']}_{row['sat_key']}",
-                "source": src_id,
-                "target": sat_id,
-                "relationship_type": "observed_by",
-                "weight": row["obs_count"],
-                "avg_health": row["avg_health"],
-                "edge_label": str(row["obs_count"]),
-                "edge_width": min(max(row["obs_count"] / 5, 1), 8),
-            }
+            "id": f"e_{row['source_name']}_{row['sat_key']}",
+            "source": src_id,
+            "target": sat_id,
+            "type": "observed_by",
+            "weight": row["obs_count"],
+            "avg_health": row["avg_health"],
+            "edge_label": str(row["obs_count"]),
+            "edge_width": min(max(row["obs_count"] / 5, 1), 8),
         })
 
     return {
@@ -517,44 +511,38 @@ def get_temporal_chain(norad_id: int, limit: int = 50):
             health = fo.get("derived_health_score")
             color = _health_color(health)
             nodes[fo["_id"]] = {
-                "data": {
-                    "id": fo["_id"],
-                    "label": fo.get("observation_epoch", "")[:16],
-                    "type": "observation",
-                    "background_color": color,
-                    "health_score": health,
-                    "source": fo.get("source"),
-                    "node_size": 30,
-                }
+                "id": fo["_id"],
+                "name": fo.get("observation_epoch", "")[:16],
+                "type": "observation",
+                "background_color": color,
+                "health_score": health,
+                "source": fo.get("source"),
+                "node_size": 30,
             }
         if to and to["_id"] not in nodes:
             health = to.get("derived_health_score")
             color = _health_color(health)
             nodes[to["_id"]] = {
-                "data": {
-                    "id": to["_id"],
-                    "label": to.get("observation_epoch", "")[:16],
-                    "type": "observation",
-                    "background_color": color,
-                    "health_score": health,
-                    "source": to.get("source"),
-                    "node_size": 30,
-                }
+                "id": to["_id"],
+                "name": to.get("observation_epoch", "")[:16],
+                "type": "observation",
+                "background_color": color,
+                "health_score": health,
+                "source": to.get("source"),
+                "node_size": 30,
             }
 
         edge = row["edge"]
         delta = edge.get("health_delta")
         edges.append({
-            "data": {
-                "id": edge["_id"],
-                "source": edge["_from"],
-                "target": edge["_to"],
-                "relationship_type": "temporal_sequence",
-                "health_delta": delta,
-                "edge_label": f"{delta:+.1f}" if delta is not None else "",
-                "edge_color": "#e74c3c" if (delta is not None and delta < -5) else "#2ecc71" if (delta is not None and delta > 5) else "#95a5a6",
-                "edge_width": 2,
-            }
+            "id": edge["_id"],
+            "source": edge["_from"],
+            "target": edge["_to"],
+            "type": "temporal_sequence",
+            "health_delta": delta,
+            "edge_label": f"{delta:+.1f}" if delta is not None else "",
+            "edge_color": "#e74c3c" if (delta is not None and delta < -5) else "#2ecc71" if (delta is not None and delta > 5) else "#95a5a6",
+            "edge_width": 2,
         })
 
     return {
@@ -619,27 +607,23 @@ def get_anomaly_correlation_network(limit: int = 100):
             nid = f"sat/{norad}"
             if nid not in nodes:
                 nodes[nid] = {
-                    "data": {
-                        "id": nid,
-                        "label": name,
-                        "type": "satellite",
-                        "norad_id": norad,
-                        "background_color": "#e74c3c",
-                        "node_size": 30 + min(pair["co_occurrences"] * 3, 20),
-                    }
+                    "id": nid,
+                    "name": name,
+                    "type": "satellite",
+                    "norad_id": norad,
+                    "background_color": "#e74c3c",
+                    "node_size": 30 + min(pair["co_occurrences"] * 3, 20),
                 }
         edges.append({
-            "data": {
-                "id": f"corr_{pair['norad_a']}_{pair['norad_b']}",
-                "source": f"sat/{pair['norad_a']}",
-                "target": f"sat/{pair['norad_b']}",
-                "relationship_type": "anomaly_correlation",
-                "co_occurrences": pair["co_occurrences"],
-                "avg_time_diff_hours": round(pair["avg_time_diff"], 1),
-                "edge_label": str(pair["co_occurrences"]),
-                "edge_color": "#e74c3c",
-                "edge_width": min(max(pair["co_occurrences"], 1), 6),
-            }
+            "id": f"corr_{pair['norad_a']}_{pair['norad_b']}",
+            "source": f"sat/{pair['norad_a']}",
+            "target": f"sat/{pair['norad_b']}",
+            "type": "anomaly_correlation",
+            "co_occurrences": pair["co_occurrences"],
+            "avg_time_diff_hours": round(pair["avg_time_diff"], 1),
+            "edge_label": str(pair["co_occurrences"]),
+            "edge_color": "#e74c3c",
+            "edge_width": min(max(pair["co_occurrences"], 1), 6),
         })
 
     return {
