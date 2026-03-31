@@ -1,88 +1,51 @@
-# Spec and build
-
-## Agent Instructions
-
-Ask the user questions when anything is unclear or needs their input. This includes:
-
-- Ambiguous or incomplete requirements
-- Technical decisions that affect architecture or user experience
-- Trade-offs that require business context
-
-Do not make assumptions on important decisions — get clarification first.
-
----
+# Implementation Plan: Observation Graph and AQL Editor
 
 ## Workflow Steps
 
-### [x] Step: Technical Specification
-
-Assess the task's difficulty, as underestimating it leads to poor outcomes.
-
-- easy: Straightforward implementation, trivial bug fix or feature
-- medium: Moderate complexity, some edge cases or caveats to consider
-- hard: Complex logic, many caveats, architectural considerations, or high-risk changes
-
-Create a technical specification for the task that is appropriate for the complexity level:
-
-- Review the existing codebase architecture and identify reusable components.
-- Define the implementation approach based on established patterns in the project.
-- Identify all source code files that will be created or modified.
-- Define any necessary data model, API, or interface changes.
-- Describe verification steps using the project's test and lint commands.
-
-Save the output to `/Users/frankblau/SatTrack/.zencoder/chats/fbddbbd9-a5c8-44c0-b3a1-d021e5e2d59a/spec.md` with:
-
-- Technical context (language, dependencies)
-- Implementation approach
-- Source code structure changes
-- Data model / API / interface changes
-- Verification approach
-
-If the task is complex enough, create a detailed implementation plan based on `/Users/frankblau/SatTrack/.zencoder/chats/fbddbbd9-a5c8-44c0-b3a1-d021e5e2d59a/spec.md`:
-
-- Break down the work into concrete tasks (incrementable, testable milestones)
-- Each task should reference relevant contracts and include verification steps
-- Replace the Implementation step below with the planned tasks
-
-Rule of thumb for step size: each step should represent a coherent unit of work (e.g., implement a component, add an API endpoint, write tests for a module). Avoid steps that are too granular (single function).
-
-Save to `/Users/frankblau/SatTrack/.zencoder/chats/fbddbbd9-a5c8-44c0-b3a1-d021e5e2d59a/plan.md`. If the feature is trivial and doesn't warrant this breakdown, keep the Implementation step below as is.
-
-**Stop here.** Present the specification (and plan, if created) to the user and wait for their confirmation before proceeding.
-
----
-
-### [x] Step: Backend Analytics & AQL Endpoints
-Implement new analytics endpoints and the AQL execution route in `api/routers/observations.py`.
+### [x] 1. Backend: Analytics and AQL Endpoints
+Implement new analytics and AQL execution routes in `api/routers/observations.py`.
 - Implement `GET /v2/observations/analytics/health-over-time`.
 - Implement `GET /v2/observations/analytics/anomaly-distribution`.
 - Implement `GET /v2/observations/analytics/source-distribution`.
 - Implement `POST /v2/observations/aql`.
-- **Verification**: Run `curl` commands to verify each endpoint returns correct data.
+- **Verification**: Use `curl` or Postman to verify endpoints return valid JSON.
 
-### [x] Step: Frontend Configuration & Navigation
-Update constants and navigation to include the new Observation Graphs page.
+### [x] 2. Backend: Observation Graph Endpoint
+Implement the observation neighborhood graph endpoint in `api/routers/graphs.py`.
+- Implement `GET /v2/graphs/observations/neighborhood?norad_id=...`.
+- Ensure it returns a structure compatible with `GraphViewer.jsx` (nodes/edges).
+- **Verification**: Verify the graph structure contains the satellite, observations, and source nodes.
+
+### [x] 3. Frontend: Configuration and Navigation
+Update constants and navigation.
 - Add new endpoints to `react-app/src/config/constants.js`.
 - Modify `react-app/src/App.jsx` to add "Observation Graphs" tab (admin-only).
-- **Verification**: Login as admin and verify the new button appears in the header.
+- **Verification**: Login as admin and verify the new tab is visible.
 
-### [x] Step: ObservationGraphs Component Implementation
-Create the `ObservationGraphs` component with sidebar and visualization views.
-- Create `react-app/src/components/ObservationGraphs.jsx`.
-- Create `react-app/src/components/ObservationGraphs.css`.
-- Implement "Health Trends" visualization (SVG-based).
-- Implement "Anomaly Analysis" visualization.
-- Implement "Source Statistics" visualization.
-- **Verification**: Click through different views in the sidebar and verify charts render correctly.
+### [x] 4. Frontend: ObservationGraphs Component
+Create the main component with sidebar navigation.
+- Create `react-app/src/components/ObservationGraphs.jsx` and `.css`.
+- Implement the sidebar to switch between different views.
+- **Verification**: Verify sidebar navigation works and switches components.
 
-### [x] Step: AQL Editor Implementation
-Add the AQL editor functionality to the `ObservationGraphs` component.
-- Implement the AQL editor UI in `ObservationGraphs.jsx`.
-- Implement query execution and results rendering.
-- **Verification**: Execute valid and invalid AQL queries and verify results/error messages.
+### [x] 5. Frontend: Observation Network (Graph View)
+Implement the graph visualization using `GraphViewer`.
+- Integrate `GraphViewer` with `graphType="neighborhood"`.
+- Implement a search bar to select a satellite by `norad_id`.
+- **Verification**: Searching for a satellite should render its observation network.
 
-### [x] Step: Final Review & Testing
-Perform final manual verification and run tests/linters.
-- Verify admin-only access (login as demo user).
+### [x] 6. Frontend: Analytics Charts
+Implement the SVG-based charts.
+- Implement Health Trends (line chart).
+- Implement Anomaly Analysis and Source Statistics (bar charts).
+- **Verification**: Verify charts render correctly with real data from the backend.
+
+### [x] 7. Frontend: AQL Editor
+Implement the AQL editor functionality.
+- Add text area for query input and a result display area.
+- Handle success and error states (e.g., syntax errors).
+- **Verification**: Execute `FOR o IN observations LIMIT 5 RETURN o` and verify results.
+
+### [x] 8. Final Review
+- Manual verification of all features.
 - Run `npm run lint` and backend tests.
-- Write a report to `/Users/frankblau/SatTrack/.zencoder/chats/fbddbbd9-a5c8-44c0-b3a1-d021e5e2d59a/report.md`.

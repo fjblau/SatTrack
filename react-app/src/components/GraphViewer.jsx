@@ -1602,7 +1602,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             label: node.name || node.identifier || (node.id?.split('/')[1]),
             is_source: node.is_source,
             distance: node.distance,
-            node_size: node.is_source ? 50 : (40 - (node.distance * 5))
+            node_size: node.is_source ? 50 : (40 - ((node.distance || 1) * 5))
           }
         })),
         edges: (data.edges || []).filter(edge => (edge.source || edge._from) != null && (edge.target || edge._to) != null).map(edge => {

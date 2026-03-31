@@ -1,48 +1,51 @@
-# Technical Specification: Observation Graphs and AQL Editor
+# Technical Specification: Observation Graph Database and AQL Editor
 
 ## Technical Context
 - **Language**: Python (FastAPI), JavaScript (React)
 - **Database**: ArangoDB
-- **Frontend Patterns**: React functional components with `useState`, `useEffect`, and manual SVG rendering for charts (matching `TimelineChart.jsx`).
-- **Authentication**: Token-based, with `is_demo` flag in session storage to differentiate between admin and demo users.
+- **Frontend Patterns**: React functional components, `GraphViewer.jsx` (Cytoscape.js for graph visualization), SVG for charts.
+- **Authentication**: Token-based, with `is_demo` flag in session storage.
 
 ## Implementation Approach
 
-### 1. Backend: Observation Analytics and AQL Endpoint
-Modify `api/routers/observations.py` to add new endpoints:
+### 1. Backend: Observation Graph and AQL Endpoint
+Modify `api/routers/graphs.py` to add the graph neighborhood endpoint:
+- **`GET /v2/graphs/observations/neighborhood`**:
+  - Parameters: `norad_id` (required).
+  - Fetches the satellite node.
+  - Fetches all observations for the satellite from the `observations` collection.
+  - Extracts unique `source` strings from those observations to create source nodes.
+  - Returns a graph structure:
+    - **Nodes**:
+      - Satellite (center): `{ id, name, type: "satellite", is_source: true }`
+      - Observations: `{ id, epoch, type: "observation", is_source: false }`
+      - Sources: `{ id: "source/<name>", name, type: "source", is_source: false }`
+    - **Edges**:
+      - `satellite` -> `observation` (type: "has_observation")
+      - `observation` -> `source` (type: "recorded_by")
+
+Modify `api/routers/observations.py` to add analytics and AQL endpoints:
 - **`GET /v2/observations/analytics/health-over-time`**: 
-  - Groups observations by date (daily or weekly).
-  - Calculates the average `derived_health_score` for each group.
-  - Returns a list of `{ date, average_health_score }`.
+  - Groups observations by date and returns `{ date, average_health_score }`.
 - **`GET /v2/observations/analytics/anomaly-distribution`**:
-  - Groups observations where `thermal.anomaly_flag == true`.
-  - Groups by `source` or `object_type`.
-  - Returns counts for each group.
+  - Groups observations where `thermal.anomaly_flag == true` by `source` or `object_type`.
 - **`GET /v2/observations/analytics/source-distribution`**:
   - Groups all observations by `source`.
-  - Returns counts for each source.
 - **`POST /v2/observations/aql`**:
-  - Accepts a JSON body with a `query` string.
-  - Executes the query using `db.aql.execute`.
-  - Returns the results as a list.
-  - **Security**: Since this is restricted to admins in the UI, we will rely on the existing `AuthMiddleware` which should already be protecting these routes if we ensure they are handled correctly. Note: `AuthMiddleware` currently allows all requests if a token is present, but we should verify if it distinguishes between demo and admin tokens. Looking at `api/routers/auth.py`, it seems it doesn't strictly forbid demo users from hitting certain endpoints yet, other than what's filtered in the frontend. 
+  - Executes a raw AQL query and returns JSON results.
 
 ### 2. Frontend: Observation Graphs Page
-- **Navigation**: Update `react-app/src/App.jsx` to include an "Observation Graphs" button in the header, visible only when `!isDemo`.
+- **Navigation**: Update `react-app/src/App.jsx` to include an "Observation Graphs" button in the header (admin-only).
 - **New Component `ObservationGraphs.jsx`**:
-  - Implements a sidebar similar to `GraphExplorer.jsx` for selecting different visualizations:
-    - Health Trends
-    - Anomaly Analysis
-    - Source Statistics
-    - AQL Editor
-  - **Visualizations**:
-    - **Health Trends**: A line chart (SVG) showing average health score over time.
-    - **Anomaly Analysis**: A bar chart (SVG) or pie chart showing anomalies by source.
-    - **Source Statistics**: A bar chart (SVG) showing observation counts per source.
-  - **AQL Editor**:
-    - A text area for writing AQL queries.
-    - An "Execute" button.
-    - A results panel that displays the returned JSON data in a formatted way (e.g., `<pre>` block or table).
+  - Sidebar for selecting:
+    - **Observation Network (Graph View)**: Uses `GraphViewer.jsx` to visualize the relationship between satellites, observations, and ground sources.
+    - **Health Trends (Line Chart)**: SVG chart for health scores over time.
+    - **Anomaly Analysis (Bar Chart)**: SVG chart for anomaly distribution.
+    - **Source Statistics (Bar Chart)**: SVG chart for observation counts.
+    - **AQL Editor**: Text area and results panel for running manual queries.
+  - **Graph View**:
+    - Provides a search/select for `norad_id` to center the graph.
+    - Passes fetched data to `GraphViewer` with `graphType="neighborhood"`.
 
 ### 3. Configuration
 - Update `react-app/src/config/constants.js` to include the new API endpoints.
@@ -54,9 +57,10 @@ Modify `api/routers/observations.py` to add new endpoints:
 - `react-app/src/components/ObservationGraphs.css`
 
 ### Modified Files:
-- `react-app/src/App.jsx`: Add new tab and routing logic.
-- `react-app/src/config/constants.js`: Add new API endpoints to `API_ENDPOINTS`.
-- `api/routers/observations.py`: Add new analytics and AQL routes.
+- `react-app/src/App.jsx`: Add new tab and routing.
+- `react-app/src/config/constants.js`: Add API endpoints.
+- `api/routers/observations.py`: Add analytics and AQL routes.
+- `api/routers/graphs.py`: Add `/v2/graphs/observations/neighborhood` route.
 
 ## Data Model / API / Interface Changes
 
@@ -66,23 +70,19 @@ Modify `api/routers/observations.py` to add new endpoints:
 - `GET /v2/observations/analytics/source-distribution`
 - `POST /v2/observations/aql`
   - Body: `{ "query": "string" }`
-  - Response: `{ "data": [...], "count": number }`
+- `GET /v2/graphs/observations/neighborhood?norad_id=12345`
+  - Response: `{ "nodes": [...], "edges": [...] }`
 
 ## Verification Approach
 
 ### Automated Testing
-- Add unit tests in `tests/unit/test_observations_router.py` (if it exists, or create it) to test the new analytics endpoints.
-- Ensure `POST /v2/observations/aql` returns expected results for a simple query.
+- Unit tests for the new backend endpoints.
+- Verify `POST /v2/observations/aql` returns expected data.
 
 ### Manual Verification
-1. Log in as admin (not demo).
-2. Verify "Observation Graphs" button appears in the header.
-3. Click "Observation Graphs" and verify the sidebar and initial graph load.
-4. Switch between different visualizations in the sidebar.
-5. Use the AQL Editor to run a simple query like `FOR obs IN observations LIMIT 5 RETURN obs` and verify the results are displayed.
-6. Log in as demo user and verify "Observation Graphs" button is NOT visible.
-7. Verify the AQL editor handles errors (e.g., syntax errors in AQL) gracefully.
-
-### Linting & Type Checking
-- Run `npm run lint` in `react-app`.
-- Run `ruff` or `flake8` on the backend code.
+1. Log in as admin.
+2. Verify "Observation Graphs" appears.
+3. Select "Observation Network" and search for a satellite to see its connections.
+4. Verify the AQL Editor can query the `observations` and `satellites` collections.
+5. Verify charts render correctly.
+6. Verify access is restricted for demo users.

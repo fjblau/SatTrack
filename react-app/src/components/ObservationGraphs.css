@@ -186,12 +186,29 @@
 }
 
 .bar {
-  fill: #3498db;
-  transition: fill 0.2s ease;
+  transition: fill 0.2s ease, opacity 0.2s ease;
+  cursor: pointer;
 }
 
-.bar:hover {
-  fill: #2980b9;
+.anomaly-bar {
+  fill: #e67e22;
+}
+
+.anomaly-bar:hover {
+  fill: #d35400;
+}
+
+.source-bar {
+  fill: #2ecc71;
+}
+
+.source-bar:hover {
+  fill: #27ae60;
+}
+
+.bar-axis-label {
+  font-weight: 600;
+  fill: #7f8c8d;
 }
 
 .bar-label {
@@ -347,12 +364,16 @@
 .results-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: auto;
 }
 
 .results-table th, .results-table td {
   padding: 0.75rem;
   text-align: left;
   border-bottom: 1px solid #eee;
+  max-width: 400px;
+  overflow-wrap: break-word;
+  vertical-align: top;
 }
 
 .results-table th {
@@ -362,9 +383,116 @@
   top: 0;
 }
 
+.card-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.card-header-actions h2 {
+  margin-bottom: 0;
+}
+
+.view-toggle {
+  display: flex;
+  background-color: #f1f3f5;
+  padding: 0.2rem;
+  border-radius: 6px;
+}
+
+.toggle-btn {
+  padding: 0.4rem 1rem;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.toggle-btn.active {
+  background-color: white;
+  color: #3498db;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.json-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.copy-val-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.2rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.json-wrapper:hover .copy-val-btn {
+  opacity: 1;
+}
+
+.copy-val-btn:hover {
+  background: white;
+  border-color: #3498db;
+}
+
+.sample-chip.challenge-chip {
+  background-color: #f3f0ff;
+  color: #6741d9;
+  border: 1px dashed #b197fc;
+}
+
+.sample-chip.challenge-chip:hover {
+  background-color: #ede9fe;
+}
+
 .no-results {
   padding: 2rem;
   text-align: center;
   color: #999;
   font-style: italic;
+}
+
+/* Network View styles */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background-color: #f1f3f5;
+  padding: 1rem;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.norad-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  width: 200px;
+}
+
+.network-view .chart-controls {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.graph-container-wrapper {
+  margin-top: 1rem;
+}
+
+.graph-placeholder {
+  border: 2px dashed #dee2e6;
 }

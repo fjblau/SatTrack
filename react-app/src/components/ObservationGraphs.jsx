@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
+import GraphViewer from './GraphViewer'
 import './ObservationGraphs.css'
 
 const CHART_DIMENSIONS = {
@@ -26,6 +27,11 @@ const MENU_ITEMS = [
     desc: 'Observations by data source'
   },
   {
+    id: 'network',
+    label: 'Observation Network',
+    desc: 'Graph view of satellite observations'
+  },
+  {
     id: 'aql',
     label: 'AQL Editor',
     desc: 'Custom analytics queries'
@@ -42,6 +48,10 @@ export default function ObservationGraphs() {
   const [aqlQuery, setAqlQuery] = useState('FOR obs IN observations\n  SORT obs.observation_epoch DESC\n  LIMIT 10\n  RETURN obs')
   const [aqlResults, setAqlResults] = useState(null)
   const [aqlLoading, setAqlLoading] = useState(false)
+  const [noradId, setNoradId] = useState('')
+  const [neighborhoodData, setNeighborhoodData] = useState(null)
+  const [hoveredIndex, setHoveredIndex] = useState(null)
+  const [viewAsGraph, setViewAsGraph] = useState(false)
 
   const SAMPLE_QUERIES = [
     {
@@ -59,10 +69,16 @@ export default function ObservationGraphs() {
   ]
 
   useEffect(() => {
-    if (activeView !== 'aql') {
+    if (activeView !== 'aql' && activeView !== 'network') {
       fetchData()
     }
   }, [activeView, granularity, anomalyBy])
+
+  useEffect(() => {
+    if (activeView === 'network' && noradId) {
+      fetchNeighborhoodData()
+    }
+  }, [activeView, noradId])
 
   const fetchData = async () => {
     setLoading(true)
@@ -91,6 +107,25 @@ export default function ObservationGraphs() {
       setData(result)
     } catch (err) {
       console.error('Error fetching analytics data:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchNeighborhoodData = async () => {
+    if (!noradId) return
+    setLoading(true)
+    setError(null)
+    setNeighborhoodData(null)
+
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.OBSERVATION_NEIGHBORHOOD}?satellite_id=${noradId}`)
+      if (!response.ok) throw new Error(`Failed to fetch neighborhood: ${response.statusText}`)
+      const result = await response.json()
+      setNeighborhoodData(result.data)
+    } catch (err) {
+      console.error('Error fetching neighborhood data:', err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -146,6 +181,8 @@ export default function ObservationGraphs() {
         return renderAnomalyAnalysis()
       case 'source':
         return renderSourceStats()
+      case 'network':
+        return renderObservationNetwork()
       case 'aql':
         return renderAqlEditor()
       default:
@@ -213,17 +250,16 @@ export default function ObservationGraphs() {
 
           {/* X axis labels (sample some) */}
           {data.map((d, i) => {
-            if (data.length > 10 && i % Math.ceil(data.length / 10) !== 0) return null
+            if (data.length > 15 && i % Math.ceil(data.length / 15) !== 0) return null
             return (
               <text 
                 key={i} 
                 x={xScale(i)} 
-                y={padding.top + chartHeight + 35} 
+                y={padding.top + chartHeight + 15} 
                 textAnchor="middle" 
                 className="axis-text"
-                transform={`rotate(-45, ${xScale(i)}, ${padding.top + chartHeight + 35})`}
               >
-                {d.date}
+                {d.date.substring(5)}
               </text>
             )
           })}
@@ -236,12 +272,46 @@ export default function ObservationGraphs() {
               key={i} 
               cx={xScale(i)} 
               cy={yScale(d.average_health_score)} 
-              r="4" 
+              r={hoveredIndex === i ? 6 : 4} 
               className="chart-dot"
-            >
-              <title>{`${d.date}: ${d.average_health_score.toFixed(2)}`}</title>
-            </circle>
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            />
           ))}
+
+          {/* Tooltip */}
+          {hoveredIndex !== null && data[hoveredIndex] && (
+            <g>
+              <rect
+                x={xScale(hoveredIndex) - 60}
+                y={yScale(data[hoveredIndex].average_health_score) - 50}
+                width="120"
+                height="40"
+                fill="rgba(44, 62, 80, 0.9)"
+                rx="4"
+              />
+              <text
+                x={xScale(hoveredIndex)}
+                y={yScale(data[hoveredIndex].average_health_score) - 35}
+                textAnchor="middle"
+                fontSize="11"
+                fill="white"
+                fontWeight="600"
+              >
+                {data[hoveredIndex].date}
+              </text>
+              <text
+                x={xScale(hoveredIndex)}
+                y={yScale(data[hoveredIndex].average_health_score) - 20}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#3498db"
+                fontWeight="bold"
+              >
+                Score: {data[hoveredIndex].average_health_score.toFixed(2)}
+              </text>
+            </g>
+          )}
 
           <line 
             x1={padding.left} 
@@ -329,7 +399,7 @@ export default function ObservationGraphs() {
                   y={yScale(d.value)} 
                   width={barWidth} 
                   height={h} 
-                  className="bar" 
+                  className="bar anomaly-bar" 
                 >
                   <title>{`${d.label}: ${d.value}`}</title>
                 </rect>
@@ -337,7 +407,7 @@ export default function ObservationGraphs() {
                   x={x + barWidth / 2} 
                   y={padding.top + chartHeight + 20} 
                   textAnchor="middle" 
-                  className="axis-text"
+                  className="axis-text bar-axis-label"
                 >
                   {d.label}
                 </text>
@@ -430,8 +500,7 @@ export default function ObservationGraphs() {
                   y={yScale(d.value)} 
                   width={barWidth} 
                   height={h} 
-                  className="bar" 
-                  style={{ fill: '#2ecc71' }}
+                  className="bar source-bar" 
                 >
                   <title>{`${d.label}: ${d.value}`}</title>
                 </rect>
@@ -439,7 +508,7 @@ export default function ObservationGraphs() {
                   x={x + barWidth / 2} 
                   y={padding.top + chartHeight + 20} 
                   textAnchor="middle" 
-                  className="axis-text"
+                  className="axis-text bar-axis-label"
                 >
                   {d.label}
                 </text>
@@ -484,7 +553,74 @@ export default function ObservationGraphs() {
     )
   }
 
+  const renderObservationNetwork = () => {
+    return (
+      <div className="chart-card network-view">
+        <h2>Observation Network</h2>
+        <p className="chart-description">Visual representation of satellite observations and their sources</p>
+        
+        <div className="chart-controls">
+          <div className="search-box">
+            <label htmlFor="norad-search">NORAD ID:</label>
+            <input 
+              id="norad-search"
+              type="text" 
+              placeholder="Enter NORAD ID (e.g. 25544)" 
+              value={noradId}
+              onChange={(e) => setNoradId(e.target.value)}
+              className="norad-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') fetchNeighborhoodData()
+              }}
+            />
+            <button 
+              onClick={fetchNeighborhoodData} 
+              className="run-button"
+              disabled={loading || !noradId}
+            >
+              Search
+            </button>
+          </div>
+        </div>
+
+        <div className="graph-container-wrapper">
+          {neighborhoodData ? (
+            <div style={{ height: '600px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+              <GraphViewer 
+                graphType="neighborhood" 
+                neighborhoodData={neighborhoodData} 
+              />
+            </div>
+          ) : (
+            <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+              {loading ? (
+                <p>Loading network data...</p>
+              ) : (
+                <p>Enter a NORAD ID to visualize its observation network</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   const renderAqlEditor = () => {
+    // Detect if results contain graph data (nodes and edges)
+    const hasGraphData = useMemo(() => {
+      if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return false
+      
+      // If it's a single object with nodes/edges
+      if (aqlResults.data.length === 1) {
+        const item = aqlResults.data[0]
+        return item && typeof item === 'object' && item.nodes && item.edges
+      }
+      
+      // If it's an array of items that might be nodes/edges
+      // (This is less common for GraphViewer but possible)
+      return false
+    }, [aqlResults])
+
     // Collect all unique keys from all rows to ensure consistent column headers
     const allKeys = useMemo(() => {
       if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return []
@@ -505,7 +641,25 @@ export default function ObservationGraphs() {
 
     return (
       <div className="chart-card">
-        <h2>AQL Editor</h2>
+        <div className="card-header-actions">
+          <h2>AQL Editor</h2>
+          {hasGraphData && (
+            <div className="view-toggle">
+              <button 
+                className={`toggle-btn ${!viewAsGraph ? 'active' : ''}`}
+                onClick={() => setViewAsGraph(false)}
+              >
+                Table
+              </button>
+              <button 
+                className={`toggle-btn ${viewAsGraph ? 'active' : ''}`}
+                onClick={() => setViewAsGraph(true)}
+              >
+                Graph
+              </button>
+            </div>
+          )}
+        </div>
         <p className="chart-description">Execute custom ArangoDB Query Language queries for deep analytics</p>
         
         <div className="aql-editor-container">
@@ -521,6 +675,12 @@ export default function ObservationGraphs() {
                   {sq.label}
                 </button>
               ))}
+              <button 
+                className="sample-chip challenge-chip" 
+                onClick={() => setAqlQuery('// CHALLENGE: Return a neighborhood graph\nLET sat = DOCUMENT("satellites/25544")\nLET obs = (FOR o IN observations FILTER o.norad_id == 25544 LIMIT 10 RETURN o)\nRETURN {\n  nodes: APPEND([\n    { data: { id: sat._id, label: sat.official_name || sat._key, type: "satellite" } }\n  ], obs[* RETURN { data: { id: CURRENT._id, label: CURRENT.source, type: "observation" } }]),\n  edges: obs[* RETURN { data: { id: CONCAT("e", sat._id, CURRENT._id), source: sat._id, target: CURRENT._id } }]\n}')}
+              >
+                Graph Query Example
+              </button>
             </div>
           </div>
 
@@ -539,6 +699,7 @@ export default function ObservationGraphs() {
                 onClick={() => {
                   setAqlResults(null)
                   setError(null)
+                  setViewAsGraph(false)
                 }}
               >
                 Clear Results
@@ -558,35 +719,54 @@ export default function ObservationGraphs() {
               <div className="results-summary">
                 Found {aqlResults.count} results
               </div>
-              <table className="results-table">
-                <thead>
-                  <tr>
-                    {allKeys.map(key => (
-                      <th key={key}>{key}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {aqlResults.data.map((row, i) => (
-                    <tr key={i}>
-                      {allKeys.map((key, j) => {
-                        const val = (typeof row === 'object' && row !== null) ? row[key] : (key === 'Result' ? row : undefined)
-                        return (
-                          <td key={j}>
-                            {val === undefined ? (
-                              <em className="null-val">N/A</em>
-                            ) : typeof val === 'object' && val !== null ? (
-                              <pre className="json-val">{JSON.stringify(val, null, 2)}</pre>
-                            ) : (
-                              String(val)
-                            )}
-                          </td>
-                        )
-                      })}
+              
+              {viewAsGraph && hasGraphData ? (
+                <div style={{ height: '500px', borderTop: '1px solid #eee' }}>
+                  <GraphViewer 
+                    graphType="neighborhood" 
+                    neighborhoodData={aqlResults.data[0]} 
+                  />
+                </div>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      {allKeys.map(key => (
+                        <th key={key}>{key}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {aqlResults.data.map((row, i) => (
+                      <tr key={i}>
+                        {allKeys.map((key, j) => {
+                          const val = (typeof row === 'object' && row !== null) ? row[key] : (key === 'Result' ? row : undefined)
+                          return (
+                            <td key={j}>
+                              {val === undefined ? (
+                                <em className="null-val">N/A</em>
+                              ) : typeof val === 'object' && val !== null ? (
+                                <div className="json-wrapper">
+                                  <pre className="json-val">{JSON.stringify(val, null, 2)}</pre>
+                                  <button 
+                                    className="copy-val-btn"
+                                    onClick={() => navigator.clipboard.writeText(JSON.stringify(val, null, 2))}
+                                    title="Copy JSON"
+                                  >
+                                    📋
+                                  </button>
+                                </div>
+                              ) : (
+                                String(val)
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
               {aqlResults.data.length === 0 && (
                 <div className="no-results">Query returned no results</div>
               )}

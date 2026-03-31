@@ -377,6 +377,153 @@ def get_satellite_neighborhood(
         )
 
 
+@router.get("/observations/neighborhood")
+def get_observations_neighborhood(
+    satellite_id: str = Query(..., description="Satellite identifier (NORAD ID, ID, etc.)"),
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum observations to return")
+):
+    """
+    Get the observations neighborhood graph for a satellite.
+    
+    Returns a graph structure containing the satellite, its observations, and the sources of those observations.
+    Compatible with GraphViewer.jsx.
+    """
+    try:
+        # Resolve satellite document ID
+        full_id = _resolve_satellite_doc_id(satellite_id)
+        if not full_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Satellite '{satellite_id}' not found"
+            )
+
+        query = """
+        LET sat = DOCUMENT(@source_id)
+        FILTER sat != null
+
+        LET observations = (
+            FOR obs IN observations
+            FILTER obs.norad_id == sat.canonical.norad_cat_id
+            SORT obs.observation_epoch DESC
+            LIMIT @limit
+            RETURN obs
+        )
+
+        LET source_nodes = (
+            FOR obs IN observations
+            COLLECT source_name = obs.source
+            RETURN {
+                id: CONCAT('source/', MD5(source_name)),
+                name: source_name,
+                type: 'source',
+                node_role: 'source',
+                background_color: '#e67e22'
+            }
+        )
+
+        LET observation_nodes = (
+            FOR obs IN observations
+            RETURN {
+                id: obs._id,
+                key: obs._key,
+                type: 'observation',
+                name: obs.observation_epoch,
+                epoch: obs.observation_epoch,
+                health_score: obs.derived_health_score,
+                source: obs.source,
+                background_color: '#3498db'
+            }
+        )
+
+        LET satellite_node = {
+            id: sat._id,
+            key: sat._key,
+            type: 'satellite',
+            name: sat.canonical.name,
+            identifier: sat.identifier,
+            norad_id: sat.canonical.norad_cat_id,
+            is_source: true,
+            background_color: '#2ecc71'
+        }
+
+        LET edges = APPEND(
+            (FOR obs IN observations
+                RETURN {
+                    id: CONCAT('edge/sat_obs/', obs._key),
+                    source: sat._id,
+                    target: obs._id,
+                    type: 'observed_by',
+                    relationship_type: 'observation'
+                }),
+            (FOR obs IN observations
+                RETURN {
+                    id: CONCAT('edge/obs_src/', obs._key),
+                    source: obs._id,
+                    target: CONCAT('source/', MD5(obs.source)),
+                    type: 'reported_by',
+                    relationship_type: 'reporting'
+                })
+        )
+
+        RETURN {
+            source_satellite: {
+                id: sat._id,
+                identifier: sat.identifier,
+                name: sat.canonical.name
+            },
+            nodes: APPEND(APPEND(observation_nodes, source_nodes), [satellite_node]),
+            edges: edges,
+            stats: {
+                total_nodes: LENGTH(observation_nodes) + LENGTH(source_nodes) + 1,
+                total_edges: LENGTH(edges),
+                observation_count: LENGTH(observation_nodes),
+                source_count: LENGTH(source_nodes)
+            }
+        }
+        """
+
+        cursor = db_conn.db.aql.execute(
+            query,
+            bind_vars={
+                'source_id': full_id,
+                'limit': limit
+            }
+        )
+
+        results = list(cursor)
+
+        if results and results[0]['nodes']:
+            return {
+                "data": results[0],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        else:
+            return {
+                "data": {
+                    "nodes": [],
+                    "edges": [],
+                    "stats": {
+                        "total_nodes": 0,
+                        "total_edges": 0,
+                        "observation_count": 0,
+                        "source_count": 0
+                    }
+                },
+                "message": f"No observations found for satellite '{satellite_id}'",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving observations neighborhood: {str(e)}"
+        )
+
+
 @router.get("/registration-document/{doc_key}")
 def get_registration_document_graph(
     doc_key: str,
