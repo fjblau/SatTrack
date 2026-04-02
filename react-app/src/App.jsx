@@ -11,6 +11,7 @@ import AdminPage from './components/AdminPage'
 import ObservationsView from './components/ObservationsView'
 import ObservationGraphs from './components/ObservationGraphs'
 import LoginPage from './components/LoginPage'
+import AqlEditorPage from './components/AqlEditorPage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
@@ -295,12 +296,20 @@ function App() {
           >
             Analytics
           </button>
-          <button 
+          <button
             className={activeTab === 'admin' ? 'active' : ''}
             onClick={() => setActiveTab('admin')}
           >
             Admin
           </button>
+          {!isDemo && (
+            <button
+              className={activeTab === 'aql-editor' ? 'active' : ''}
+              onClick={() => setActiveTab('aql-editor')}
+            >
+              AQL Editor
+            </button>
+          )}
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
         {activeTab === 'observations' && <p>Observational Data</p>}
@@ -394,6 +403,10 @@ function App() {
         <div className="analytics-view-container">
           <AdminPage />
         </div>
+      )}
+
+      {activeTab === 'aql-editor' && !isDemo && (
+        <AqlEditorPage />
       )}
 
       {activeTab === 'analytics' && (
