@@ -460,7 +460,6 @@ def get_satellite_observations_graph(
         LET obs_nodes = (
             FOR obs IN observations
                 LET health = obs.derived_health_score
-                LET color = health >= 80 ? '#2ecc71' : (health >= 50 ? '#f39c12' : (health != null ? '#e74c3c' : '#95a5a6'))
                 RETURN {{
                     id: obs._id,
                     key: obs._key,
@@ -470,7 +469,6 @@ def get_satellite_observations_graph(
                     source: obs.source,
                     health_score: obs.derived_health_score,
                     has_anomaly: obs.thermal.anomaly_flag == true,
-                    background_color: color,
                     node_size: 25,
                     observation_data: obs
                 }}
@@ -542,6 +540,25 @@ def get_satellite_observations_graph(
                 "message": f"No observations found for satellite '{satellite_id}'",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
+
+        # Compute health-score gradient colors for observation nodes
+        for node in result.get("nodes", []):
+            if node.get("type") == "observation":
+                h = node.get("health_score")
+                if h is None:
+                    node["background_color"] = "#95a5a6"
+                else:
+                    # Gradient: red(0) -> orange(50) -> green(100)
+                    h = max(0.0, min(100.0, float(h)))
+                    if h < 50:
+                        r = 231
+                        g = int(76 + h * (204 - 76) / 50)
+                        b = 60
+                    else:
+                        r = int(231 - (h - 50) * (231 - 46) / 50)
+                        g = 204
+                        b = int(60 + (h - 50) * (113 - 60) / 50)
+                    node["background_color"] = f"#{r:02x}{g:02x}{b:02x}"
 
         return {
             "data": result,
