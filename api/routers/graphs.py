@@ -458,7 +458,7 @@ def get_satellite_observations_graph(
                     id: obs._id,
                     key: obs._key,
                     type: 'observation',
-                    name: CONCAT(SUBSTRING(obs.observation_epoch, 0, 16), ' [', obs.source, ']'),
+                    name: SUBSTRING(obs.observation_epoch, 0, 16),
                     epoch: obs.observation_epoch,
                     source: obs.source,
                     health_score: obs.derived_health_score,
@@ -513,23 +513,35 @@ def get_satellite_observations_graph(
             }
 
         # Compute health-score gradient colors for observation nodes
-        for node in result.get("nodes", []):
-            if node.get("type") == "observation":
-                h = node.get("health_score")
-                if h is None:
-                    node["background_color"] = "#95a5a6"
+        # Normalize across the actual min/max range so differences are visible
+        obs_nodes = [n for n in result.get("nodes", []) if n.get("type") == "observation"]
+        scores = [n["health_score"] for n in obs_nodes if n.get("health_score") is not None]
+        if scores:
+            lo, hi = min(scores), max(scores)
+            span = hi - lo if hi > lo else 1.0  # avoid div by zero
+        else:
+            lo, hi, span = 0, 100, 100
+
+        for node in obs_nodes:
+            h = node.get("health_score")
+            if h is None:
+                node["background_color"] = "#95a5a6"
+            else:
+                # Normalize 0-1 within the observed range, then map to red->green
+                t = (float(h) - lo) / span  # 0 = worst in set, 1 = best in set
+                t = max(0.0, min(1.0, t))
+                # Red (231,76,60) -> Yellow (241,196,15) -> Green (46,204,113)
+                if t < 0.5:
+                    s = t * 2  # 0..1 within first half
+                    r = int(231 + (241 - 231) * s)
+                    g = int(76 + (196 - 76) * s)
+                    b = int(60 + (15 - 60) * s)
                 else:
-                    # Gradient: red(0) -> orange(50) -> green(100)
-                    h = max(0.0, min(100.0, float(h)))
-                    if h < 50:
-                        r = 231
-                        g = int(76 + h * (204 - 76) / 50)
-                        b = 60
-                    else:
-                        r = int(231 - (h - 50) * (231 - 46) / 50)
-                        g = 204
-                        b = int(60 + (h - 50) * (113 - 60) / 50)
-                    node["background_color"] = f"#{r:02x}{g:02x}{b:02x}"
+                    s = (t - 0.5) * 2  # 0..1 within second half
+                    r = int(241 + (46 - 241) * s)
+                    g = int(196 + (204 - 196) * s)
+                    b = int(15 + (113 - 15) * s)
+                node["background_color"] = f"#{r:02x}{g:02x}{b:02x}"
 
         return {
             "data": result,
