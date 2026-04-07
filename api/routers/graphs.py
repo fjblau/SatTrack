@@ -396,6 +396,166 @@ def get_satellite_neighborhood(
         )
 
 
+@router.get("/satellite-observations/{satellite_id}")
+def get_satellite_observations_graph(
+    satellite_id: str,
+    limit: int = Query(default=50, ge=1, le=500, description="Maximum observations to return"),
+    source: Optional[str] = Query(default=None, description="Filter by observation source"),
+    anomaly_only: bool = Query(default=False, description="Only show observations with thermal anomalies"),
+):
+    """
+    Get a graph combining a satellite with its observations.
+
+    Returns the satellite as a central node connected to observation nodes via 'has_observation' edges.
+    Each observation node carries the full observation data record for detail panel display.
+    """
+    try:
+        full_id = _resolve_satellite_doc_id(satellite_id)
+        if not full_id:
+            raise HTTPException(status_code=404, detail=f"Satellite '{satellite_id}' not found")
+
+        filters = []
+        bind_vars = {"sat_id": full_id, "limit": limit}
+        if source:
+            filters.append("FILTER obs.source == @source")
+            bind_vars["source"] = source
+        if anomaly_only:
+            filters.append("FILTER obs.thermal.anomaly_flag == true")
+        filter_clause = "\n            ".join(filters)
+
+        query = f"""
+        LET sat = DOCUMENT(@sat_id)
+        FILTER sat != null
+
+        LET observations = (
+            FOR obs IN observations
+                FILTER obs.norad_id == sat.canonical.norad_cat_id
+                {filter_clause}
+                SORT obs.observation_epoch DESC
+                LIMIT @limit
+                RETURN obs
+        )
+
+        LET source_names = (
+            FOR obs IN observations
+                COLLECT src = obs.source
+                RETURN src
+        )
+
+        LET satellite_node = {{
+            id: sat._id,
+            key: sat._key,
+            type: 'satellite',
+            identifier: sat.identifier,
+            name: sat.canonical.name || sat.canonical.object_name || sat._key,
+            country: sat.canonical.country,
+            orbital_band: sat.canonical.orbital_band,
+            status: sat.canonical.status,
+            norad_id: sat.canonical.norad_cat_id,
+            is_source: true,
+            node_size: 50,
+            background_color: '#2ecc71'
+        }}
+
+        LET obs_nodes = (
+            FOR obs IN observations
+                LET health = obs.derived_health_score
+                LET color = health >= 80 ? '#2ecc71' : (health >= 50 ? '#f39c12' : (health != null ? '#e74c3c' : '#95a5a6'))
+                RETURN {{
+                    id: obs._id,
+                    key: obs._key,
+                    type: 'observation',
+                    name: CONCAT(SUBSTRING(obs.observation_epoch, 0, 16), ' [', obs.source, ']'),
+                    epoch: obs.observation_epoch,
+                    source: obs.source,
+                    health_score: obs.derived_health_score,
+                    has_anomaly: obs.thermal.anomaly_flag == true,
+                    background_color: color,
+                    node_size: 25,
+                    observation_data: obs
+                }}
+        )
+
+        LET source_nodes = (
+            FOR src IN source_names
+                RETURN {{
+                    id: CONCAT('source/', MD5(src)),
+                    key: MD5(src),
+                    type: 'source',
+                    name: src,
+                    background_color: '#e67e22',
+                    node_size: 35
+                }}
+        )
+
+        LET obs_edges = (
+            FOR obs IN observations
+                RETURN {{
+                    id: CONCAT('edge/has_obs/', obs._key),
+                    source: sat._id,
+                    target: obs._id,
+                    type: 'has_observation',
+                    epoch: obs.observation_epoch
+                }}
+        )
+
+        LET source_edges = (
+            FOR obs IN observations
+                RETURN {{
+                    id: CONCAT('edge/obs_src/', obs._key),
+                    source: obs._id,
+                    target: CONCAT('source/', MD5(obs.source)),
+                    type: 'reported_by'
+                }}
+        )
+
+        RETURN {{
+            satellite: {{
+                id: sat._id,
+                identifier: sat.identifier,
+                name: sat.canonical.name
+            }},
+            nodes: APPEND(APPEND([satellite_node], obs_nodes), source_nodes),
+            edges: APPEND(obs_edges, source_edges),
+            stats: {{
+                total_nodes: 1 + LENGTH(obs_nodes) + LENGTH(source_nodes),
+                total_edges: LENGTH(obs_edges) + LENGTH(source_edges),
+                observation_count: LENGTH(obs_nodes),
+                source_count: LENGTH(source_nodes),
+                anomaly_count: LENGTH(FOR o IN observations FILTER o.thermal.anomaly_flag == true RETURN 1)
+            }}
+        }}
+        """
+
+        import database.connection as db_conn
+        cursor = db_conn.db.aql.execute(query, bind_vars=bind_vars)
+        result = next(cursor, None)
+
+        if not result or not result.get("nodes"):
+            return {
+                "data": {
+                    "satellite": {"id": full_id, "identifier": satellite_id},
+                    "nodes": [],
+                    "edges": [],
+                    "stats": {"total_nodes": 0, "total_edges": 0, "observation_count": 0, "source_count": 0, "anomaly_count": 0}
+                },
+                "message": f"No observations found for satellite '{satellite_id}'",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        return {
+            "data": result,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error retrieving satellite observations graph: {str(e)}")
+
+
 @router.get("/observations/neighborhood")
 def get_observations_neighborhood(
     satellite_id: str = Query(..., description="Satellite identifier (NORAD ID, ID, etc.)"),

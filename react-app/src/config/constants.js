@@ -40,6 +40,7 @@ export const API_ENDPOINTS = {
     COMMUNITIES: '/v2/graphs/communities',
     EVOLUTION_TIMELINE: '/v2/graphs/evolution/timeline',
     EVOLUTION_SNAPSHOT: '/v2/graphs/evolution/snapshot',
+    SATELLITE_OBSERVATIONS: '/v2/graphs/satellite-observations',
     OBSERVATION_NEIGHBORHOOD: '/v2/graphs/observations/neighborhood',
     OBSERVATION_SOURCE_NETWORK: '/v2/graphs/observations/source-network',
     OBSERVATION_TEMPORAL_CHAIN: '/v2/graphs/observations/temporal-chain',

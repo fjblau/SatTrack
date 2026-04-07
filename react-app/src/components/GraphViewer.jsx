@@ -2021,6 +2021,17 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
     }
   }
 
+  const handleShowObservationDetails = (nodeData) => {
+    setContextMenu({ visible: false, x: 0, y: 0, node: null })
+    // observation_data is embedded in the node by the API
+    const obsData = nodeData.observation_data || nodeData
+    setDetailPanel({
+      visible: true,
+      type: 'observation',
+      data: obsData
+    })
+  }
+
   const handleShowSatelliteDetails = async (nodeData) => {
     setContextMenu({ visible: false, x: 0, y: 0, node: null })
     
@@ -2442,12 +2453,22 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           )}
 
           {/* Satellite nodes (show if has identifier and is not a document) */}
-          {contextMenu.node.identifier && contextMenu.node.type !== 'registration_document' && (
-            <div 
+          {contextMenu.node.identifier && contextMenu.node.type !== 'registration_document' && contextMenu.node.type !== 'observation' && (
+            <div
               className="context-menu-item"
               onClick={() => handleShowSatelliteDetails(contextMenu.node)}
             >
               {contextMenu.node.is_hub === true ? '⭐ Show Hub Details' : '📊 Show Satellite Details'}
+            </div>
+          )}
+
+          {/* Observation nodes */}
+          {contextMenu.node.type === 'observation' && (
+            <div
+              className="context-menu-item"
+              onClick={() => handleShowObservationDetails(contextMenu.node)}
+            >
+              Show Observation Data
             </div>
           )}
         </div>
@@ -2459,9 +2480,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           <div className="graph-detail-panel" onClick={(e) => e.stopPropagation()}>
             <div className="graph-detail-panel-header">
               <h3>
-                {detailPanel.type === 'satellite' && '📡 Satellite Details'}
-                {detailPanel.type === 'registration' && '📄 Registration Document'}
-                {detailPanel.type === 'error' && '⚠️ Error'}
+                {detailPanel.type === 'satellite' && 'Satellite Details'}
+                {detailPanel.type === 'registration' && 'Registration Document'}
+                {detailPanel.type === 'observation' && 'Observation Record'}
+                {detailPanel.type === 'error' && 'Error'}
               </h3>
               <button 
                 className="close-button"
@@ -2496,6 +2518,24 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
                     {JSON.stringify(detailPanel.data, null, 2)}
                   </pre>
                   <button 
+                    className="copy-json-button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(detailPanel.data, null, 2))
+                        .then(() => alert('Copied to clipboard!'))
+                        .catch(err => console.error('Failed to copy:', err))
+                    }}
+                  >
+                    Copy to Clipboard
+                  </button>
+                </div>
+              )}
+
+              {detailPanel.type === 'observation' && detailPanel.data && (
+                <div className="observation-details">
+                  <pre className="json-display">
+                    {JSON.stringify(detailPanel.data, null, 2)}
+                  </pre>
+                  <button
                     className="copy-json-button"
                     onClick={() => {
                       navigator.clipboard.writeText(JSON.stringify(detailPanel.data, null, 2))

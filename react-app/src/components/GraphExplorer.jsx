@@ -31,6 +31,33 @@ function GraphExplorer() {
   const [searchingsatellite, setSearchingsatellite] = useState(false)
   const [constellationBrowserData, setConstellationBrowserData] = useState(null)
   const [neighborhoodData, setNeighborhoodData] = useState(null)
+  const [satObsData, setSatObsData] = useState(null)
+  const [satObsNoradId, setSatObsNoradId] = useState('')
+  const [satObsSource, setSatObsSource] = useState('')
+  const [satObsAnomalyOnly, setSatObsAnomalyOnly] = useState(false)
+  const [satObsLoading, setSatObsLoading] = useState(false)
+
+  const fetchSatObsGraph = async () => {
+    if (!satObsNoradId) return
+    setSatObsLoading(true)
+    setSatObsData(null)
+    try {
+      let url = `${API_ENDPOINTS.GRAPHS.SATELLITE_OBSERVATIONS}/${satObsNoradId}?limit=50`
+      if (satObsSource) url += `&source=${encodeURIComponent(satObsSource)}`
+      if (satObsAnomalyOnly) url += `&anomaly_only=true`
+      const response = await apiFetch(url)
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.detail || 'Failed to load')
+      }
+      const result = await response.json()
+      setSatObsData(result.data)
+    } catch (err) {
+      console.error('Error fetching satellite observations graph:', err)
+    } finally {
+      setSatObsLoading(false)
+    }
+  }
 
   useEffect(() => {
     loadGraphStats()
@@ -218,11 +245,17 @@ function GraphExplorer() {
           >
             Constellation Browser
           </button>
-          <button 
+          <button
             className={graphType === 'neighborhood' ? 'active' : ''}
             onClick={() => setGraphType('neighborhood')}
           >
             Satellite Neighborhood
+          </button>
+          <button
+            className={graphType === 'satellite-observations' ? 'active' : ''}
+            onClick={() => setGraphType('satellite-observations')}
+          >
+            Satellite Observations
           </button>
           <button 
             className={graphType === 'collision' ? 'active' : ''}
@@ -473,6 +506,55 @@ function GraphExplorer() {
           </div>
         )}
 
+        {graphType === 'satellite-observations' && (
+          <div className="selector-content">
+            <h3>Satellite Observations</h3>
+            <p className="section-description">View a satellite and its observations as a graph. Right-click an observation node to see the full data record.</p>
+
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                NORAD ID:
+              </label>
+              <input
+                type="text"
+                value={satObsNoradId}
+                onChange={(e) => setSatObsNoradId(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') fetchSatObsGraph() }}
+                placeholder="e.g. 58023"
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem', marginBottom: '0.75rem' }}
+              />
+
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                Source (optional):
+              </label>
+              <input
+                type="text"
+                value={satObsSource}
+                onChange={(e) => setSatObsSource(e.target.value)}
+                placeholder="Filter by source..."
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem', marginBottom: '0.75rem' }}
+              />
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', fontWeight: '500', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={satObsAnomalyOnly}
+                  onChange={(e) => setSatObsAnomalyOnly(e.target.checked)}
+                />
+                Anomalies only
+              </label>
+
+              <button
+                onClick={fetchSatObsGraph}
+                disabled={satObsLoading || !satObsNoradId}
+                style={{ width: '100%', padding: '0.6rem', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', fontWeight: '600', cursor: 'pointer', fontSize: '0.9rem' }}
+              >
+                {satObsLoading ? 'Loading...' : 'Load Observations'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {graphType === 'collision' && (
           <div className="selector-content">
             <CollisionRiskView onCollisionRiskSelect={(data, viewType) => {
@@ -611,7 +693,7 @@ function GraphExplorer() {
           collisionViewType={graphType === 'collision' ? collisionViewType : null}
           selectedSatellite={graphType === 'lineage' ? selectedSatellite : null}
           constellationBrowserData={graphType === 'constellation-browser' ? constellationBrowserData : null}
-          neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : null}
+          neighborhoodData={graphType === 'neighborhood' ? neighborhoodData : graphType === 'satellite-observations' ? satObsData : null}
           functionClusters={graphType === 'function' ? functionClusters : null}
         />
       </div>
