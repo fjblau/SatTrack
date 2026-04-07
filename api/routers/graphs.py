@@ -436,12 +436,6 @@ def get_satellite_observations_graph(
                 RETURN obs
         )
 
-        LET source_names = (
-            FOR obs IN observations
-                COLLECT src = obs.source
-                RETURN src
-        )
-
         LET satellite_node = {{
             id: sat._id,
             key: sat._key,
@@ -474,18 +468,6 @@ def get_satellite_observations_graph(
                 }}
         )
 
-        LET source_nodes = (
-            FOR src IN source_names
-                RETURN {{
-                    id: CONCAT('source/', MD5(src)),
-                    key: MD5(src),
-                    type: 'source',
-                    name: src,
-                    background_color: '#e67e22',
-                    node_size: 35
-                }}
-        )
-
         LET obs_edges = (
             FOR obs IN observations
                 RETURN {{
@@ -497,29 +479,18 @@ def get_satellite_observations_graph(
                 }}
         )
 
-        LET source_edges = (
-            FOR obs IN observations
-                RETURN {{
-                    id: CONCAT('edge/obs_src/', obs._key),
-                    source: obs._id,
-                    target: CONCAT('source/', MD5(obs.source)),
-                    type: 'reported_by'
-                }}
-        )
-
         RETURN {{
             satellite: {{
                 id: sat._id,
                 identifier: sat.identifier,
                 name: sat.canonical.name
             }},
-            nodes: APPEND(APPEND([satellite_node], obs_nodes), source_nodes),
-            edges: APPEND(obs_edges, source_edges),
+            nodes: APPEND([satellite_node], obs_nodes),
+            edges: obs_edges,
             stats: {{
-                total_nodes: 1 + LENGTH(obs_nodes) + LENGTH(source_nodes),
-                total_edges: LENGTH(obs_edges) + LENGTH(source_edges),
+                total_nodes: 1 + LENGTH(obs_nodes),
+                total_edges: LENGTH(obs_edges),
                 observation_count: LENGTH(obs_nodes),
-                source_count: LENGTH(source_nodes),
                 anomaly_count: LENGTH(FOR o IN observations FILTER o.thermal.anomaly_flag == true RETURN 1)
             }}
         }}
@@ -535,7 +506,7 @@ def get_satellite_observations_graph(
                     "satellite": {"id": full_id, "identifier": satellite_id},
                     "nodes": [],
                     "edges": [],
-                    "stats": {"total_nodes": 0, "total_edges": 0, "observation_count": 0, "source_count": 0, "anomaly_count": 0}
+                    "stats": {"total_nodes": 0, "total_edges": 0, "observation_count": 0, "anomaly_count": 0}
                 },
                 "message": f"No observations found for satellite '{satellite_id}'",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
