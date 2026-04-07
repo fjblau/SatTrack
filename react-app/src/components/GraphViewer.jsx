@@ -503,7 +503,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       }
     } else if (graphType === 'constellation-browser' && constellationBrowserData) {
       renderConstellationBrowserGraph(constellationBrowserData)
-    } else if (graphType === 'neighborhood' && neighborhoodData) {
+    } else if ((graphType === 'neighborhood' || graphType === 'satellite-observations') && neighborhoodData) {
       renderNeighborhoodGraph(neighborhoodData)
     }
   }, [graphType, selectedConstellation, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionViewMode, selectedClusterId])
@@ -2375,7 +2375,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
               </div>
             </div>
           </>
-        ) : graphType === 'neighborhood' ? (
+        ) : (graphType === 'neighborhood' || graphType === 'satellite-observations') ? (
           <>
             <div className="legend-section">
               <h5>Nodes</h5>
