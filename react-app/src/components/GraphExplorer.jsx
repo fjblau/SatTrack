@@ -33,16 +33,18 @@ function GraphExplorer() {
   const [neighborhoodData, setNeighborhoodData] = useState(null)
   const [satObsData, setSatObsData] = useState(null)
   const [satObsNoradId, setSatObsNoradId] = useState('')
+  const [satObsName, setSatObsName] = useState('')
   const [satObsSource, setSatObsSource] = useState('')
   const [satObsAnomalyOnly, setSatObsAnomalyOnly] = useState(false)
   const [satObsLoading, setSatObsLoading] = useState(false)
 
   const fetchSatObsGraph = async () => {
-    if (!satObsNoradId) return
+    const searchValue = satObsNoradId || satObsName
+    if (!searchValue) return
     setSatObsLoading(true)
     setSatObsData(null)
     try {
-      let url = `${API_ENDPOINTS.GRAPHS.SATELLITE_OBSERVATIONS}/${satObsNoradId}?limit=50`
+      let url = `${API_ENDPOINTS.GRAPHS.SATELLITE_OBSERVATIONS}/${encodeURIComponent(searchValue)}?limit=50`
       if (satObsSource) url += `&source=${encodeURIComponent(satObsSource)}`
       if (satObsAnomalyOnly) url += `&anomaly_only=true`
       const response = await apiFetch(url)
@@ -518,9 +520,21 @@ function GraphExplorer() {
               <input
                 type="text"
                 value={satObsNoradId}
-                onChange={(e) => setSatObsNoradId(e.target.value)}
+                onChange={(e) => { setSatObsNoradId(e.target.value); if (e.target.value) setSatObsName('') }}
                 onKeyDown={(e) => { if (e.key === 'Enter') fetchSatObsGraph() }}
                 placeholder="e.g. 58023"
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem', marginBottom: '0.75rem' }}
+              />
+
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                Name:
+              </label>
+              <input
+                type="text"
+                value={satObsName}
+                onChange={(e) => { setSatObsName(e.target.value); if (e.target.value) setSatObsNoradId('') }}
+                onKeyDown={(e) => { if (e.key === 'Enter') fetchSatObsGraph() }}
+                placeholder="e.g. ISS (ZARYA)"
                 style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem', marginBottom: '0.75rem' }}
               />
 
@@ -546,7 +560,7 @@ function GraphExplorer() {
 
               <button
                 onClick={fetchSatObsGraph}
-                disabled={satObsLoading || !satObsNoradId}
+                disabled={satObsLoading || (!satObsNoradId && !satObsName)}
                 style={{ width: '100%', padding: '0.6rem', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', fontWeight: '600', cursor: 'pointer', fontSize: '0.9rem' }}
               >
                 {satObsLoading ? 'Loading...' : 'Load Observations'}
