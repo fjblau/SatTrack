@@ -87,6 +87,11 @@ def _resolve_satellite_doc_id(input_id: str) -> Optional[str]:
             if sat:
                 return sat["_id"]
 
+    # Try resolving by satellite name (case-insensitive partial match)
+    name_doc = find_satellite(name=key)
+    if name_doc:
+        return name_doc["_id"]
+
     return None
 
 

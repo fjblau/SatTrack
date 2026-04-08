@@ -64,6 +64,7 @@ export default function ObservationGraphs() {
   const [aqlResults, setAqlResults] = useState(null)
   const [aqlLoading, setAqlLoading] = useState(false)
   const [noradId, setNoradId] = useState('')
+  const [satelliteName, setSatelliteName] = useState('')
   const [neighborhoodData, setNeighborhoodData] = useState(null)
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const [viewAsGraph, setViewAsGraph] = useState(false)
@@ -174,13 +175,14 @@ export default function ObservationGraphs() {
   }
 
   const fetchNeighborhoodData = async () => {
-    if (!noradId) return
+    const searchValue = noradId || satelliteName
+    if (!searchValue) return
     setLoading(true)
     setError(null)
     setNeighborhoodData(null)
 
     try {
-      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.OBSERVATION_NEIGHBORHOOD}?satellite_id=${noradId}`)
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.OBSERVATION_NEIGHBORHOOD}?satellite_id=${encodeURIComponent(searchValue)}`)
       if (!response.ok) throw new Error(`Failed to fetch neighborhood: ${response.statusText}`)
       const result = await response.json()
       setNeighborhoodData(result.data)
@@ -727,7 +729,19 @@ export default function ObservationGraphs() {
               type="text"
               placeholder="Enter NORAD ID (e.g. 25544)"
               value={noradId}
-              onChange={(e) => setNoradId(e.target.value)}
+              onChange={(e) => { setNoradId(e.target.value); if (e.target.value) setSatelliteName('') }}
+              className="norad-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') fetchNeighborhoodData()
+              }}
+            />
+            <label htmlFor="name-search">Name:</label>
+            <input
+              id="name-search"
+              type="text"
+              placeholder="Enter satellite name (e.g. ISS)"
+              value={satelliteName}
+              onChange={(e) => { setSatelliteName(e.target.value); if (e.target.value) setNoradId('') }}
               className="norad-input"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') fetchNeighborhoodData()
@@ -736,7 +750,7 @@ export default function ObservationGraphs() {
             <button
               onClick={fetchNeighborhoodData}
               className="run-button"
-              disabled={loading || !noradId}
+              disabled={loading || (!noradId && !satelliteName)}
             >
               Search
             </button>
@@ -758,7 +772,7 @@ export default function ObservationGraphs() {
               {loading ? (
                 <p>Loading network data...</p>
               ) : (
-                <p>Enter a NORAD ID to visualize its observation network</p>
+                <p>Enter a NORAD ID or satellite name to visualize its observation network</p>
               )}
             </div>
           )}
