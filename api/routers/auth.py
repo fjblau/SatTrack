@@ -21,7 +21,8 @@ class LoginRequest(BaseModel):
 @router.post("/login")
 def login(body: LoginRequest):
     is_demo = body.username == DEMO_USERNAME and body.password == DEMO_PASSWORD
-    if not is_demo and (body.username != config.auth.USERNAME or body.password != config.auth.PASSWORD):
+    valid_users = config.auth.valid_users()
+    if not is_demo and valid_users.get(body.username) != body.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = secrets.token_urlsafe(32)
     _token_store.add(token)

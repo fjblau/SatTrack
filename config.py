@@ -94,12 +94,23 @@ class AuthConfig:
     USERNAME: str = os.getenv("APP_USERNAME", "admin")
     PASSWORD: str = os.getenv("APP_PASSWORD", "")
 
+    SHANTANU_USERNAME: str = os.getenv("SHANTANU_USERNAME", "shantanu")
+    SHANTANU_PASSWORD: str = os.getenv("SHANTANU_PASSWORD", "")
+
     def __init__(self):
         import logging
         if not self.PASSWORD:
             logging.getLogger(__name__).warning(
                 "APP_PASSWORD is not set. Authentication will reject all login attempts."
             )
+
+    def valid_users(self) -> dict[str, str]:
+        users = {}
+        if self.USERNAME and self.PASSWORD:
+            users[self.USERNAME] = self.PASSWORD
+        if self.SHANTANU_USERNAME and self.SHANTANU_PASSWORD:
+            users[self.SHANTANU_USERNAME] = self.SHANTANU_PASSWORD
+        return users
 
 
 class Config:
