@@ -25,21 +25,26 @@ Kessler provides a comprehensive satellite tracking system combining:
 
 ### Core Features
 
-- 🛰️ **Satellite Search**: Filter by country, status, orbital band, constellation
-- 📊 **Orbital Calculations**: Real-time apogee, perigee, period, and orbital band
-- 🗺️ **Graph Explorer**: Visualize constellation networks and registration relationships
-- 📈 **Timeline View**: Track satellite launches over time
-- 📡 **TLE Data**: Fresh Two-Line Element data from CelesTrak
-- 🔔 **MQTT Publishing**: Push satellite data via MQTT
+- 🛰️ **Satellite Search**: Filter by country, status, orbital band, object type, congestion risk
+- 📊 **Orbital Calculations**: Real-time apogee, perigee, period, and orbital band via SGP4/Skyfield
+- 🗺️ **Graph Explorer**: Visualize constellation networks, registration relationships, collision risks, lineage trees
+- 📈 **Timeline View**: Track satellite launches over time by year and month
+- 📡 **TLE Data**: Fresh Two-Line Element data from CelesTrak (with Space-Track fallback)
+- 🔔 **MQTT Publishing**: Scheduled TLE publishing to external MQTT brokers
+- 🔭 **Observations**: Import and analyse observational data (health, anomalies, thermal, mass)
+- 📉 **Collision Risk Network**: Graph of high-risk orbital proximity pairs
+- 🤖 **AI Help Assistant**: LangGraph-powered chat that answers questions using RAG + live data tools
+- 🔑 **Authentication**: Bearer-token login with demo mode
 
 ### Technical Features
 
-- ✅ **Modular Architecture**: Clean separation of concerns (API, database, services)
-- ✅ **Unified Caching**: LRU cache with TTL for optimal performance
-- ✅ **Type Safety**: Full type hints throughout codebase
-- ✅ **Test Coverage**: >80% test coverage with unit and integration tests
+- ✅ **Modular Architecture**: Routers → Services → Database separation of concerns
+- ✅ **Unified Caching**: LRU cache with TTL for TLE and document data
+- ✅ **Two Named Graphs**: `satellite_relationships` and `observation_relationships` in ArangoDB
+- ✅ **LangGraph Agent**: ReAct agent with RAG, satellite search, and read-only AQL tools
+- ✅ **Type Safety**: Full type hints and Pydantic models throughout
 - ✅ **OpenAPI Docs**: Auto-generated interactive API documentation
-- ✅ **Configuration Management**: Environment-based configuration
+- ✅ **Configuration Management**: Environment-based configuration via `config.py`
 
 ---
 
@@ -77,20 +82,29 @@ nano .env
 
 ```bash
 # Database
-ARANGO_HOST=localhost
-ARANGO_PORT=8529
-ARANGO_DATABASE=kessler
+ARANGO_HOST=http://localhost:8529
 ARANGO_USER=root
-ARANGO_PASSWORD=
+ARANGO_PASSWORD=kessler_dev_password
 
 # API
-API_HOST=127.0.0.1
 API_PORT=8000
 CORS_ORIGINS=http://localhost:3000
 
+# Authentication (required)
+APP_USERNAME=admin
+APP_PASSWORD=changeme
+
+# LangGraph AI Assistant (required for Help tab)
+OPENAI_API_KEY=sk-...
+AGENT_MODEL=gpt-4o-mini
+
+# Space-Track (optional TLE fallback)
+SPACETRACK_USERNAME=your_email@example.com
+SPACETRACK_PASSWORD=your_password
+
 # Caching
 TLE_CACHE_TTL=3600
-MAX_CACHE_SIZE=10000
+MAX_CACHE_SIZE=1000
 ```
 
 ### Running the Application
@@ -122,42 +136,60 @@ npm run dev
 ```
 kessler/
 ├── api/                        # API layer
-│   ├── main.py                 # FastAPI app entry point
-│   ├── routers/                # API endpoints
-│   │   ├── satellites.py       # Satellite search
-│   │   ├── metadata.py         # Metadata (countries, stats)
-│   │   ├── graphs.py           # Graph visualization
-│   │   ├── documents.py        # UN documents
-│   │   ├── tle.py              # TLE data
-│   │   └── mqtt.py             # MQTT configuration
+│   ├── main.py                 # FastAPI app entry point & lifespan
+│   ├── middleware/auth.py       # Bearer-token authentication middleware
+│   ├── routers/                # API endpoints by domain
+│   │   ├── auth.py             # Login / logout
+│   │   ├── satellites.py       # Satellite search & retrieval
+│   │   ├── metadata.py         # Countries, statuses, orbital bands, stats
+│   │   ├── graphs.py           # Graph visualization & analytics
+│   │   ├── documents.py        # UN document metadata
+│   │   ├── tle.py              # TLE data & orbit propagation
+│   │   ├── mqtt.py             # MQTT configuration & publishing
+│   │   ├── observations.py     # Observation import & analytics
+│   │   ├── admin.py            # Admin script runner
+│   │   └── agent.py            # AI assistant (/v2/ask)
 │   └── services/               # Business logic
-│       ├── cache_service.py    # Unified caching with LRU
-│       ├── orbital_service.py  # Orbital calculations
-│       ├── tle_service.py      # TLE fetching
-│       └── document_service.py # Document metadata
+│       ├── cache_service.py    # LRU cache with TTL
+│       ├── orbital_service.py  # Orbital calculations from TLE
+│       ├── tle_service.py      # TLE fetching (CelesTrak / Space-Track)
+│       ├── document_service.py # UN document metadata extraction
+│       ├── collision_service.py # Collision risk computation
+│       ├── lineage_service.py  # Satellite lineage traversal
+│       ├── propagation_service.py # SGP4/Skyfield propagation
+│       ├── spacetrack_service.py  # Space-Track API integration
+│       ├── index_service.py    # ChromaDB RAG vector store
+│       └── agent_service.py    # LangGraph AI agent
 │
 ├── database/                   # Data layer
-│   ├── connection.py           # ArangoDB connection
-│   ├── operations.py           # CRUD operations
-│   ├── graph_operations.py     # Graph queries
-│   └── transformations.py      # Data transformations
+│   ├── connection.py           # ArangoDB connection & schema init
+│   ├── operations.py           # Satellite CRUD operations
+│   ├── graph_operations.py     # Edge CRUD & indexes
+│   ├── graph_analytics.py      # AQL analytics (centrality, communities)
+│   ├── observation_graph_ops.py # Observation edge creation & traversal
+│   ├── transformations.py      # Data canonicalization
+│   └── mqtt_config.py          # MQTT configuration storage
 │
 ├── scripts/                    # Utility scripts
-│   ├── import/                 # Data import (8 scripts)
-│   ├── verification/           # Verification (9 scripts)
-│   ├── population/             # Graph population (3 scripts)
-│   └── maintenance/            # Maintenance (6 scripts)
+│   ├── import/                 # Data import scripts
+│   ├── verification/           # Data verification scripts
+│   ├── population/             # Graph population scripts
+│   └── maintenance/            # Data maintenance scripts
 │
 ├── tests/                      # Test suite
-│   ├── unit/                   # Unit tests (51+ tests)
+│   ├── unit/                   # Unit tests
 │   ├── integration/            # Integration tests
 │   └── e2e/                    # End-to-end tests
 │
 ├── react-app/                  # React frontend
 │   └── src/
 │       ├── components/         # React components
-│       └── config/
-│           └── constants.js    # Frontend configuration
+│       │   ├── HelpPage.jsx    # AI assistant chat interface
+│       │   ├── AqlEditorPage.jsx # Interactive AQL editor
+│       │   ├── AdminPage.jsx   # Admin script runner
+│       │   └── ...             # Data, graph, observation views
+│       ├── utils/apiFetch.js   # Authenticated fetch wrapper
+│       └── config/constants.js # API endpoint constants
 │
 ├── config.py                   # Centralized configuration
 ├── mqtt_publisher.py           # MQTT publishing service
@@ -180,20 +212,28 @@ FastAPI provides automatic interactive API documentation:
 ### Quick Examples
 
 ```bash
+# Login and get token
+TOKEN=$(curl -s -X POST "http://localhost:8000/v2/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"changeme"}' | jq -r .token)
+
 # Search satellites
-curl "http://localhost:8000/v2/search?country=USA&status=operational&limit=10"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/v2/search?country=USA&status=operational&limit=10"
 
 # Get satellite by NORAD ID
-curl "http://localhost:8000/v2/satellite/25544"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/v2/satellite/25544"
 
 # Get TLE data for ISS
-curl "http://localhost:8000/v2/tle/25544"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/v2/tle/25544"
 
-# Get all countries
-curl "http://localhost:8000/v2/countries"
-
-# Get statistics
-curl "http://localhost:8000/v2/stats"
+# Ask the AI assistant
+curl -s -X POST "http://localhost:8000/v2/ask" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What orbital bands does Kessler track?"}'
 ```
 
 For complete API documentation, see [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).
@@ -379,6 +419,11 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 - **FastAPI**: Modern web framework with automatic OpenAPI docs
 - **ArangoDB**: Multi-model database (documents + graphs)
 - **Uvicorn**: ASGI server
+- **LangGraph / LangChain**: AI agent framework
+- **ChromaDB**: Vector store for RAG
+- **OpenAI**: LLM provider for the AI assistant
+- **SGP4 / Skyfield**: Orbit propagation
+- **Paho MQTT**: MQTT broker integration
 - **Pytest**: Testing framework
 
 ### Frontend

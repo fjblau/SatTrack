@@ -9,12 +9,16 @@ Complete API reference for the Kessler satellite tracking application.
 1. [Getting Started](#getting-started)
 2. [Authentication](#authentication)
 3. [Endpoints](#endpoints)
+   - [Auth](#auth)
    - [Satellites](#satellites)
    - [Metadata](#metadata)
    - [Graphs](#graphs)
    - [Documents](#documents)
    - [TLE Data](#tle-data)
    - [MQTT Configuration](#mqtt-configuration)
+   - [Observations](#observations)
+   - [Admin](#admin)
+   - [AI Assistant (Agent)](#ai-assistant-agent)
 4. [Response Formats](#response-formats)
 5. [Error Handling](#error-handling)
 6. [Rate Limiting](#rate-limiting)
@@ -56,13 +60,61 @@ curl "http://localhost:8000/v2/tle/25544"
 
 ## Authentication
 
-**Current Version**: No authentication required (open API)
+All endpoints (except `POST /v2/auth/login`) require a **Bearer token** in the `Authorization` header:
 
-**Future Versions**: API keys planned for v3
+```
+Authorization: Bearer <token>
+```
+
+Tokens are obtained via `POST /v2/auth/login` and are valid for the lifetime of the server process (in-memory store). Demo mode tokens have read-only access and do not expose observation or AQL editor features.
 
 ---
 
 ## Endpoints
+
+### Auth
+
+#### Login
+
+```http
+POST /v2/auth/login
+```
+
+**Request Body:**
+
+```json
+{ "username": "admin", "password": "changeme" }
+```
+
+Use `username: "demo"` / `password: "demo"` for restricted demo access.
+
+**Response:**
+
+```json
+{ "token": "abc123...", "is_demo": false }
+```
+
+---
+
+#### Logout
+
+```http
+POST /v2/auth/logout
+```
+
+**Request Body:**
+
+```json
+{ "token": "abc123..." }
+```
+
+**Response:**
+
+```json
+{ "detail": "Logged out" }
+```
+
+---
 
 ### Satellites
 
@@ -1385,6 +1437,287 @@ curl -X POST "http://localhost:8000/v2/mqtt/configurations" \
 
 ---
 
+### Observations
+
+#### Import Observations
+
+```http
+POST /v2/observations/import
+```
+
+Bulk-import observation records. Only satellites with `observations_enabled: true` in their canonical fields are accepted.
+
+**Request Body:**
+
+```json
+{
+  "observations": [
+    {
+      "norad_id": 25544,
+      "observation_epoch": "2026-02-06T12:00:00Z",
+      "source": "groundstation-alpha",
+      "object_name": "ISS",
+      "object_type": "payload",
+      "origin_country": "USA",
+      "derived_health_score": 87.5,
+      "estimated_mass_kg": 420000,
+      "spin_rate_rpm": 0.0,
+      "thermal": { "anomaly_flag": false }
+    }
+  ]
+}
+```
+
+**Field validation:**
+- `norad_id`: positive integer
+- `observation_epoch`: ISO 8601 datetime string
+- `source`: non-empty string
+- `derived_health_score`: 0–100
+- `estimated_mass_kg`, `spin_rate_rpm`: non-negative
+
+**Response:**
+
+```json
+{
+  "inserted": 1,
+  "skipped_duplicates": 0,
+  "skipped_not_allowed": 0,
+  "errors": [],
+  "total_submitted": 1
+}
+```
+
+---
+
+#### Get Allowed Objects
+
+```http
+GET /v2/observations/allowed-objects
+```
+
+List all satellites that have `observations_enabled: true`.
+
+**Response:**
+
+```json
+{
+  "data": [
+    { "norad_id": 25544, "name": "ISS (ZARYA)" }
+  ],
+  "total": 1
+}
+```
+
+---
+
+#### Enable / Disable Observation Tracking
+
+```http
+PUT /v2/observations/allowed-objects/{norad_id}
+DELETE /v2/observations/allowed-objects/{norad_id}
+```
+
+Enable or disable observation tracking for a satellite.
+
+---
+
+#### List Observations
+
+```http
+GET /v2/observations
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `norad_id` | integer | Filter by NORAD ID |
+| `source` | string | Filter by data source |
+| `start_epoch` | string | ISO 8601 start datetime |
+| `end_epoch` | string | ISO 8601 end datetime |
+| `anomaly_only` | boolean | Return only anomalous records |
+| `sort_by` | string | Field to sort by |
+| `sort_order` | string | `asc` or `desc` |
+| `skip` | integer | Pagination offset |
+| `limit` | integer | Page size |
+
+---
+
+#### Observation Analytics
+
+```http
+GET /v2/observations/analytics/health-over-time
+GET /v2/observations/analytics/anomaly-distribution
+GET /v2/observations/analytics/source-distribution
+```
+
+Aggregated analytics over observation data.
+
+---
+
+#### Observation Graph Endpoints
+
+```http
+GET /v2/graphs/satellite-observations          # Observations for a satellite
+GET /v2/graphs/observations/neighborhood       # Observation neighborhood graph
+GET /v2/graphs/observations/source-network     # Source network graph
+GET /v2/graphs/observations/temporal-chain     # Temporal health chain
+GET /v2/graphs/observations/anomaly-correlation # Anomaly correlation graph
+GET /v2/graphs/observations/graph-stats        # Observation graph statistics
+POST /v2/graphs/observations/populate-edges    # Populate observation edges
+```
+
+---
+
+### Admin
+
+#### List Available Scripts
+
+```http
+GET /v2/admin/scripts
+```
+
+Returns the catalogue of runnable maintenance and population scripts.
+
+**Response:**
+
+```json
+{
+  "scripts": [
+    {
+      "id": "populate_collision_risks",
+      "name": "Populate Collision Risks",
+      "description": "Compute and populate collision risk edges",
+      "category": "population"
+    },
+    {
+      "id": "enrich_launch_data",
+      "name": "Enrich Launch Data",
+      "description": "Enriches satellite documents with launch dates and country data",
+      "category": "maintenance"
+    }
+  ]
+}
+```
+
+**Available script IDs:**
+
+| ID | Category | Description |
+|----|----------|-------------|
+| `enrich_launch_data` | maintenance | Enrich satellites with launch dates and country data |
+| `promote_kaggle_orbital` | maintenance | Promote Kaggle orbital parameters to canonical fields |
+| `promote_attributes` | maintenance | Promote attributes across satellite records |
+| `promote_launch_site` | maintenance | Promote launch site data to canonical fields |
+| `populate_collision_risks` | population | Compute and populate collision risk edges |
+| `populate_constellation_network` | population | Build constellation membership graph |
+| `populate_orbital_proximity` | population | Populate orbital proximity edges |
+| `populate_registration_network` | population | Build registration document links |
+
+---
+
+#### Run a Script
+
+```http
+POST /v2/admin/scripts/{script_id}/run
+```
+
+Executes the named script as a background subprocess.
+
+**Response:**
+
+```json
+{ "run_id": "uuid-...", "status": "started", "script_id": "populate_collision_risks" }
+```
+
+---
+
+#### Get Run Status
+
+```http
+GET /v2/admin/runs/{run_id}
+```
+
+**Response:**
+
+```json
+{
+  "run_id": "uuid-...",
+  "script_id": "populate_collision_risks",
+  "status": "completed",
+  "started_at": "2026-02-06T12:00:00Z",
+  "completed_at": "2026-02-06T12:05:00Z",
+  "output": "...",
+  "error": null
+}
+```
+
+---
+
+### AI Assistant (Agent)
+
+The AI assistant uses a **LangGraph ReAct agent** backed by OpenAI and a ChromaDB RAG index over project documentation. It supports multi-turn conversation via `session_id`.
+
+Requires `OPENAI_API_KEY` to be set on the server. Check readiness with `GET /v2/ask/status` before use.
+
+---
+
+#### Check Agent Status
+
+```http
+GET /v2/ask/status
+```
+
+**Response:**
+
+```json
+{ "agent_ready": true, "index_ready": true }
+```
+
+---
+
+#### Ask a Question
+
+```http
+POST /v2/ask
+```
+
+**Request Body:**
+
+```json
+{
+  "question": "What graph relationships does Kessler track?",
+  "session_id": null
+}
+```
+
+Pass `session_id` from a previous response to continue a multi-turn conversation.
+
+**Response:**
+
+```json
+{
+  "answer": "Kessler tracks the following graph relationships...",
+  "sources": ["ARCHITECTURE.md", "API_DOCUMENTATION.md"],
+  "session_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Tools the agent can use:**
+- `search_knowledge_base` — RAG over indexed project documentation
+- `search_satellites` — live satellite registry lookup
+- `run_aql_query` — read-only AQL queries (FOR/RETURN only)
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:8000/v2/ask" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How many satellites are in LEO?"}'
+```
+
+---
+
 ## OpenAPI Specification
 
 The complete OpenAPI 3.0 specification is available at:
@@ -1405,5 +1738,5 @@ Import this into tools like Postman, Insomnia, or API testing frameworks.
 
 ---
 
-**Last Updated**: February 6, 2026  
-**API Version**: 2.0.0
+**Last Updated**: April 10, 2026  
+**API Version**: 2.1.0

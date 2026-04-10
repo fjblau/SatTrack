@@ -47,53 +47,80 @@ kessler/
 
 ```
 kessler/
-├── config.py                    # Centralized configuration
+├── config.py                    # Centralized configuration (DatabaseConfig, CacheConfig,
+│                                #   APIConfig, ExternalServicesConfig, AuthConfig, AgentConfig)
 │
-├── api/                         # API Layer (2,843 lines organized)
-│   ├── main.py                  # 55 lines - FastAPI app entry point
+├── api/                         # API Layer
+│   ├── main.py                  # FastAPI app entry point, lifespan, middleware
+│   ├── middleware/
+│   │   └── auth.py              # Bearer-token authentication middleware
 │   ├── routers/                 # API endpoints by domain
+│   │   ├── auth.py              # POST /v2/auth/login, POST /v2/auth/logout
 │   │   ├── satellites.py        # Satellite search & retrieval
-│   │   ├── metadata.py          # Countries, statuses, stats
-│   │   ├── graphs.py            # Graph visualization endpoints
-│   │   ├── documents.py         # Document metadata
-│   │   ├── tle.py               # TLE data endpoints
-│   │   └── mqtt.py              # MQTT configuration
+│   │   ├── metadata.py          # Countries, statuses, orbital bands, stats
+│   │   ├── graphs.py            # Graph visualization & analytics endpoints
+│   │   ├── documents.py         # UN document metadata
+│   │   ├── tle.py               # TLE data endpoints & orbit propagation
+│   │   ├── mqtt.py              # MQTT configuration & publishing
+│   │   ├── observations.py      # Observation import, analytics, graph data
+│   │   ├── admin.py             # Admin script execution & run tracking
+│   │   └── agent.py             # POST /v2/ask, GET /v2/ask/status (AI assistant)
 │   ├── services/                # Business logic services
-│   │   ├── cache_service.py     # 265 lines - unified caching with LRU
-│   │   ├── orbital_service.py   # 237 lines - unified orbital calculations
-│   │   ├── tle_service.py       # TLE fetching & parsing
-│   │   └── document_service.py  # Document metadata extraction
+│   │   ├── cache_service.py     # Unified caching with LRU & TTL
+│   │   ├── orbital_service.py   # Orbital calculations from TLE
+│   │   ├── tle_service.py       # TLE fetching & parsing (CelesTrak / Space-Track)
+│   │   ├── document_service.py  # UN document metadata extraction
+│   │   ├── collision_service.py # Collision risk computation
+│   │   ├── lineage_service.py   # Satellite family-tree traversal
+│   │   ├── propagation_service.py # SGP4/Skyfield orbit propagation
+│   │   ├── spacetrack_service.py  # Space-Track API integration
+│   │   ├── index_service.py     # ChromaDB RAG vector store build & load
+│   │   └── agent_service.py     # LangGraph AI agent (RAG + tools)
 │   └── utils/
 │       └── converters.py        # Format conversion utilities
 │
-├── database/                    # Data Layer (1,348 lines organized)
-│   ├── connection.py            # 90 lines - ArangoDB connection
-│   ├── operations.py            # 375 lines - CRUD operations
-│   ├── graph_operations.py      # 320 lines - graph queries
-│   ├── transformations.py       # 150 lines - data transformations
-│   ├── mqtt_config.py           # 290 lines - MQTT config storage
+├── database/                    # Data Layer
+│   ├── connection.py            # ArangoDB connection, collection & graph init
+│   ├── operations.py            # CRUD operations (satellites)
+│   ├── graph_operations.py      # Graph edge CRUD & index management
+│   ├── graph_analytics.py       # AQL graph analytics (centrality, communities, etc.)
+│   ├── observation_graph_ops.py # Observation edge creation & graph traversal
+│   ├── transformations.py       # Data canonicalization & transformation
+│   ├── mqtt_config.py           # MQTT configuration storage
 │   ├── data/
 │   │   └── country_codes.json   # ISO 3166-1 alpha-3 mappings
 │   └── utils/
 │       ├── normalization.py     # Country code normalization
-│       └── field_utils.py       # Field manipulation utilities
+│       └── field_utils.py       # Nested field manipulation utilities
 │
-├── scripts/                     # Organized utility scripts (26 files)
-│   ├── import/                  # 8 scripts - data import
-│   ├── verification/            # 9 scripts - data verification
-│   ├── population/              # 3 scripts - graph population
-│   └── maintenance/             # 6 scripts - data maintenance
+├── scripts/                     # Organized utility scripts
+│   ├── import/                  # Data import scripts
+│   ├── verification/            # Data verification scripts
+│   ├── population/              # Graph population scripts
+│   └── maintenance/             # Data maintenance scripts
 │
-├── tests/                       # Comprehensive test suite (22 files)
+├── tests/                       # Comprehensive test suite
 │   ├── unit/                    # Unit tests for services
 │   ├── integration/             # API & database integration tests
 │   └── e2e/                     # End-to-end tests
 │
-├── react-app/                   # Frontend (organized)
+├── react-app/                   # React Frontend
 │   └── src/
 │       ├── config/
-│       │   └── constants.js     # Frontend configuration constants
-│       └── components/          # React components
+│       │   └── constants.js     # API endpoint constants
+│       ├── utils/
+│       │   └── apiFetch.js      # Authenticated fetch wrapper
+│       └── components/
+│           ├── DataTable.jsx    # Satellite data grid
+│           ├── DetailPanel.jsx  # Satellite detail view
+│           ├── Filters.jsx      # Search filter sidebar
+│           ├── GraphExplorer.jsx/GraphViewer.jsx  # Graph visualization
+│           ├── TimelineChart.jsx  # Launch timeline
+│           ├── ObservationsView.jsx/ObservationGraphs.jsx
+│           ├── AqlEditorPage.jsx  # Interactive AQL query editor
+│           ├── HelpPage.jsx     # AI assistant chat interface
+│           ├── AdminPage.jsx    # Admin script runner
+│           └── LoginPage.jsx    # Authentication
 │
 └── mqtt_publisher.py            # MQTT publishing service
     mqtt_scheduler.py            # MQTT scheduling service
@@ -128,14 +155,18 @@ kessler/
 │               │                              │
 │  ┌────────────▼─────────────────────────┐   │
 │  │  Routers (endpoints)                 │   │
-│  │  - satellites, metadata, graphs      │   │
-│  │  - documents, tle, mqtt              │   │
+│  │  - auth, satellites, metadata        │   │
+│  │  - graphs, documents, tle, mqtt      │   │
+│  │  - observations, admin, agent        │   │
 │  └────────────┬─────────────────────────┘   │
 │               │                              │
 │  ┌────────────▼─────────────────────────┐   │
 │  │  Services (business logic)           │   │
 │  │  - CacheService, OrbitalService      │   │
 │  │  - TLEService, DocumentService       │   │
+│  │  - CollisionService, LineageService  │   │
+│  │  - PropagationService, SpaceTrack    │   │
+│  │  - IndexService, AgentService        │   │
 │  └────────────┬─────────────────────────┘   │
 └───────────────┼──────────────────────────────┘
                 │
@@ -307,60 +338,128 @@ band = service.classify_orbital_band(altitude_km=500.0)
 
 ---
 
+## Database Schema
+
+### ArangoDB Database: `kessler`
+
+#### Vertex Collections
+
+| Collection | Description | Key Indexes |
+|-----------|-------------|-------------|
+| `satellites` | Primary satellite registry — all UNOOSA/NORAD records with canonical fields | `identifier` (unique), `canonical.international_designator`, `canonical.registration_number` |
+| `registration_documents` | UN registration document metadata | — |
+| `observations` | Observational data records (health, mass, thermal, spin) | `norad_id`, `source`, `observation_epoch` |
+| `observation_sources` | Observation data source metadata | — |
+| `mqtt_configurations` | MQTT broker configurations for TLE publishing | — |
+
+#### Edge Collections
+
+| Collection | From | To | Description |
+|-----------|------|----|-------------|
+| `constellation_membership` | `satellites` | `satellites` | Maps a satellite to its constellation hub |
+| `registration_links` | `satellites` | `registration_documents` | Satellite ↔ UN registration document |
+| `orbital_proximity` | `satellites` | `satellites` | Satellites within ±50 km apogee/perigee, ±5° inclination |
+| `collision_risk_edges` | `satellites` | `satellites` | Computed collision-risk pairs with risk score and min-distance |
+| `satellite_lineage` | `satellites` | `satellites` | Predecessor/successor relationships between satellite generations |
+| `observation_satellite_edges` | `observations` | `satellites` | Links an observation to the satellite being tracked |
+| `observation_source_edges` | `observations` | `observation_sources` | Links an observation to its reporting source |
+| `observation_correlation_edges` | `observations` | `observations` | Correlates observations sharing characteristics (same source, band, etc.) |
+| `observation_temporal_edges` | `observations` | `observations` | Sequential chain of observations over time for the same NORAD ID |
+
+#### Named Graphs
+
+**`satellite_relationships`**
+- Vertex collections: `satellites`, `registration_documents`
+- Edge collections: `constellation_membership`, `registration_links`, `orbital_proximity`, `collision_risk_edges`, `satellite_lineage`
+- Used for: constellation browsing, registration document graphs, proximity analysis, collision risk network, lineage trees
+
+**`observation_relationships`**
+- Vertex collections: `observations`, `satellites`, `observation_sources`
+- Edge collections: `observation_satellite_edges`, `observation_source_edges`, `observation_correlation_edges`, `observation_temporal_edges`
+- Used for: observation neighborhood graphs, source networks, temporal health chains, anomaly correlation
+
+---
+
 ## Configuration
 
 ### config.py Structure
 
 ```python
-# Database configuration
 class DatabaseConfig:
-    host: str = "localhost"
-    port: int = 8529
-    database: str = "kessler"
-    user: str = "root"
-    password: str = ""
+    HOST: str        # ARANGO_HOST (default: http://localhost:8529)
+    USER: str        # ARANGO_USER (default: root)
+    PASSWORD: str    # ARANGO_PASSWORD
+    DB_NAME: str = "kessler"
+    # Collection & graph name constants ...
 
-# Cache configuration
 class CacheConfig:
-    tle_cache_ttl: int = 3600  # 1 hour
-    document_cache_ttl: int = 86400  # 24 hours
-    max_cache_size: int = 10000
+    TLE_CACHE_TTL: int = 3600      # 1 hour
+    DOCUMENT_CACHE_TTL: int = 3600
+    MAX_CACHE_SIZE: int = 1000
 
-# API configuration
 class APIConfig:
-    host: str = "127.0.0.1"
-    port: int = 8000
-    log_level: str = "info"
-    cors_origins: list = ["*"]
+    HOST: str = "127.0.0.1"
+    PORT: int = 8000
+    CORS_ORIGINS: list              # CORS_ORIGINS (comma-separated)
+    IS_SERVERLESS: bool             # Set by VERCEL=1
 
-# External services
 class ExternalServicesConfig:
-    celestrak_base_url: str = "https://celestrak.org"
-    spacetrack_base_url: str = "https://www.space-track.org"
+    CELESTRAK_BASE_URL: str = "https://celestrak.org/NORAD/elements"
+    CELESTRAK_TLE_FILES: list       # stations, resource, sarsat, dmc, weather, geo, iss
+    SPACETRACK_BASE_URL: str        # SPACETRACK_USERNAME / SPACETRACK_PASSWORD
 
-# Physical constants
 class OrbitalConstants:
-    GM: float = 398600.4418  # Earth's gravitational parameter (km³/s²)
-    EARTH_RADIUS_KM: float = 6371.0
+    GM: float = 398600.4418         # Earth gravitational parameter (km³/s²)
+    WGS84_EQUATORIAL_RADIUS_KM: float = 6378.137
+    EARTH_RADIUS_KM: float = 6371.0 # Legacy, kept for backward compatibility
+
+class AuthConfig:
+    USERNAME: str   # APP_USERNAME (default: admin)
+    PASSWORD: str   # APP_PASSWORD (required)
+    SHANTANU_USERNAME: str  # SHANTANU_USERNAME
+    SHANTANU_PASSWORD: str  # SHANTANU_PASSWORD
+
+class AgentConfig:
+    OPENAI_API_KEY: str             # OPENAI_API_KEY (required for /v2/ask)
+    MODEL: str = "gpt-4o-mini"      # AGENT_MODEL
+    VECTOR_STORE_PATH: str = ".chroma"  # AGENT_VECTOR_STORE_PATH
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    RAG_CHUNK_SIZE: int = 1000
+    RAG_CHUNK_OVERLAP: int = 200
+    RAG_TOP_K: int = 5
+    INDEX_SOURCES: list             # Markdown docs to index for RAG
 ```
 
 ### Environment Variables
 
-All configuration can be overridden via environment variables:
-
 ```bash
 # Database
-export ARANGO_HOST=production.arangodb.com
-export ARANGO_USER=kessler_api
-export ARANGO_PASSWORD=secure_password
+ARANGO_HOST=http://localhost:8529
+ARANGO_USER=root
+ARANGO_PASSWORD=kessler_dev_password
 
 # API
-export API_PORT=8080
-export CORS_ORIGINS=https://kessler.space,https://app.kessler.space
+API_PORT=8000
+CORS_ORIGINS=http://localhost:3000
+
+# Authentication
+APP_USERNAME=admin
+APP_PASSWORD=changeme
+SHANTANU_USERNAME=shantanu
+SHANTANU_PASSWORD=changeme
+
+# Space-Track (optional TLE fallback)
+SPACETRACK_USERNAME=your_email@example.com
+SPACETRACK_PASSWORD=your_password
+
+# LangGraph AI Agent (required for /v2/ask)
+OPENAI_API_KEY=sk-...
+AGENT_MODEL=gpt-4o-mini
+AGENT_VECTOR_STORE_PATH=.chroma
 
 # Caching
-export TLE_CACHE_TTL=7200
-export MAX_CACHE_SIZE=50000
+TLE_CACHE_TTL=3600
+MAX_CACHE_SIZE=1000
 ```
 
 ---
@@ -472,17 +571,70 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 ---
 
+## Additional Services
+
+### AgentService (`api/services/agent_service.py`)
+
+**Purpose**: LangGraph-powered conversational AI assistant
+
+**Architecture**: ReAct agent compiled with LangGraph `StateGraph`
+
+**Tools available to the agent**:
+1. `search_knowledge_base` — RAG retrieval over indexed project documentation (ChromaDB)
+2. `search_satellites` — Live satellite registry search (wraps `database.operations.search_satellites`)
+3. `run_aql_query` — Read-only AQL queries against ArangoDB (FOR/RETURN only; INSERT/UPDATE/REMOVE blocked)
+
+**Session management**: In-memory `_session_histories` dict keyed by `session_id` (UUID) enables multi-turn conversation.
+
+**Initialization**: Called once at startup via `api/main.py` lifespan. Requires `OPENAI_API_KEY` — gracefully degrades to unavailable state if missing.
+
+---
+
+### IndexService (`api/services/index_service.py`)
+
+**Purpose**: Build and serve the ChromaDB RAG vector store from project documentation
+
+**Indexed sources** (loaded from repo root at startup):
+- `ARCHITECTURE.md`, `DEVELOPER_GUIDE.md`, `API_DOCUMENTATION.md`, `README.md`
+- `docs/MULTI_SOURCE_DATA_ARCHITECTURE.md`, `docs/OBSERVATIONS_IMPORT_API.md`, `docs/MONGODB_README.md`
+
+**Behaviour**: If a persisted store exists at `AGENT_VECTOR_STORE_PATH` (`.chroma`), it is loaded; otherwise a new store is built and embedded using `text-embedding-3-small`.
+
+---
+
+### CollisionService (`api/services/collision_service.py`)
+
+Computes pairwise collision risk scores between satellites based on orbital proximity data. Populates `collision_risk_edges`.
+
+---
+
+### LineageService (`api/services/lineage_service.py`)
+
+Traverses the `satellite_lineage` edge collection to build family trees (ancestors/descendants) for a given satellite.
+
+---
+
+### PropagationService (`api/services/propagation_service.py`)
+
+Uses SGP4 (via `sgp4`) and Skyfield to propagate TLE elements forward in time, computing position/velocity state vectors.
+
+---
+
+### SpaceTrackService (`api/services/spacetrack_service.py`)
+
+Authenticates with Space-Track.org and fetches historical TLE data as a fallback when CelesTrak does not have a record.
+
+---
+
 ## Future Enhancements
 
 ### Planned Improvements
 
 1. **GraphQL API**: Add GraphQL support alongside REST
 2. **Real-time Updates**: WebSocket support for live satellite tracking
-3. **Advanced Caching**: Redis for distributed caching
-4. **Batch Operations**: Bulk import/export endpoints
-5. **ML Integration**: Collision prediction models
-6. **Rate Limiting**: Per-client rate limiting
-7. **API Versioning**: v3 with breaking changes
+3. **Advanced Caching**: Redis for distributed caching across instances
+4. **Rate Limiting**: Per-client rate limiting
+5. **API Versioning**: v3 with breaking changes
 
 ### Scalability Considerations
 
