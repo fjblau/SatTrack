@@ -108,7 +108,7 @@ export default function HelpPage() {
               key={q}
               className="help-sample-btn"
               onClick={() => sendMessage(q)}
-              disabled={loading}
+              disabled={loading || agentReady === false}
             >
               {q}
             </button>
@@ -124,7 +124,17 @@ export default function HelpPage() {
 
       <div className="help-main">
         <div className="help-messages">
-          {messages.length === 0 && (
+          {messages.length === 0 && agentReady === false && (
+            <div className="help-empty">
+              <div className="help-empty-icon help-empty-icon-warn">!</div>
+              <p>Agent Unavailable</p>
+              <p className="help-empty-sub">
+                Set <code>OPENAI_API_KEY</code> in your <code>.env</code> file and restart the server.
+              </p>
+            </div>
+          )}
+
+          {messages.length === 0 && agentReady !== false && (
             <div className="help-empty">
               <div className="help-empty-icon">?</div>
               <p>Ask a question to get started.</p>
@@ -173,14 +183,14 @@ export default function HelpPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question… (Enter to send, Shift+Enter for newline)"
+            placeholder={agentReady === false ? 'Agent unavailable — set OPENAI_API_KEY on the server' : 'Ask a question… (Enter to send, Shift+Enter for newline)'}
             rows={3}
-            disabled={loading}
+            disabled={loading || agentReady === false}
           />
           <button
             className="help-send-btn"
             onClick={() => sendMessage()}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || agentReady === false}
           >
             {loading ? 'Sending…' : 'Send'}
           </button>
