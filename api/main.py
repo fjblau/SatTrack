@@ -6,8 +6,9 @@ import os
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent
 from api.middleware.auth import AuthMiddleware
+from api.services import index_service, agent_service
 
 try:
     from dotenv import load_dotenv
@@ -26,6 +27,9 @@ async def lifespan(app: FastAPI):
     if not is_serverless:
         mqtt_scheduler.initialize_scheduler()
         mqtt_scheduler.load_and_schedule_all_configs()
+
+    index_service.build_index()
+    agent_service.initialize_agent()
     
     yield
     
@@ -56,3 +60,4 @@ app.include_router(tle.router)
 app.include_router(mqtt.router)
 app.include_router(admin.router)
 app.include_router(observations.router)
+app.include_router(agent.router)
