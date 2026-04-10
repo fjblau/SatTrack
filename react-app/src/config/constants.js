@@ -53,6 +53,11 @@ export const API_ENDPOINTS = {
     RESOLVE: '/api/documents/resolve',
     METADATA: '/api/documents/metadata',
   },
+
+  AGENT: {
+    ASK: '/v2/ask',
+    STATUS: '/v2/ask/status',
+  },
 }
 
 export const PAGINATION = {

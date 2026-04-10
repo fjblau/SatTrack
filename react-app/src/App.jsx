@@ -12,6 +12,7 @@ import ObservationsView from './components/ObservationsView'
 import ObservationGraphs from './components/ObservationGraphs'
 import LoginPage from './components/LoginPage'
 import AqlEditorPage from './components/AqlEditorPage'
+import HelpPage from './components/HelpPage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
@@ -310,6 +311,12 @@ function App() {
               AQL Editor
             </button>
           )}
+          <button
+            className={`help-button${activeTab === 'help' ? ' active' : ''}`}
+            onClick={() => setActiveTab('help')}
+          >
+            ? Help
+          </button>
         </nav>
         {activeTab === 'table' && <p>{total} objects</p>}
         {activeTab === 'observations' && <p>Observational Data</p>}
@@ -407,6 +414,10 @@ function App() {
 
       {activeTab === 'aql-editor' && !isDemo && (
         <AqlEditorPage />
+      )}
+
+      {activeTab === 'help' && (
+        <HelpPage />
       )}
 
       {activeTab === 'analytics' && (

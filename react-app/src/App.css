@@ -49,6 +49,23 @@
   color: white;
 }
 
+.app-nav .help-button {
+  border-color: #27ae60;
+  color: #27ae60;
+}
+
+.app-nav .help-button:hover {
+  background: #27ae60;
+  border-color: #27ae60;
+  color: white;
+}
+
+.app-nav .help-button.active {
+  background: #27ae60;
+  border-color: #27ae60;
+  color: white;
+}
+
 .app-header p {
   color: #666;
   font-size: 0.9em;
