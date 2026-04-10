@@ -19,6 +19,9 @@ mongodb_export.json
 # Build output
 react-app/dist/
 
+# LangGraph / ChromaDB vector store
+.chroma/
+
 # Claude Code local settings
 .claude/settings.local.json
 

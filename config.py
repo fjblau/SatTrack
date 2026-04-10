@@ -113,6 +113,26 @@ class AuthConfig:
         return users
 
 
+class AgentConfig:
+    """LangGraph agent configuration"""
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    MODEL: str = os.getenv("AGENT_MODEL", "gpt-4o-mini")
+    VECTOR_STORE_PATH: str = os.getenv("AGENT_VECTOR_STORE_PATH", ".chroma")
+    EMBEDDING_MODEL: str = os.getenv("AGENT_EMBEDDING_MODEL", "text-embedding-3-small")
+    RAG_CHUNK_SIZE: int = int(os.getenv("AGENT_RAG_CHUNK_SIZE", "1000"))
+    RAG_CHUNK_OVERLAP: int = int(os.getenv("AGENT_RAG_CHUNK_OVERLAP", "200"))
+    RAG_TOP_K: int = int(os.getenv("AGENT_RAG_TOP_K", "5"))
+    INDEX_SOURCES: List[str] = [
+        "ARCHITECTURE.md",
+        "DEVELOPER_GUIDE.md",
+        "API_DOCUMENTATION.md",
+        "README.md",
+        "docs/MULTI_SOURCE_DATA_ARCHITECTURE.md",
+        "docs/OBSERVATIONS_IMPORT_API.md",
+        "docs/MONGODB_README.md",
+    ]
+
+
 class Config:
     """Main configuration class"""
     database = DatabaseConfig()
@@ -121,6 +141,7 @@ class Config:
     external = ExternalServicesConfig()
     orbital = OrbitalConstants()
     auth = AuthConfig()
+    agent = AgentConfig()
 
 
 config = Config()
