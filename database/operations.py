@@ -167,10 +167,12 @@ def search_satellites(
             (LIKE(doc.canonical.name, @query_pattern, true) OR
              LIKE(doc.canonical.object_name, @query_pattern, true) OR
              LIKE(doc.canonical.international_designator, @query_pattern, true) OR
-             LIKE(doc.canonical.registration_number, @query_pattern, true))
+             LIKE(doc.canonical.registration_number, @query_pattern, true) OR
+             TO_STRING(doc.canonical.norad_cat_id) == @query_exact)
         """)
         bind_vars['query_pattern'] = f'%{query}%'
-    
+        bind_vars['query_exact'] = str(query).strip()
+
     if country:
         filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
         bind_vars['country_pattern'] = f'%{country}%'

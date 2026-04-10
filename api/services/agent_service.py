@@ -57,6 +57,32 @@ def _build_tools(retriever) -> list:
             return f"Satellite search failed: {exc}"
 
     @tool
+    def get_satellite_by_norad_id(norad_id: int) -> str:
+        """Look up a satellite's full canonical data by its NORAD catalog ID (integer).
+        Use this whenever the user provides a numeric NORAD ID (e.g. 25544, 58023).
+        Returns the complete canonical fields for that satellite."""
+        try:
+            import database.connection as db_conn
+            cursor = db_conn.db.aql.execute(
+                """
+                FOR s IN satellites
+                    FILTER s.canonical.norad_cat_id == @norad_id
+                    LIMIT 1
+                    RETURN s.canonical
+                """,
+                bind_vars={"norad_id": norad_id},
+                max_runtime=10,
+            )
+            results = list(cursor)
+            if not results:
+                return f"No satellite found with NORAD ID {norad_id}."
+            import json
+            return json.dumps(results[0], default=str)
+        except Exception as exc:
+            logger.error(f"NORAD ID lookup failed: {exc}")
+            return f"Lookup failed: {exc}"
+
+    @tool
     def run_aql_query(aql: str) -> str:
         """Execute a read-only AQL query against the ArangoDB satellite graph database.
         Only SELECT-style queries (FOR … RETURN) are permitted — no INSERT/UPDATE/REMOVE.
@@ -81,7 +107,7 @@ def _build_tools(retriever) -> list:
             logger.error(f"AQL query failed: {exc}")
             return f"AQL query failed: {exc}"
 
-    return [search_knowledge_base, search_satellites, run_aql_query]
+    return [search_knowledge_base, get_satellite_by_norad_id, search_satellites, run_aql_query]
 
 
 def _build_graph(llm, tools):
@@ -97,14 +123,14 @@ def _build_graph(llm, tools):
     SYSTEM_PROMPT = (
         "You are a knowledgeable assistant for the Kessler satellite tracking application. "
         "You help users understand the application, satellite data, orbital mechanics, and the API.\n\n"
-        "You have access to three tools — use them in this order of preference:\n"
+        "You have access to four tools — use them in this order of preference:\n"
         "1. search_knowledge_base — ALWAYS try this first for any conceptual, architectural, "
         "or how-to question. It searches indexed documentation, API guides, and architecture docs.\n"
-        "2. search_satellites — use this when the user asks about a specific satellite by name, "
-        "NORAD ID, or designator, or wants live registry data.\n"
-        "3. run_aql_query — use this ONLY when the user explicitly asks for a live database query "
-        "or when the knowledge base has no answer and a database lookup would clearly help. "
-        "If the query fails, explain what you know from documentation instead.\n\n"
+        "2. get_satellite_by_norad_id — use this IMMEDIATELY when the user provides a numeric "
+        "NORAD ID (e.g. 'NORAD ID 58023', 'satellite 25544'). Returns the full canonical data.\n"
+        "3. search_satellites — use this when the user asks about a satellite by name or designator.\n"
+        "4. run_aql_query — use this ONLY when the user explicitly asks for a live database query "
+        "or when other tools have no answer. If the query fails, explain what you know instead.\n\n"
         "For general questions about graph relationships, orbital bands, data structure, or "
         "application features, always use search_knowledge_base — do not run AQL queries for "
         "conceptual questions.\n\n"
