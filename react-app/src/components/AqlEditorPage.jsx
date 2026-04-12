@@ -58,23 +58,31 @@ export default function AqlEditorPage() {
   const [nlLoading, setNlLoading] = useState(false)
   const [nlExplanation, setNlExplanation] = useState('')
   const [nlError, setNlError] = useState('')
+  const [nlClarifyingQuestion, setNlClarifyingQuestion] = useState('')
+  const [nlClarification, setNlClarification] = useState('')
 
-  const generateAql = async () => {
+  const generateAql = async (clarification = '') => {
     if (!nlQuestion.trim()) return
     setNlLoading(true)
     setNlError('')
     setNlExplanation('')
+    setNlClarifyingQuestion('')
     try {
+      const body = { question: nlQuestion }
+      if (clarification) body.clarification = clarification
       const response = await apiFetch(API_ENDPOINTS.AGENT.AQL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: nlQuestion }),
+        body: JSON.stringify(body),
       })
       const result = await response.json()
       if (!response.ok) {
         throw new Error(result.detail || 'Generation failed')
       }
-      if (result.error) {
+      if (result.clarifying_question) {
+        setNlClarifyingQuestion(result.clarifying_question)
+        setNlClarification('')
+      } else if (result.error) {
         setNlError(result.error)
       } else {
         setAqlQuery(result.aql)
@@ -226,6 +234,31 @@ export default function AqlEditorPage() {
             {nlExplanation && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted, #6c757d)', fontStyle: 'italic' }}>
                 {nlExplanation}
+              </div>
+            )}
+            {nlClarifyingQuestion && (
+              <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--surface-3, #fff3cd)', borderRadius: '6px', border: '1px solid #ffc107' }}>
+                <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.4rem' }}>
+                  Clarification needed
+                </div>
+                <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>{nlClarifyingQuestion}</div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={nlClarification}
+                    onChange={e => setNlClarification(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && nlClarification.trim() && generateAql(nlClarification)}
+                    placeholder="Your answer…"
+                    style={{ flex: 1, padding: '0.4rem 0.6rem', borderRadius: '5px', border: '1px solid #ffc107', fontSize: '0.875rem' }}
+                  />
+                  <button
+                    className="run-button"
+                    onClick={() => generateAql(nlClarification)}
+                    disabled={nlLoading || !nlClarification.trim()}
+                  >
+                    {nlLoading ? 'Generating…' : 'Submit'}
+                  </button>
+                </div>
               </div>
             )}
           </div>

@@ -261,8 +261,27 @@ Respond with a JSON object and no other text:
     )
 
 
+_CLARIFY_SYSTEM_PROMPT = """You are an assistant that detects when a natural language database query is ambiguous.
+
+The Kessler satellite database has these potentially ambiguous concepts:
+- "country" could mean `canonical.country_of_origin` (where the satellite was built/registered by) OR a launch registration nation — always prefer `country_of_origin` unless the user explicitly asks about registration.
+- "active" or "operational" satellites → `canonical.status == 'in orbit'`
+- "inactive" / "dead" / "decommissioned" → `canonical.status == 'decayed'`
+- "name" could mean `canonical.name`, `canonical.object_name`, or `canonical.satellite_name`
+
+If the question is clear enough to generate AQL without guessing, respond:
+{"needs_clarification": false}
+
+If there is genuine ambiguity that would change the query significantly, respond:
+{"needs_clarification": true, "clarifying_question": "<one short question to resolve it>"}
+
+Respond with JSON only. No other text."""
+
+
 class _State(TypedDict):
     question: str
+    clarification: str
+    clarifying_question: str
     aql: str
     bind_vars: dict
     explanation: str
@@ -325,8 +344,28 @@ def _build_graph():
     from langgraph.graph import StateGraph, END
     from langchain_core.messages import HumanMessage, SystemMessage
 
+    def clarify(state: _State) -> _State:
+        # Skip clarification if the user already answered a clarifying question
+        if state.get("clarification"):
+            return {**state, "clarifying_question": ""}
+
+        response = _llm.invoke([
+            SystemMessage(content=_CLARIFY_SYSTEM_PROMPT),
+            HumanMessage(content=state["question"]),
+        ])
+        parsed = _parse_llm_response(response.content)
+        if parsed.get("needs_clarification"):
+            return {**state, "clarifying_question": parsed.get("clarifying_question", "")}
+        return {**state, "clarifying_question": ""}
+
+    def should_clarify(state: _State) -> str:
+        return "ask" if state.get("clarifying_question") else "translate"
+
     def translate(state: _State) -> _State:
-        prompt = _annotate_question_with_countries(state["question"], _known_countries)
+        question = state["question"]
+        if state.get("clarification"):
+            question = f"{question}\n\nClarification from user: {state['clarification']}"
+        prompt = _annotate_question_with_countries(question, _known_countries)
         if state.get("error"):
             prompt = (
                 f"{prompt}\n\n"
@@ -371,9 +410,13 @@ def _build_graph():
         return END
 
     g = StateGraph(_State)
+    g.add_node("clarify", clarify)
+    g.add_node("ask", lambda s: s)   # terminal: return state with clarifying_question set
     g.add_node("translate", translate)
     g.add_node("execute", execute)
-    g.set_entry_point("translate")
+    g.set_entry_point("clarify")
+    g.add_conditional_edges("clarify", should_clarify, {"ask": "ask", "translate": "translate"})
+    g.add_edge("ask", END)
     g.add_edge("translate", "execute")
     g.add_conditional_edges("execute", should_retry, {"translate": "translate", END: END})
     return g.compile()
@@ -386,7 +429,7 @@ def _get_graph():
     return _graph
 
 
-def run_aql_agent(question: str) -> dict[str, Any]:
+def run_aql_agent(question: str, clarification: str = "") -> dict[str, Any]:
     if _llm is None:
         return {
             "aql": "",
@@ -394,9 +437,12 @@ def run_aql_agent(question: str) -> dict[str, Any]:
             "result": [],
             "explanation": "",
             "error": "AQL agent unavailable. Ensure OPENAI_API_KEY is set.",
+            "clarifying_question": "",
         }
     initial: _State = {
         "question": question,
+        "clarification": clarification,
+        "clarifying_question": "",
         "aql": "",
         "bind_vars": {},
         "explanation": "",
@@ -411,4 +457,5 @@ def run_aql_agent(question: str) -> dict[str, Any]:
         "result": final.get("result", []),
         "explanation": final.get("explanation", ""),
         "error": final.get("error", ""),
+        "clarifying_question": final.get("clarifying_question", ""),
     }
