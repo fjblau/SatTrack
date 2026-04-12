@@ -15,7 +15,7 @@ _SCHEMA_CONTEXT_BASE = """
 - `_id`: "satellites/<identifier>"
 - `identifier`: string e.g. "2023-001A", "25544"
 - `canonical.satellite_name` / `canonical.object_name`: string (either may be null)
-- `canonical.country_of_registration`: string — full country name (see ENUM VALUES below)
+- `canonical.country_of_origin`: string — full country name (see ENUM VALUES below)
 - `canonical.status`: string — (see ENUM VALUES below)
 - `canonical.orbital_band`: string — (see ENUM VALUES below)
 - `canonical.launch_date`: string (ISO date)
@@ -202,7 +202,7 @@ def _fetch_enum_values() -> dict:
         return {
             "countries": _collect(
                 "FOR s IN satellites "
-                "COLLECT c = s.canonical.country_of_registration RETURN c"
+                "COLLECT c = s.canonical.country_of_origin RETURN c"
             ),
             "statuses": _collect(
                 "FOR s IN satellites "
@@ -226,7 +226,7 @@ def _build_system_prompt(enums: dict) -> str:
     enum_section = f"""
 ### ENUM VALUES — use these exact strings, never abbreviations or ISO codes
 
-`canonical.country_of_registration` must be one of:
+`canonical.country_of_origin` must be one of:
 {countries_str}
 
 `canonical.status` must be one of:
