@@ -56,6 +56,7 @@ def ask_status():
 
 class AQLRequest(BaseModel):
     question: str
+    clarification: Optional[str] = None
 
 
 class AQLResponse(BaseModel):
@@ -64,14 +65,16 @@ class AQLResponse(BaseModel):
     result: list[Any]
     explanation: str
     error: str
+    clarifying_question: str
 
 
 @router.post("/aql", response_model=AQLResponse)
 def aql_query(body: AQLRequest):
     """Translate a natural language question into an AQL query and execute it.
 
-    Returns the generated AQL, bind variables, execution results, and a plain-English
-    explanation of what the query does — so users can read and learn from the query.
+    If the question is ambiguous, the response will contain a `clarifying_question`
+    and empty `aql`/`result` fields. Re-submit with `clarification` set to the user's
+    answer to proceed with query generation.
 
     The agent automatically retries (up to 3 times) if ArangoDB returns a syntax error.
     """
@@ -80,5 +83,8 @@ def aql_query(body: AQLRequest):
             status_code=503,
             detail="AQL agent is not available. Ensure OPENAI_API_KEY is set and the server restarted.",
         )
-    result = aql_agent_service.run_aql_agent(question=body.question)
+    result = aql_agent_service.run_aql_agent(
+        question=body.question,
+        clarification=body.clarification or "",
+    )
     return AQLResponse(**result)
