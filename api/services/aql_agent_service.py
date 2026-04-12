@@ -60,7 +60,9 @@ _SCHEMA_CONTEXT = """
 ### AQL Tips
 - `FOR s IN satellites FILTER ... RETURN s` for document queries
 - `FOR v, e IN 1..1 OUTBOUND "satellites/<id>" <edge_col>` for graph traversal
-- Always add `LIMIT 20` on open-ended queries unless aggregating
+- **LIMIT must always appear before RETURN** — never after it:
+  - CORRECT: `FOR s IN satellites FILTER ... SORT s.canonical.launch_date DESC LIMIT 20 RETURN s`
+  - WRONG:   `FOR s IN satellites FILTER ... RETURN s LIMIT 20`
 - `canonical.satellite_name` may be null — prefer `canonical.satellite_name || canonical.object_name`
 - NORAD IDs are integers — do not quote them
 """
@@ -73,6 +75,7 @@ Translate the user's natural language question into a correct, read-only AQL que
 
 Rules:
 - Only FOR...RETURN queries. No INSERT / UPDATE / REPLACE / REMOVE / UPSERT.
+- LIMIT must come before RETURN, never after it. This is a hard AQL requirement.
 - Always include LIMIT (default 20) unless the user asks for counts or aggregates.
 - Use @bind_var placeholders for user-supplied values.
 - If you receive an error from a previous attempt, fix the query accordingly.
