@@ -67,6 +67,113 @@ _SCHEMA_CONTEXT_BASE = """
 - NORAD IDs are integers — do not quote them
 """
 
+_COUNTRY_ALIASES: dict[str, str] = {
+    k.lower(): v for k, v in {
+        # Austria
+        "at": "Austria", "aut": "Austria", "austrian": "Austria",
+        # Australia
+        "au": "Australia", "aus": "Australia", "australian": "Australia",
+        # Belgium
+        "be": "Belgium", "bel": "Belgium", "belgian": "Belgium",
+        # Brazil
+        "br": "Brazil", "bra": "Brazil", "brazilian": "Brazil",
+        # Canada
+        "ca": "Canada", "can": "Canada", "canadian": "Canada",
+        # China
+        "cn": "China", "chn": "China", "chinese": "China",
+        "people's republic of china": "China", "prc": "China",
+        # Denmark
+        "dk": "Denmark", "dnk": "Denmark", "danish": "Denmark",
+        # Finland
+        "fi": "Finland", "fin": "Finland", "finnish": "Finland",
+        # France
+        "fr": "France", "fra": "France", "french": "France",
+        # Germany
+        "de": "Germany", "deu": "Germany", "german": "Germany",
+        # India
+        "in": "India", "ind": "India", "indian": "India",
+        # Indonesia
+        "id": "Indonesia", "idn": "Indonesia", "indonesian": "Indonesia",
+        # Israel
+        "il": "Israel", "isr": "Israel", "israeli": "Israel",
+        # Italy
+        "it": "Italy", "ita": "Italy", "italian": "Italy",
+        # Japan
+        "jp": "Japan", "jpn": "Japan", "japanese": "Japan",
+        # Luxembourg
+        "lu": "Luxembourg", "lux": "Luxembourg",
+        # Netherlands
+        "nl": "Netherlands", "nld": "Netherlands", "dutch": "Netherlands",
+        # New Zealand
+        "nz": "New Zealand", "nzl": "New Zealand",
+        # Norway
+        "no": "Norway", "nor": "Norway", "norwegian": "Norway",
+        # Pakistan
+        "pk": "Pakistan", "pak": "Pakistan", "pakistani": "Pakistan",
+        # Republic of Korea
+        "kr": "Republic of Korea", "kor": "Republic of Korea",
+        "south korea": "Republic of Korea", "korean": "Republic of Korea",
+        # Russian Federation
+        "ru": "Russian Federation", "rus": "Russian Federation",
+        "russia": "Russian Federation", "russian": "Russian Federation",
+        # Saudi Arabia
+        "sa": "Saudi Arabia", "sau": "Saudi Arabia", "saudi": "Saudi Arabia",
+        # Singapore
+        "sg": "Singapore", "sgp": "Singapore", "singaporean": "Singapore",
+        # South Africa
+        "za": "South Africa", "zaf": "South Africa", "south african": "South Africa",
+        # Spain
+        "es": "Spain", "esp": "Spain", "spanish": "Spain",
+        # Sweden
+        "se": "Sweden", "swe": "Sweden", "swedish": "Sweden",
+        # Switzerland
+        "ch": "Switzerland", "che": "Switzerland", "swiss": "Switzerland",
+        # Thailand
+        "th": "Thailand", "tha": "Thailand", "thai": "Thailand",
+        # Turkey
+        "tr": "Turkey", "tur": "Turkey", "turkish": "Turkey",
+        # United Arab Emirates
+        "ae": "United Arab Emirates", "are": "United Arab Emirates", "uae": "United Arab Emirates",
+        # United Kingdom
+        "gb": "United Kingdom", "gbr": "United Kingdom",
+        "uk": "United Kingdom", "british": "United Kingdom", "britain": "United Kingdom",
+        # United States of America
+        "us": "United States of America", "usa": "United States of America",
+        "usa": "United States of America", "u.s.": "United States of America",
+        "united states": "United States of America", "american": "United States of America",
+        # European Space Agency
+        "esa": "European Space Agency",
+    }.items()
+}
+
+
+def _annotate_question_with_countries(question: str, known_countries: list[str]) -> str:
+    """
+    Scan the question for known country aliases and prepend an unambiguous
+    resolution note so the LLM uses the exact stored value.
+    """
+    words = question.lower().split()
+    # also check two-word phrases
+    bigrams = [f"{words[i]} {words[i+1]}" for i in range(len(words) - 1)]
+    resolved: dict[str, str] = {}
+
+    for token in bigrams + words:
+        token_clean = token.strip("'\".,;:?!()")
+        if token_clean in _COUNTRY_ALIASES:
+            canonical = _COUNTRY_ALIASES[token_clean]
+            if canonical in known_countries or not known_countries:
+                resolved[token_clean] = canonical
+
+    if not resolved:
+        return question
+
+    notes = "; ".join(
+        f'"{raw}" → exact DB value: "{canonical}"'
+        for raw, canonical in resolved.items()
+    )
+    return f"[Country resolution: {notes}]\n{question}"
+
+
 _ENUM_VALUES_FALLBACK = {
     "countries": [
         "Austria", "Australia", "Belgium", "Brazil", "Canada", "China", "Denmark",
@@ -167,10 +274,11 @@ class _State(TypedDict):
 _llm = None
 _graph = None
 _system_prompt = None
+_known_countries: list[str] = []
 
 
 def initialize_aql_agent() -> None:
-    global _llm, _system_prompt
+    global _llm, _system_prompt, _known_countries
     if not config.agent.OPENAI_API_KEY:
         logger.warning("OPENAI_API_KEY not set — /v2/aql endpoint will be unavailable.")
         return
@@ -183,6 +291,7 @@ def initialize_aql_agent() -> None:
             temperature=0,
         )
         enums = _fetch_enum_values()
+        _known_countries = enums["countries"]
         _system_prompt = _build_system_prompt(enums)
         logger.info(
             "AQL translation agent initialized with model '%s' (%d countries, %d statuses, %d bands).",
@@ -217,10 +326,10 @@ def _build_graph():
     from langchain_core.messages import HumanMessage, SystemMessage
 
     def translate(state: _State) -> _State:
-        prompt = state["question"]
+        prompt = _annotate_question_with_countries(state["question"], _known_countries)
         if state.get("error"):
             prompt = (
-                f"{state['question']}\n\n"
+                f"{prompt}\n\n"
                 f"Previous AQL:\n{state['aql']}\n\n"
                 f"Execution error: {state['error']}\n\n"
                 "Fix the query."
