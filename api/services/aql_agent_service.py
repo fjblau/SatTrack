@@ -64,6 +64,7 @@ _SCHEMA_CONTEXT = """
   - CORRECT: `FOR s IN satellites FILTER ... SORT s.canonical.launch_date DESC LIMIT 20 RETURN s`
   - WRONG:   `FOR s IN satellites FILTER ... RETURN s LIMIT 20`
 - `canonical.satellite_name` may be null — prefer `canonical.satellite_name || canonical.object_name`
+- `canonical.country_of_registration` stores **full country names**, never ISO codes — e.g. `"Austria"`, `"United States of America"`, `"Russian Federation"`, `"China"`, `"France"`, `"Germany"`, `"Japan"`. Never use "AT", "US", "RU", etc.
 - NORAD IDs are integers — do not quote them
 """
 
