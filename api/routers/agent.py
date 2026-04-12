@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 
-from api.services import agent_service, index_service
+from api.services import agent_service, aql_agent_service, index_service
 
 router = APIRouter(prefix="/v2", tags=["agent"])
 
@@ -50,4 +50,35 @@ def ask_status():
     return {
         "agent_ready": agent_service.is_ready(),
         "index_ready": index_service.is_ready(),
+        "aql_agent_ready": aql_agent_service.is_ready(),
     }
+
+
+class AQLRequest(BaseModel):
+    question: str
+
+
+class AQLResponse(BaseModel):
+    aql: str
+    bind_vars: dict[str, Any]
+    result: list[Any]
+    explanation: str
+    error: str
+
+
+@router.post("/aql", response_model=AQLResponse)
+def aql_query(body: AQLRequest):
+    """Translate a natural language question into an AQL query and execute it.
+
+    Returns the generated AQL, bind variables, execution results, and a plain-English
+    explanation of what the query does — so users can read and learn from the query.
+
+    The agent automatically retries (up to 3 times) if ArangoDB returns a syntax error.
+    """
+    if not aql_agent_service.is_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="AQL agent is not available. Ensure OPENAI_API_KEY is set and the server restarted.",
+        )
+    result = aql_agent_service.run_aql_agent(question=body.question)
+    return AQLResponse(**result)

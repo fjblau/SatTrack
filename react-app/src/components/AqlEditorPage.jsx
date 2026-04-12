@@ -54,6 +54,42 @@ export default function AqlEditorPage() {
   const [viewAsGraph, setViewAsGraph] = useState(false)
   const [exportingFormat, setExportingFormat] = useState(null)
 
+  const [nlQuestion, setNlQuestion] = useState('')
+  const [nlLoading, setNlLoading] = useState(false)
+  const [nlExplanation, setNlExplanation] = useState('')
+  const [nlError, setNlError] = useState('')
+
+  const generateAql = async () => {
+    if (!nlQuestion.trim()) return
+    setNlLoading(true)
+    setNlError('')
+    setNlExplanation('')
+    try {
+      const response = await apiFetch(API_ENDPOINTS.AGENT.AQL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: nlQuestion }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.detail || 'Generation failed')
+      }
+      if (result.error) {
+        setNlError(result.error)
+      } else {
+        setAqlQuery(result.aql)
+        setNlExplanation(result.explanation)
+        setAqlResults(null)
+        setError(null)
+        setViewAsGraph(false)
+      }
+    } catch (err) {
+      setNlError(err.message)
+    } finally {
+      setNlLoading(false)
+    }
+  }
+
   const hasGraphData = useMemo(() => {
     if (!aqlResults || !aqlResults.data || aqlResults.data.length === 0) return false
     if (aqlResults.data.length === 1) {
@@ -162,6 +198,38 @@ export default function AqlEditorPage() {
         <p className="chart-description">Execute custom ArangoDB Query Language queries against the full database. Export results as CSV or JSON for data science workflows.</p>
 
         <div className="aql-editor-container">
+          <div className="nl-aql-section" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--surface-2, #f8f9fa)', borderRadius: '8px', border: '1px solid var(--border, #dee2e6)' }}>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.875rem' }}>
+              Generate AQL from plain English
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                value={nlQuestion}
+                onChange={e => setNlQuestion(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !nlLoading && generateAql()}
+                placeholder="e.g. Show the 10 satellites with highest collision risk scores"
+                style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border, #dee2e6)', fontSize: '0.875rem' }}
+              />
+              <button
+                className="run-button"
+                onClick={generateAql}
+                disabled={nlLoading || !nlQuestion.trim()}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {nlLoading ? 'Generating…' : 'Generate AQL'}
+              </button>
+            </div>
+            {nlError && (
+              <div className="aql-error" style={{ marginTop: '0.5rem' }}>{nlError}</div>
+            )}
+            {nlExplanation && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted, #6c757d)', fontStyle: 'italic' }}>
+                {nlExplanation}
+              </div>
+            )}
+          </div>
+
           <div className="sample-queries">
             <label>Sample Queries:</label>
             <div className="sample-chips">

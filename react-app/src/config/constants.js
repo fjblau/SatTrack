@@ -57,6 +57,7 @@ export const API_ENDPOINTS = {
   AGENT: {
     ASK: '/v2/ask',
     STATUS: '/v2/ask/status',
+    AQL: '/v2/aql',
   },
 }
 
