@@ -248,12 +248,12 @@ Rules:
 - Only FOR...RETURN queries. No INSERT / UPDATE / REPLACE / REMOVE / UPSERT.
 - LIMIT must come before RETURN, never after it. This is a hard AQL requirement.
 - Always include LIMIT (default 20) unless the user asks for counts or aggregates.
-- Use @bind_var placeholders for user-supplied values.
+- Always inline values as string literals directly in the AQL — never use @bind_var placeholders. The query must be self-contained and runnable as-is.
 - If you receive an error from a previous attempt, fix the query accordingly.
 
 Respond with a JSON object and no other text:
 {
-  "aql": "<the AQL query>",
+  "aql": "<the AQL query, with all values inlined as literals>",
   "bind_vars": {},
   "explanation": "<one sentence: what this query returns>"
 }
