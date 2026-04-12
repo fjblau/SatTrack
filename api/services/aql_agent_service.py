@@ -6,7 +6,7 @@ from config import config
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_CONTEXT = """
+_SCHEMA_CONTEXT_BASE = """
 ## ArangoDB Schema
 
 ### Vertex Collections
@@ -15,9 +15,9 @@ _SCHEMA_CONTEXT = """
 - `_id`: "satellites/<identifier>"
 - `identifier`: string e.g. "2023-001A", "25544"
 - `canonical.satellite_name` / `canonical.object_name`: string (either may be null)
-- `canonical.country_of_registration`: string e.g. "US", "CN", "RU"
-- `canonical.status`: string e.g. "in orbit", "decayed", "unknown"
-- `canonical.orbital_band`: string e.g. "LEO", "MEO", "GEO", "HEO"
+- `canonical.country_of_registration`: string — full country name (see ENUM VALUES below)
+- `canonical.status`: string — (see ENUM VALUES below)
+- `canonical.orbital_band`: string — (see ENUM VALUES below)
 - `canonical.launch_date`: string (ISO date)
 - `canonical.norad_cat_id`: integer
 - `canonical.international_designator`: string
@@ -64,16 +64,79 @@ _SCHEMA_CONTEXT = """
   - CORRECT: `FOR s IN satellites FILTER ... SORT s.canonical.launch_date DESC LIMIT 20 RETURN s`
   - WRONG:   `FOR s IN satellites FILTER ... RETURN s LIMIT 20`
 - `canonical.satellite_name` may be null — prefer `canonical.satellite_name || canonical.object_name`
-- `canonical.country_of_registration` stores **full country names**, never ISO codes — e.g. `"Austria"`, `"United States of America"`, `"Russian Federation"`, `"China"`, `"France"`, `"Germany"`, `"Japan"`. Never use "AT", "US", "RU", etc.
 - NORAD IDs are integers — do not quote them
 """
 
-_SYSTEM_PROMPT = f"""You are an AQL (ArangoDB Query Language) expert for the Kessler satellite tracking database.
+_ENUM_VALUES_FALLBACK = {
+    "countries": [
+        "Austria", "Australia", "Belgium", "Brazil", "Canada", "China", "Denmark",
+        "European Space Agency", "Finland", "France", "Germany", "India", "Indonesia",
+        "Israel", "Italy", "Japan", "Luxembourg", "Netherlands", "New Zealand", "Norway",
+        "Pakistan", "Republic of Korea", "Russian Federation", "Saudi Arabia", "Singapore",
+        "South Africa", "Spain", "Sweden", "Switzerland", "Thailand", "Turkey",
+        "United Arab Emirates", "United Kingdom", "United States of America",
+    ],
+    "statuses": ["in orbit", "decayed", "unknown", "deorbited"],
+    "orbital_bands": ["LEO", "MEO", "GEO", "HEO", "SSO", "Unknown"],
+}
 
-Translate the user's natural language question into a correct, read-only AQL query.
 
-{_SCHEMA_CONTEXT}
+def _fetch_enum_values() -> dict:
+    """Query the DB for the actual distinct field values at startup."""
+    try:
+        import database.connection as db_conn
 
+        def _collect(aql: str) -> list:
+            return sorted(
+                v for v in db_conn.db.aql.execute(aql, max_runtime=10)
+                if v is not None
+            )
+
+        return {
+            "countries": _collect(
+                "FOR s IN satellites "
+                "COLLECT c = s.canonical.country_of_registration RETURN c"
+            ),
+            "statuses": _collect(
+                "FOR s IN satellites "
+                "COLLECT v = s.canonical.status RETURN v"
+            ),
+            "orbital_bands": _collect(
+                "FOR s IN satellites "
+                "COLLECT v = s.canonical.orbital_band RETURN v"
+            ),
+        }
+    except Exception as exc:
+        logger.warning("Could not fetch enum values from DB, using fallback: %s", exc)
+        return _ENUM_VALUES_FALLBACK
+
+
+def _build_system_prompt(enums: dict) -> str:
+    countries_str = ", ".join(f'"{c}"' for c in enums["countries"])
+    statuses_str = ", ".join(f'"{s}"' for s in enums["statuses"])
+    bands_str = ", ".join(f'"{b}"' for b in enums["orbital_bands"])
+
+    enum_section = f"""
+### ENUM VALUES — use these exact strings, never abbreviations or ISO codes
+
+`canonical.country_of_registration` must be one of:
+{countries_str}
+
+`canonical.status` must be one of:
+{statuses_str}
+
+`canonical.orbital_band` must be one of:
+{bands_str}
+
+When a user refers to a country by a common name, adjective, or abbreviation (e.g. "Austrian", "US", "American", "Russian"), map it to the exact string above.
+"""
+
+    return (
+        "You are an AQL (ArangoDB Query Language) expert for the Kessler satellite tracking database.\n\n"
+        "Translate the user's natural language question into a correct, read-only AQL query.\n\n"
+        + _SCHEMA_CONTEXT_BASE
+        + enum_section
+        + """
 Rules:
 - Only FOR...RETURN queries. No INSERT / UPDATE / REPLACE / REMOVE / UPSERT.
 - LIMIT must come before RETURN, never after it. This is a hard AQL requirement.
@@ -82,12 +145,13 @@ Rules:
 - If you receive an error from a previous attempt, fix the query accordingly.
 
 Respond with a JSON object and no other text:
-{{
+{
   "aql": "<the AQL query>",
-  "bind_vars": {{}},
+  "bind_vars": {},
   "explanation": "<one sentence: what this query returns>"
-}}
+}
 """
+    )
 
 
 class _State(TypedDict):
@@ -102,10 +166,11 @@ class _State(TypedDict):
 
 _llm = None
 _graph = None
+_system_prompt = None
 
 
 def initialize_aql_agent() -> None:
-    global _llm
+    global _llm, _system_prompt
     if not config.agent.OPENAI_API_KEY:
         logger.warning("OPENAI_API_KEY not set — /v2/aql endpoint will be unavailable.")
         return
@@ -117,7 +182,15 @@ def initialize_aql_agent() -> None:
             api_key=config.agent.OPENAI_API_KEY,
             temperature=0,
         )
-        logger.info("AQL translation agent initialized with model '%s'.", config.agent.MODEL)
+        enums = _fetch_enum_values()
+        _system_prompt = _build_system_prompt(enums)
+        logger.info(
+            "AQL translation agent initialized with model '%s' (%d countries, %d statuses, %d bands).",
+            config.agent.MODEL,
+            len(enums["countries"]),
+            len(enums["statuses"]),
+            len(enums["orbital_bands"]),
+        )
     except Exception as exc:
         logger.error("Failed to initialize AQL agent: %s", exc, exc_info=True)
 
@@ -153,7 +226,7 @@ def _build_graph():
                 "Fix the query."
             )
         response = _llm.invoke([
-            SystemMessage(content=_SYSTEM_PROMPT),
+            SystemMessage(content=_system_prompt),
             HumanMessage(content=prompt),
         ])
         parsed = _parse_llm_response(response.content)
