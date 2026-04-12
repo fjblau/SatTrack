@@ -221,7 +221,7 @@ export default function AqlEditorPage() {
               />
               <button
                 className="run-button"
-                onClick={generateAql}
+                onClick={() => generateAql()}
                 disabled={nlLoading || !nlQuestion.trim()}
                 style={{ whiteSpace: 'nowrap' }}
               >
