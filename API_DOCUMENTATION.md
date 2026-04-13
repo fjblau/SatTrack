@@ -19,6 +19,7 @@ Complete API reference for the Kessler satellite tracking application.
    - [Observations](#observations)
    - [Admin](#admin)
    - [AI Assistant (Agent)](#ai-assistant-agent)
+   - [AQL Translation Agent](#aql-translation-agent)
 4. [Response Formats](#response-formats)
 5. [Error Handling](#error-handling)
 6. [Rate Limiting](#rate-limiting)
@@ -1655,9 +1656,14 @@ GET /v2/admin/runs/{run_id}
 
 ### AI Assistant (Agent)
 
-The AI assistant uses a **LangGraph ReAct agent** backed by OpenAI and a ChromaDB RAG index over project documentation. It supports multi-turn conversation via `session_id`.
+Kessler ships two LangGraph-powered agents. Both require `OPENAI_API_KEY` on the server.
+Check readiness with `GET /v2/ask/status` before use.
 
-Requires `OPENAI_API_KEY` to be set on the server. Check readiness with `GET /v2/ask/status` before use.
+See [`docs/LANGGRAPH_AGENT_ARCHITECTURE.md`](docs/LANGGRAPH_AGENT_ARCHITECTURE.md) for full
+implementation details, graph topologies, and extension guidance.
+
+The **General Assistant** uses a ReAct agent backed by OpenAI and a ChromaDB RAG index
+over project documentation. It supports multi-turn conversation via `session_id`.
 
 ---
 
@@ -1670,7 +1676,7 @@ GET /v2/ask/status
 **Response:**
 
 ```json
-{ "agent_ready": true, "index_ready": true }
+{ "agent_ready": true, "index_ready": true, "aql_agent_ready": true }
 ```
 
 ---
@@ -1704,6 +1710,7 @@ Pass `session_id` from a previous response to continue a multi-turn conversation
 
 **Tools the agent can use:**
 - `search_knowledge_base` — RAG over indexed project documentation
+- `get_satellite_by_norad_id` — direct lookup by integer NORAD catalog ID
 - `search_satellites` — live satellite registry lookup
 - `run_aql_query` — read-only AQL queries (FOR/RETURN only)
 
@@ -1714,6 +1721,90 @@ curl -X POST "http://localhost:8000/v2/ask" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"question": "How many satellites are in LEO?"}'
+```
+
+---
+
+### AQL Translation Agent
+
+Translates a natural language question into an AQL query, executes it against ArangoDB,
+and returns both the generated query and the results. The generated AQL is self-contained
+(no bind variables) so it can be copied directly into the AQL Editor and modified.
+
+#### How it works
+
+1. **Ambiguity check**: if the question is ambiguous (e.g. "show satellites by country"
+   could mean origin or registration), the agent returns a `clarifying_question` and no
+   AQL. Re-submit with the `clarification` field set to proceed.
+2. **Country resolution**: ISO codes and adjective forms ("AT", "AUT", "Austrian") are
+   resolved deterministically to the exact stored value ("Austria") before the LLM runs.
+3. **Error correction**: if ArangoDB rejects the generated AQL, the LLM sees the error
+   and rewrites the query (up to 3 attempts).
+
+---
+
+#### Translate Natural Language to AQL
+
+```http
+POST /v2/aql
+```
+
+**Request Body:**
+
+```json
+{
+  "question": "Show the active Austrian satellites",
+  "clarification": null
+}
+```
+
+Pass `clarification` (user's answer) when the previous response contained a
+`clarifying_question`.
+
+**Response — successful query:**
+
+```json
+{
+  "aql": "FOR s IN satellites FILTER s.canonical.country_of_origin == 'Austria' AND s.canonical.status == 'in orbit' LIMIT 20 RETURN s",
+  "bind_vars": {},
+  "result": [ { ... }, { ... } ],
+  "explanation": "Returns up to 20 active satellites registered in Austria.",
+  "error": "",
+  "clarifying_question": ""
+}
+```
+
+**Response — clarification needed:**
+
+```json
+{
+  "aql": "",
+  "bind_vars": {},
+  "result": [],
+  "explanation": "",
+  "error": "",
+  "clarifying_question": "Do you mean satellites by country of origin, or by launch registration country?"
+}
+```
+
+Re-submit the same `question` with `"clarification": "country of origin"` to proceed.
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:8000/v2/aql" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Show the 10 satellites with the highest collision risk scores"}'
+```
+
+**With clarification:**
+
+```bash
+curl -X POST "http://localhost:8000/v2/aql" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Show satellites by country", "clarification": "country of origin"}'
 ```
 
 ---

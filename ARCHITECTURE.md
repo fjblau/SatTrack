@@ -64,7 +64,7 @@ kessler/
 │   │   ├── mqtt.py              # MQTT configuration & publishing
 │   │   ├── observations.py      # Observation import, analytics, graph data
 │   │   ├── admin.py             # Admin script execution & run tracking
-│   │   └── agent.py             # POST /v2/ask, GET /v2/ask/status (AI assistant)
+│   │   └── agent.py             # POST /v2/ask, POST /v2/aql, GET /v2/ask/status (AI agents)
 │   ├── services/                # Business logic services
 │   │   ├── cache_service.py     # Unified caching with LRU & TTL
 │   │   ├── orbital_service.py   # Orbital calculations from TLE
@@ -75,7 +75,8 @@ kessler/
 │   │   ├── propagation_service.py # SGP4/Skyfield orbit propagation
 │   │   ├── spacetrack_service.py  # Space-Track API integration
 │   │   ├── index_service.py     # ChromaDB RAG vector store build & load
-│   │   └── agent_service.py     # LangGraph AI agent (RAG + tools)
+│   │   ├── agent_service.py     # LangGraph general assistant (RAG + tools, /v2/ask)
+│   │   └── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
 │   └── utils/
 │       └── converters.py        # Format conversion utilities
 │
@@ -452,10 +453,11 @@ SHANTANU_PASSWORD=changeme
 SPACETRACK_USERNAME=your_email@example.com
 SPACETRACK_PASSWORD=your_password
 
-# LangGraph AI Agent (required for /v2/ask)
+# LangGraph AI Agents (required for /v2/ask and /v2/aql)
 OPENAI_API_KEY=sk-...
 AGENT_MODEL=gpt-4o-mini
 AGENT_VECTOR_STORE_PATH=.chroma
+AGENT_EMBEDDING_MODEL=text-embedding-3-small
 
 # Caching
 TLE_CACHE_TTL=3600
@@ -575,18 +577,52 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 ### AgentService (`api/services/agent_service.py`)
 
-**Purpose**: LangGraph-powered conversational AI assistant
+**Purpose**: LangGraph-powered conversational AI assistant — serves `POST /v2/ask`
 
-**Architecture**: ReAct agent compiled with LangGraph `StateGraph`
+**Architecture**: ReAct agent (`agent → tools → agent` loop) compiled with LangGraph `StateGraph`
 
-**Tools available to the agent**:
+**Tools**:
 1. `search_knowledge_base` — RAG retrieval over indexed project documentation (ChromaDB)
-2. `search_satellites` — Live satellite registry search (wraps `database.operations.search_satellites`)
-3. `run_aql_query` — Read-only AQL queries against ArangoDB (FOR/RETURN only; INSERT/UPDATE/REMOVE blocked)
+2. `get_satellite_by_norad_id` — Direct AQL lookup by integer NORAD catalog ID
+3. `search_satellites` — Live satellite registry search
+4. `run_aql_query` — Read-only AQL queries against ArangoDB (FOR/RETURN only; write keywords blocked)
 
-**Session management**: In-memory `_session_histories` dict keyed by `session_id` (UUID) enables multi-turn conversation.
+**Session management**: In-memory `_session_histories` dict keyed by UUID `session_id` enables multi-turn conversation.
 
-**Initialization**: Called once at startup via `api/main.py` lifespan. Requires `OPENAI_API_KEY` — gracefully degrades to unavailable state if missing.
+**Initialization**: Called once at startup. Requires `OPENAI_API_KEY` — gracefully degrades to unavailable state if missing.
+
+---
+
+### AqlAgentService (`api/services/aql_agent_service.py`)
+
+**Purpose**: Translate natural language into AQL, execute it, and return both the generated query and results — serves `POST /v2/aql`
+
+**Architecture**: Custom `StateGraph` pipeline with four nodes:
+
+```
+clarify → ask (END)          # human-in-the-loop: ask user to resolve ambiguity
+        → translate → execute → translate (retry ×3) → END
+```
+
+**Key behaviours**:
+- **Ambiguity detection**: `clarify` node calls the LLM with a focused prompt to detect
+  schema ambiguities (e.g. "country" → `country_of_origin` vs registration nation) and
+  returns a clarifying question to the client before generating any AQL
+- **Deterministic country resolution**: `_annotate_question_with_countries()` maps ~120
+  country aliases (ISO 2/3 codes, adjective forms, common names) to exact stored values
+  before the LLM sees the question — no LLM judgment involved
+- **Live enum injection**: distinct values of `country_of_origin`, `status`, and
+  `orbital_band` are fetched from ArangoDB at startup and injected into the system prompt
+- **Error-correction loop**: if AQL execution fails, the LLM sees the error and rewrites
+  the query (up to 3 attempts)
+- **Inline values**: generated AQL uses string literals, not bind variables, so queries
+  are self-contained and directly runnable in the AQL Editor UI
+
+**Initialization**: Called once at startup after the DB connection is established (requires
+a live DB to fetch enum values). Requires `OPENAI_API_KEY`.
+
+See [`docs/LANGGRAPH_AGENT_ARCHITECTURE.md`](docs/LANGGRAPH_AGENT_ARCHITECTURE.md) for full
+details on both agent graphs, LangChain patterns, and extension guidance.
 
 ---
 
