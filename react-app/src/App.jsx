@@ -57,17 +57,23 @@ function App() {
   }, [])
 
   useEffect(() => {
-    fetchFilterOptions()
-    fetchLaunchYears()
-  }, [])
+    if (token) {
+      fetchFilterOptions()
+      fetchLaunchYears()
+    }
+  }, [token])
 
   useEffect(() => {
-    fetchObjects()
-    setPage(0)
-  }, [filters])
+    if (token) {
+      fetchObjects()
+      setPage(0)
+    }
+  }, [filters, token])
 
   useEffect(() => {
-    fetchObjects(0)
+    if (token) {
+      fetchObjects(0)
+    }
   }, [sortConfig])
 
   const fetchFilterOptions = async () => {
