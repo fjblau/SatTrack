@@ -128,6 +128,7 @@ class AgentConfig:
         "API_DOCUMENTATION.md",
         "README.md",
         "docs/GRAPH_RELATIONSHIPS.md",
+        "docs/LANGGRAPH_AGENT_ARCHITECTURE.md",
         "docs/MULTI_SOURCE_DATA_ARCHITECTURE.md",
         "docs/OBSERVATIONS_IMPORT_API.md",
         "docs/MONGODB_README.md",
