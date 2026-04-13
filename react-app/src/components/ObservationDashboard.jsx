@@ -4,8 +4,8 @@ import { API_ENDPOINTS } from '../config/constants'
 import './ObservationDashboard.css'
 
 const SVG_W = 820
-const SVG_H = 240
-const P = { top: 32, right: 90, bottom: 56, left: 78 }
+const SVG_H = 170
+const P = { top: 24, right: 88, bottom: 44, left: 72 }
 const IW = SVG_W - P.left - P.right
 const IH = SVG_H - P.top - P.bottom
 
@@ -372,7 +372,7 @@ function HealthScoreChart({ data }) {
   const vals = data.map(d => d.health).filter(v => v != null && isFinite(v))
   if (!vals.length) return <div className="obs-no-data">No health score data</div>
 
-  const height = SVG_H + 20
+  const height = SVG_H + 10
 
   function yH(v) {
     return P.top + (height - P.top - P.bottom) - ((v - 0) / 100) * (height - P.top - P.bottom)
