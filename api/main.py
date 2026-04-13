@@ -6,7 +6,7 @@ import os
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service
 
@@ -62,3 +62,4 @@ app.include_router(mqtt.router)
 app.include_router(admin.router)
 app.include_router(observations.router)
 app.include_router(agent.router)
+app.include_router(docs.router)

@@ -3,6 +3,13 @@ import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
 import './HelpPage.css'
 
+const DOC_LINKS = [
+  { name: 'api', label: 'API Reference', desc: 'REST endpoint documentation' },
+  { name: 'architecture', label: 'Architecture', desc: 'System design & data flow' },
+  { name: 'deployment-vercel', label: 'Vercel Deployment', desc: 'Deploy to Vercel' },
+  { name: 'deployment-fly', label: 'Fly.io / ArangoDB', desc: 'Self-hosted database setup' },
+]
+
 const SAMPLE_QUESTIONS = [
   'What is the Kessler application?',
   'How is satellite data structured?',
@@ -100,6 +107,23 @@ export default function HelpPage() {
             Agent unavailable. Ensure <code>OPENAI_API_KEY</code> is configured on the server.
           </div>
         )}
+
+        <div className="help-docs">
+          <h4>Documentation</h4>
+          {DOC_LINKS.map(({ name, label, desc }) => (
+            <a
+              key={name}
+              className="help-doc-link"
+              href={`/v2/docs/${name}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={desc}
+            >
+              <span className="help-doc-label">{label}</span>
+              <span className="help-doc-desc">{desc}</span>
+            </a>
+          ))}
+        </div>
 
         <div className="help-samples">
           <h4>Sample Questions</h4>
