@@ -46,10 +46,42 @@
   border-radius: 3px;
 }
 
+.help-docs h4,
 .help-samples h4 {
   margin: 0 0 0.5rem 0;
   font-size: 0.9rem;
   color: #495057;
+}
+
+.help-doc-link {
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.15s;
+}
+
+.help-doc-link:hover {
+  background: #e9ecef;
+  border-color: #3498db;
+}
+
+.help-doc-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.help-doc-desc {
+  font-size: 0.76rem;
+  color: #6c757d;
+  margin-top: 0.1rem;
 }
 
 .help-sample-btn {
