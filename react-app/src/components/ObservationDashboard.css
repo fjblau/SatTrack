@@ -1,0 +1,430 @@
+.obs-dashboard {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 80px);
+  background: #f0f2f5;
+}
+
+/* ── Header ──────────────────────────────────────────── */
+.obs-dashboard-header {
+  background: linear-gradient(135deg, #1a1f36 0%, #2c3e6b 100%);
+  padding: 1.5rem 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  color: white;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+}
+
+.obs-dashboard-title h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.obs-dashboard-title p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.65);
+}
+
+.obs-selector-area {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.obs-search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  position: relative;
+}
+
+.obs-search-group label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.obs-search-input {
+  width: 260px;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.obs-search-input::placeholder { color: rgba(255,255,255,0.45); }
+
+.obs-search-input:focus {
+  border-color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.15);
+}
+
+.obs-norad-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.obs-norad-input {
+  width: 120px;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.obs-norad-input::placeholder { color: rgba(255,255,255,0.45); }
+.obs-norad-input:focus { border-color: rgba(255,255,255,0.5); }
+
+.obs-load-btn {
+  padding: 0.55rem 1.2rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.obs-load-btn:hover:not(:disabled) { background: #2980b9; }
+.obs-load-btn:active:not(:disabled) { transform: scale(0.97); }
+.obs-load-btn:disabled { background: rgba(255,255,255,0.2); cursor: not-allowed; }
+
+.obs-selector-divider {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.45);
+  padding-bottom: 0.6rem;
+  user-select: none;
+}
+
+/* Dropdown */
+.obs-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  min-width: 280px;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.obs-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.obs-dropdown-item:last-child { border-bottom: none; }
+.obs-dropdown-item:hover { background: #e7f5ff; }
+
+.obs-dd-norad {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #3498db;
+  background: #e7f5ff;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.obs-dd-name {
+  font-size: 0.875rem;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Body ────────────────────────────────────────────── */
+.obs-dashboard-body {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+/* ── Empty / loading / error ─────────────────────────── */
+.obs-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  color: #6c757d;
+  text-align: center;
+}
+
+.obs-empty-icon {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+}
+
+.obs-empty-state h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+  color: #495057;
+}
+
+.obs-empty-state p {
+  margin: 0;
+  font-size: 0.9rem;
+  max-width: 420px;
+}
+
+.obs-empty-hint {
+  margin-top: 0.5rem !important;
+  color: #adb5bd;
+  font-size: 0.8rem !important;
+}
+
+.obs-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  color: #6c757d;
+  gap: 1rem;
+}
+
+.obs-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #dee2e6;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: obs-spin 0.75s linear infinite;
+}
+
+@keyframes obs-spin {
+  to { transform: rotate(360deg); }
+}
+
+.obs-error {
+  background: #fff5f5;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.obs-no-data {
+  color: #adb5bd;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+  font-size: 0.9rem;
+}
+
+/* ── Summary stat cards ──────────────────────────────── */
+.obs-summary-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.75rem;
+}
+
+.obs-stat-card {
+  background: white;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  min-width: 110px;
+  flex: 1;
+}
+
+.obs-stat-card--wide {
+  flex: 2;
+  min-width: 220px;
+}
+
+.obs-stat-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #8e9aaf;
+  margin-bottom: 0.35rem;
+}
+
+.obs-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a1f36;
+  line-height: 1.2;
+}
+
+.obs-stat-value--sm {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #495057;
+  font-family: 'Monaco', 'Menlo', monospace;
+  line-height: 1.5;
+}
+
+/* ── Charts grid ─────────────────────────────────────── */
+.obs-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.obs-chart-full {
+  grid-column: 1 / -1;
+}
+
+/* ── Chart card ──────────────────────────────────────── */
+.obs-chart-card {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  padding: 1.25rem 1.25rem 0.75rem;
+  overflow: hidden;
+}
+
+.obs-chart-card--health {
+  background: linear-gradient(135deg, #f8fff8 0%, #fff 100%);
+}
+
+.obs-chart-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.obs-chart-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1f36;
+}
+
+.obs-chart-subtitle {
+  font-size: 0.8rem;
+  color: #8e9aaf;
+  flex: 1;
+}
+
+.obs-health-avg {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+/* ── Chart legend ────────────────────────────────────── */
+.obs-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.obs-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.obs-legend-right {
+  margin-left: auto;
+}
+
+.obs-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.obs-legend-dot-dashed {
+  border-radius: 0;
+  width: 16px;
+  height: 3px;
+  position: relative;
+  background: transparent !important;
+  border-top: 3px dashed currentColor;
+}
+
+/* ── SVG ─────────────────────────────────────────────── */
+.obs-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+/* ── Flag legend ─────────────────────────────────────── */
+.obs-flag-legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.25rem;
+  padding-left: 78px;
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+.obs-flag-legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.obs-flag-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 900px) {
+  .obs-charts-grid {
+    grid-template-columns: 1fr;
+  }
+  .obs-dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .obs-selector-area {
+    margin-left: 0;
+    width: 100%;
+  }
+  .obs-search-input {
+    width: 100%;
+  }
+}
