@@ -12,7 +12,16 @@ except ImportError:
 
 router = APIRouter(prefix="/v2/docs", tags=["docs"])
 
-_ROOT = Path(os.getcwd())
+
+def _find_root() -> Path:
+    here = Path(__file__).resolve().parent
+    for candidate in [here, here.parent, here.parent.parent, here.parent.parent.parent]:
+        if (candidate / "API_DOCUMENTATION.md").exists():
+            return candidate
+    return Path(os.getcwd())
+
+
+_ROOT = _find_root()
 
 _DOCS = {
     "api": {
