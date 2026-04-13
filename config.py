@@ -130,8 +130,9 @@ class AgentConfig:
         "docs/GRAPH_RELATIONSHIPS.md",
         "docs/LANGGRAPH_AGENT_ARCHITECTURE.md",
         "docs/MULTI_SOURCE_DATA_ARCHITECTURE.md",
+        "docs/DATA_IMPORT_COMMANDS.md",
+        "docs/CELESTRAK_IMPORT.md",
         "docs/OBSERVATIONS_IMPORT_API.md",
-        "docs/MONGODB_README.md",
     ]
 
 

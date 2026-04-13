@@ -94,8 +94,8 @@ Tools are implemented as `@tool`-decorated functions (LangChain `langchain_core.
 - **Sources indexed** (repo-root-relative):
   - `ARCHITECTURE.md`, `DEVELOPER_GUIDE.md`, `API_DOCUMENTATION.md`, `README.md`
   - `docs/GRAPH_RELATIONSHIPS.md`, `docs/MULTI_SOURCE_DATA_ARCHITECTURE.md`
-  - `docs/OBSERVATIONS_IMPORT_API.md`, `docs/MONGODB_README.md`
-  - `docs/LANGGRAPH_AGENT_ARCHITECTURE.md` (this file)
+  - `docs/OBSERVATIONS_IMPORT_API.md`, `docs/DATA_IMPORT_COMMANDS.md`
+  - `docs/CELESTRAK_IMPORT.md`, `docs/LANGGRAPH_AGENT_ARCHITECTURE.md` (this file)
 - **Retrieval**: top-5 chunks (`RAG_TOP_K=5`)
 
 ### Session management
