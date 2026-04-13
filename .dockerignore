@@ -3,6 +3,10 @@
 .git
 .gitignore
 *.md
+!API_DOCUMENTATION.md
+!ARCHITECTURE.md
+!README.vercel.md
+!fly-arangodb-setup.md
 node_modules
 react-app/
 .vercel
