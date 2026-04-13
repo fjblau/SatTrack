@@ -12,7 +12,7 @@ except ImportError:
 
 router = APIRouter(prefix="/v2/docs", tags=["docs"])
 
-_ROOT = Path(__file__).resolve().parents[2]
+_ROOT = Path(os.getcwd())
 
 _DOCS = {
     "api": {
