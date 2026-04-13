@@ -232,7 +232,7 @@ def get_doc(name: str):
         raise HTTPException(status_code=404, detail=f"Document '{name}' not found.")
     path = _ROOT / meta["file"]
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {path} (root={_ROOT})")
+        raise HTTPException(status_code=404, detail=f"File not found: {meta['file']}")
     raw = path.read_text(encoding="utf-8")
     body_html = _md_to_html(raw)
     return HTMLResponse(_build_html(name, meta["title"], body_html))
