@@ -1,8 +1,11 @@
 .obs-dashboard {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 80px);
+  width: 100%;
+  min-height: 100%;
+  align-self: stretch;
   background: #f0f2f5;
+  overflow-y: auto;
 }
 
 /* ── Header ──────────────────────────────────────────── */
