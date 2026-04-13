@@ -10,6 +10,7 @@ import RegistrationDocumentAnalytics from './components/RegistrationDocumentAnal
 import AdminPage from './components/AdminPage'
 import ObservationsView from './components/ObservationsView'
 import ObservationGraphs from './components/ObservationGraphs'
+import ObservationDashboard from './components/ObservationDashboard'
 import LoginPage from './components/LoginPage'
 import AqlEditorPage from './components/AqlEditorPage'
 import HelpPage from './components/HelpPage'
@@ -44,6 +45,11 @@ function App() {
       id: 'registration-docs',
       name: 'Registration Docs',
       description: 'Registration documents analytics and statistics'
+    },
+    {
+      id: 'observation-dashboard',
+      name: 'Observation Dashboard',
+      description: 'Multi-domain sensor observations per satellite'
     }
   ]
 
@@ -447,6 +453,7 @@ function App() {
           <div className="analytics-main">
             {selectedAnalytics === 'function-similarity' && <FunctionAnalytics />}
             {selectedAnalytics === 'registration-docs' && <RegistrationDocumentAnalytics />}
+            {selectedAnalytics === 'observation-dashboard' && <ObservationDashboard />}
           </div>
         </div>
       )}
