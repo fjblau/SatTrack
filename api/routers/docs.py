@@ -56,40 +56,107 @@ _DOCS = {
 }
 
 _CSS = """
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
+html { font-size: 15px; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
-  font-size: 15px;
-  line-height: 1.7;
-  color: #212529;
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.75;
+  color: #1a1a2e;
+  background: #f7f8fc;
+  margin: 0;
+  padding: 0;
+}
+.page-wrap {
+  display: flex;
+  min-height: 100vh;
+}
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #1a1a2e;
+  color: #c8cfe8;
+  padding: 2rem 1.25rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7b8abf;
+  margin: 0 0 1rem;
+}
+.sidebar a {
+  display: block;
+  color: #c8cfe8;
+  text-decoration: none;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.15rem;
+}
+.sidebar a:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.sidebar .back-link {
+  color: #7b8abf;
+  font-size: 0.78rem;
+  margin-bottom: 1.5rem;
+}
+.sidebar .back-link:hover { color: #c8cfe8; }
+.sidebar .vendor-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7b8abf;
+  margin: 1.5rem 0 0.5rem;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2.5rem 3rem 4rem;
   background: #fff;
 }
-h1 { font-size: 2rem; color: #1a1a2e; border-bottom: 2px solid #3498db; padding-bottom: 0.4rem; margin-top: 0; }
-h2 { font-size: 1.45rem; color: #1a1a2e; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem; margin-top: 2.5rem; }
-h3 { font-size: 1.15rem; color: #2c3e50; margin-top: 2rem; }
-h4 { font-size: 1rem; color: #495057; margin-top: 1.5rem; }
+h1 {
+  font-size: 1.9rem;
+  color: #1a1a2e;
+  border-bottom: 3px solid #3498db;
+  padding-bottom: 0.5rem;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+h2 {
+  font-size: 1.3rem;
+  color: #1a1a2e;
+  border-bottom: 1px solid #e0e4ef;
+  padding-bottom: 0.3rem;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+}
+h3 { font-size: 1.05rem; color: #2c3e50; margin-top: 1.75rem; margin-bottom: 0.5rem; }
+h4 { font-size: 0.95rem; color: #495057; margin-top: 1.25rem; margin-bottom: 0.4rem; }
 a { color: #3498db; text-decoration: none; }
 a:hover { text-decoration: underline; }
+p { margin: 0 0 1rem; }
 code {
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 0.875em;
-  background: #f1f3f5;
-  padding: 0.15em 0.4em;
+  background: #eef0f8;
+  padding: 0.15em 0.45em;
   border-radius: 4px;
   color: #c0392b;
 }
 pre {
-  background: #1e1e2e;
+  background: #1e2235;
   color: #cdd6f4;
   padding: 1.25rem 1.5rem;
   border-radius: 8px;
   overflow-x: auto;
-  font-size: 0.85rem;
-  line-height: 1.55;
-  margin: 1rem 0;
+  font-size: 0.83rem;
+  line-height: 1.6;
+  margin: 1rem 0 1.5rem;
 }
 pre code {
   background: none;
@@ -101,50 +168,39 @@ pre code {
 table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1.25rem 0;
-  font-size: 0.9rem;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.88rem;
 }
 th {
-  background: #f1f3f5;
-  border: 1px solid #dee2e6;
-  padding: 0.6rem 0.85rem;
+  background: #eef0f8;
+  border: 1px solid #d0d5e8;
+  padding: 0.55rem 0.85rem;
   text-align: left;
   font-weight: 600;
-  color: #495057;
+  color: #2c3e50;
 }
 td {
-  border: 1px solid #dee2e6;
-  padding: 0.55rem 0.85rem;
+  border: 1px solid #d0d5e8;
+  padding: 0.5rem 0.85rem;
   vertical-align: top;
 }
-tr:nth-child(even) td { background: #f8f9fa; }
+tr:nth-child(even) td { background: #f7f8fc; }
 blockquote {
   border-left: 4px solid #3498db;
   margin: 1rem 0;
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
   background: #f0f7ff;
   color: #2c3e50;
   border-radius: 0 6px 6px 0;
 }
-hr { border: none; border-top: 1px solid #dee2e6; margin: 2rem 0; }
-ul, ol { padding-left: 1.5rem; }
-li { margin: 0.25rem 0; }
-.back-link {
-  display: inline-block;
-  margin-bottom: 1.5rem;
-  font-size: 0.85rem;
-  color: #6c757d;
+blockquote p:last-child { margin: 0; }
+hr { border: none; border-top: 1px solid #e0e4ef; margin: 2rem 0; }
+ul, ol { padding-left: 1.5rem; margin: 0 0 1rem; }
+li { margin: 0.3rem 0; }
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .content { padding: 1.5rem; }
 }
-.back-link:hover { color: #3498db; }
-.vendor-links {
-  background: #f0f7ff;
-  border: 1px solid #90caf9;
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  margin: 2rem 0;
-}
-.vendor-links h4 { margin-top: 0; color: #1565c0; }
-.vendor-links ul { margin: 0; }
 """
 
 _VENDOR_LINKS = {
@@ -177,10 +233,18 @@ _VENDOR_LINKS = {
 
 def _build_html(name: str, title: str, body_html: str) -> str:
     vendor = _VENDOR_LINKS.get(name, [])
+    vendor_links = "".join(
+        f'<a href="{url}" target="_blank" rel="noopener noreferrer">{label}</a>'
+        for label, url in vendor
+    )
     vendor_section = ""
-    if vendor:
-        items = "".join(f'<li><a href="{url}" target="_blank" rel="noopener noreferrer">{label}</a></li>' for label, url in vendor)
-        vendor_section = f'<div class="vendor-links"><h4>Official Vendor Documentation</h4><ul>{items}</ul></div>'
+    if vendor_links:
+        vendor_section = f'<p class="vendor-title">Official Docs</p>{vendor_links}'
+
+    all_docs_links = "".join(
+        f'<a href="/v2/docs/{n}"{"style=\"font-weight:600;color:#fff\"" if n == name else ""}>{m["title"]}</a>'
+        for n, m in _DOCS.items()
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -191,9 +255,17 @@ def _build_html(name: str, title: str, body_html: str) -> str:
   <style>{_CSS}</style>
 </head>
 <body>
-  <a class="back-link" href="javascript:history.back()">← Back</a>
-  {vendor_section}
-  {body_html}
+<div class="page-wrap">
+  <nav class="sidebar">
+    <a class="back-link" href="javascript:history.back()">← Back to App</a>
+    <p class="sidebar-title">Documentation</p>
+    {all_docs_links}
+    {vendor_section}
+  </nav>
+  <main class="content">
+    {body_html}
+  </main>
+</div>
 </body>
 </html>"""
 
@@ -202,10 +274,7 @@ def _md_to_html(text: str) -> str:
     if MARKDOWN_AVAILABLE:
         return md_lib.markdown(
             text,
-            extensions=["fenced_code", "tables", "toc", "nl2br", "codehilite"],
-            extension_configs={
-                "codehilite": {"noclasses": True, "guess_lang": False},
-            },
+            extensions=["fenced_code", "tables", "toc"],
         )
     escaped = (
         text.replace("&", "&amp;")
