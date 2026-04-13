@@ -15,7 +15,16 @@ router = APIRouter(prefix="/v2/docs", tags=["docs"])
 
 def _find_root() -> Path:
     here = Path(__file__).resolve().parent
-    for candidate in [here, here.parent, here.parent.parent, here.parent.parent.parent]:
+    candidates = [
+        Path(os.getcwd()),
+        here,
+        here.parent,
+        here.parent.parent,
+        here.parent.parent.parent,
+        Path("/app"),
+        Path("/var/task"),
+    ]
+    for candidate in candidates:
         if (candidate / "API_DOCUMENTATION.md").exists():
             return candidate
     return Path(os.getcwd())
@@ -223,7 +232,7 @@ def get_doc(name: str):
         raise HTTPException(status_code=404, detail=f"Document '{name}' not found.")
     path = _ROOT / meta["file"]
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {meta['file']}")
+        raise HTTPException(status_code=404, detail=f"File not found: {path} (root={_ROOT})")
     raw = path.read_text(encoding="utf-8")
     body_html = _md_to_html(raw)
     return HTMLResponse(_build_html(name, meta["title"], body_html))
