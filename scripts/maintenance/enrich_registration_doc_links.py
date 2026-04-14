@@ -31,13 +31,15 @@ def main():
         f"FOR doc IN {db_conn.COLLECTION_REG_DOCS} RETURN {{ _key: doc._key, url: doc.url, english_link: doc.english_link }}",
         batch_size=BATCH_SIZE,
     )
+    docs = list(cursor)
+    print(f"Loaded {len(docs)} documents into memory")
 
     processed = 0
     updated = 0
     skipped = 0
     failed = 0
 
-    for doc in cursor:
+    for doc in docs:
         key = doc["_key"]
         url = doc.get("url", "")
 
