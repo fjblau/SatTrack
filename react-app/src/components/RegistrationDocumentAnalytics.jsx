@@ -67,6 +67,18 @@ function RegistrationDocumentAnalytics() {
     }
   }
 
+  const handleDocumentClick = async (e, url) => {
+    e.preventDefault()
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.DOCUMENTS.RESOLVE}?path=${encodeURIComponent(url)}`)
+      const data = await response.json()
+      const target = data.english_link || data.original_url || `https://www.unoosa.org${url}`
+      window.open(target, '_blank', 'noopener,noreferrer')
+    } catch {
+      window.open(`https://www.unoosa.org${url}`, '_blank', 'noopener,noreferrer')
+    }
+  }
+
   const truncateUrl = (url, maxLength = 60) => {
     if (url.length <= maxLength) return url
     return url.substring(0, maxLength) + '...'
@@ -128,8 +140,8 @@ function RegistrationDocumentAnalytics() {
               <tr key={doc.key}>
                 <td className="url-cell">
                   <a 
-                    href={doc.url.startsWith('/') ? `https://www.unoosa.org${doc.url}` : doc.url} 
-                    target="_blank" 
+                    href={`https://www.unoosa.org${doc.url}`}
+                    onClick={(e) => handleDocumentClick(e, doc.url)}
                     rel="noopener noreferrer"
                     title={doc.url}
                   >
