@@ -372,7 +372,7 @@ function HealthScoreChart({ data }) {
   const vals = data.map(d => d.health).filter(v => v != null && isFinite(v))
   if (!vals.length) return <div className="obs-no-data">No health score data</div>
 
-  const height = SVG_H - 20
+  const height = SVG_H
 
   function yH(v) {
     return P.top + (height - P.top - P.bottom) - ((v - 0) / 100) * (height - P.top - P.bottom)
@@ -771,10 +771,8 @@ export default function ObservationDashboard() {
 
             {/* Charts grid */}
             <div className="obs-charts-grid">
-              {/* Health score: full width */}
-              <div className="obs-chart-full">
-                <HealthScoreChart data={chartData} />
-              </div>
+              {/* Health score */}
+              <HealthScoreChart data={chartData} />
 
               {/* Attitude */}
               {hasAttitude && (
