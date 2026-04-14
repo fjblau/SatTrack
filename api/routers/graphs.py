@@ -3681,6 +3681,7 @@ def get_registration_documents_analytics(
             RETURN {{
                 key: doc._key,
                 url: doc.url,
+                english_link: doc.english_link,
                 satellite_count: doc.satellite_count,
                 countries: doc.countries,
                 created_at: doc.created_at
