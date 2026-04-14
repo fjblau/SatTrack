@@ -72,6 +72,38 @@
   margin: 0;
 }
 
+.app-subnav {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 2rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  flex-shrink: 0;
+}
+
+.app-subnav button {
+  padding: 0.4rem 1.1rem;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6c757d;
+  transition: all 0.2s;
+}
+
+.app-subnav button:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+
+.app-subnav button.active {
+  background: #e3f2fd;
+  border-color: #3498db;
+  color: #1a6fa8;
+}
+
 .app-container {
   display: flex;
   flex: 1;
@@ -272,6 +304,12 @@
   align-items: flex-start;
   justify-content: center;
   min-width: 0;
+}
+
+.analytics-main .timeline-view-container {
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
 }
 
 @media (max-width: 1200px) {
