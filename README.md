@@ -25,13 +25,14 @@ Kessler provides a comprehensive satellite tracking system combining:
 
 ### Core Features
 
-- 🛰️ **Satellite Search**: Filter by country, status, orbital band, object type, congestion risk
+- 🛰️ **Satellite Catalog**: Browse and filter satellites by country, status, orbital band, object type, congestion risk
 - 📊 **Orbital Calculations**: Real-time apogee, perigee, period, and orbital band via SGP4/Skyfield
-- 🗺️ **Graph Explorer**: Visualize constellation networks, registration relationships, collision risks, lineage trees
-- 📈 **Timeline View**: Track satellite launches over time by year and month
+- 🗺️ **Satellite Graphs**: Visualize constellation networks, registration relationships, collision risks, lineage trees
+- 📈 **Launch Timeline**: Track satellite launches over time by year and month
 - 📡 **TLE Data**: Fresh Two-Line Element data from CelesTrak (with Space-Track fallback)
 - 🔔 **MQTT Publishing**: Scheduled TLE publishing to external MQTT brokers
-- 🔭 **Observations**: Import and analyse observational data (health, anomalies, thermal, mass)
+- 🔭 **Observations**: Observational data with health trends, anomaly analysis, source statistics, and graph views
+- 📋 **Observation Dashboard**: Multi-domain sensor observations per satellite
 - 📉 **Collision Risk Network**: Graph of high-risk orbital proximity pairs
 - 🤖 **AI Help Assistant**: LangGraph-powered chat that answers questions using RAG + live data tools
 - 🔑 **Authentication**: Bearer-token login with demo mode
