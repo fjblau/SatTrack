@@ -45,11 +45,6 @@ const MENU_ITEMS = [
     id: 'anomaly-correlation',
     label: 'Anomaly Correlation',
     desc: 'Cross-satellite anomaly co-occurrence'
-  },
-  {
-    id: 'aql',
-    label: 'AQL Editor',
-    desc: 'Custom analytics queries with export'
   }
 ]
 
