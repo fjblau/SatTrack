@@ -86,10 +86,24 @@ python -m uvicorn api:app --host 127.0.0.1 --port 8000
 ### Application Structure
 - **Entry Point**: `src/main.jsx`
 - **Root Component**: `src/App.jsx`
+- **Navigation**: Two-level structure — top-level tabs with a secondary sub-navigation bar
+  - **Satellite Catalog** (sub-tabs: Satellite Catalog, Satellite Graphs, Function Similarity, Registration Docs, Timeline)
+  - **Observations** (sub-tabs: Observations, Observation Graphs, Observation Dashboard)
+  - **Admin**, **AQL Editor** (non-demo), **Help**
 - **Components**:
   - `Filters.jsx`: Filter UI for satellite search
   - `DataTable.jsx`: Data grid display
   - `DetailPanel.jsx`: Detailed satellite information panel
+  - `GraphExplorer.jsx`: Satellite graph visualization (Satellite Graphs sub-tab)
+  - `TimelineChart.jsx`: Launch timeline by year (Timeline sub-tab)
+  - `FunctionAnalytics.jsx`: Function similarity analytics
+  - `RegistrationDocumentAnalytics.jsx`: Registration document statistics
+  - `ObservationsView.jsx`: Observational data list and filtering
+  - `ObservationGraphs.jsx`: Health trends, anomaly analysis, source statistics, graph views
+  - `ObservationDashboard.jsx`: Multi-domain sensor observations per satellite
+  - `AdminPage.jsx`: Admin controls
+  - `AqlEditorPage.jsx`: Interactive AQL query editor
+  - `HelpPage.jsx`: AI-powered help assistant
 - **Styling**: CSS modules per component
 
 ### Build & Installation
