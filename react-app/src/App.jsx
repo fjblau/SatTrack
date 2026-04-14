@@ -20,7 +20,9 @@ import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/con
 function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('auth_token'))
   const [isDemo, setIsDemo] = useState(() => sessionStorage.getItem('is_demo') === 'true')
-  const [activeTab, setActiveTab] = useState('table')
+  const [activeTab, setActiveTab] = useState('satellite-catalog')
+  const [activeCatalogSubTab, setActiveCatalogSubTab] = useState('table')
+  const [activeObservationsSubTab, setActiveObservationsSubTab] = useState('observations')
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
   const [selectedAnalytics, setSelectedAnalytics] = useState('function-similarity')
   const [launchYears, setLaunchYears] = useState([])
@@ -47,9 +49,9 @@ function App() {
       description: 'Registration documents analytics and statistics'
     },
     {
-      id: 'observation-dashboard',
-      name: 'Observation Dashboard',
-      description: 'Multi-domain sensor observations per satellite'
+      id: 'timeline',
+      name: 'Timeline',
+      description: 'Launch timeline breakdown by year'
     }
   ]
 
@@ -270,39 +272,19 @@ function App() {
         <h1>Space Object Registry</h1>
         <nav className="app-nav">
           <button 
-            className={activeTab === 'table' ? 'active' : ''}
-            onClick={() => setActiveTab('table')}
+            className={activeTab === 'satellite-catalog' ? 'active' : ''}
+            onClick={() => setActiveTab('satellite-catalog')}
           >
-            Table View
+            Satellite Catalog
           </button>
           {!isDemo && (
-            <>
-              <button 
-                className={activeTab === 'observations' ? 'active' : ''}
-                onClick={() => setActiveTab('observations')}
-              >
-                Observations
-              </button>
-              <button 
-                className={activeTab === 'observation-graphs' ? 'active' : ''}
-                onClick={() => setActiveTab('observation-graphs')}
-              >
-                Observation Graphs
-              </button>
-            </>
+            <button 
+              className={activeTab === 'observations' ? 'active' : ''}
+              onClick={() => setActiveTab('observations')}
+            >
+              Observations
+            </button>
           )}
-          <button 
-            className={activeTab === 'graphs' ? 'active' : ''}
-            onClick={() => setActiveTab('graphs')}
-          >
-            Graphs
-          </button>
-          <button 
-            className={activeTab === 'timeline' ? 'active' : ''}
-            onClick={() => setActiveTab('timeline')}
-          >
-            Timeline
-          </button>
           <button 
             className={activeTab === 'analytics' ? 'active' : ''}
             onClick={() => setActiveTab('analytics')}
@@ -330,13 +312,52 @@ function App() {
             ? Help
           </button>
         </nav>
-        {activeTab === 'table' && <p>{total} objects</p>}
+        {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'table' && <p>{total} objects</p>}
         {activeTab === 'observations' && <p>Observational Data</p>}
-        {activeTab === 'observation-graphs' && <p>Observation Analytics</p>}
         <button className="logout-button" onClick={handleLogout}>Logout</button>
       </header>
+
+      {activeTab === 'satellite-catalog' && (
+        <nav className="app-subnav">
+          <button
+            className={activeCatalogSubTab === 'table' ? 'active' : ''}
+            onClick={() => setActiveCatalogSubTab('table')}
+          >
+            Satellite Catalog
+          </button>
+          <button
+            className={activeCatalogSubTab === 'satellite-graphs' ? 'active' : ''}
+            onClick={() => setActiveCatalogSubTab('satellite-graphs')}
+          >
+            Satellite Graphs
+          </button>
+        </nav>
+      )}
+
+      {activeTab === 'observations' && !isDemo && (
+        <nav className="app-subnav">
+          <button
+            className={activeObservationsSubTab === 'observations' ? 'active' : ''}
+            onClick={() => setActiveObservationsSubTab('observations')}
+          >
+            Observations
+          </button>
+          <button
+            className={activeObservationsSubTab === 'observation-graphs' ? 'active' : ''}
+            onClick={() => setActiveObservationsSubTab('observation-graphs')}
+          >
+            Observation Graphs
+          </button>
+          <button
+            className={activeObservationsSubTab === 'observation-dashboard' ? 'active' : ''}
+            onClick={() => setActiveObservationsSubTab('observation-dashboard')}
+          >
+            Observation Dashboard
+          </button>
+        </nav>
+      )}
       
-      {activeTab === 'table' && (
+      {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'table' && (
         <div className="app-container">
           <aside className="sidebar">
             <Filters 
@@ -380,41 +401,23 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'observations' && !isDemo && (
-        <ObservationsView />
-      )}
-      
-      {activeTab === 'observation-graphs' && !isDemo && (
-        <ObservationGraphs />
-      )}
-
-      {activeTab === 'graphs' && (
+      {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'satellite-graphs' && (
         <div className="graph-view-container">
           <GraphExplorer />
         </div>
       )}
 
-      {activeTab === 'timeline' && (
-        <div className="timeline-view-container">
-          <div className="timeline-sidebar">
-            <h3>Launch Years</h3>
-            <p className="section-description">Select a year to view breakdown ({UI_TEXT.TIMELINE_COVERAGE})</p>
-            <div className="item-list">
-              {launchYears.map((yearData) => (
-                <div
-                  key={yearData.year}
-                  className={`list-item ${selectedTimePeriod === yearData.year.toString() ? 'selected' : ''}`}
-                  onClick={() => setSelectedTimePeriod(yearData.year.toString())}
-                >
-                  <div className="item-name">{yearData.year}</div>
-                  <div className="item-count">{yearData.satellite_count.toLocaleString()} satellites</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="timeline-main">
-            <TimelineChart selectedTimePeriod={selectedTimePeriod} />
-          </div>
+      {activeTab === 'observations' && !isDemo && activeObservationsSubTab === 'observations' && (
+        <ObservationsView />
+      )}
+
+      {activeTab === 'observations' && !isDemo && activeObservationsSubTab === 'observation-graphs' && (
+        <ObservationGraphs />
+      )}
+
+      {activeTab === 'observations' && !isDemo && activeObservationsSubTab === 'observation-dashboard' && (
+        <div className="analytics-view-container">
+          <ObservationDashboard />
         </div>
       )}
 
@@ -453,7 +456,29 @@ function App() {
           <div className="analytics-main">
             {selectedAnalytics === 'function-similarity' && <FunctionAnalytics />}
             {selectedAnalytics === 'registration-docs' && <RegistrationDocumentAnalytics />}
-            {selectedAnalytics === 'observation-dashboard' && <ObservationDashboard />}
+            {selectedAnalytics === 'timeline' && (
+              <div className="timeline-view-container">
+                <div className="timeline-sidebar">
+                  <h3>Launch Years</h3>
+                  <p className="section-description">Select a year to view breakdown ({UI_TEXT.TIMELINE_COVERAGE})</p>
+                  <div className="item-list">
+                    {launchYears.map((yearData) => (
+                      <div
+                        key={yearData.year}
+                        className={`list-item ${selectedTimePeriod === yearData.year.toString() ? 'selected' : ''}`}
+                        onClick={() => setSelectedTimePeriod(yearData.year.toString())}
+                      >
+                        <div className="item-name">{yearData.year}</div>
+                        <div className="item-count">{yearData.satellite_count.toLocaleString()} satellites</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="timeline-main">
+                  <TimelineChart selectedTimePeriod={selectedTimePeriod} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
