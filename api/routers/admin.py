@@ -70,6 +70,13 @@ SCRIPT_CATALOGUE = [
         "category": "population",
         "path": "scripts/population/populate_satellite_lineage.py",
     },
+    {
+        "id": "enrich_registration_doc_links",
+        "name": "Enrich Registration Document Links",
+        "description": "Scrapes UNOOSA pages to resolve and store English document links for all registration documents",
+        "category": "maintenance",
+        "path": "scripts/maintenance/enrich_registration_doc_links.py",
+    },
 ]
 
 _CATALOGUE_BY_ID = {s["id"]: s for s in SCRIPT_CATALOGUE}
