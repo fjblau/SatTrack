@@ -372,7 +372,7 @@ function HealthScoreChart({ data }) {
   const vals = data.map(d => d.health).filter(v => v != null && isFinite(v))
   if (!vals.length) return <div className="obs-no-data">No health score data</div>
 
-  const height = SVG_H + 10
+  const height = SVG_H - 20
 
   function yH(v) {
     return P.top + (height - P.top - P.bottom) - ((v - 0) / 100) * (height - P.top - P.bottom)
