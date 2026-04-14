@@ -128,7 +128,7 @@ function RegistrationDocumentAnalytics() {
               <tr key={doc.key}>
                 <td className="url-cell">
                   <a 
-                    href={doc.url} 
+                    href={doc.url.startsWith('/') ? `https://www.unoosa.org${doc.url}` : doc.url} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     title={doc.url}
