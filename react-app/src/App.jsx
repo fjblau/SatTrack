@@ -24,7 +24,6 @@ function App() {
   const [activeCatalogSubTab, setActiveCatalogSubTab] = useState('table')
   const [activeObservationsSubTab, setActiveObservationsSubTab] = useState('observations')
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
-  const [selectedAnalytics, setSelectedAnalytics] = useState('function-similarity')
   const [launchYears, setLaunchYears] = useState([])
   const [objects, setObjects] = useState([])
   const [filters, setFilters] = useState({})
@@ -36,24 +35,6 @@ function App() {
   const [sortConfig, setSortConfig] = useState([])
 
   const limit = PAGINATION.DEFAULT_PAGE_SIZE
-
-  const analyticsPages = [
-    {
-      id: 'function-similarity',
-      name: 'Function Similarity',
-      description: 'Satellite function relationships and clustering'
-    },
-    {
-      id: 'registration-docs',
-      name: 'Registration Docs',
-      description: 'Registration documents analytics and statistics'
-    },
-    {
-      id: 'timeline',
-      name: 'Timeline',
-      description: 'Launch timeline breakdown by year'
-    }
-  ]
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -285,12 +266,6 @@ function App() {
               Observations
             </button>
           )}
-          <button 
-            className={activeTab === 'analytics' ? 'active' : ''}
-            onClick={() => setActiveTab('analytics')}
-          >
-            Analytics
-          </button>
           <button
             className={activeTab === 'admin' ? 'active' : ''}
             onClick={() => setActiveTab('admin')}
@@ -330,6 +305,24 @@ function App() {
             onClick={() => setActiveCatalogSubTab('satellite-graphs')}
           >
             Satellite Graphs
+          </button>
+          <button
+            className={activeCatalogSubTab === 'function-similarity' ? 'active' : ''}
+            onClick={() => setActiveCatalogSubTab('function-similarity')}
+          >
+            Function Similarity
+          </button>
+          <button
+            className={activeCatalogSubTab === 'registration-docs' ? 'active' : ''}
+            onClick={() => setActiveCatalogSubTab('registration-docs')}
+          >
+            Registration Docs
+          </button>
+          <button
+            className={activeCatalogSubTab === 'timeline' ? 'active' : ''}
+            onClick={() => setActiveCatalogSubTab('timeline')}
+          >
+            Timeline
           </button>
         </nav>
       )}
@@ -435,50 +428,38 @@ function App() {
         <HelpPage />
       )}
 
-      {activeTab === 'analytics' && (
+      {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'function-similarity' && (
         <div className="analytics-view-container">
-          <div className="analytics-sidebar">
-            <h3>Analytics</h3>
-            <p className="section-description">Select an analytics page</p>
+          <FunctionAnalytics />
+        </div>
+      )}
+
+      {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'registration-docs' && (
+        <div className="analytics-view-container">
+          <RegistrationDocumentAnalytics />
+        </div>
+      )}
+
+      {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'timeline' && (
+        <div className="timeline-view-container">
+          <div className="timeline-sidebar">
+            <h3>Launch Years</h3>
+            <p className="section-description">Select a year to view breakdown ({UI_TEXT.TIMELINE_COVERAGE})</p>
             <div className="item-list">
-              {analyticsPages.map((page) => (
+              {launchYears.map((yearData) => (
                 <div
-                  key={page.id}
-                  className={`list-item ${selectedAnalytics === page.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedAnalytics(page.id)}
+                  key={yearData.year}
+                  className={`list-item ${selectedTimePeriod === yearData.year.toString() ? 'selected' : ''}`}
+                  onClick={() => setSelectedTimePeriod(yearData.year.toString())}
                 >
-                  <div className="item-name">{page.name}</div>
-                  <div className="item-description">{page.description}</div>
+                  <div className="item-name">{yearData.year}</div>
+                  <div className="item-count">{yearData.satellite_count.toLocaleString()} satellites</div>
                 </div>
               ))}
             </div>
           </div>
-          <div className="analytics-main">
-            {selectedAnalytics === 'function-similarity' && <FunctionAnalytics />}
-            {selectedAnalytics === 'registration-docs' && <RegistrationDocumentAnalytics />}
-            {selectedAnalytics === 'timeline' && (
-              <div className="timeline-view-container">
-                <div className="timeline-sidebar">
-                  <h3>Launch Years</h3>
-                  <p className="section-description">Select a year to view breakdown ({UI_TEXT.TIMELINE_COVERAGE})</p>
-                  <div className="item-list">
-                    {launchYears.map((yearData) => (
-                      <div
-                        key={yearData.year}
-                        className={`list-item ${selectedTimePeriod === yearData.year.toString() ? 'selected' : ''}`}
-                        onClick={() => setSelectedTimePeriod(yearData.year.toString())}
-                      >
-                        <div className="item-name">{yearData.year}</div>
-                        <div className="item-count">{yearData.satellite_count.toLocaleString()} satellites</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="timeline-main">
-                  <TimelineChart selectedTimePeriod={selectedTimePeriod} />
-                </div>
-              </div>
-            )}
+          <div className="timeline-main">
+            <TimelineChart selectedTimePeriod={selectedTimePeriod} />
           </div>
         </div>
       )}
