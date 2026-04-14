@@ -24,6 +24,7 @@ export default function HelpPage() {
   const [loading, setLoading] = useState(false)
   const [sessionId, setSessionId] = useState(null)
   const [agentReady, setAgentReady] = useState(null)
+  const [activeDoc, setActiveDoc] = useState(null)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -111,17 +112,15 @@ export default function HelpPage() {
         <div className="help-docs">
           <h4>Documentation</h4>
           {DOC_LINKS.map(({ name, label, desc }) => (
-            <a
+            <button
               key={name}
-              className="help-doc-link"
-              href={`/v2/docs/${name}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              className={`help-doc-link${activeDoc === name ? ' active' : ''}`}
+              onClick={() => setActiveDoc(activeDoc === name ? null : name)}
               title={desc}
             >
               <span className="help-doc-label">{label}</span>
               <span className="help-doc-desc">{desc}</span>
-            </a>
+            </button>
           ))}
         </div>
 
@@ -147,78 +146,105 @@ export default function HelpPage() {
       </div>
 
       <div className="help-main">
-        <div className="help-messages">
-          {messages.length === 0 && agentReady === false && (
-            <div className="help-empty">
-              <div className="help-empty-icon help-empty-icon-warn">!</div>
-              <p>Agent Unavailable</p>
-              <p className="help-empty-sub">
-                Set <code>OPENAI_API_KEY</code> in your <code>.env</code> file and restart the server.
-              </p>
+        {activeDoc ? (
+          <div className="help-doc-viewer">
+            <div className="help-doc-viewer-bar">
+              <span className="help-doc-viewer-title">
+                {DOC_LINKS.find(d => d.name === activeDoc)?.label}
+              </span>
+              <a
+                href={`/v2/docs/${activeDoc}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="help-doc-viewer-external"
+              >
+                Open in new tab ↗
+              </a>
+              <button className="help-doc-viewer-close" onClick={() => setActiveDoc(null)}>✕ Close</button>
             </div>
-          )}
-
-          {messages.length === 0 && agentReady !== false && (
-            <div className="help-empty">
-              <div className="help-empty-icon">?</div>
-              <p>Ask a question to get started.</p>
-              <p className="help-empty-sub">
-                The assistant has access to documentation, satellite data, and the graph database.
-              </p>
-            </div>
-          )}
-
-          {messages.map((msg, i) => (
-            <div key={i} className={`help-message help-message-${msg.role}${msg.isError ? ' help-message-error' : ''}`}>
-              <div className="help-message-label">
-                {msg.role === 'user' ? 'You' : 'Assistant'}
-              </div>
-              <div className="help-message-content">
-                {msg.content}
-              </div>
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="help-message-sources">
-                  <span className="help-sources-label">Sources:</span>
-                  {msg.sources.map((src, j) => (
-                    <span key={j} className="help-source-tag">{src}</span>
-                  ))}
+            <iframe
+              key={activeDoc}
+              src={`/v2/docs/${activeDoc}`}
+              className="help-doc-frame"
+              title={DOC_LINKS.find(d => d.name === activeDoc)?.label}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="help-messages">
+              {messages.length === 0 && agentReady === false && (
+                <div className="help-empty">
+                  <div className="help-empty-icon help-empty-icon-warn">!</div>
+                  <p>Agent Unavailable</p>
+                  <p className="help-empty-sub">
+                    Set <code>OPENAI_API_KEY</code> in your <code>.env</code> file and restart the server.
+                  </p>
                 </div>
               )}
+
+              {messages.length === 0 && agentReady !== false && (
+                <div className="help-empty">
+                  <div className="help-empty-icon">?</div>
+                  <p>Ask a question to get started.</p>
+                  <p className="help-empty-sub">
+                    The assistant has access to documentation, satellite data, and the graph database.
+                  </p>
+                </div>
+              )}
+
+              {messages.map((msg, i) => (
+                <div key={i} className={`help-message help-message-${msg.role}${msg.isError ? ' help-message-error' : ''}`}>
+                  <div className="help-message-label">
+                    {msg.role === 'user' ? 'You' : 'Assistant'}
+                  </div>
+                  <div className="help-message-content">
+                    {msg.content}
+                  </div>
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="help-message-sources">
+                      <span className="help-sources-label">Sources:</span>
+                      {msg.sources.map((src, j) => (
+                        <span key={j} className="help-source-tag">{src}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {loading && (
+                <div className="help-message help-message-assistant">
+                  <div className="help-message-label">Assistant</div>
+                  <div className="help-message-content help-loading">
+                    <span className="help-dot" />
+                    <span className="help-dot" />
+                    <span className="help-dot" />
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
-          ))}
 
-          {loading && (
-            <div className="help-message help-message-assistant">
-              <div className="help-message-label">Assistant</div>
-              <div className="help-message-content help-loading">
-                <span className="help-dot" />
-                <span className="help-dot" />
-                <span className="help-dot" />
-              </div>
+            <div className="help-input-area">
+              <textarea
+                className="help-input"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={agentReady === false ? 'Agent unavailable — set OPENAI_API_KEY on the server' : 'Ask a question… (Enter to send, Shift+Enter for newline)'}
+                rows={3}
+                disabled={loading || agentReady === false}
+              />
+              <button
+                className="help-send-btn"
+                onClick={() => sendMessage()}
+                disabled={loading || !input.trim() || agentReady === false}
+              >
+                {loading ? 'Sending…' : 'Send'}
+              </button>
             </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="help-input-area">
-          <textarea
-            className="help-input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={agentReady === false ? 'Agent unavailable — set OPENAI_API_KEY on the server' : 'Ask a question… (Enter to send, Shift+Enter for newline)'}
-            rows={3}
-            disabled={loading || agentReady === false}
-          />
-          <button
-            className="help-send-btn"
-            onClick={() => sendMessage()}
-            disabled={loading || !input.trim() || agentReady === false}
-          >
-            {loading ? 'Sending…' : 'Send'}
-          </button>
-        </div>
+          </>
+        )}
       </div>
     </div>
   )
