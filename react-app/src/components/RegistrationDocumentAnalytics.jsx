@@ -67,15 +67,16 @@ function RegistrationDocumentAnalytics() {
     }
   }
 
-  const handleDocumentClick = async (e, url) => {
+  const handleDocumentClick = async (e, doc) => {
+    if (doc.english_link) return
     e.preventDefault()
     try {
-      const response = await apiFetch(`${API_ENDPOINTS.DOCUMENTS.RESOLVE}?path=${encodeURIComponent(url)}`)
+      const response = await apiFetch(`${API_ENDPOINTS.DOCUMENTS.RESOLVE}?path=${encodeURIComponent(doc.url)}`)
       const data = await response.json()
-      const target = data.english_link || data.original_url || `https://www.unoosa.org${url}`
+      const target = data.english_link || data.original_url || `https://www.unoosa.org${doc.url}`
       window.open(target, '_blank', 'noopener,noreferrer')
     } catch {
-      window.open(`https://www.unoosa.org${url}`, '_blank', 'noopener,noreferrer')
+      window.open(`https://www.unoosa.org${doc.url}`, '_blank', 'noopener,noreferrer')
     }
   }
 
@@ -140,10 +141,11 @@ function RegistrationDocumentAnalytics() {
               <tr key={doc.key}>
                 <td className="url-cell">
                   <a 
-                    href={`https://www.unoosa.org${doc.url}`}
-                    onClick={(e) => handleDocumentClick(e, doc.url)}
+                    href={doc.english_link || `https://www.unoosa.org${doc.url}`}
+                    onClick={(e) => handleDocumentClick(e, doc)}
+                    target="_blank"
                     rel="noopener noreferrer"
-                    title={doc.url}
+                    title={doc.english_link || doc.url}
                   >
                     {truncateUrl(doc.url)}
                   </a>
