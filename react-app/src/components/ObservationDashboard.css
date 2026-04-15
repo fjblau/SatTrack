@@ -174,7 +174,7 @@
   padding: 0.75rem 1rem;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* ── Empty / loading / error ─────────────────────────── */
@@ -301,11 +301,9 @@
 
 /* ── Charts grid ─────────────────────────────────────── */
 .obs-charts-grid {
-  flex: 1;
-  min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-auto-rows: 1fr;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: auto;
   gap: 0.75rem;
 }
 
@@ -393,8 +391,7 @@
 /* ── SVG ─────────────────────────────────────────────── */
 .obs-svg {
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  height: auto;
   display: block;
   overflow: visible;
 }
@@ -423,13 +420,7 @@
 }
 
 /* ── Responsive ──────────────────────────────────────── */
-@media (max-width: 1200px) {
-  .obs-charts-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 800px) {
+@media (max-width: 700px) {
   .obs-charts-grid {
     grid-template-columns: 1fr;
   }
