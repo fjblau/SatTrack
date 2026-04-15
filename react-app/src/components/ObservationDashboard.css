@@ -299,6 +299,43 @@
   line-height: 1.5;
 }
 
+.obs-stat-card--daterange {
+  flex: 3;
+  min-width: 340px;
+}
+
+.obs-daterange-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+.obs-date-input {
+  font-size: 0.8rem;
+  font-family: 'Monaco', 'Menlo', monospace;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  color: #495057;
+  background: #f8f9fa;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+
+.obs-date-input:focus {
+  outline: none;
+  border-color: #3498db;
+  background: #fff;
+}
+
+.obs-date-arrow {
+  color: #8e9aaf;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
 /* ── Charts grid ─────────────────────────────────────── */
 .obs-charts-grid {
   display: grid;

@@ -512,6 +512,8 @@ export default function ObservationDashboard() {
   const [observations, setObservations] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const dropdownRef = useRef(null)
 
   useEffect(() => {
@@ -576,7 +578,7 @@ export default function ObservationDashboard() {
     }
   }
 
-  const chartData = useMemo(() => {
+  const allChartData = useMemo(() => {
     return [...observations]
       .sort((a, b) => (a.observation_epoch || '').localeCompare(b.observation_epoch || ''))
       .map(obs => ({
@@ -602,6 +604,26 @@ export default function ObservationDashboard() {
         spin: obs.spin_rate_rpm,
       }))
   }, [observations])
+
+  useEffect(() => {
+    if (allChartData.length) {
+      setDateFrom(allChartData[0].epoch?.substring(0, 16) || '')
+      setDateTo(allChartData[allChartData.length - 1].epoch?.substring(0, 16) || '')
+    } else {
+      setDateFrom('')
+      setDateTo('')
+    }
+  }, [allChartData])
+
+  const chartData = useMemo(() => {
+    return allChartData.filter(d => {
+      if (!d.epoch) return true
+      const ep = d.epoch.substring(0, 16)
+      if (dateFrom && ep < dateFrom) return false
+      if (dateTo && ep > dateTo) return false
+      return true
+    })
+  }, [allChartData, dateFrom, dateTo])
 
   const summaryStats = useMemo(() => {
     if (!chartData.length) return null
@@ -761,10 +783,22 @@ export default function ObservationDashboard() {
                   {summaryStats.maneuverCount}
                 </div>
               </div>
-              <div className="obs-stat-card obs-stat-card--wide">
+              <div className="obs-stat-card obs-stat-card--wide obs-stat-card--daterange">
                 <div className="obs-stat-label">Date Range</div>
-                <div className="obs-stat-value obs-stat-value--sm">
-                  {formatEpochFull(summaryStats.first)} → {formatEpochFull(summaryStats.last)}
+                <div className="obs-daterange-inputs">
+                  <input
+                    type="datetime-local"
+                    className="obs-date-input"
+                    value={dateFrom}
+                    onChange={e => setDateFrom(e.target.value)}
+                  />
+                  <span className="obs-date-arrow">→</span>
+                  <input
+                    type="datetime-local"
+                    className="obs-date-input"
+                    value={dateTo}
+                    onChange={e => setDateTo(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
