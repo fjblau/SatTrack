@@ -81,10 +81,8 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
           animation: true,
           timeline: true,
           fullscreenButton: false,
-          imageryProvider: new Cesium.TileMapServiceImageryProvider({
-            url: Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII'),
-            fileExtension: 'jpg',
-            maximumLevel: 5,
+          imageryProvider: new Cesium.OpenStreetMapImageryProvider({
+            url: 'https://tile.openstreetmap.org/',
           }),
         })
 
