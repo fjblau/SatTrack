@@ -104,6 +104,7 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
             clock.currentTime = clock.startTime.clone()
             clock.clockRange = Cesium.ClockRange.LOOP_STOP
             clock.multiplier = 60
+            clock.shouldAnimate = true
           }
         }
 
@@ -112,6 +113,7 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
         const entities = dataSource.entities.values
         if (entities.length > 0) {
           viewer.trackedEntity = entities[0]
+          viewer.zoomTo(entities[0])
         }
 
         setStatus('ready')
