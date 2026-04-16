@@ -81,8 +81,10 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
           animation: true,
           timeline: true,
           fullscreenButton: false,
-          imageryProvider: new Cesium.OpenStreetMapImageryProvider({
-            url: 'https://tile.openstreetmap.org/',
+          imageryProvider: new Cesium.UrlTemplateImageryProvider({
+            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            credit: '© OpenStreetMap contributors',
+            maximumLevel: 19,
           }),
         })
 
