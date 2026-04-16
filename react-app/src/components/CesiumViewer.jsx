@@ -69,7 +69,7 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
 
         if (!containerRef.current) return
 
-        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS0zMzI0ZWU0YjY3ZjkiLCJpZCI6NTk5Mywic2NvcGVzIjpbImFzciIsImdjIl0sImlhdCI6MTU0NzgwNzgyNX0.1FNiClUyk00YH5S3bnsDSxyqGbmMD3IvEfFNjYUNgUg'
+        Cesium.Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN || ''
 
         const viewer = new Cesium.Viewer(containerRef.current, {
           terrainProvider: new Cesium.EllipsoidTerrainProvider(),
