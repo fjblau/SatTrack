@@ -160,6 +160,83 @@ class PropagationService:
             }
         }
     
+    @classmethod
+    def propagate_window(
+        cls,
+        line1: str,
+        line2: str,
+        start_time: Optional[datetime] = None,
+        duration_hours: float = 24.0,
+        step_seconds: int = 60,
+    ) -> Dict[str, Any]:
+        """
+        Propagate satellite ephemeris over an arbitrary time window.
+
+        Args:
+            line1: TLE line 1
+            line2: TLE line 2
+            start_time: Window start (defaults to now UTC)
+            duration_hours: Length of the window in hours
+            step_seconds: Time step between ephemeris points in seconds
+
+        Returns:
+            Dictionary with tle_epoch, valid_from, valid_until, step_seconds,
+            orbital_period_minutes, and ephemeris_points list.
+        """
+        if step_seconds <= 0:
+            raise ValueError("step_seconds must be positive")
+        if duration_hours <= 0:
+            raise ValueError("duration_hours must be positive")
+
+        if start_time is None:
+            start_time = datetime.now(timezone.utc)
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=timezone.utc)
+
+        try:
+            satellite = Satrec.twoline2rv(line1, line2)
+        except Exception as e:
+            raise PropagationError(f"Invalid TLE format: {str(e)}")
+
+        tle_epoch = OrbitalService.extract_tle_epoch(line1)
+        if tle_epoch is None:
+            raise PropagationError("Failed to extract TLE epoch")
+
+        try:
+            orbital_params = OrbitalService.calculate_orbital_parameters(line2)
+            period_minutes = orbital_params['period_minutes']
+        except Exception as e:
+            raise PropagationError(f"Failed to calculate orbital period: {str(e)}")
+
+        total_seconds = int(duration_hours * 3600)
+        num_steps = total_seconds // step_seconds + 1
+        valid_until = start_time + timedelta(seconds=total_seconds)
+
+        points = []
+        for i in range(num_steps):
+            t = start_time + timedelta(seconds=i * step_seconds)
+            try:
+                pos = cls._calculate_position(satellite, t)
+                age_minutes = (t - tle_epoch).total_seconds() / 60.0
+                pos['propagation_age_minutes'] = round(age_minutes, 2)
+                points.append(pos)
+            except PropagationError as e:
+                logger.warning(f"Skipping position at {t}: {e}")
+                continue
+
+        if not points:
+            raise PropagationError("Failed to calculate any ephemeris points")
+
+        return {
+            'tle_epoch': tle_epoch.isoformat(),
+            'valid_from': start_time.isoformat(),
+            'valid_until': valid_until.isoformat(),
+            'step_seconds': step_seconds,
+            'orbital_period_minutes': round(period_minutes, 2),
+            'num_points': len(points),
+            'ephemeris_points': points,
+        }
+
     @staticmethod
     def propagate_orbit(
         line1: str,
