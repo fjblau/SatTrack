@@ -71,6 +71,11 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
 
         Cesium.Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN || ''
 
+        const imageryProvider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+          'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+          { enablePickFeatures: false }
+        )
+
         const viewer = new Cesium.Viewer(containerRef.current, {
           terrainProvider: new Cesium.EllipsoidTerrainProvider(),
           baseLayerPicker: false,
@@ -81,11 +86,7 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
           animation: true,
           timeline: true,
           fullscreenButton: false,
-          imageryProvider: new Cesium.UrlTemplateImageryProvider({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            credit: '© OpenStreetMap contributors',
-            maximumLevel: 19,
-          }),
+          imageryProvider,
         })
 
         viewerRef.current = viewer
