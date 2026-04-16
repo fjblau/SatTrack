@@ -168,3 +168,27 @@ This script:
 - **Data Layer**: Pandas-based in-memory data processing, CSV-backed persistence
 - **Frontend**: Component-based React architecture with CSS modules
 - **API**: RESTful FastAPI design with automatic OpenAPI documentation
+
+## Git & Deployment Workflow
+
+Railway deploys automatically when a PR is merged into `main`. Follow these rules strictly:
+
+### After a PR is merged
+- **Never push follow-up commits to the merged feature branch** — that branch is orphaned from `main` and changes will not deploy.
+- Before making any follow-up change, check whether the current branch has an open PR:
+  ```
+  gh pr list --head <current-branch> --state open
+  ```
+- If no open PR exists, **create a new branch off `main`** before committing:
+  ```
+  git fetch origin main
+  git checkout -b <short-descriptive-name> origin/main
+  ```
+- Commit the follow-up changes to the new branch, then open a new PR.
+
+### Rule summary
+| Situation | Action |
+|---|---|
+| Branch has an open PR | Commit and push normally — PR will update |
+| PR was merged / no open PR | Create a new branch off `main`, then commit |
+| Hotfix needed on `main` | New branch off `main` → commit → PR |
