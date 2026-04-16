@@ -113,7 +113,10 @@ export default function CesiumViewer({ envelopeId, satelliteName }) {
         const entities = dataSource.entities.values
         if (entities.length > 0) {
           viewer.trackedEntity = entities[0]
-          viewer.zoomTo(entities[0])
+          viewer.zoomTo(
+            entities[0],
+            new Cesium.HeadingPitchRange(0, -Math.PI / 3, 20000000)
+          )
         }
 
         setStatus('ready')
