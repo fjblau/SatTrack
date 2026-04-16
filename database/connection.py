@@ -17,6 +17,7 @@ EDGE_COLLECTION_SATELLITE_LINEAGE = "satellite_lineage"
 COLLECTION_REG_DOCS = "registration_documents"
 COLLECTION_OBSERVATIONS = "observations"
 COLLECTION_OBSERVATION_SOURCES = "observation_sources"
+COLLECTION_EPHEMERIS = "ephemeris_envelopes"
 
 OBSERVATION_GRAPH_NAME = "observation_relationships"
 EDGE_COLLECTION_OBS_SATELLITE = "observation_satellite_edges"
@@ -62,6 +63,15 @@ def connect_arangodb():
         # Ensure observation_sources vertex collection exists
         if not db.has_collection(COLLECTION_OBSERVATION_SOURCES):
             db.create_collection(COLLECTION_OBSERVATION_SOURCES)
+
+        # Ensure ephemeris_envelopes collection exists
+        if not db.has_collection(COLLECTION_EPHEMERIS):
+            db.create_collection(COLLECTION_EPHEMERIS)
+        eph_col = db.collection(COLLECTION_EPHEMERIS)
+        eph_col.add_persistent_index(fields=['norad_id'], unique=False)
+        eph_col.add_persistent_index(fields=['generated_at'], unique=False)
+        eph_col.add_persistent_index(fields=['valid_from'], unique=False)
+        eph_col.add_persistent_index(fields=['valid_until'], unique=False)
 
         # Ensure observation edge collections exist
         obs_edge_collections = [

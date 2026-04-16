@@ -14,6 +14,7 @@ import ObservationDashboard from './components/ObservationDashboard'
 import LoginPage from './components/LoginPage'
 import AqlEditorPage from './components/AqlEditorPage'
 import HelpPage from './components/HelpPage'
+import EphemerisPage from './components/EphemerisPage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
@@ -280,6 +281,14 @@ function App() {
               AQL Editor
             </button>
           )}
+          {!isDemo && (
+            <button
+              className={activeTab === 'ephemeris' ? 'active' : ''}
+              onClick={() => setActiveTab('ephemeris')}
+            >
+              Ephemeris
+            </button>
+          )}
           <button
             className={`help-button${activeTab === 'help' ? ' active' : ''}`}
             onClick={() => setActiveTab('help')}
@@ -426,6 +435,10 @@ function App() {
 
       {activeTab === 'help' && (
         <HelpPage />
+      )}
+
+      {activeTab === 'ephemeris' && !isDemo && (
+        <EphemerisPage />
       )}
 
       {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'function-similarity' && (

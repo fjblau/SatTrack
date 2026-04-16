@@ -59,6 +59,15 @@ export const API_ENDPOINTS = {
     STATUS: '/v2/ask/status',
     AQL: '/v2/aql',
   },
+
+  EPHEMERIS: {
+    BASE: '/v2/ephemeris',
+    GENERATE: '/v2/ephemeris/generate',
+    LIST: '/v2/ephemeris',
+    GET: (id) => `/v2/ephemeris/${id}`,
+    CZML: (id) => `/v2/ephemeris/${id}/czml`,
+    DELETE: (id) => `/v2/ephemeris/${id}`,
+  },
 }
 
 export const PAGINATION = {

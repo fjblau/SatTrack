@@ -26,6 +26,7 @@ from database.connection import (
     EDGE_COLLECTION_SATELLITE_LINEAGE,
     COLLECTION_REG_DOCS,
     COLLECTION_OBSERVATIONS,
+    COLLECTION_EPHEMERIS,
     client,
     db,
     satellites_collection,
@@ -92,6 +93,15 @@ from database.mqtt_config import (
     update_last_published,
 )
 
+# Ephemeris operations
+from database.ephemeris_ops import (
+    save_ephemeris_envelope,
+    list_ephemeris_envelopes,
+    count_ephemeris_envelopes,
+    get_ephemeris_envelope,
+    delete_ephemeris_envelope,
+)
+
 # Utility functions
 from database.utils.field_utils import (
     get_nested_field,
@@ -132,6 +142,7 @@ __all__ = [
     'EDGE_COLLECTION_SATELLITE_LINEAGE',
     'COLLECTION_REG_DOCS',
     'COLLECTION_OBSERVATIONS',
+    'COLLECTION_EPHEMERIS',
     'MQTT_CONFIG_COLLECTION',
     
     # Module-level variables
@@ -192,6 +203,13 @@ __all__ = [
     'get_enabled_mqtt_configurations',
     'update_last_published',
     
+    # Ephemeris operations
+    'save_ephemeris_envelope',
+    'list_ephemeris_envelopes',
+    'count_ephemeris_envelopes',
+    'get_ephemeris_envelope',
+    'delete_ephemeris_envelope',
+
     # Utilities
     'get_nested_field',
     'set_nested_field',
