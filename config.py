@@ -69,8 +69,8 @@ class ExternalServicesConfig:
     UN_DOCS_BASE_URL: str = "https://documents.un.org"
     
     SPACETRACK_BASE_URL: str = "https://www.space-track.org"
-    SPACETRACK_USERNAME: str = os.getenv("SPACETRACK_USERNAME", "")
-    SPACETRACK_PASSWORD: str = os.getenv("SPACETRACK_PASSWORD", "")
+    SPACETRACK_USERNAME: str = os.getenv("SPACETRACK_USERNAME") or os.getenv("SPACE_TRACK_USER", "")
+    SPACETRACK_PASSWORD: str = os.getenv("SPACETRACK_PASSWORD") or os.getenv("SPACE_TRACK_PASS", "")
     
     REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "5"))
 
