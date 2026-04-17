@@ -294,7 +294,7 @@ function App() {
             className={`kestrel-button${activeTab === 'kestrel-mission' ? ' active' : ''}`}
             onClick={() => setActiveTab('kestrel-mission')}
           >
-            🛰 Kestrel Mission
+            Kestrel Mission
           </button>
           <button
             className={`help-button${activeTab === 'help' ? ' active' : ''}`}
