@@ -101,6 +101,39 @@ export function computeOptimalBurnWindow(r1, r2) {
   return { requiredPhaseAngle, synodicPeriod, transferTime }
 }
 
+export function launchSiteToOrbitElements(siteLat, siteLon, altKm, incDeg, eccParam = 0) {
+  const lat = siteLat * (Math.PI / 180)
+  const lon = siteLon * (Math.PI / 180)
+  const inc = incDeg * (Math.PI / 180)
+  const sma = altitudeToSMA(altKm)
+
+  let M0, raan
+
+  const ratio = Math.sin(lat) / Math.sin(inc)
+
+  if (Math.abs(ratio) <= 1) {
+    M0 = Math.asin(ratio)
+    const A = Math.cos(M0)
+    const B = Math.sin(M0) * Math.cos(inc)
+    raan = Math.atan2(A * Math.sin(lon) - B * Math.cos(lon), A * Math.cos(lon) + B * Math.sin(lon))
+  } else {
+    M0 = (lat >= 0 ? 1 : -1) * Math.PI / 2
+    raan = lon
+  }
+
+  return { sma, ecc: eccParam, inc, raan, argPerigee: 0, meanAnomaly0: M0 }
+}
+
+export function deorbitBurn(rTarget, rDeorbitPerigeeKm = 200) {
+  const rDeorbit = RE + rDeorbitPerigeeKm * 1000
+  const vCircular = Math.sqrt(GM / rTarget)
+  const aTransfer = (rTarget + rDeorbit) / 2
+  const vTransferAtApogee = Math.sqrt(GM * (2 / rTarget - 1 / aTransfer))
+  const dvDeorbit = Math.abs(vCircular - vTransferAtApogee)
+  const deorbitTime = Math.PI * Math.sqrt(Math.pow(aTransfer, 3) / GM)
+  return { dvDeorbit, deorbitTime, rDeorbit, altKm: rDeorbitPerigeeKm }
+}
+
 export function propagateTransferOrbit(r1, r2, raan, incKestrel, startSeconds, steps = 100) {
   const at = (r1 + r2) / 2
   const ecc = Math.abs(r2 - r1) / (r1 + r2)
