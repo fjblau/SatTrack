@@ -173,7 +173,7 @@ export default function KestrelCesiumViewer({ czmlData, launchSite, emptyMessage
             clock.stopTime = Cesium.JulianDate.fromIso8601(parts[1])
             clock.currentTime = clock.startTime.clone()
             clock.clockRange = Cesium.ClockRange.LOOP_STOP
-            clock.multiplier = 60
+            clock.multiplier = 300
             clock.shouldAnimate = true
           }
         }

@@ -174,7 +174,7 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
     clock: {
       interval: `${startIso}/${endIso}`,
       currentTime: startIso,
-      multiplier: 60,
+      multiplier: 300,
       range: 'CLAMPED',
       step: 'SYSTEM_CLOCK_MULTIPLIER',
     },
