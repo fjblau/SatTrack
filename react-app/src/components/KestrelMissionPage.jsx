@@ -57,6 +57,7 @@ export default function KestrelMissionPage() {
   const [targetElements, setTargetElements] = useState(null)
   const [targetFetchError, setTargetFetchError] = useState(null)
   const [targetFetchLoading, setTargetFetchLoading] = useState(false)
+  const [targetTleSource, setTargetTleSource] = useState(null)
 
   const [launchSiteId, setLaunchSiteId] = useState('ksc')
   const [altitudeKm, setAltitudeKm] = useState(550)
@@ -119,6 +120,7 @@ export default function KestrelMissionPage() {
     setTargetResults([])
     setTargetElements(null)
     setTargetFetchError(null)
+    setTargetTleSource(null)
     setManeuverResult(null)
     setManeuverCZML(null)
 
@@ -133,13 +135,14 @@ export default function KestrelMissionPage() {
       if (!res.ok) throw new Error(`TLE fetch failed (HTTP ${res.status})`)
       const data = await res.json()
       const tle = data.data
-      if (!tle) throw new Error('No TLE record found for this object.')
+      if (!tle) throw new Error('No TLE record found for this object. It may not yet have a TLE in the database.')
       const line1 = tle.line1 || tle.tle_line1
       const line2 = tle.line2 || tle.tle_line2
       if (!line1 || !line2) throw new Error('TLE lines missing in API response.')
       const els = parseTLE(line1, line2)
       if (!els) throw new Error('Failed to parse TLE data.')
       setTargetElements(els)
+      setTargetTleSource(tle.source || data.source || 'celestrak')
       setIncDeg(parseFloat((els.inc * RAD).toFixed(1)))
       setAltitudeKm(Math.round(smaToAltitude(els.sma)))
     } catch (err) {
@@ -395,6 +398,9 @@ export default function KestrelMissionPage() {
                     {targetElements && (
                       <p className="km-hint-text km-hint-suggest">
                         ↑ Orbit parameters auto-matched to target
+                        {targetTleSource === 'db_cached' && (
+                          <span className="km-badge km-badge-cached" title="Live TLE unavailable — using last known TLE from database"> cached TLE</span>
+                        )}
                       </p>
                     )}
                   </div>

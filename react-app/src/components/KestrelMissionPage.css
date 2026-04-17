@@ -392,6 +392,13 @@
   border-color: #ddd;
 }
 
+.km-badge-cached {
+  background: #fff8e1;
+  color: #e65100;
+  border-color: #ffe0b2;
+  cursor: help;
+}
+
 .km-target-orbit {
   border-color: rgba(231, 76, 60, 0.25);
 }

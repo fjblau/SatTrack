@@ -6,10 +6,6 @@ import logging
 from datetime import datetime, timezone
 
 from api.services.cache_service import get_tle_cache
-from api.services.spacetrack_service import (
-    fetch_tle_from_spacetrack_by_norad_id,
-    fetch_tle_from_spacetrack_by_intl_des,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -59,90 +55,131 @@ def _parse_tle_text(text: str) -> list:
     return results
 
 
+def _fetch_from_celestrak_by_norad(norad_id: str) -> Optional[Dict]:
+    """
+    Attempt to fetch a fresh TLE from CelesTrak GP API.
+
+    Tries TLE format first; on a non-200 or empty response also tries JSON format.
+    Uses a short timeout (5s) with a single retry so failures are fast.
+    Returns None if CelesTrak is unavailable or the object is not listed.
+    """
+    for fmt in ("TLE", "JSON"):
+        params = {"CATNR": norad_id, "FORMAT": fmt}
+        for attempt in range(2):
+            try:
+                response = requests.get(CELESTRAK_GP_URL, params=params, timeout=5)
+                if response.status_code == 200:
+                    if fmt == "TLE":
+                        entries = _parse_tle_text(response.text)
+                        if entries:
+                            e = entries[0]
+                            logger.info(f"CelesTrak TLE hit for NORAD {norad_id}")
+                            return {
+                                "name": e["name"],
+                                "line1": e["line1"],
+                                "line2": e["line2"],
+                                "source": "celestrak",
+                                "date": None,
+                                "norad_cat_id": e["norad_cat_id"],
+                                "intl_designator": e["intl_designator"],
+                            }
+                    else:
+                        try:
+                            records = response.json()
+                            if records:
+                                r = records[0]
+                                line1 = r.get("TLE_LINE1", "")
+                                line2 = r.get("TLE_LINE2", "")
+                                if line1 and line2:
+                                    logger.info(f"CelesTrak JSON hit for NORAD {norad_id}")
+                                    return {
+                                        "name": r.get("OBJECT_NAME", f"NORAD {norad_id}"),
+                                        "line1": line1,
+                                        "line2": line2,
+                                        "source": "celestrak",
+                                        "date": r.get("EPOCH"),
+                                        "norad_cat_id": str(r.get("NORAD_CAT_ID", norad_id)),
+                                        "intl_designator": r.get("INTLDES", ""),
+                                    }
+                        except Exception:
+                            pass
+                    break
+                elif response.status_code == 404:
+                    logger.info(f"CelesTrak 404 for NORAD {norad_id} ({fmt})")
+                    break
+                else:
+                    logger.warning(f"CelesTrak returned {response.status_code} for NORAD {norad_id} ({fmt})")
+                    break
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+                if attempt == 0:
+                    logger.warning(f"CelesTrak timeout for NORAD {norad_id} ({fmt}), retrying once...")
+                    time.sleep(0.5)
+                else:
+                    logger.warning(f"CelesTrak still unavailable for NORAD {norad_id} ({fmt}), giving up")
+            except Exception as e:
+                logger.error(f"CelesTrak unexpected error for NORAD {norad_id}: {e}")
+                break
+    return None
+
+
 def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
     """
     Fetch fresh TLE data by NORAD ID.
 
-    First attempts CelesTrak GP API; if the object is not found there, falls
-    back to SpaceTrack which covers all catalogued objects including debris.
-    Use fetch_tle_by_norad_id() instead for cached results.
+    Chain: CelesTrak (TLE then JSON format) → last known TLE from satellite DB.
+    SpaceTrack is intentionally not used due to rate limits.
     """
-    params = {"CATNR": norad_id, "FORMAT": "TLE"}
-    max_retries = 3
-    celestrak_found = False
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(CELESTRAK_GP_URL, params=params, timeout=10)
-            if response.status_code == 200:
-                entries = _parse_tle_text(response.text)
-                if entries:
-                    e = entries[0]
-                    logger.info(f"Successfully fetched TLE for NORAD ID {norad_id} from CelesTrak")
-                    celestrak_found = True
-                    return {
-                        "name": e["name"],
-                        "line1": e["line1"],
-                        "line2": e["line2"],
-                        "source": "celestrak",
-                        "date": None,
-                        "norad_cat_id": e["norad_cat_id"],
-                        "intl_designator": e["intl_designator"],
-                    }
-                logger.info(f"TLE not found for NORAD ID {norad_id} on CelesTrak")
-                break
-            elif response.status_code == 404:
-                logger.info(f"TLE not found for NORAD ID {norad_id} on CelesTrak (404)")
-                break
-            else:
-                logger.warning(f"CelesTrak GP API returned {response.status_code} for NORAD {norad_id}")
-                break
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            if attempt < max_retries - 1:
-                wait_time = 0.5 * (2 ** attempt)
-                logger.warning(f"Connection error fetching TLE for NORAD {norad_id}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
-                time.sleep(wait_time)
-            else:
-                logger.error(f"Error fetching from CelesTrak after {max_retries} attempts: {e}")
-        except Exception as e:
-            logger.error(f"Error fetching from CelesTrak GP API: {e}")
-            break
-    if not celestrak_found:
-        logger.info(f"Falling back to SpaceTrack for NORAD ID {norad_id}")
-        return fetch_tle_from_spacetrack_by_norad_id(norad_id)
+    result = _fetch_from_celestrak_by_norad(norad_id)
+    if result:
+        return result
+
+    logger.info(f"CelesTrak miss for NORAD {norad_id}, trying satellite DB for last known TLE")
+    try:
+        from database.operations import get_satellite_tle_by_norad_id
+        db_tle = get_satellite_tle_by_norad_id(norad_id)
+        if db_tle and db_tle.get("line1") and db_tle.get("line2"):
+            logger.info(f"Using last known DB TLE for NORAD {norad_id} (fetched {db_tle.get('fetched_at', 'unknown')})")
+            return {
+                "name": db_tle["name"],
+                "line1": db_tle["line1"],
+                "line2": db_tle["line2"],
+                "source": "db_cached",
+                "date": db_tle.get("fetched_at"),
+                "norad_cat_id": norad_id,
+                "intl_designator": "",
+            }
+    except Exception as e:
+        logger.error(f"DB TLE lookup failed for NORAD {norad_id}: {e}")
+
+    logger.warning(f"No TLE found anywhere for NORAD {norad_id}")
     return None
 
 
 def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
     """
-    Fetch fresh TLE data by International Designator.
-
-    First attempts CelesTrak GP API; if the object is not found there, falls
-    back to SpaceTrack which covers all catalogued objects including debris.
-    Use fetch_tle_by_intl_des() instead for cached results.
+    Fetch fresh TLE data by International Designator from CelesTrak.
 
     CelesTrak returns all objects associated with the launch designator (e.g. 1999-025
     returns all fragments). This returns the best match — the entry whose intl_designator
     exactly matches intl_des, or the first entry if no exact match.
+    SpaceTrack is intentionally not used due to rate limits.
     """
     params = {"INTDES": intl_des, "FORMAT": "TLE"}
-    max_retries = 3
-    celestrak_found = False
-    for attempt in range(max_retries):
+    for attempt in range(2):
         try:
-            response = requests.get(CELESTRAK_GP_URL, params=params, timeout=10)
+            response = requests.get(CELESTRAK_GP_URL, params=params, timeout=5)
             if response.status_code == 200:
                 entries = _parse_tle_text(response.text)
                 if not entries:
-                    logger.info(f"TLE not found for international designator {intl_des} on CelesTrak")
-                    break
+                    logger.info(f"CelesTrak: no TLE for intl des {intl_des}")
+                    return None
                 normalized = intl_des.replace(" ", "").upper()
                 exact = next(
                     (e for e in entries if e["intl_designator"].replace(" ", "").upper() == normalized),
                     None
                 )
                 entry = exact or entries[0]
-                logger.info(f"Successfully fetched TLE for intl des {intl_des} from CelesTrak")
-                celestrak_found = True
+                logger.info(f"CelesTrak hit for intl des {intl_des}")
                 return {
                     "name": entry["name"],
                     "line1": entry["line1"],
@@ -153,24 +190,20 @@ def _fetch_tle_by_intl_des_uncached(intl_des: str) -> Optional[Dict]:
                     "intl_designator": entry["intl_designator"],
                 }
             elif response.status_code == 404:
-                logger.info(f"TLE not found for intl des {intl_des} on CelesTrak (404)")
-                break
+                logger.info(f"CelesTrak 404 for intl des {intl_des}")
+                return None
             else:
-                logger.warning(f"CelesTrak GP API returned {response.status_code} for intl des {intl_des}")
-                break
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            if attempt < max_retries - 1:
-                wait_time = 0.5 * (2 ** attempt)
-                logger.warning(f"Connection error fetching TLE for intl des {intl_des}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
-                time.sleep(wait_time)
+                logger.warning(f"CelesTrak returned {response.status_code} for intl des {intl_des}")
+                return None
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            if attempt == 0:
+                logger.warning(f"CelesTrak timeout for intl des {intl_des}, retrying once...")
+                time.sleep(0.5)
             else:
-                logger.error(f"Error fetching from CelesTrak after {max_retries} attempts: {e}")
+                logger.warning(f"CelesTrak still unavailable for intl des {intl_des}")
         except Exception as e:
-            logger.error(f"Error fetching from CelesTrak GP API: {e}")
+            logger.error(f"CelesTrak error for intl des {intl_des}: {e}")
             break
-    if not celestrak_found:
-        logger.info(f"Falling back to SpaceTrack for intl des {intl_des}")
-        return fetch_tle_from_spacetrack_by_intl_des(intl_des)
     return None
 
 
