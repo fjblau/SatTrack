@@ -1,6 +1,7 @@
 const GM = 3.986004418e14
 const RE = 6.3781e6
 const TWO_PI = 2 * Math.PI
+const J2 = 1.08263e-3
 
 function solveKepler(M, e, maxIter = 100, tol = 1e-12) {
   let E = e < 0.8 ? M : Math.PI
@@ -347,6 +348,80 @@ export function computeManeuverScenarios(r1, r2) {
   }
 
   return [s1, s2, s3]
+}
+
+function raanDriftRate(sma, inc) {
+  const n = Math.sqrt(GM / Math.pow(sma, 3))
+  return -(3 / 2) * J2 * n * Math.pow(RE / sma, 2) * Math.cos(inc)
+}
+
+export function computeJ2RAANScenario(kestrelElements, targetElements) {
+  const { sma: sma1, inc: inc1, raan: raan1 } = kestrelElements
+  const { sma: sma2, inc: inc2, raan: raan2 } = targetElements
+
+  let dRaan = raan2 - raan1
+  while (dRaan > Math.PI) dRaan -= TWO_PI
+  while (dRaan < -Math.PI) dRaan += TWO_PI
+  const dRaanDeg = Math.abs(dRaan) * (180 / Math.PI)
+
+  if (dRaanDeg < 1.0) return null
+
+  const rate1 = raanDriftRate(sma1, inc1)
+  const rate2 = raanDriftRate(sma2, inc2)
+  const naturalDiffRate = rate1 - rate2
+
+  let driftSMA = sma1
+  let dvDriftOrbit = 0
+  let diffRate = naturalDiffRate
+  let useNatural = true
+
+  if (dRaan * naturalDiffRate <= 0 || Math.abs(naturalDiffRate) < 1e-13) {
+    const candidates = [200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 1200, 1500, 2000, 3000]
+      .map((h) => RE + h * 1e3)
+    let bestRate = 0
+    let bestSMA = null
+    for (const aSMA of candidates) {
+      const rd = raanDriftRate(aSMA, inc1) - rate2
+      if (dRaan * rd > 0 && Math.abs(rd) > Math.abs(bestRate)) {
+        bestRate = rd
+        bestSMA = aSMA
+      }
+    }
+    if (!bestSMA) return null
+    driftSMA = bestSMA
+    diffRate = bestRate
+    useNatural = false
+    const toDrift = hohmannTransfer(sma1, driftSMA)
+    const fromDrift = hohmannTransfer(driftSMA, sma1)
+    dvDriftOrbit = toDrift.dvTotal + fromDrift.dvTotal
+  }
+
+  const waitTime = Math.abs(dRaan / diffRate)
+  const base = hohmannTransfer(sma1, sma2)
+  const driftAltKm = Math.round((driftSMA - RE) / 1e3)
+
+  const desc = useNatural
+    ? `Park at ${driftAltKm} km — natural J2 nodal precession passively closes the ${dRaanDeg.toFixed(1)}° RAAN gap. No plane-change burn. ΔV equals a standard Hohmann.`
+    : `Transfer to ${driftAltKm} km drift orbit — J2 precession at this altitude closes the ${dRaanDeg.toFixed(1)}° RAAN gap faster than the parking orbit. Extra ΔV replaces costly in-plane burns.`
+
+  return {
+    id: 'j2raan',
+    name: 'J2 RAAN Alignment',
+    tag: 'LOW ΔV',
+    tagColor: '#a78bfa',
+    desc,
+    dv1: base.dv1,
+    dv2: base.dv2,
+    dvTotal: base.dvTotal + dvDriftOrbit,
+    transferTime: base.transferTime,
+    waitTime,
+    driftSMA,
+    driftAltKm,
+    dRaanDeg,
+    at: base.at,
+    ecc: Math.abs(sma2 - sma1) / (sma1 + sma2),
+    arcMode: 'hohmann',
+  }
 }
 
 export function propagateScenarioArc(scenario, kestrelElements, r2, steps = 150) {
