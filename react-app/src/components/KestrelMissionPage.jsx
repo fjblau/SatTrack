@@ -790,6 +790,7 @@ export default function KestrelMissionPage() {
             <KestrelCesiumViewer
               czmlData={maneuverCZML}
               launchSite={null}
+              targetLabel={selectedTarget?.name}
               emptyMessage="Complete the Launch Planner to see the full mission trajectory — Kestrel orbit (blue), target (red), transfer arc (yellow)."
             />
           </>
