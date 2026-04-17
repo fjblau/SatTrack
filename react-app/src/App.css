@@ -66,6 +66,23 @@
   color: white;
 }
 
+.app-nav .kestrel-button {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+
+.app-nav .kestrel-button:hover {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+  color: white;
+}
+
+.app-nav .kestrel-button.active {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+  color: white;
+}
+
 .app-header p {
   color: #666;
   font-size: 0.9em;
