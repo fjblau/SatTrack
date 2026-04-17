@@ -156,7 +156,7 @@ def _build_mission_prompt(ctx: dict) -> str:
         scenario_lines.append(line)
 
     raan_diff = abs(
-        (target.get("raan_deg", 0) - kestrel.get("raan_deg", 0) + 540) % 360 - 180
+        (float(target.get("raan_deg", 0)) - float(kestrel.get("raan_deg", 0)) + 540) % 360 - 180
     )
 
     prompt = f"""## Mission Context
