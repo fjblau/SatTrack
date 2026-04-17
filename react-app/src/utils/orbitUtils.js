@@ -226,6 +226,121 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
   return [doc, ...entities]
 }
 
+export function computeManeuverScenarios(r1, r2) {
+  const base = hohmannTransfer(r1, r2)
+  const burnWindow = computeOptimalBurnWindow(r1, r2)
+  const targetPeriod = orbitalPeriod(r2)
+
+  const s1 = {
+    id: 'hohmann',
+    name: 'Hohmann Transfer',
+    tag: 'OPTIMAL',
+    tagColor: '#3fb950',
+    desc: 'Two-burn minimum-energy transfer. Wait for phase alignment, then execute.',
+    dv1: base.dv1,
+    dv2: base.dv2,
+    dvTotal: base.dvTotal,
+    transferTime: base.transferTime,
+    waitTime: burnWindow.synodicPeriod / 2,
+    at: base.at,
+    arcMode: 'hohmann',
+  }
+
+  const fastDv1 = base.dv1 * 1.42
+  const fastDv2 = base.dv2 * 1.42
+  const fastAt = r1 < r2
+    ? (r1 + r2 * 1.55) / 2
+    : (r1 * 1.55 + r2) / 2
+  const fastTime = Math.PI * Math.sqrt(Math.pow(fastAt, 3) / GM) * 0.62
+  const s2 = {
+    id: 'fast',
+    name: 'Fast Intercept',
+    tag: 'FAST',
+    tagColor: '#e6b454',
+    desc: 'Depart immediately with higher thrust. No phase wait — ~42% more ΔV, ~38% less transit time.',
+    dv1: fastDv1,
+    dv2: fastDv2,
+    dvTotal: fastDv1 + fastDv2,
+    transferTime: fastTime,
+    waitTime: 0,
+    at: fastAt,
+    arcMode: 'fast',
+  }
+
+  const phaseDv = base.dvTotal * 0.72
+  const phaseTime = base.transferTime + targetPeriod * 1.8
+  const s3 = {
+    id: 'phased',
+    name: 'Phased Rendezvous',
+    tag: 'EFFICIENT',
+    tagColor: '#58a6ff',
+    desc: 'Phasing orbit approach: drift into alignment over multiple passes. ~28% less ΔV, longer time.',
+    dv1: phaseDv * 0.55,
+    dv2: phaseDv * 0.45,
+    dvTotal: phaseDv,
+    transferTime: phaseTime,
+    waitTime: burnWindow.synodicPeriod * 0.25,
+    at: (r1 + r2) / 2,
+    arcMode: 'phased',
+    phaseOrbitSMA: r1 < r2 ? r1 * 0.985 : r1 * 1.015,
+  }
+
+  return [s1, s2, s3]
+}
+
+export function propagateScenarioArc(scenario, kestrelElements, r2, steps = 150) {
+  const { r1, raan, inc } = { r1: kestrelElements.sma, raan: kestrelElements.raan, inc: kestrelElements.inc }
+  const startOffset = 0
+
+  if (scenario.arcMode === 'hohmann') {
+    return propagateTransferOrbit(r1, r2, raan, inc, startOffset, steps)
+  }
+
+  if (scenario.arcMode === 'fast') {
+    const at = scenario.at
+    const ecc = Math.abs(at * 2 - r1 - r2) / (r1 + (r1 < r2 ? r2 : r1))
+    const argP = r1 < r2 ? 0 : Math.PI
+    const n = Math.sqrt(GM / Math.pow(at, 3))
+    const transferTime = scenario.transferTime
+    const stepDur = transferTime / steps
+    const points = []
+    for (let i = 0; i <= steps; i++) {
+      const t = i * stepDur
+      const M = ((n * t) % TWO_PI + TWO_PI) % TWO_PI
+      const E = solveKepler(M, ecc)
+      const nu = Math.atan2(Math.sqrt(1 - ecc * ecc) * Math.sin(E), Math.cos(E) - ecc)
+      const [x, y, z] = keplerToECI(at, ecc, inc, raan, argP, nu)
+      points.push({ t: startOffset + t, x, y, z })
+    }
+    return points
+  }
+
+  if (scenario.arcMode === 'phased') {
+    const phaseOrbitSMA = scenario.phaseOrbitSMA
+    const phasePeriod = orbitalPeriod(phaseOrbitSMA)
+    const phaseEcc = 0
+    const phaseSteps = Math.floor(steps * 0.45)
+    const mainSteps = steps - phaseSteps
+    const phaseStepDur = phasePeriod * 1.5 / phaseSteps
+    const phasePoints = []
+    const n = Math.sqrt(GM / Math.pow(phaseOrbitSMA, 3))
+    const M0 = kestrelElements.meanAnomaly0
+    for (let i = 0; i <= phaseSteps; i++) {
+      const t = i * phaseStepDur
+      const M = ((M0 + n * t) % TWO_PI + TWO_PI) % TWO_PI
+      const E = solveKepler(M, 0)
+      const nu = M
+      const [x, y, z] = keplerToECI(phaseOrbitSMA, phaseEcc, inc, raan, 0, nu)
+      phasePoints.push({ t: startOffset + t, x, y, z })
+    }
+    const phaseEnd = phasePoints[phasePoints.length - 1].t
+    const mainPoints = propagateTransferOrbit(phaseOrbitSMA, r2, raan, inc, phaseEnd, mainSteps)
+    return [...phasePoints, ...mainPoints]
+  }
+
+  return propagateTransferOrbit(r1, r2, raan, inc, startOffset, steps)
+}
+
 export const LAUNCH_SITES = [
   { id: 'ksc',           name: 'Kennedy Space Center (LC-39)',    lat: 28.573,  lon: -80.649,  country: 'USA' },
   { id: 'vandenberg',    name: 'Vandenberg SFB (SLC-4)',          lat: 34.742,  lon: -120.574, country: 'USA' },

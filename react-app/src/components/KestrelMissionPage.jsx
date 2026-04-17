@@ -5,6 +5,7 @@ import KestrelCesiumViewer from './KestrelCesiumViewer'
 import {
   propagateOrbit,
   propagateTransferOrbit,
+  propagateScenarioArc,
   launchSiteToOrbitElements,
   altitudeToSMA,
   smaToAltitude,
@@ -12,6 +13,7 @@ import {
   parseTLE,
   hohmannTransfer,
   computeOptimalBurnWindow,
+  computeManeuverScenarios,
   deorbitBurn,
   generateCZML,
   LAUNCH_SITES,
@@ -68,8 +70,13 @@ export default function KestrelMissionPage() {
 
   const [maneuverResult, setManeuverResult] = useState(null)
   const [maneuverCZML, setManeuverCZML] = useState(null)
+  const [scenarios, setScenarios] = useState(null)
+  const [activeScenario, setActiveScenario] = useState(null)
+  const [executedScenario, setExecutedScenario] = useState(null)
 
   const searchDebounce = useRef(null)
+  const kestrelPointsRef = useRef(null)
+  const targetPointsRef = useRef(null)
   const launchSite = LAUNCH_SITES.find((s) => s.id === launchSiteId) || LAUNCH_SITES[0]
 
   const applyPreset = (preset) => {
@@ -207,56 +214,19 @@ export default function KestrelMissionPage() {
 
           const targetPeriod = orbitalPeriod(r2)
           const targetStep = Math.max(10, Math.round(targetPeriod / 240))
-          const targetPoints = propagateOrbit(
-            targetElements,
-            targetPeriod * 3,
-            targetStep
-          )
+          const targetPoints = propagateOrbit(targetElements, targetPeriod * 3, targetStep)
 
-          const transferPoints = propagateTransferOrbit(
-            r1, r2,
-            elements.raan,
-            elements.inc,
-            period * 2,
-            150
-          )
+          kestrelPointsRef.current = { points: kestrelPoints, period, elements }
+          targetPointsRef.current = { points: targetPoints, period: targetPeriod }
 
-          const maneuverSats = [
-            {
-              id: 'kestrel',
-              label: 'KESTREL',
-              points: kestrelPoints,
-              color: [52, 152, 219, 255],
-              trailTime: period,
-              leadTime: 0,
-              pointSize: 12,
-              pathWidth: 2.5,
-            },
-            {
-              id: 'target',
-              label: selectedTarget.name,
-              points: targetPoints,
-              color: [231, 76, 60, 255],
-              trailTime: targetPeriod,
-              leadTime: 0,
-              pointSize: 10,
-              pathWidth: 2,
-            },
-            {
-              id: 'transfer',
-              label: 'Hohmann Transfer',
-              points: transferPoints,
-              color: [241, 196, 15, 255],
-              trailTime: transfer.transferTime,
-              leadTime: 0,
-              pointSize: 6,
-              pathWidth: 3,
-            },
-          ]
+          const computed = computeManeuverScenarios(r1, r2)
+          setScenarios(computed)
+          setActiveScenario(null)
+          setExecutedScenario(null)
 
+          const defaultArc = propagateTransferOrbit(r1, r2, elements.raan, elements.inc, period * 2, 150)
           const totalDuration = kestrelDuration + transfer.transferTime + targetPeriod * 2
-          const manCzml = generateCZML(maneuverSats, startIso, totalDuration)
-          setManeuverCZML(manCzml)
+          setManeuverCZML(buildManeuverCZML(startIso, kestrelPoints, period, targetPoints, targetPeriod, defaultArc, transfer.transferTime, selectedTarget.name))
         }
       } catch (err) {
         setComputeError(err.message)
@@ -265,6 +235,67 @@ export default function KestrelMissionPage() {
       }
     }, 20)
   }, [launchSite, altitudeKm, incDeg, ecc, targetElements, selectedTarget, missionType])
+
+  function buildManeuverCZML(startIso, kestrelPoints, kestrelPeriod, targetPoints, targetPeriod, arcPoints, arcDuration, targetName) {
+    const sats = [
+      {
+        id: 'kestrel',
+        label: 'KESTREL',
+        points: kestrelPoints,
+        color: [52, 152, 219, 255],
+        trailTime: kestrelPeriod,
+        leadTime: 0,
+        pointSize: 12,
+        pathWidth: 2.5,
+      },
+      {
+        id: 'target',
+        label: targetName || 'TARGET',
+        points: targetPoints,
+        color: [231, 76, 60, 255],
+        trailTime: targetPeriod,
+        leadTime: 0,
+        pointSize: 10,
+        pathWidth: 2,
+      },
+      {
+        id: 'transfer',
+        label: 'Transfer Arc',
+        points: arcPoints,
+        color: [241, 196, 15, 255],
+        trailTime: arcDuration,
+        leadTime: 0,
+        pointSize: 6,
+        pathWidth: 3,
+      },
+    ]
+    const totalDuration = Math.max(
+      kestrelPoints[kestrelPoints.length - 1]?.t || 0,
+      targetPoints[targetPoints.length - 1]?.t || 0,
+      arcPoints[arcPoints.length - 1]?.t || 0
+    )
+    return generateCZML(sats, startIso, totalDuration)
+  }
+
+  const handleExecuteScenario = useCallback((scenario) => {
+    setExecutedScenario(scenario)
+    const kp = kestrelPointsRef.current
+    const tp = targetPointsRef.current
+    if (!kp || !tp || !kestrelElements || !targetElements) return
+    const arcPoints = propagateScenarioArc(scenario, kestrelElements, targetElements.sma, 150)
+    const startIso = new Date().toISOString()
+    const czml = buildManeuverCZML(
+      startIso,
+      kp.points,
+      kp.period,
+      tp.points,
+      tp.period,
+      arcPoints,
+      scenario.transferTime,
+      selectedTarget?.name
+    )
+    setManeuverCZML(czml)
+  }, [kestrelElements, targetElements, selectedTarget])
 
   const kestrelPeriod = orbitalPeriod(altitudeToSMA(altitudeKm))
   const incWarning = Math.abs(launchSite.lat) > incDeg
@@ -571,6 +602,76 @@ export default function KestrelMissionPage() {
                       <strong>{(kestrelElements.raan * RAD).toFixed(1)}°</strong>
                     </div>
                   </div>
+                </section>
+              )}
+
+              {scenarios && (
+                <section className="km-section">
+                  <h3>Maneuver Scenarios</h3>
+                  <p className="km-hint-text" style={{ marginBottom: '0.75rem' }}>
+                    Select a scenario to preview, then execute to update the trajectory.
+                  </p>
+                  <div className="km-scenarios">
+                    {scenarios.map((sc) => {
+                      const isActive = activeScenario?.id === sc.id
+                      const isExecuted = executedScenario?.id === sc.id
+                      return (
+                        <div
+                          key={sc.id}
+                          className={`km-scenario-card${isActive ? ' km-scenario-active' : ''}${isExecuted ? ' km-scenario-executed' : ''}`}
+                        >
+                          <div className="km-scenario-header">
+                            <span className="km-scenario-name">{sc.name}</span>
+                            <span className="km-scenario-tag" style={{ background: sc.tagColor + '33', color: sc.tagColor, borderColor: sc.tagColor }}>
+                              {sc.tag}
+                            </span>
+                            {isExecuted && <span className="km-scenario-check">✓ ACTIVE</span>}
+                          </div>
+                          <p className="km-scenario-desc">{sc.desc}</p>
+                          <div className="km-scenario-stats">
+                            <div className="km-sc-stat">
+                              <span>ΔV Total</span>
+                              <strong style={{ color: sc.tagColor }}>{fmtDv(sc.dvTotal)}</strong>
+                            </div>
+                            <div className="km-sc-stat">
+                              <span>Transfer</span>
+                              <strong>{fmtTime(sc.transferTime)}</strong>
+                            </div>
+                            <div className="km-sc-stat">
+                              <span>Wait</span>
+                              <strong>{sc.waitTime === 0 ? 'None' : fmtTime(sc.waitTime)}</strong>
+                            </div>
+                          </div>
+                          <div className="km-scenario-actions">
+                            <button
+                              className="km-btn-suggest"
+                              onClick={() => setActiveScenario(isActive ? null : sc)}
+                            >
+                              {isActive ? 'Hide' : 'Preview'}
+                            </button>
+                            <button
+                              className="km-btn-execute"
+                              onClick={() => handleExecuteScenario(sc)}
+                            >
+                              {isExecuted ? '↺ Re-execute' : '▶ Execute'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {activeScenario && !executedScenario && (
+                    <div className="km-scenario-preview">
+                      <div className="km-preview-title">Preview: {activeScenario.name}</div>
+                      <div className="km-result-rows">
+                        <div className="km-result-row"><span>ΔV₁ departure</span><strong className="km-dv">{fmtDv(activeScenario.dv1)}</strong></div>
+                        <div className="km-result-row"><span>ΔV₂ arrival</span><strong className="km-dv">{fmtDv(activeScenario.dv2)}</strong></div>
+                        <div className="km-result-row"><span>Transfer time</span><strong>{fmtTime(activeScenario.transferTime)}</strong></div>
+                        <div className="km-result-row"><span>Phase wait</span><strong>{activeScenario.waitTime === 0 ? 'Immediate' : fmtTime(activeScenario.waitTime)}</strong></div>
+                      </div>
+                    </div>
+                  )}
                 </section>
               )}
 
