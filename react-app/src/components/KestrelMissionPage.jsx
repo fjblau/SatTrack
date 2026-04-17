@@ -14,6 +14,7 @@ import {
   hohmannTransfer,
   computeOptimalBurnWindow,
   computeManeuverScenarios,
+  computeJ2RAANScenario,
   deorbitBurn,
   generateCZML,
   LAUNCH_SITES,
@@ -233,7 +234,8 @@ export default function KestrelMissionPage() {
           targetPointsRef.current = { points: targetPoints, period: targetPeriod }
 
           const computed = computeManeuverScenarios(r1, r2)
-          setScenarios(computed)
+          const j2Scenario = computeJ2RAANScenario(elements, targetElements)
+          setScenarios(j2Scenario ? [...computed, j2Scenario] : computed)
           setActiveScenario(null)
           setExecutedScenario(null)
 
@@ -675,6 +677,12 @@ export default function KestrelMissionPage() {
                               <span>Wait</span>
                               <strong>{sc.waitTime === 0 ? 'None' : fmtTime(sc.waitTime)}</strong>
                             </div>
+                            {sc.driftAltKm !== undefined && (
+                              <div className="km-sc-stat">
+                                <span>Drift Orbit</span>
+                                <strong>{sc.driftAltKm} km</strong>
+                              </div>
+                            )}
                           </div>
                           <div className="km-scenario-actions">
                             <button
