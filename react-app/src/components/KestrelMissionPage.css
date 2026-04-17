@@ -473,3 +473,74 @@
   margin: 0;
   line-height: 1.4;
 }
+
+.km-tab-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.7rem;
+  color: #3fb950;
+  font-weight: 700;
+}
+
+.km-subnav button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.km-target-card {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.km-hint-suggest {
+  color: #3fb950 !important;
+  font-style: italic;
+  font-size: 0.74rem !important;
+  margin: 0 !important;
+}
+
+.km-mission-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.km-mission-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.82rem;
+  padding: 3px 0;
+  border-bottom: 1px solid #1c2128;
+}
+
+.km-mission-summary-row:last-child {
+  border-bottom: none;
+}
+
+.km-sum-label {
+  color: #6e7681;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.km-sum-value-inline {
+  color: #c9d1d9;
+  font-weight: 500;
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.km-deorbit-block {
+  border-color: rgba(248, 81, 73, 0.3);
+  background: rgba(248, 81, 73, 0.04);
+}
+
+.km-deorbit-block .km-result-title {
+  color: #f85149;
+}
