@@ -261,6 +261,7 @@ export default function KestrelMissionPage() {
         leadTime: 0,
         pointSize: 12,
         pathWidth: 2.5,
+        labelOffsetY: -28,
       },
       {
         id: 'target',
@@ -271,6 +272,7 @@ export default function KestrelMissionPage() {
         leadTime: 0,
         pointSize: 10,
         pathWidth: 2,
+        labelOffsetY: 18,
       },
       {
         id: 'transfer',
@@ -283,6 +285,7 @@ export default function KestrelMissionPage() {
         pathWidth: 3,
         availStartSec: arcStartSec,
         availEndSec: arcEndSec,
+        noLabel: true,
       },
     ]
     const totalDuration = Math.max(
