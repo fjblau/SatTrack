@@ -219,7 +219,7 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
         },
         width: sat.pathWidth || 2,
       },
-      label: {
+      label: sat.noLabel ? { show: false, text: '' } : {
         text: sat.label,
         font: '13pt sans-serif',
         fillColor: { rgba: [255, 255, 255, 220] },
@@ -227,7 +227,7 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
         outlineWidth: 2,
         style: 'FILL_AND_OUTLINE',
         verticalOrigin: 'BOTTOM',
-        pixelOffset: { cartesian2: [0, -14] },
+        pixelOffset: { cartesian2: [sat.labelOffsetX || 0, sat.labelOffsetY !== undefined ? sat.labelOffsetY : -14] },
         show: true,
       },
     }
