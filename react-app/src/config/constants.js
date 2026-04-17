@@ -58,6 +58,7 @@ export const API_ENDPOINTS = {
     ASK: '/v2/ask',
     STATUS: '/v2/ask/status',
     AQL: '/v2/aql',
+    KESTREL_MISSION: '/v2/kestrel-mission',
   },
 
   EPHEMERIS: {

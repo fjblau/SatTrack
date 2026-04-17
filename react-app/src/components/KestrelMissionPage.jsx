@@ -76,6 +76,13 @@ export default function KestrelMissionPage() {
   const [activeScenario, setActiveScenario] = useState(null)
   const [executedScenario, setExecutedScenario] = useState(null)
 
+  const [advisorLoading, setAdvisorLoading] = useState(false)
+  const [advisorResult, setAdvisorResult] = useState(null)
+  const [advisorError, setAdvisorError] = useState(null)
+  const [advisorClarifyQuestion, setAdvisorClarifyQuestion] = useState(null)
+  const [advisorClarification, setAdvisorClarification] = useState('')
+  const [advisorConstraints, setAdvisorConstraints] = useState('')
+
   const searchDebounce = useRef(null)
   const kestrelPointsRef = useRef(null)
   const targetPointsRef = useRef(null)
@@ -160,6 +167,9 @@ export default function KestrelMissionPage() {
     }
     setComputing(true)
     setComputeError(null)
+    setAdvisorResult(null)
+    setAdvisorClarifyQuestion(null)
+    setAdvisorError(null)
 
     setTimeout(() => {
       try {
@@ -329,6 +339,69 @@ export default function KestrelMissionPage() {
     )
     setManeuverCZML(czml)
   }, [kestrelElements, targetElements, selectedTarget])
+
+  const handleGetAIRecommendation = useCallback(async (clarification = '') => {
+    if (!scenarios || !kestrelElements || !targetElements || !selectedTarget) return
+    setAdvisorLoading(true)
+    setAdvisorError(null)
+    setAdvisorResult(null)
+    if (!clarification) {
+      setAdvisorClarifyQuestion(null)
+      setAdvisorClarification('')
+    }
+
+    const RAD_LOCAL = 180 / Math.PI
+    const missionContext = {
+      target: {
+        name: selectedTarget.name,
+        alt_km: smaToAltitude(targetElements.sma).toFixed(1),
+        inc_deg: (targetElements.inc * RAD_LOCAL).toFixed(2),
+        raan_deg: (targetElements.raan * RAD_LOCAL).toFixed(2),
+      },
+      kestrel: {
+        alt_km: smaToAltitude(kestrelElements.sma).toFixed(1),
+        inc_deg: (kestrelElements.inc * RAD_LOCAL).toFixed(2),
+        raan_deg: (kestrelElements.raan * RAD_LOCAL).toFixed(2),
+      },
+      mission_type: missionType,
+      scenarios: scenarios.map((sc) => ({
+        id: sc.id,
+        name: sc.name,
+        tag: sc.tag,
+        dvTotal: sc.dvTotal,
+        dv1: sc.dv1,
+        dv2: sc.dv2,
+        transferTime: sc.transferTime,
+        waitTime: sc.waitTime,
+        driftAltKm: sc.driftAltKm,
+        dRaanDeg: sc.dRaanDeg,
+      })),
+      constraints: advisorConstraints,
+    }
+
+    try {
+      const res = await apiFetch(API_ENDPOINTS.AGENT.KESTREL_MISSION, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mission_context: missionContext, clarification: clarification || '' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Advisor request failed')
+      if (data.clarifying_question) {
+        setAdvisorClarifyQuestion(data.clarifying_question)
+        setAdvisorClarification('')
+      } else if (data.error) {
+        setAdvisorError(data.error)
+      } else {
+        setAdvisorResult(data)
+        setAdvisorClarifyQuestion(null)
+      }
+    } catch (err) {
+      setAdvisorError(err.message)
+    } finally {
+      setAdvisorLoading(false)
+    }
+  }, [scenarios, kestrelElements, targetElements, selectedTarget, missionType, advisorConstraints])
 
   const kestrelPeriod = orbitalPeriod(altitudeToSMA(altitudeKm))
   const incWarning = Math.abs(launchSite.lat) > incDeg
@@ -714,6 +787,103 @@ export default function KestrelMissionPage() {
                       </div>
                     </div>
                   )}
+                </section>
+              )}
+
+              {scenarios && (
+                <section className="km-section">
+                  <h3>AI Mission Advisor</h3>
+                  <p className="km-hint-text" style={{ marginBottom: '0.5rem' }}>
+                    Optionally describe constraints (ΔV budget, time urgency, etc.) then ask the AI to recommend the best scenario.
+                  </p>
+                  <div className="km-field">
+                    <input
+                      type="text"
+                      className="km-input"
+                      placeholder="e.g. ΔV budget &lt;200 m/s, rendezvous within 2 weeks…"
+                      value={advisorConstraints}
+                      onChange={(e) => setAdvisorConstraints(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    className="km-advisor-btn"
+                    onClick={() => handleGetAIRecommendation()}
+                    disabled={advisorLoading}
+                  >
+                    {advisorLoading ? 'Analyzing…' : 'Get AI Recommendation'}
+                  </button>
+
+                  {advisorError && (
+                    <p className="km-error">{advisorError}</p>
+                  )}
+
+                  {advisorClarifyQuestion && (
+                    <div className="km-advisor-clarify">
+                      <div className="km-advisor-clarify-label">Clarification needed</div>
+                      <p className="km-advisor-clarify-q">{advisorClarifyQuestion}</p>
+                      <div className="km-advisor-clarify-row">
+                        <input
+                          type="text"
+                          className="km-input"
+                          placeholder="Your answer…"
+                          value={advisorClarification}
+                          onChange={(e) => setAdvisorClarification(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && advisorClarification.trim()) {
+                              handleGetAIRecommendation(advisorClarification)
+                            }
+                          }}
+                        />
+                        <button
+                          className="km-advisor-btn"
+                          onClick={() => handleGetAIRecommendation(advisorClarification)}
+                          disabled={advisorLoading || !advisorClarification.trim()}
+                        >
+                          Submit
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {advisorResult && (() => {
+                    const recSc = scenarios.find((sc) => sc.id === advisorResult.recommended_scenario_id)
+                    const confidenceColor = { high: '#3fb950', medium: '#e6b454', low: '#f85149' }[advisorResult.confidence] || '#888'
+                    return (
+                      <div className="km-advisor-result">
+                        <div className="km-advisor-result-header">
+                          <span className="km-advisor-rec-label">Recommended</span>
+                          {recSc && (
+                            <span className="km-advisor-rec-name" style={{ color: recSc.tagColor }}>
+                              {recSc.name}
+                            </span>
+                          )}
+                          <span className="km-advisor-confidence" style={{ color: confidenceColor }}>
+                            {advisorResult.confidence} confidence
+                          </span>
+                        </div>
+                        <p className="km-advisor-reasoning">{advisorResult.reasoning}</p>
+                        {advisorResult.trade_off_summary && (
+                          <p className="km-advisor-tradeoff">
+                            <strong>Trade-off:</strong> {advisorResult.trade_off_summary}
+                          </p>
+                        )}
+                        {advisorResult.caveats && (
+                          <p className="km-advisor-caveat">
+                            {advisorResult.caveats}
+                          </p>
+                        )}
+                        {recSc && (
+                          <button
+                            className="km-btn-execute"
+                            style={{ width: '100%', marginTop: '0.75rem' }}
+                            onClick={() => handleExecuteScenario(recSc)}
+                          >
+                            Execute Recommended Scenario
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </section>
               )}
 

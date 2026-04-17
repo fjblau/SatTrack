@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Any, Optional
 
-from api.services import agent_service, aql_agent_service, index_service
+from api.services import agent_service, aql_agent_service, index_service, kestrel_agent_service
 
 router = APIRouter(prefix="/v2", tags=["agent"])
 
@@ -51,6 +51,7 @@ def ask_status():
         "agent_ready": agent_service.is_ready(),
         "index_ready": index_service.is_ready(),
         "aql_agent_ready": aql_agent_service.is_ready(),
+        "kestrel_advisor_ready": kestrel_agent_service.is_ready(),
     }
 
 
@@ -88,3 +89,40 @@ def aql_query(body: AQLRequest):
         clarification=body.clarification or "",
     )
     return AQLResponse(**result)
+
+
+class KestrelMissionRequest(BaseModel):
+    mission_context: dict[str, Any]
+    clarification: Optional[str] = None
+
+
+class KestrelMissionResponse(BaseModel):
+    recommended_scenario_id: str
+    reasoning: str
+    trade_off_summary: str
+    caveats: str
+    confidence: str
+    error: str
+    clarifying_question: str
+
+
+@router.post("/kestrel-mission", response_model=KestrelMissionResponse)
+def kestrel_mission_advisor(body: KestrelMissionRequest):
+    """AI mission advisor for Kestrel rendezvous scenario selection.
+
+    Receives pre-computed orbital mechanics scenarios and recommends the best one
+    based on mission type, orbital geometry, and operator constraints.
+
+    If a clarifying question is returned, re-submit with `clarification` set to
+    the operator's answer to proceed with the recommendation.
+    """
+    if not kestrel_agent_service.is_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="Kestrel mission advisor is not available. Ensure OPENAI_API_KEY is set.",
+        )
+    result = kestrel_agent_service.run_kestrel_advisor(
+        mission_context=body.mission_context,
+        clarification=body.clarification or "",
+    )
+    return KestrelMissionResponse(**result)
