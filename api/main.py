@@ -8,7 +8,7 @@ import mqtt_scheduler
 
 from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris
 from api.middleware.auth import AuthMiddleware
-from api.services import index_service, agent_service, aql_agent_service
+from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 
 try:
     from dotenv import load_dotenv
@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
     index_service.build_index()
     agent_service.initialize_agent()
     aql_agent_service.initialize_aql_agent()
+    kestrel_agent_service.initialize_kestrel_agent()
     
     yield
     

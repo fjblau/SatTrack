@@ -701,3 +701,121 @@
   color: #3498db;
   margin-bottom: 0.5rem;
 }
+
+.km-advisor-btn {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #8b5cf6;
+  background: rgba(139, 92, 246, 0.07);
+  color: #7c3aed;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 0.25rem;
+}
+
+.km-advisor-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.km-advisor-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.km-advisor-clarify {
+  margin-top: 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+}
+
+.km-advisor-clarify-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+}
+
+.km-advisor-clarify-q {
+  font-size: 0.82rem;
+  color: #78350f;
+  margin: 0 0 0.5rem 0;
+}
+
+.km-advisor-clarify-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.km-advisor-clarify-row .km-advisor-btn {
+  width: auto;
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.km-advisor-result {
+  margin-top: 0.75rem;
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.km-advisor-result-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.km-advisor-rec-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c3aed;
+}
+
+.km-advisor-rec-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.km-advisor-confidence {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.km-advisor-reasoning {
+  font-size: 0.82rem;
+  color: #374151;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.5;
+}
+
+.km-advisor-tradeoff {
+  font-size: 0.78rem;
+  color: #555;
+  margin: 0 0 0.4rem 0;
+  line-height: 1.45;
+}
+
+.km-advisor-caveat {
+  font-size: 0.76rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  margin: 0.35rem 0 0 0;
+}
