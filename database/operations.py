@@ -356,6 +356,40 @@ def clear_collection():
     collection.truncate()
 
 
+def get_satellite_tle_by_norad_id(norad_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Look up the last known TLE for a satellite by NORAD catalog ID.
+
+    Searches canonical.norad_cat_id and returns stored line1/line2 if present.
+    Used as a fallback when live CelesTrak fetch fails.
+
+    Returns:
+        Dict with name, line1, line2, fetched_at — or None if not found.
+    """
+    collection = get_satellites_collection()
+    aql = """
+    FOR doc IN @@collection
+        FILTER TO_STRING(doc.canonical.norad_cat_id) == @norad_id
+        FILTER doc.canonical.tle.line1 != null AND doc.canonical.tle.line1 != ""
+        LIMIT 1
+        RETURN {
+            name: doc.canonical.object_name || doc.canonical.name || CONCAT("NORAD ", @norad_id),
+            line1: doc.canonical.tle.line1,
+            line2: doc.canonical.tle.line2,
+            fetched_at: doc.canonical.tle.fetched_at
+        }
+    """
+    try:
+        cursor = db_conn.db.aql.execute(
+            aql,
+            bind_vars={'@collection': COLLECTION_NAME, 'norad_id': str(norad_id)}
+        )
+        results = list(cursor)
+        return results[0] if results else None
+    except Exception:
+        return None
+
+
 def update_satellite_tle(
     identifier: str,
     norad_id: str,
