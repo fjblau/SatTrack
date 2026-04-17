@@ -385,7 +385,12 @@ export default function KestrelMissionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mission_context: missionContext, clarification: clarification || '' }),
       })
-      const data = await res.json()
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error(`Server error (HTTP ${res.status}) — check backend logs`)
+      }
       if (!res.ok) throw new Error(data.detail || 'Advisor request failed')
       if (data.clarifying_question) {
         setAdvisorClarifyQuestion(data.clarifying_question)
@@ -423,6 +428,15 @@ export default function KestrelMissionPage() {
         >
           Maneuver Plan
           {maneuverResult && <span className="km-tab-badge">✓</span>}
+        </button>
+        <button
+          className={activeSubTab === 'advisor' ? 'active' : ''}
+          onClick={() => setActiveSubTab('advisor')}
+          disabled={!scenarios}
+          title={!scenarios ? 'Plan a mission first' : ''}
+        >
+          AI Mission Advisor
+          {advisorResult && <span className="km-tab-badge">✓</span>}
         </button>
       </div>
 
@@ -790,103 +804,6 @@ export default function KestrelMissionPage() {
                 </section>
               )}
 
-              {scenarios && (
-                <section className="km-section">
-                  <h3>AI Mission Advisor</h3>
-                  <p className="km-hint-text" style={{ marginBottom: '0.5rem' }}>
-                    Optionally describe constraints (ΔV budget, time urgency, etc.) then ask the AI to recommend the best scenario.
-                  </p>
-                  <div className="km-field">
-                    <input
-                      type="text"
-                      className="km-input"
-                      placeholder="e.g. ΔV budget &lt;200 m/s, rendezvous within 2 weeks…"
-                      value={advisorConstraints}
-                      onChange={(e) => setAdvisorConstraints(e.target.value)}
-                    />
-                  </div>
-                  <button
-                    className="km-advisor-btn"
-                    onClick={() => handleGetAIRecommendation()}
-                    disabled={advisorLoading}
-                  >
-                    {advisorLoading ? 'Analyzing…' : 'Get AI Recommendation'}
-                  </button>
-
-                  {advisorError && (
-                    <p className="km-error">{advisorError}</p>
-                  )}
-
-                  {advisorClarifyQuestion && (
-                    <div className="km-advisor-clarify">
-                      <div className="km-advisor-clarify-label">Clarification needed</div>
-                      <p className="km-advisor-clarify-q">{advisorClarifyQuestion}</p>
-                      <div className="km-advisor-clarify-row">
-                        <input
-                          type="text"
-                          className="km-input"
-                          placeholder="Your answer…"
-                          value={advisorClarification}
-                          onChange={(e) => setAdvisorClarification(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && advisorClarification.trim()) {
-                              handleGetAIRecommendation(advisorClarification)
-                            }
-                          }}
-                        />
-                        <button
-                          className="km-advisor-btn"
-                          onClick={() => handleGetAIRecommendation(advisorClarification)}
-                          disabled={advisorLoading || !advisorClarification.trim()}
-                        >
-                          Submit
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {advisorResult && (() => {
-                    const recSc = scenarios.find((sc) => sc.id === advisorResult.recommended_scenario_id)
-                    const confidenceColor = { high: '#3fb950', medium: '#e6b454', low: '#f85149' }[advisorResult.confidence] || '#888'
-                    return (
-                      <div className="km-advisor-result">
-                        <div className="km-advisor-result-header">
-                          <span className="km-advisor-rec-label">Recommended</span>
-                          {recSc && (
-                            <span className="km-advisor-rec-name" style={{ color: recSc.tagColor }}>
-                              {recSc.name}
-                            </span>
-                          )}
-                          <span className="km-advisor-confidence" style={{ color: confidenceColor }}>
-                            {advisorResult.confidence} confidence
-                          </span>
-                        </div>
-                        <p className="km-advisor-reasoning">{advisorResult.reasoning}</p>
-                        {advisorResult.trade_off_summary && (
-                          <p className="km-advisor-tradeoff">
-                            <strong>Trade-off:</strong> {advisorResult.trade_off_summary}
-                          </p>
-                        )}
-                        {advisorResult.caveats && (
-                          <p className="km-advisor-caveat">
-                            {advisorResult.caveats}
-                          </p>
-                        )}
-                        {recSc && (
-                          <button
-                            className="km-btn-execute"
-                            style={{ width: '100%', marginTop: '0.75rem' }}
-                            onClick={() => handleExecuteScenario(recSc)}
-                          >
-                            Execute Recommended Scenario
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })()}
-                </section>
-              )}
-
               {maneuverResult && (
                 <>
                   <section className="km-section km-results">
@@ -1004,6 +921,163 @@ export default function KestrelMissionPage() {
               launchSite={null}
               targetLabel={selectedTarget?.name}
               emptyMessage="Complete the Launch Planner to see the full mission trajectory — Kestrel orbit (blue), target (red), transfer arc (yellow)."
+            />
+          </>
+        )}
+
+        {activeSubTab === 'advisor' && (
+          <>
+            <aside className="km-sidebar">
+              <section className="km-section">
+                <h3>Mission Context</h3>
+                <div className="km-mission-summary-row">
+                  <span className="km-sum-label">Target</span>
+                  <span className="km-sum-value-inline">{selectedTarget?.name || '—'}</span>
+                </div>
+                <div className="km-mission-summary-row">
+                  <span className="km-sum-label">Mission</span>
+                  <span className="km-sum-value-inline">
+                    {MISSION_TYPES.find((m) => m.id === missionType)?.icon}{' '}
+                    {MISSION_TYPES.find((m) => m.id === missionType)?.label}
+                  </span>
+                </div>
+                {kestrelElements && targetElements && (
+                  <div className="km-orbit-summary" style={{ marginTop: '0.5rem' }}>
+                    <div className="km-sum-item">
+                      <span>Kestrel Alt</span>
+                      <strong>{smaToAltitude(kestrelElements.sma).toFixed(0)} km</strong>
+                    </div>
+                    <div className="km-sum-item">
+                      <span>Target Alt</span>
+                      <strong>{smaToAltitude(targetElements.sma).toFixed(0)} km</strong>
+                    </div>
+                    <div className="km-sum-item">
+                      <span>RAAN Δ</span>
+                      <strong>{Math.abs(((targetElements.raan - kestrelElements.raan) * RAD + 540) % 360 - 180).toFixed(1)}°</strong>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="km-section">
+                <h3>AI Mission Advisor</h3>
+                <p className="km-hint-text" style={{ marginBottom: '0.5rem' }}>
+                  Optionally describe constraints, then ask the AI to recommend the best maneuver scenario.
+                </p>
+                <div className="km-field">
+                  <label>Operator Constraints</label>
+                  <input
+                    type="text"
+                    className="km-input"
+                    placeholder="e.g. ΔV budget &lt;200 m/s, rendezvous within 2 weeks…"
+                    value={advisorConstraints}
+                    onChange={(e) => setAdvisorConstraints(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !advisorLoading && handleGetAIRecommendation()}
+                  />
+                </div>
+                <button
+                  className="km-advisor-btn"
+                  onClick={() => handleGetAIRecommendation()}
+                  disabled={advisorLoading}
+                >
+                  {advisorLoading ? 'Analyzing…' : 'Get AI Recommendation'}
+                </button>
+
+                {advisorError && <p className="km-error">{advisorError}</p>}
+
+                {advisorClarifyQuestion && (
+                  <div className="km-advisor-clarify">
+                    <div className="km-advisor-clarify-label">Clarification needed</div>
+                    <p className="km-advisor-clarify-q">{advisorClarifyQuestion}</p>
+                    <div className="km-advisor-clarify-row">
+                      <input
+                        type="text"
+                        className="km-input"
+                        placeholder="Your answer…"
+                        value={advisorClarification}
+                        onChange={(e) => setAdvisorClarification(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && advisorClarification.trim()) {
+                            handleGetAIRecommendation(advisorClarification)
+                          }
+                        }}
+                      />
+                      <button
+                        className="km-advisor-btn"
+                        style={{ width: 'auto', marginTop: 0 }}
+                        onClick={() => handleGetAIRecommendation(advisorClarification)}
+                        disabled={advisorLoading || !advisorClarification.trim()}
+                      >
+                        Submit
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {advisorResult && scenarios && (() => {
+                  const recSc = scenarios.find((sc) => sc.id === advisorResult.recommended_scenario_id)
+                  const confidenceColor = { high: '#3fb950', medium: '#e6b454', low: '#f85149' }[advisorResult.confidence] || '#888'
+                  return (
+                    <div className="km-advisor-result">
+                      <div className="km-advisor-result-header">
+                        <span className="km-advisor-rec-label">Recommended</span>
+                        {recSc && (
+                          <span className="km-advisor-rec-name" style={{ color: recSc.tagColor }}>
+                            {recSc.name}
+                          </span>
+                        )}
+                        <span className="km-advisor-confidence" style={{ color: confidenceColor }}>
+                          {advisorResult.confidence} confidence
+                        </span>
+                      </div>
+                      <p className="km-advisor-reasoning">{advisorResult.reasoning}</p>
+                      {advisorResult.trade_off_summary && (
+                        <p className="km-advisor-tradeoff">
+                          <strong>Trade-off:</strong> {advisorResult.trade_off_summary}
+                        </p>
+                      )}
+                      {advisorResult.caveats && (
+                        <p className="km-advisor-caveat">{advisorResult.caveats}</p>
+                      )}
+                      {recSc && (
+                        <button
+                          className="km-btn-execute"
+                          style={{ width: '100%', marginTop: '0.75rem' }}
+                          onClick={() => {
+                            handleExecuteScenario(recSc)
+                            setActiveSubTab('maneuver')
+                          }}
+                        >
+                          Execute & View on Globe
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
+              </section>
+
+              {scenarios && (
+                <section className="km-section">
+                  <h3>Available Scenarios</h3>
+                  {scenarios.map((sc) => (
+                    <div key={sc.id} className="km-advisor-scenario-row"
+                      style={{ borderLeft: `3px solid ${sc.tagColor}` }}>
+                      <div className="km-advisor-sc-name">{sc.name}</div>
+                      <div className="km-advisor-sc-stats">
+                        <span>ΔV {(sc.dvTotal / 1000).toFixed(3)} km/s</span>
+                        <span>{sc.waitTime === 0 ? 'No wait' : fmtTime(sc.waitTime) + ' wait'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              )}
+            </aside>
+
+            <KestrelCesiumViewer
+              czmlData={maneuverCZML || kestrelCZML}
+              launchSite={null}
+              targetLabel={selectedTarget?.name}
+              emptyMessage="The AI advisor will recommend and execute the best scenario — the result appears here."
             />
           </>
         )}
