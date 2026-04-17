@@ -122,14 +122,13 @@ export default function KestrelMissionPage() {
 
     setTargetFetchLoading(true)
     try {
-      const res = await apiFetch(`${API_ENDPOINTS.TLE}?norad_id=${noradId}`)
+      const res = await apiFetch(`${API_ENDPOINTS.TLE}/${noradId}`)
       if (!res.ok) throw new Error(`TLE fetch failed (HTTP ${res.status})`)
       const data = await res.json()
-      const tleLines = Array.isArray(data) ? data : (data.data || [])
-      const entry = tleLines[0]
-      if (!entry) throw new Error('No TLE record found for this object.')
-      const line1 = entry.tle_line1 || entry.line1
-      const line2 = entry.tle_line2 || entry.line2
+      const tle = data.data
+      if (!tle) throw new Error('No TLE record found for this object.')
+      const line1 = tle.line1 || tle.tle_line1
+      const line2 = tle.line2 || tle.tle_line2
       if (!line1 || !line2) throw new Error('TLE lines missing in API response.')
       const els = parseTLE(line1, line2)
       if (!els) throw new Error('Failed to parse TLE data.')
