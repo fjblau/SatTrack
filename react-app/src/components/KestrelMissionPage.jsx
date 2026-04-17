@@ -172,18 +172,17 @@ export default function KestrelMissionPage() {
         setKestrelElements(elements)
 
         const period = orbitalPeriod(elements.sma)
-        const kestrelDuration = period * 3
         const kestrelStep = Math.max(10, Math.round(period / 240))
-        const kestrelPoints = propagateOrbit(elements, kestrelDuration, kestrelStep)
 
         const startIso = new Date().toISOString()
 
+        const launchPoints = propagateOrbit(elements, period * 3, kestrelStep)
         const launchCzml = generateCZML(
           [
             {
               id: 'kestrel',
               label: 'KESTREL',
-              points: kestrelPoints,
+              points: launchPoints,
               color: [52, 152, 219, 255],
               trailTime: period,
               leadTime: 0,
@@ -192,7 +191,7 @@ export default function KestrelMissionPage() {
             },
           ],
           startIso,
-          kestrelDuration
+          period * 3
         )
         setKestrelCZML(launchCzml)
 
@@ -217,7 +216,18 @@ export default function KestrelMissionPage() {
 
           const targetPeriod = orbitalPeriod(r2)
           const targetStep = Math.max(10, Math.round(targetPeriod / 240))
-          const targetPoints = propagateOrbit(targetElements, targetPeriod * 3, targetStep)
+
+          // Preview arc: show transfer starting after 3 parking orbits
+          const arcPreviewWait = period * 3
+          const TWO_PI_local = 2 * Math.PI
+          const n_park = Math.sqrt(3.986004418e14 / Math.pow(r1, 3))
+          const M_burn_preview = ((elements.meanAnomaly0 + n_park * arcPreviewWait) % TWO_PI_local + TWO_PI_local) % TWO_PI_local
+          const previewArc = propagateTransferOrbit(r1, r2, elements.raan, elements.inc, arcPreviewWait, 150, M_burn_preview)
+
+          // Propagate orbits to cover the preview mission window
+          const previewDuration = arcPreviewWait + transfer.transferTime + targetPeriod * 2
+          const kestrelPoints = propagateOrbit(elements, previewDuration, kestrelStep)
+          const targetPoints = propagateOrbit(targetElements, previewDuration, targetStep)
 
           kestrelPointsRef.current = { points: kestrelPoints, period, elements }
           targetPointsRef.current = { points: targetPoints, period: targetPeriod }
@@ -227,9 +237,7 @@ export default function KestrelMissionPage() {
           setActiveScenario(null)
           setExecutedScenario(null)
 
-          const defaultArc = propagateTransferOrbit(r1, r2, elements.raan, elements.inc, period * 2, 150)
-          const totalDuration = kestrelDuration + transfer.transferTime + targetPeriod * 2
-          setManeuverCZML(buildManeuverCZML(startIso, kestrelPoints, period, targetPoints, targetPeriod, defaultArc, transfer.transferTime, selectedTarget.name))
+          setManeuverCZML(buildManeuverCZML(startIso, kestrelPoints, period, targetPoints, targetPeriod, previewArc, transfer.transferTime, selectedTarget.name))
         }
       } catch (err) {
         setComputeError(err.message)
@@ -240,6 +248,9 @@ export default function KestrelMissionPage() {
   }, [launchSite, altitudeKm, incDeg, ecc, targetElements, selectedTarget, missionType])
 
   function buildManeuverCZML(startIso, kestrelPoints, kestrelPeriod, targetPoints, targetPeriod, arcPoints, arcDuration, targetName) {
+    const arcStartSec = arcPoints.length > 0 ? arcPoints[0].t : 0
+    const arcEndSec = arcPoints.length > 0 ? arcPoints[arcPoints.length - 1].t : arcDuration
+
     const sats = [
       {
         id: 'kestrel',
@@ -270,12 +281,14 @@ export default function KestrelMissionPage() {
         leadTime: 0,
         pointSize: 6,
         pathWidth: 3,
+        availStartSec: arcStartSec,
+        availEndSec: arcEndSec,
       },
     ]
     const totalDuration = Math.max(
       kestrelPoints[kestrelPoints.length - 1]?.t || 0,
       targetPoints[targetPoints.length - 1]?.t || 0,
-      arcPoints[arcPoints.length - 1]?.t || 0
+      arcEndSec
     )
     return generateCZML(sats, startIso, totalDuration)
   }
@@ -285,13 +298,25 @@ export default function KestrelMissionPage() {
     const kp = kestrelPointsRef.current
     const tp = targetPointsRef.current
     if (!kp || !tp || !kestrelElements || !targetElements) return
-    const arcPoints = propagateScenarioArc(scenario, kestrelElements, targetElements.sma, 150)
+
+    // Cap displayed wait time at 20 parking orbits so the animation stays manageable
+    const displayWaitTime = Math.min(scenario.waitTime || 0, kp.period * 20)
+    const displayScenario = { ...scenario, waitTime: displayWaitTime }
+
+    // Re-propagate both orbits to cover the full display mission duration
+    const displayDuration = displayWaitTime + scenario.transferTime + tp.period * 3
+    const kStep = Math.max(30, Math.round(kp.period / 120))
+    const tStep = Math.max(30, Math.round(tp.period / 120))
+    const newKestrelPoints = propagateOrbit(kestrelElements, displayDuration, kStep)
+    const newTargetPoints = propagateOrbit(targetElements, displayDuration, tStep)
+
+    const arcPoints = propagateScenarioArc(displayScenario, kestrelElements, targetElements.sma, 150)
     const startIso = new Date().toISOString()
     const czml = buildManeuverCZML(
       startIso,
-      kp.points,
+      newKestrelPoints,
       kp.period,
-      tp.points,
+      newTargetPoints,
       tp.period,
       arcPoints,
       scenario.transferTime,

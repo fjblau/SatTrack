@@ -134,13 +134,18 @@ export function deorbitBurn(rTarget, rDeorbitPerigeeKm = 200) {
   return { dvDeorbit, deorbitTime, rDeorbit, altKm: rDeorbitPerigeeKm }
 }
 
-export function propagateTransferOrbit(r1, r2, raan, incKestrel, startSeconds, steps = 100) {
+export function propagateTransferOrbit(r1, r2, raan, incKestrel, startSeconds, steps = 100, burnArgPerigee = 0) {
   const at = (r1 + r2) / 2
   const ecc = Math.abs(r2 - r1) / (r1 + r2)
-  const argPerigee = r1 < r2 ? 0 : Math.PI
+  // For ascending: burn is at periapsis — periapsis points toward burn direction
+  // For descending: burn is at apoapsis — periapsis is π away from burn direction
+  const argPerigee = r1 < r2
+    ? burnArgPerigee
+    : ((burnArgPerigee + Math.PI) % TWO_PI)
   const transferTime = Math.PI * Math.sqrt(Math.pow(at, 3) / GM)
   const n = Math.sqrt(GM / Math.pow(at, 3))
-  const M0 = 0
+  // Ascending: start at periapsis (M=0); Descending: start at apoapsis (M=π)
+  const M0 = r1 < r2 ? 0 : Math.PI
   const stepDuration = transferTime / steps
 
   const points = []
@@ -169,7 +174,7 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
       interval: `${startIso}/${endIso}`,
       currentTime: startIso,
       multiplier: 60,
-      range: 'LOOP_STOP',
+      range: 'CLAMPED',
       step: 'SYSTEM_CLOCK_MULTIPLIER',
     },
   }
@@ -180,8 +185,13 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
       cartesian.push(pt.t, pt.x, pt.y, pt.z)
     }
 
-    const availStart = startIso
-    const availEnd = sat.availEnd || endIso
+    // availStartSec / availEndSec are seconds relative to startIso
+    const availStart = sat.availStartSec !== undefined
+      ? new Date(startMs + sat.availStartSec * 1000).toISOString()
+      : startIso
+    const availEnd = sat.availEndSec !== undefined
+      ? new Date(startMs + sat.availEndSec * 1000).toISOString()
+      : endIso
 
     return {
       id: sat.id,
@@ -229,116 +239,163 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
 export function computeManeuverScenarios(r1, r2) {
   const base = hohmannTransfer(r1, r2)
   const burnWindow = computeOptimalBurnWindow(r1, r2)
-  const targetPeriod = orbitalPeriod(r2)
 
   const s1 = {
     id: 'hohmann',
     name: 'Hohmann Transfer',
     tag: 'OPTIMAL',
     tagColor: '#3fb950',
-    desc: 'Two-burn minimum-energy transfer. Wait for phase alignment, then execute.',
+    desc: 'Two-burn minimum-energy coplanar transfer. Wait for phase alignment, then execute two impulsive burns. Exact physics — minimum ΔV for any coplanar transfer.',
     dv1: base.dv1,
     dv2: base.dv2,
     dvTotal: base.dvTotal,
     transferTime: base.transferTime,
     waitTime: burnWindow.synodicPeriod / 2,
     at: base.at,
+    ecc: Math.abs(r2 - r1) / (r1 + r2),
     arcMode: 'hohmann',
   }
 
-  const fastDv1 = base.dv1 * 1.42
-  const fastDv2 = base.dv2 * 1.42
-  const fastAt = r1 < r2
-    ? (r1 + r2 * 1.55) / 2
-    : (r1 * 1.55 + r2) / 2
-  const fastTime = Math.PI * Math.sqrt(Math.pow(fastAt, 3) / GM) * 0.62
-  const s2 = {
-    id: 'fast',
-    name: 'Fast Intercept',
-    tag: 'FAST',
-    tagColor: '#e6b454',
-    desc: 'Depart immediately with higher thrust. No phase wait — ~42% more ΔV, ~38% less transit time.',
-    dv1: fastDv1,
-    dv2: fastDv2,
-    dvTotal: fastDv1 + fastDv2,
-    transferTime: fastTime,
-    waitTime: 0,
-    at: fastAt,
-    arcMode: 'fast',
+  // Fast Intercept: overshoot/undershoot transfer orbit
+  // Ascending: raise apoapsis 50% past target altitude → reach target on ascending leg (faster)
+  // Descending: lower perigee 50% below target altitude → reach target on descending leg (faster)
+  const ascending = r1 < r2
+  const altDiff = Math.abs(r2 - r1)
+  const overshoot = altDiff * 0.5
+  const r_far = ascending ? r2 + overshoot : r1
+  const r_near = ascending ? r1 : Math.max(RE + 220e3, r2 - overshoot)
+  const at_fast = (r_far + r_near) / 2
+  const ecc_fast = (r_far - r_near) / (r_far + r_near)
+  const p_fast = at_fast * (1 - ecc_fast * ecc_fast)
+  const n_fast = Math.sqrt(GM / Math.pow(at_fast, 3))
+
+  const v1_circ = Math.sqrt(GM / r1)
+  const v1_trans = Math.sqrt(GM * (2 / r1 - 1 / at_fast))
+  const dv1_fast = Math.abs(v1_trans - v1_circ)
+
+  const cos_nu_fast = (p_fast / r2 - 1) / ecc_fast
+  let s2
+  if (Math.abs(cos_nu_fast) <= 1 && at_fast > RE + 150e3) {
+    const nu_arrive = ascending
+      ? Math.acos(Math.max(-1, Math.min(1, cos_nu_fast)))
+      : TWO_PI - Math.acos(Math.max(-1, Math.min(1, cos_nu_fast)))
+    const E_arrive = 2 * Math.atan2(
+      Math.sqrt(1 - ecc_fast) * Math.sin(nu_arrive / 2),
+      Math.sqrt(1 + ecc_fast) * Math.cos(nu_arrive / 2)
+    )
+    const M_arrive = ((E_arrive - ecc_fast * Math.sin(E_arrive)) % TWO_PI + TWO_PI) % TWO_PI
+    const M_start_fast = ascending ? 0 : Math.PI
+    const transferTime_fast = ((M_arrive - M_start_fast + TWO_PI) % TWO_PI) / n_fast
+
+    // Circularization ΔV: accounts for radial velocity component at r2
+    const v_tot_r2 = Math.sqrt(GM * (2 / r2 - 1 / at_fast))
+    const h_fast = Math.sqrt(GM * p_fast)
+    const v_tang_r2 = h_fast / r2
+    const v_rad_r2 = Math.sqrt(Math.max(0, v_tot_r2 * v_tot_r2 - v_tang_r2 * v_tang_r2))
+    const v2_circ = Math.sqrt(GM / r2)
+    const dv2_fast = Math.sqrt((v2_circ - v_tang_r2) ** 2 + v_rad_r2 ** 2)
+
+    const pctFaster = Math.round((1 - transferTime_fast / base.transferTime) * 100)
+    const pctMoreDv = Math.round(((dv1_fast + dv2_fast) / base.dvTotal - 1) * 100)
+
+    s2 = {
+      id: 'fast',
+      name: 'Fast Intercept',
+      tag: 'FAST',
+      tagColor: '#e6b454',
+      desc: `${ascending ? 'Overshoot' : 'Undershoot'} transfer — ${ascending ? 'apoapsis raised' : 'perigee lowered'} 50% past target altitude. ~${pctFaster}% faster transit, ~${pctMoreDv}% more ΔV. No phase wait.`,
+      dv1: dv1_fast,
+      dv2: dv2_fast,
+      dvTotal: dv1_fast + dv2_fast,
+      transferTime: transferTime_fast,
+      waitTime: 0,
+      at: at_fast,
+      ecc: ecc_fast,
+      nu_arrive,
+      arcMode: 'fast',
+    }
+  } else {
+    s2 = {
+      ...s1,
+      id: 'fast',
+      name: 'Fast Intercept',
+      tag: 'FAST',
+      tagColor: '#e6b454',
+      desc: 'Direct transfer (orbit geometry limits overshoot for this altitude difference).',
+      waitTime: 0,
+      arcMode: 'hohmann',
+    }
   }
 
-  const phaseDv = base.dvTotal * 0.72
-  const phaseTime = base.transferTime + targetPeriod * 1.8
+  // Phased Rendezvous: same ΔV as Hohmann — execute at the NEXT optimal window
+  // In reality a phased rendezvous uses identical burns to Hohmann; the "phasing"
+  // refers to waiting for the correct relative geometry, not a different maneuver.
   const s3 = {
     id: 'phased',
     name: 'Phased Rendezvous',
-    tag: 'EFFICIENT',
+    tag: 'NEXT WINDOW',
     tagColor: '#58a6ff',
-    desc: 'Phasing orbit approach: drift into alignment over multiple passes. ~28% less ΔV, longer time.',
-    dv1: phaseDv * 0.55,
-    dv2: phaseDv * 0.45,
-    dvTotal: phaseDv,
-    transferTime: phaseTime,
-    waitTime: burnWindow.synodicPeriod * 0.25,
-    at: (r1 + r2) / 2,
-    arcMode: 'phased',
-    phaseOrbitSMA: r1 < r2 ? r1 * 0.985 : r1 * 1.015,
+    desc: 'Execute the standard Hohmann transfer at the NEXT optimal alignment window (after one full synodic period). Identical ΔV to Hohmann — choose this if the primary window was missed.',
+    dv1: base.dv1,
+    dv2: base.dv2,
+    dvTotal: base.dvTotal,
+    transferTime: base.transferTime,
+    waitTime: burnWindow.synodicPeriod * 1.5,
+    at: base.at,
+    ecc: Math.abs(r2 - r1) / (r1 + r2),
+    arcMode: 'hohmann',
   }
 
   return [s1, s2, s3]
 }
 
 export function propagateScenarioArc(scenario, kestrelElements, r2, steps = 150) {
-  const { r1, raan, inc } = { r1: kestrelElements.sma, raan: kestrelElements.raan, inc: kestrelElements.inc }
-  const startOffset = 0
+  const { sma: r1, raan, inc, meanAnomaly0, ecc: parkEcc = 0 } = kestrelElements
+  const waitTime = scenario.waitTime || 0
+
+  // Kestrel's true anomaly at burn time (for circular parking orbit, nu ≈ M exactly when ecc=0)
+  const n_park = Math.sqrt(GM / Math.pow(r1, 3))
+  const M_burn = ((meanAnomaly0 + n_park * waitTime) % TWO_PI + TWO_PI) % TWO_PI
+  const E_burn = solveKepler(M_burn, parkEcc)
+  const sqrtE = Math.sqrt(Math.max(0, 1 - parkEcc * parkEcc))
+  const nu_burn = Math.atan2(sqrtE * Math.sin(E_burn), Math.cos(E_burn) - parkEcc)
+  const burnArgPerigee = ((nu_burn % TWO_PI) + TWO_PI) % TWO_PI
 
   if (scenario.arcMode === 'hohmann') {
-    return propagateTransferOrbit(r1, r2, raan, inc, startOffset, steps)
+    return propagateTransferOrbit(r1, r2, raan, inc, waitTime, steps, burnArgPerigee)
   }
 
   if (scenario.arcMode === 'fast') {
-    const at = scenario.at
-    const ecc = Math.abs(at * 2 - r1 - r2) / (r1 + (r1 < r2 ? r2 : r1))
-    const argP = r1 < r2 ? 0 : Math.PI
+    const { at, ecc, nu_arrive } = scenario
+    if (!at || !ecc || nu_arrive === undefined) {
+      return propagateTransferOrbit(r1, r2, raan, inc, waitTime, steps, burnArgPerigee)
+    }
+    const ascending = r1 < r2
+    const argPerigee = ascending ? burnArgPerigee : ((burnArgPerigee + Math.PI) % TWO_PI)
     const n = Math.sqrt(GM / Math.pow(at, 3))
-    const transferTime = scenario.transferTime
+    const M_start = ascending ? 0 : Math.PI
+    const E_arrive = 2 * Math.atan2(
+      Math.sqrt(1 - ecc) * Math.sin(nu_arrive / 2),
+      Math.sqrt(1 + ecc) * Math.cos(nu_arrive / 2)
+    )
+    const M_arrive = ((E_arrive - ecc * Math.sin(E_arrive)) % TWO_PI + TWO_PI) % TWO_PI
+    const transferTime = ((M_arrive - M_start + TWO_PI) % TWO_PI) / n
     const stepDur = transferTime / steps
+
     const points = []
     for (let i = 0; i <= steps; i++) {
       const t = i * stepDur
-      const M = ((n * t) % TWO_PI + TWO_PI) % TWO_PI
+      const M = ((M_start + n * t) % TWO_PI + TWO_PI) % TWO_PI
       const E = solveKepler(M, ecc)
-      const nu = Math.atan2(Math.sqrt(1 - ecc * ecc) * Math.sin(E), Math.cos(E) - ecc)
-      const [x, y, z] = keplerToECI(at, ecc, inc, raan, argP, nu)
-      points.push({ t: startOffset + t, x, y, z })
+      const sqrtTerm = Math.sqrt(1 - ecc * ecc)
+      const nu = Math.atan2(sqrtTerm * Math.sin(E), Math.cos(E) - ecc)
+      const [x, y, z] = keplerToECI(at, ecc, inc, raan, argPerigee, nu)
+      points.push({ t: waitTime + t, x, y, z })
     }
     return points
   }
 
-  if (scenario.arcMode === 'phased') {
-    const phaseOrbitSMA = scenario.phaseOrbitSMA
-    const phasePeriod = orbitalPeriod(phaseOrbitSMA)
-    const phaseEcc = 0
-    const phaseSteps = Math.floor(steps * 0.45)
-    const mainSteps = steps - phaseSteps
-    const phaseStepDur = phasePeriod * 1.5 / phaseSteps
-    const phasePoints = []
-    const n = Math.sqrt(GM / Math.pow(phaseOrbitSMA, 3))
-    const M0 = kestrelElements.meanAnomaly0
-    for (let i = 0; i <= phaseSteps; i++) {
-      const t = i * phaseStepDur
-      const M = ((M0 + n * t) % TWO_PI + TWO_PI) % TWO_PI
-      const E = solveKepler(M, 0)
-      const nu = M
-      const [x, y, z] = keplerToECI(phaseOrbitSMA, phaseEcc, inc, raan, 0, nu)
-      phasePoints.push({ t: startOffset + t, x, y, z })
-    }
-    const phaseEnd = phasePoints[phasePoints.length - 1].t
-    const mainPoints = propagateTransferOrbit(phaseOrbitSMA, r2, raan, inc, phaseEnd, mainSteps)
-    return [...phasePoints, ...mainPoints]
-  }
-
-  return propagateTransferOrbit(r1, r2, raan, inc, startOffset, steps)
+  return propagateTransferOrbit(r1, r2, raan, inc, waitTime, steps, burnArgPerigee)
 }
 
 export const LAUNCH_SITES = [
