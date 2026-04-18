@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './KestrelDataGlobe.css'
 
 const CESIUM_VERSION = '1.122'
@@ -68,118 +68,13 @@ function getCartographic(Cesium, entity, time) {
   }
 }
 
-function flattenObservations(observations) {
-  const rows = []
-  for (const obs of observations) {
-    const epoch = obs.observation_epoch
-      ? new Date(obs.observation_epoch).toISOString().slice(0, 16).replace('T', ' ') + 'Z'
-      : null
-
-    const push = (label, value, highlight) => {
-      if (value == null || value === '') return
-      rows.push({ label, value: typeof value === 'number' ? value.toFixed(3) : String(value), epoch, highlight })
-    }
-
-    push('Source', obs.source)
-    push('Health', obs.derived_health_score, true)
-    push('Mass (kg)', obs.estimated_mass_kg)
-    push('Spin (rpm)', obs.spin_rate_rpm)
-
-    const att = obs.attitude
-    if (att) {
-      push('Roll (°)', att.roll_deg)
-      push('Pitch (°)', att.pitch_deg)
-      push('Yaw (°)', att.yaw_deg)
-      push('Stability', att.stability_flag)
-    }
-    const th = obs.thermal
-    if (th) {
-      push('Temp (K)', th.surface_temp_K)
-      push('Temp var 30d', th.temp_variance_30d)
-      push('Thermal anomaly', th.anomaly_flag)
-    }
-    const mat = obs.material_signature
-    if (mat) {
-      push('Reflectivity', mat.reflectivity_index)
-      push('Material', mat.inferred_material)
-      push('Mat. confidence', mat.confidence)
-    }
-    const prox = obs.proximity_state
-    if (prox) {
-      push('Range (km)', prox.range_km)
-      push('Rel. velocity (m/s)', prox.relative_velocity_ms)
-    }
-    const man = obs.maneuver_indicator
-    if (man) {
-      push('ΔV residual (m/s)', man.delta_v_residual_ms)
-      push('Man. confidence', man.confidence)
-      push('Man. flag', man.flag)
-    }
-    const decay = obs.orbital_decay_indicator
-    if (decay) {
-      push('Perigee drift (km/d)', decay.perigee_drift_km_per_day)
-      push('Est. perigee (km)', decay.estimated_perigee_km)
-    }
-  }
-  return rows
-}
-
-function ObservationTicker({ rows, satelliteName }) {
-  const VISIBLE = 10
-  const [offset, setOffset] = useState(0)
-
-  useEffect(() => {
-    if (!rows.length) return
-    const id = setInterval(() => {
-      setOffset(prev => (prev + 1) % rows.length)
-    }, 1200)
-    return () => clearInterval(id)
-  }, [rows.length])
-
-  useEffect(() => {
-    setOffset(0)
-  }, [satelliteName])
-
-  if (!rows.length) return null
-
-  const visible = []
-  for (let i = 0; i < VISIBLE; i++) {
-    visible.push(rows[(offset + i) % rows.length])
-  }
-
-  return (
-    <div className="kdg-ticker">
-      <div className="kdg-ticker-header">
-        <span className="kdg-ticker-dot" />
-        LIVE OBSERVATION DATA
-      </div>
-      <div className="kdg-ticker-rows">
-        {visible.map((row, i) => (
-          <div
-            key={i}
-            className={`kdg-ticker-row${i === 0 ? ' kdg-ticker-row-entering' : ''}${row.highlight ? ' kdg-ticker-row-highlight' : ''}`}
-          >
-            <span className="kdg-ticker-label">{row.label}</span>
-            <span className="kdg-ticker-value">{row.value}</span>
-          </div>
-        ))}
-      </div>
-      {rows[offset]?.epoch && (
-        <div className="kdg-ticker-epoch">epoch {rows[offset].epoch}</div>
-      )}
-    </div>
-  )
-}
-
-export default function KestrelDataGlobe({ czmlData, observations, satelliteName, healthScore, loading, emptyMessage }) {
+export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore, loading, emptyMessage }) {
   const containerRef = useRef(null)
   const viewerRef = useRef(null)
   const lastTickRef = useRef(0)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const [telemetry, setTelemetry] = useState(null)
-
-  const tickerRows = useMemo(() => flattenObservations(observations || []), [observations])
 
   useEffect(() => {
     if (!czmlData || czmlData.length < 2) {
@@ -355,10 +250,6 @@ export default function KestrelDataGlobe({ czmlData, observations, satelliteName
             <div className="kdg-telem-time">{telemetry.simTime}</div>
           </div>
         </div>
-      )}
-
-      {status === 'ready' && tickerRows.length > 0 && (
-        <ObservationTicker rows={tickerRows} satelliteName={satelliteName} />
       )}
 
       {status === 'ready' && (
