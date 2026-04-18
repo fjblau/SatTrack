@@ -312,45 +312,4 @@
   padding: 3rem 1rem;
 }
 
-.kdp-build-btn {
-  padding: 0.45rem 1rem;
-  background: #8b5cf6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
 
-.kdp-build-btn:disabled {
-  background: #c4b5fd;
-  cursor: not-allowed;
-}
-
-.kdp-build-btn:not(:disabled):hover {
-  background: #7c3aed;
-}
-
-.kdp-globe-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.6rem 1rem;
-  background: #0a0a1a;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
-}
-
-.kdp-globe-toolbar-label {
-  font-size: 0.75rem;
-  color: #8b9bb4;
-}
-
-.kdp-globe-toolbar-count {
-  font-size: 0.75rem;
-  color: #c4b5fd;
-  font-weight: 600;
-}

@@ -206,3 +206,106 @@
 .kdg-legend-dot.warning  { background: #f39c12; }
 .kdg-legend-dot.critical { background: #e74c3c; }
 .kdg-legend-dot.unknown  { background: #8b9bb4; }
+
+/* ── Scrolling observation ticker ─────────────────────────────── */
+
+.kdg-ticker {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 240px;
+  background: rgba(10, 10, 26, 0.88);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  pointer-events: none;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.kdg-ticker-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #8b5cf6;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.kdg-ticker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  flex-shrink: 0;
+  animation: kdg-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes kdg-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.kdg-ticker-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.kdg-ticker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  gap: 8px;
+  opacity: 0.85;
+  transition: opacity 0.3s;
+}
+
+.kdg-ticker-row-entering {
+  opacity: 1;
+  animation: kdg-row-in 0.4s ease;
+}
+
+@keyframes kdg-row-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.kdg-ticker-row-highlight {
+  opacity: 1;
+}
+
+.kdg-ticker-row-highlight .kdg-ticker-value {
+  color: #c4b5fd;
+}
+
+.kdg-ticker-label {
+  color: #6c757d;
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+.kdg-ticker-value {
+  color: #e2e8f0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.kdg-ticker-epoch {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  font-size: 0.6rem;
+  color: #4a5568;
+  font-family: 'Courier New', monospace;
+}
