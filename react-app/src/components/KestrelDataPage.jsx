@@ -137,18 +137,24 @@ export default function KestrelDataPage() {
       return
     }
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+
     setTleFetching(true)
-    apiFetch(`${API_ENDPOINTS.TLE}/${norad}`)
+    apiFetch(`${API_ENDPOINTS.TLE}/${norad}`, { signal: controller.signal })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
+        clearTimeout(timeoutId)
         const tle = data?.data
         if (!tle) { setCzmlData(null); return }
         setTleCache(prev => ({ ...prev, [norad]: tle }))
         const czml = buildSingleSatCZML(selectedSat, tle)
         setCzmlData(czml)
       })
-      .catch(() => setCzmlData(null))
+      .catch(() => { clearTimeout(timeoutId); setCzmlData(null) })
       .finally(() => setTleFetching(false))
+
+    return () => { controller.abort(); clearTimeout(timeoutId) }
   }, [selectedSat?.key])
 
   const filteredSats = useMemo(() => {
