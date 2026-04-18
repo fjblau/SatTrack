@@ -16,6 +16,7 @@ import AqlEditorPage from './components/AqlEditorPage'
 import HelpPage from './components/HelpPage'
 import EphemerisPage from './components/EphemerisPage'
 import KestrelMissionPage from './components/KestrelMissionPage'
+import KestrelDataPage from './components/KestrelDataPage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
@@ -297,6 +298,12 @@ function App() {
             Kestrel Mission
           </button>
           <button
+            className={`kestrel-button${activeTab === 'kestrel-data' ? ' active' : ''}`}
+            onClick={() => setActiveTab('kestrel-data')}
+          >
+            Kestrel Data
+          </button>
+          <button
             className={`help-button${activeTab === 'help' ? ' active' : ''}`}
             onClick={() => setActiveTab('help')}
           >
@@ -450,6 +457,10 @@ function App() {
 
       {activeTab === 'kestrel-mission' && (
         <KestrelMissionPage />
+      )}
+
+      {activeTab === 'kestrel-data' && (
+        <KestrelDataPage />
       )}
 
       {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'function-similarity' && (
