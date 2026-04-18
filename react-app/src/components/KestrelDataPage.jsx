@@ -5,8 +5,6 @@ import { parseTLE, propagateOrbit, generateCZML, orbitalPeriod } from '../utils/
 import KestrelDataGlobe from './KestrelDataGlobe'
 import './KestrelDataPage.css'
 
-const MAX_GLOBE_SATS = 20
-
 function healthClass(score) {
   if (score == null) return 'unknown'
   if (score >= 70) return 'good'
@@ -58,44 +56,37 @@ function groupObservationsBySat(obs) {
   })
 }
 
-function buildCZML(satellites, tleMap) {
-  const now = new Date()
-  const startIso = now.toISOString()
+function buildSingleSatCZML(sat, tle) {
+  const els = parseTLE(tle.line1 || tle.tle_line1, tle.line2 || tle.tle_line2)
+  if (!els) return null
+  const period = orbitalPeriod(els.sma)
+  const duration = period * 2
+  const step = Math.max(30, period / 120)
+  const points = propagateOrbit(els, duration, step)
+  const score = sat.latest_health
+  const color = score == null
+    ? [139, 155, 180, 220]
+    : score >= 70 ? [39, 174, 96, 255]
+    : score >= 40 ? [243, 156, 18, 255]
+    : [231, 76, 60, 255]
 
-  const satEntries = []
-  for (const sat of satellites) {
-    const tle = tleMap[sat.norad_id]
-    if (!tle) continue
-    const els = parseTLE(tle.line1 || tle.tle_line1, tle.line2 || tle.tle_line2)
-    if (!els) continue
-    const period = orbitalPeriod(els.sma)
-    const duration = period * 2
-    const step = Math.max(30, period / 120)
-    const points = propagateOrbit(els, duration, step)
-    const score = sat.latest_health
-    const color = score == null
-      ? [139, 155, 180, 220]
-      : score >= 70 ? [39, 174, 96, 255]
-      : score >= 40 ? [243, 156, 18, 255]
-      : [231, 76, 60, 255]
-
-    satEntries.push({
+  const startIso = new Date().toISOString()
+  return generateCZML(
+    [{
       id: `sat-${sat.norad_id}`,
       label: sat.object_name,
       points,
       color,
-      pointSize: 8,
-      pathWidth: 1.5,
+      pointSize: 12,
+      pathWidth: 2,
       trailTime: period,
       leadTime: 0,
       availStartSec: 0,
       availEndSec: duration,
-    })
-  }
-
-  if (!satEntries.length) return null
-  const maxDuration = satEntries.reduce((m, s) => Math.max(m, s.availEndSec || 0), 0) || 7200
-  return generateCZML(satEntries, startIso, maxDuration)
+    }],
+    startIso,
+    duration
+  )
 }
 
 export default function KestrelDataPage() {
@@ -105,10 +96,9 @@ export default function KestrelDataPage() {
   const [satellites, setSatellites] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSatKey, setSelectedSatKey] = useState(null)
-  const [tleMap, setTleMap] = useState({})
-  const [tleLoading, setTleLoading] = useState(false)
+  const [tleCache, setTleCache] = useState({})
+  const [tleFetching, setTleFetching] = useState(false)
   const [czmlData, setCzmlData] = useState(null)
-  const [czmlBuilding, setCzmlBuilding] = useState(false)
 
   useEffect(() => {
     const fetchObs = async () => {
@@ -120,8 +110,7 @@ export default function KestrelDataPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const records = data.data || data.observations || []
-        const grouped = groupObservationsBySat(records)
-        setSatellites(grouped)
+        setSatellites(groupObservationsBySat(records))
       } catch (err) {
         setObsError(err.message)
       } finally {
@@ -131,47 +120,35 @@ export default function KestrelDataPage() {
     fetchObs()
   }, [])
 
+  const selectedSat = useMemo(() =>
+    satellites.find(s => s.key === selectedSatKey) || null,
+    [satellites, selectedSatKey]
+  )
+
   useEffect(() => {
-    const satsWithNorad = satellites.filter(s => s.norad_id).slice(0, MAX_GLOBE_SATS)
-    if (!satsWithNorad.length) return
+    if (!selectedSat) { setCzmlData(null); return }
+    const norad = selectedSat.norad_id
+    if (!norad) { setCzmlData(null); return }
 
-    const missing = satsWithNorad.filter(s => !tleMap[s.norad_id])
-    if (!missing.length) return
-
-    setTleLoading(true)
-    Promise.all(
-      missing.map(async (s) => {
-        try {
-          const res = await apiFetch(`${API_ENDPOINTS.TLE}/${s.norad_id}`)
-          if (!res.ok) return null
-          const data = await res.json()
-          const tle = data.data
-          if (!tle) return null
-          return { norad_id: s.norad_id, tle }
-        } catch {
-          return null
-        }
-      })
-    ).then(results => {
-      const newMap = { ...tleMap }
-      for (const r of results) {
-        if (r) newMap[r.norad_id] = r.tle
-      }
-      setTleMap(newMap)
-      setTleLoading(false)
-    })
-  }, [satellites])
-
-  const buildGlobe = () => {
-    const satsWithTle = satellites.filter(s => s.norad_id && tleMap[s.norad_id]).slice(0, MAX_GLOBE_SATS)
-    if (!satsWithTle.length) return
-    setCzmlBuilding(true)
-    setTimeout(() => {
-      const czml = buildCZML(satsWithTle, tleMap)
+    if (tleCache[norad]) {
+      const czml = buildSingleSatCZML(selectedSat, tleCache[norad])
       setCzmlData(czml)
-      setCzmlBuilding(false)
-    }, 0)
-  }
+      return
+    }
+
+    setTleFetching(true)
+    apiFetch(`${API_ENDPOINTS.TLE}/${norad}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        const tle = data?.data
+        if (!tle) { setCzmlData(null); return }
+        setTleCache(prev => ({ ...prev, [norad]: tle }))
+        const czml = buildSingleSatCZML(selectedSat, tle)
+        setCzmlData(czml)
+      })
+      .catch(() => setCzmlData(null))
+      .finally(() => setTleFetching(false))
+  }, [selectedSat?.key])
 
   const filteredSats = useMemo(() => {
     if (!searchQuery.trim()) return satellites
@@ -183,16 +160,8 @@ export default function KestrelDataPage() {
     )
   }, [satellites, searchQuery])
 
-  const selectedSat = useMemo(() =>
-    satellites.find(s => s.key === selectedSatKey) || null,
-    [satellites, selectedSatKey]
-  )
-
-  const focusedGlobeId = selectedSat?.norad_id ? `sat-${selectedSat.norad_id}` : null
-
   const totalObs = satellites.reduce((s, sat) => s + sat.obs_count, 0)
   const criticalCount = satellites.filter(s => s.latest_health != null && s.latest_health < 40).length
-  const satsWithTleCount = satellites.filter(s => tleMap[s.norad_id]).length
 
   return (
     <div className="kdp-page">
@@ -222,7 +191,7 @@ export default function KestrelDataPage() {
             </div>
             <div className="kdp-stat">
               <div className="kdp-stat-value">{totalObs}</div>
-              <div className="kdp-stat-label">Observations</div>
+              <div className="kdp-stat-label">Obs</div>
             </div>
             <div className="kdp-stat">
               <div className="kdp-stat-value" style={{ color: criticalCount > 0 ? '#e74c3c' : '#27ae60' }}>
@@ -246,7 +215,6 @@ export default function KestrelDataPage() {
           <div className="kdp-sat-list">
             {filteredSats.map(sat => {
               const hc = healthClass(sat.latest_health)
-              const hasTle = !!tleMap[sat.norad_id]
               return (
                 <div
                   key={sat.key}
@@ -262,8 +230,8 @@ export default function KestrelDataPage() {
                     {sat.origin_country && <span>· {sat.origin_country}</span>}
                     {sat.norad_id && <span>· #{sat.norad_id}</span>}
                   </div>
-                  {sat.norad_id && !hasTle && (
-                    <div className="kdp-no-tle">No TLE available</div>
+                  {!sat.norad_id && (
+                    <div className="kdp-no-tle">No NORAD ID — 3D unavailable</div>
                   )}
                 </div>
               )
@@ -273,42 +241,24 @@ export default function KestrelDataPage() {
 
         <div className="kdp-main">
           {activeSubTab === 'globe' && (
-            <>
-              <div className="kdp-globe-toolbar">
-                <span className="kdp-globe-toolbar-label">
-                  {czmlData
-                    ? `Rendering ${satsWithTleCount} satellite${satsWithTleCount !== 1 ? 's' : ''} — colored by health score`
-                    : tleLoading
-                      ? 'Fetching TLE data…'
-                      : `${satsWithTleCount} objects with TLE data ready`}
-                </span>
-                <button
-                  className="kdp-build-btn"
-                  onClick={buildGlobe}
-                  disabled={czmlBuilding || tleLoading || satsWithTleCount === 0}
-                >
-                  {czmlBuilding ? 'Building…' : czmlData ? 'Refresh Globe' : 'Launch Globe'}
-                </button>
-                {czmlData && focusedGlobeId && (
-                  <span className="kdp-globe-toolbar-label">
-                    Tracking: <span className="kdp-globe-toolbar-count">{selectedSat?.object_name}</span>
-                  </span>
-                )}
-              </div>
-              <div className="kdp-globe-area">
-                <KestrelDataGlobe
-                  czmlData={czmlData}
-                  focusedSatId={focusedGlobeId}
-                  emptyMessage={
-                    tleLoading
-                      ? 'Fetching TLE data for observed objects…'
-                      : satsWithTleCount === 0 && !obsLoading
-                        ? 'No TLE data available for observed objects. The database may not have TLE records for these satellites.'
-                        : 'Click "Launch Globe" to visualise observed objects in 3D.'
-                  }
-                />
-              </div>
-            </>
+            <div className="kdp-globe-area">
+              <KestrelDataGlobe
+                czmlData={czmlData}
+                observations={selectedSat?.observations || []}
+                satelliteName={selectedSat?.object_name}
+                healthScore={selectedSat?.latest_health}
+                loading={tleFetching}
+                emptyMessage={
+                  !selectedSat
+                    ? 'Select an object from the list to view it in 3D.'
+                    : !selectedSat.norad_id
+                      ? 'No NORAD ID available — cannot render this object in 3D.'
+                      : tleFetching
+                        ? 'Fetching TLE data…'
+                        : 'No TLE available for this object.'
+                }
+              />
+            </div>
           )}
 
           {activeSubTab === 'observations' && (
