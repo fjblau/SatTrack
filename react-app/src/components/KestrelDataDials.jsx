@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from 'react'
 import './KestrelDataDials.css'
 
 function healthColor(score) {
@@ -106,14 +107,35 @@ function BoolCard({ label, value, trueColor = '#e74c3c', falseColor = '#27ae60' 
   )
 }
 
-export default function KestrelDataDials({ observations, satelliteName }) {
-  if (!observations || !observations.length) return null
+const CYCLE_MS = 3000
 
-  const latest = [...observations].sort((a, b) => {
-    if (!a.observation_epoch) return 1
-    if (!b.observation_epoch) return -1
-    return b.observation_epoch.localeCompare(a.observation_epoch)
-  })[0]
+export default function KestrelDataDials({ observations, satelliteName }) {
+  const sorted = useMemo(() => {
+    if (!observations || !observations.length) return []
+    return [...observations].sort((a, b) => {
+      if (!a.observation_epoch) return 1
+      if (!b.observation_epoch) return -1
+      return a.observation_epoch.localeCompare(b.observation_epoch)
+    })
+  }, [observations])
+
+  const [idx, setIdx] = useState(0)
+
+  useEffect(() => {
+    setIdx(0)
+  }, [satelliteName])
+
+  useEffect(() => {
+    if (sorted.length <= 1) return
+    const id = setInterval(() => {
+      setIdx(prev => (prev + 1) % sorted.length)
+    }, CYCLE_MS)
+    return () => clearInterval(id)
+  }, [sorted.length])
+
+  if (!sorted.length) return null
+
+  const latest = sorted[idx]
 
   const health = latest.derived_health_score
   const mass = latest.estimated_mass_kg
@@ -128,6 +150,8 @@ export default function KestrelDataDials({ observations, satelliteName }) {
   const epoch = latest.observation_epoch
     ? new Date(latest.observation_epoch).toISOString().slice(0, 16).replace('T', ' ') + 'Z'
     : null
+
+  const progress = sorted.length > 1 ? idx / (sorted.length - 1) : 1
 
   return (
     <div className="kdd-strip">
@@ -256,7 +280,14 @@ export default function KestrelDataDials({ observations, satelliteName }) {
         )}
 
       </div>
-      {epoch && <div className="kdd-epoch">Latest obs: {epoch}</div>}
+      <div className="kdd-footer">
+        {epoch && <span className="kdd-epoch">obs {idx + 1}/{sorted.length} · {epoch}</span>}
+        {sorted.length > 1 && (
+          <div className="kdd-progress-bar">
+            <div className="kdd-progress-fill" style={{ width: `${progress * 100}%` }} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
