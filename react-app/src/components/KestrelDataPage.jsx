@@ -3,6 +3,7 @@ import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
 import { parseTLE, propagateOrbit, generateCZML, orbitalPeriod } from '../utils/orbitUtils'
 import KestrelDataGlobe from './KestrelDataGlobe'
+import KestrelDataDials from './KestrelDataDials'
 import './KestrelDataPage.css'
 
 function healthClass(score) {
@@ -242,9 +243,12 @@ export default function KestrelDataPage() {
         <div className="kdp-main">
           {activeSubTab === 'globe' && (
             <div className="kdp-globe-area">
+              <KestrelDataDials
+                observations={selectedSat?.observations || []}
+                satelliteName={selectedSat?.object_name}
+              />
               <KestrelDataGlobe
                 czmlData={czmlData}
-                observations={selectedSat?.observations || []}
                 satelliteName={selectedSat?.object_name}
                 healthScore={selectedSat?.latest_health}
                 loading={tleFetching}
