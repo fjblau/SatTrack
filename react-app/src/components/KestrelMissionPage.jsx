@@ -18,8 +18,6 @@ import {
   computeJ2RAANScenario,
   deorbitBurn,
   generateCZML,
-  LAUNCH_SITES,
-  ORBIT_PRESETS,
 } from '../utils/orbitUtils'
 import './KestrelMissionPage.css'
 
@@ -139,10 +137,9 @@ export default function KestrelMissionPage() {
   const [targetFetchLoading, setTargetFetchLoading] = useState(false)
   const [targetTleSource, setTargetTleSource] = useState(null)
 
-  const [launchSiteId, setLaunchSiteId] = useState('ksc')
   const [altitudeKm, setAltitudeKm] = useState(550)
   const [incDeg, setIncDeg] = useState(97.6)
-  const [ecc, setEcc] = useState(0)
+  const [ecc] = useState(0)
 
   const [kestrelCZML, setKestrelCZML] = useState(null)
   const [kestrelElements, setKestrelElements] = useState(null)
@@ -171,13 +168,6 @@ export default function KestrelMissionPage() {
   const searchDebounce = useRef(null)
   const kestrelPointsRef = useRef(null)
   const targetPointsRef = useRef(null)
-  const launchSite = LAUNCH_SITES.find((s) => s.id === launchSiteId) || LAUNCH_SITES[0]
-
-  const applyPreset = (preset) => {
-    setAltitudeKm(preset.altitudeKm)
-    setIncDeg(preset.incDeg)
-    setEcc(0)
-  }
 
   const handleTargetSearch = (e) => {
     const q = e.target.value
@@ -258,16 +248,13 @@ export default function KestrelMissionPage() {
 
     setTimeout(() => {
       try {
-        const elements = launchSiteToOrbitElements(
-          launchSite.lat,
-          launchSite.lon,
-          altitudeKm,
-          incDeg,
-          ecc
-        )
-        if (targetElements) {
-          elements.raan = targetElements.raan
-          elements.inc = targetElements.inc
+        const elements = {
+          sma: altitudeToSMA(altitudeKm),
+          ecc,
+          inc: targetElements ? targetElements.inc : incDeg * (Math.PI / 180),
+          raan: targetElements ? targetElements.raan : 0,
+          argPerigee: 0,
+          meanAnomaly0: 0,
         }
         setKestrelElements(elements)
 
@@ -339,6 +326,7 @@ export default function KestrelMissionPage() {
           setExecutedScenario(null)
 
           setManeuverCZML(buildManeuverCZML(startIso, kestrelPoints, period, targetPoints, targetPeriod, previewArc, transfer.transferTime, selectedTarget.name, elements, targetElements))
+          setActiveSubTab('maneuver')
         }
       } catch (err) {
         setComputeError(err.message)
@@ -346,7 +334,7 @@ export default function KestrelMissionPage() {
         setComputing(false)
       }
     }, 20)
-  }, [launchSite, altitudeKm, incDeg, ecc, targetElements, selectedTarget, missionType])
+  }, [altitudeKm, incDeg, ecc, targetElements, selectedTarget, missionType])
 
   function buildManeuverCZML(startIso, kestrelPoints, kestrelPeriod, targetPoints, targetPeriod, arcPoints, arcDuration, targetName, kestrelEls, targetEls) {
     const arcStartSec = arcPoints.length > 0 ? arcPoints[0].t : 0
@@ -572,7 +560,6 @@ export default function KestrelMissionPage() {
   }, [])
 
   const kestrelPeriod = orbitalPeriod(altitudeToSMA(altitudeKm))
-  const incWarning = Math.abs(launchSite.lat) > incDeg
 
   return (
     <div className="km-page">
@@ -581,7 +568,7 @@ export default function KestrelMissionPage() {
           className={activeSubTab === 'launch' ? 'active' : ''}
           onClick={() => setActiveSubTab('launch')}
         >
-          Launch Planner
+          Intercept Setup
         </button>
         <button
           className={activeSubTab === 'maneuver' ? 'active' : ''}
@@ -618,8 +605,13 @@ export default function KestrelMissionPage() {
           <>
             <aside className="km-sidebar">
 
+              <div className="km-kestrel-status-banner">
+                <span className="km-kestrel-orbit-dot" />
+                <span>KESTREL-1 · IN ORBIT · {altitudeKm.toLocaleString()} km</span>
+              </div>
+
               <section className="km-section">
-                <h3>1 — Mission Target</h3>
+                <h3>1 — Intercept Target</h3>
                 <div className="km-field">
                   <div className="km-search-wrapper">
                     <input
@@ -687,7 +679,7 @@ export default function KestrelMissionPage() {
                     )}
                     {targetElements && (
                       <p className="km-hint-text km-hint-suggest">
-                        ↑ Inclination matched · altitude set 50 km below target for rendezvous maneuver
+                        ↑ Kestrel will maneuver from {altitudeKm} km → {Math.round(smaToAltitude(targetElements.sma))} km
                         {targetTleSource === 'db_cached' && (
                           <span className="km-badge km-badge-cached" title="Live TLE unavailable — using last known TLE from database"> cached TLE</span>
                         )}
@@ -698,7 +690,7 @@ export default function KestrelMissionPage() {
               </section>
 
               <section className="km-section">
-                <h3>2 — Mission Type</h3>
+                <h3>2 — Collection Mode</h3>
                 <div className="km-mission-types">
                   {MISSION_TYPES.map((m) => (
                     <button
@@ -718,51 +710,7 @@ export default function KestrelMissionPage() {
               </section>
 
               <section className="km-section">
-                <h3>3 — Launch Site</h3>
-                <select
-                  className="km-select"
-                  value={launchSiteId}
-                  onChange={(e) => setLaunchSiteId(e.target.value)}
-                >
-                  {LAUNCH_SITES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} — {s.country}
-                    </option>
-                  ))}
-                </select>
-                <div className="km-site-info">
-                  <span className="km-site-coord">
-                    {launchSite.lat >= 0 ? launchSite.lat.toFixed(2) + '°N' : Math.abs(launchSite.lat).toFixed(2) + '°S'}
-                    {' / '}
-                    {launchSite.lon >= 0 ? launchSite.lon.toFixed(2) + '°E' : Math.abs(launchSite.lon).toFixed(2) + '°W'}
-                  </span>
-                  <span className="km-site-note">
-                    Min reachable inclination: {Math.abs(launchSite.lat).toFixed(1)}°
-                  </span>
-                </div>
-                {incWarning && (
-                  <p className="km-warn-note">
-                    ⚠ Inclination {incDeg.toFixed(1)}° &lt; site latitude {Math.abs(launchSite.lat).toFixed(1)}°. Choose a higher inclination or a different site.
-                  </p>
-                )}
-              </section>
-
-              <section className="km-section">
-                <h3>4 — Orbit Parameters</h3>
-
-                <div className="km-presets">
-                  {ORBIT_PRESETS.map((p) => (
-                    <button
-                      key={p.id}
-                      className="km-preset-btn"
-                      onClick={() => applyPreset(p)}
-                      title={p.description}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
+                <h3>3 — Kestrel Current Orbit</h3>
                 <div className="km-field">
                   <label>
                     Altitude
@@ -770,65 +718,31 @@ export default function KestrelMissionPage() {
                   </label>
                   <input
                     type="range"
-                    min={300}
-                    max={36000}
+                    min={200}
+                    max={2000}
                     step={10}
                     value={altitudeKm}
                     onChange={(e) => setAltitudeKm(Number(e.target.value))}
                     className="km-slider"
                   />
                   <div className="km-slider-labels">
-                    <span>300 km</span>
-                    <span>36 000 km</span>
+                    <span>200 km</span>
+                    <span>2 000 km</span>
                   </div>
                 </div>
-
-                <div className="km-field">
-                  <label>
-                    Inclination
-                    <span className="km-field-value">{incDeg.toFixed(1)}°</span>
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={120}
-                    step={0.1}
-                    value={incDeg}
-                    onChange={(e) => setIncDeg(Number(e.target.value))}
-                    className="km-slider"
-                  />
-                  <div className="km-slider-labels">
-                    <span>0° equatorial</span>
-                    <span>90° polar</span>
-                  </div>
-                </div>
-
-                <div className="km-field">
-                  <label>
-                    Eccentricity
-                    <span className="km-field-value">{ecc.toFixed(3)}</span>
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={0.3}
-                    step={0.001}
-                    value={ecc}
-                    onChange={(e) => setEcc(Number(e.target.value))}
-                    className="km-slider"
-                  />
-                </div>
-
                 <div className="km-orbit-summary">
                   <div className="km-sum-item">
                     <span>Period</span>
                     <strong>{fmtPeriod(kestrelPeriod)}</strong>
                   </div>
                   <div className="km-sum-item">
-                    <span>SMA</span>
-                    <strong>{(altitudeToSMA(altitudeKm) / 1000).toFixed(0)} km</strong>
+                    <span>Inclination</span>
+                    <strong>{targetElements ? (targetElements.inc * RAD).toFixed(1) : incDeg.toFixed(1)}°</strong>
                   </div>
                 </div>
+                <p className="km-hint-text">
+                  Inclination and orbital plane are matched to the target when selected.
+                </p>
 
                 {computeError && <p className="km-error">{computeError}</p>}
 
@@ -837,7 +751,7 @@ export default function KestrelMissionPage() {
                   onClick={handlePlanMission}
                   disabled={computing || !selectedTarget}
                 >
-                  {computing ? 'Computing…' : '🚀 Plan Mission'}
+                  {computing ? 'Computing…' : '🛰 Plan Intercept'}
                 </button>
                 {!selectedTarget && (
                   <p className="km-hint-text" style={{ textAlign: 'center', marginTop: '4px' }}>
@@ -848,9 +762,9 @@ export default function KestrelMissionPage() {
             </aside>
 
             <KestrelCesiumViewer
-              czmlData={kestrelCZML}
-              launchSite={launchSite}
-              emptyMessage="Select a target object, configure the launch orbit, then click Plan Mission."
+              czmlData={maneuverCZML || kestrelCZML}
+              launchSite={null}
+              emptyMessage="Select a target object and click Plan Intercept to compute the maneuver trajectory."
             />
           </>
         )}
@@ -859,27 +773,23 @@ export default function KestrelMissionPage() {
           <>
             <aside className="km-sidebar">
               <section className="km-section">
-                <h3>Mission Summary</h3>
+                <h3>Intercept Summary</h3>
                 <div className="km-mission-summary-row">
                   <span className="km-sum-label">Target</span>
                   <span className="km-sum-value-inline">{selectedTarget?.name || '—'}</span>
                 </div>
                 <div className="km-mission-summary-row">
-                  <span className="km-sum-label">Mission</span>
+                  <span className="km-sum-label">Mode</span>
                   <span className="km-sum-value-inline">
                     {MISSION_TYPES.find((m) => m.id === missionType)?.icon}{' '}
                     {MISSION_TYPES.find((m) => m.id === missionType)?.label}
                   </span>
                 </div>
-                <div className="km-mission-summary-row">
-                  <span className="km-sum-label">Launch site</span>
-                  <span className="km-sum-value-inline">{launchSite.name}</span>
-                </div>
               </section>
 
               {kestrelElements && (
                 <section className="km-section">
-                  <h3>Kestrel Parking Orbit</h3>
+                  <h3>Kestrel Starting Orbit</h3>
                   <div className="km-orbit-summary">
                     <div className="km-sum-item">
                       <span>Altitude</span>
