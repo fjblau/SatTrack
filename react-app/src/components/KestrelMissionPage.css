@@ -471,6 +471,38 @@
   font-size: 0.83rem !important;
 }
 
+.km-timeline-block {
+  border-left: 3px solid #2980b9;
+  background: #f0f6fb;
+}
+
+.km-timeline-note {
+  padding: 0 0 4px 0;
+}
+
+.km-timeline-sub {
+  font-size: 0.72rem;
+  color: #888;
+  font-style: italic;
+}
+
+.km-timeline-total {
+  color: #2980b9 !important;
+  font-size: 0.9rem !important;
+}
+
+.km-timeline-arrival-row {
+  border-top: 1px dashed #c0d8ef;
+  padding-top: 5px;
+  margin-top: 2px;
+}
+
+.km-timeline-arrival {
+  font-family: monospace;
+  font-size: 0.78rem !important;
+  color: #555 !important;
+}
+
 .km-warn {
   color: #d4820a !important;
 }
