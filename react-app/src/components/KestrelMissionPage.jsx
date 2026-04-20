@@ -237,7 +237,7 @@ export default function KestrelMissionPage() {
       setTargetElements(els)
       setTargetTleSource(tle.source || data.source || 'celestrak')
       setIncDeg(parseFloat((els.inc * RAD).toFixed(1)))
-      setAltitudeKm(Math.round(smaToAltitude(els.sma)))
+      setAltitudeKm(Math.max(250, Math.round(smaToAltitude(els.sma)) - 50))
     } catch (err) {
       setTargetFetchError(err.message)
     } finally {
@@ -265,6 +265,10 @@ export default function KestrelMissionPage() {
           incDeg,
           ecc
         )
+        if (targetElements) {
+          elements.raan = targetElements.raan
+          elements.inc = targetElements.inc
+        }
         setKestrelElements(elements)
 
         const period = orbitalPeriod(elements.sma)
@@ -641,7 +645,7 @@ export default function KestrelMissionPage() {
                     )}
                     {targetElements && (
                       <p className="km-hint-text km-hint-suggest">
-                        ↑ Orbit parameters auto-matched to target
+                        ↑ Inclination matched · altitude set 50 km below target for rendezvous maneuver
                         {targetTleSource === 'db_cached' && (
                           <span className="km-badge km-badge-cached" title="Live TLE unavailable — using last known TLE from database"> cached TLE</span>
                         )}
