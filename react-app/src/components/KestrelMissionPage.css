@@ -843,6 +843,31 @@
   color: #666;
 }
 
+/* ── Kestrel Status Banner ──────────────────────────────────────── */
+
+.km-kestrel-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #0f3460, #1a4a6b);
+  color: #7ee8e8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 0.25rem;
+}
+
+.km-kestrel-orbit-dot {
+  width: 8px;
+  height: 8px;
+  background: #2ec4c4;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: km-pulse 2s ease-in-out infinite;
+}
+
 /* ── Data Collection Tab ────────────────────────────────────────── */
 
 .km-collect-tab {
