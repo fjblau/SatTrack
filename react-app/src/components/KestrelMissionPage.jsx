@@ -338,7 +338,7 @@ export default function KestrelMissionPage() {
           setActiveScenario(null)
           setExecutedScenario(null)
 
-          setManeuverCZML(buildManeuverCZML(startIso, kestrelPoints, period, targetPoints, targetPeriod, previewArc, transfer.transferTime, selectedTarget.name))
+          setManeuverCZML(buildManeuverCZML(startIso, kestrelPoints, period, targetPoints, targetPeriod, previewArc, transfer.transferTime, selectedTarget.name, elements, targetElements))
         }
       } catch (err) {
         setComputeError(err.message)
@@ -348,18 +348,58 @@ export default function KestrelMissionPage() {
     }, 20)
   }, [launchSite, altitudeKm, incDeg, ecc, targetElements, selectedTarget, missionType])
 
-  function buildManeuverCZML(startIso, kestrelPoints, kestrelPeriod, targetPoints, targetPeriod, arcPoints, arcDuration, targetName) {
+  function buildManeuverCZML(startIso, kestrelPoints, kestrelPeriod, targetPoints, targetPeriod, arcPoints, arcDuration, targetName, kestrelEls, targetEls) {
     const arcStartSec = arcPoints.length > 0 ? arcPoints[0].t : 0
     const arcEndSec = arcPoints.length > 0 ? arcPoints[arcPoints.length - 1].t : arcDuration
+    const TWO_PI_BM = 2 * Math.PI
+
+    let unifiedKestrelPoints = kestrelPoints
+    if (kestrelEls && targetEls && arcPoints.length > 1) {
+      const phase1 = kestrelPoints.filter(p => p.t < arcStartSec)
+      const phase2 = arcPoints
+
+      const arrivalPt = arcPoints[arcPoints.length - 1]
+      const arrivalTime = arrivalPt.t
+
+      const totalDuration = Math.max(
+        kestrelPoints[kestrelPoints.length - 1]?.t || 0,
+        targetPoints[targetPoints.length - 1]?.t || 0
+      )
+      const phase3Duration = Math.max(0, totalDuration - arrivalTime)
+
+      if (phase3Duration > 60) {
+        const { inc: incT, raan: raanT, sma: smaT } = targetEls
+        const cosO = Math.cos(raanT), sinO = Math.sin(raanT)
+        const cosI = Math.cos(incT), sinI = Math.sin(incT)
+        const xOrb = cosO * arrivalPt.x + sinO * arrivalPt.y
+        const yOrb = -sinO * cosI * arrivalPt.x + cosO * cosI * arrivalPt.y + sinI * arrivalPt.z
+        const arrivalArgLat = ((Math.atan2(yOrb, xOrb) % TWO_PI_BM) + TWO_PI_BM) % TWO_PI_BM
+
+        const circEls = {
+          sma: smaT,
+          ecc: 0,
+          inc: incT,
+          raan: raanT,
+          argPerigee: 0,
+          meanAnomaly0: arrivalArgLat,
+        }
+        const step3 = Math.max(30, Math.round(orbitalPeriod(smaT) / 120))
+        const phase3Raw = propagateOrbit(circEls, phase3Duration, step3)
+        const phase3 = phase3Raw.map(p => ({ t: p.t + arrivalTime, x: p.x, y: p.y, z: p.z }))
+        unifiedKestrelPoints = [...phase1, ...phase2, ...phase3]
+      } else {
+        unifiedKestrelPoints = [...phase1, ...phase2]
+      }
+    }
 
     const sats = [
       {
         id: 'kestrel',
         label: 'KESTREL',
-        points: kestrelPoints,
+        points: unifiedKestrelPoints,
         color: [52, 152, 219, 255],
-        trailTime: kestrelPeriod / 3,
-        leadTime: kestrelPeriod * 0.67,
+        trailTime: kestrelPeriod * 2,
+        leadTime: 0,
         pointSize: 12,
         pathWidth: 2.5,
         labelOffsetY: -28,
@@ -379,18 +419,18 @@ export default function KestrelMissionPage() {
         id: 'transfer',
         label: 'Transfer Arc',
         points: arcPoints,
-        color: [241, 196, 15, 255],
+        color: [241, 196, 15, 180],
         trailTime: arcDuration,
         leadTime: 0,
-        pointSize: 6,
-        pathWidth: 3,
+        pointSize: 3,
+        pathWidth: 2,
         availStartSec: arcStartSec,
         availEndSec: arcEndSec,
         noLabel: true,
       },
     ]
     const totalDuration = Math.max(
-      kestrelPoints[kestrelPoints.length - 1]?.t || 0,
+      unifiedKestrelPoints[unifiedKestrelPoints.length - 1]?.t || 0,
       targetPoints[targetPoints.length - 1]?.t || 0,
       arcEndSec
     )
@@ -424,7 +464,9 @@ export default function KestrelMissionPage() {
       tp.period,
       arcPoints,
       scenario.transferTime,
-      selectedTarget?.name
+      selectedTarget?.name,
+      kestrelElements,
+      targetElements
     )
     setManeuverCZML(czml)
   }, [kestrelElements, targetElements, selectedTarget])
