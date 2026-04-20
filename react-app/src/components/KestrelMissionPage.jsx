@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
 import KestrelCesiumViewer from './KestrelCesiumViewer'
+import KestrelDataDials from './KestrelDataDials'
 import {
   propagateOrbit,
   propagateTransferOrbit,
@@ -46,6 +47,84 @@ const MISSION_TYPES = [
   { id: 'deorbit',     label: 'Deorbit',  icon: '🔥', desc: 'ADR — capture and deorbit debris/dead satellite' },
 ]
 
+const MATERIALS = ['solar_panel', 'aluminum_alloy', 'titanium', 'carbon_fiber', 'multilayer_insulation']
+
+function seededRng(seed) {
+  let s = seed
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0xffffffff
+    return (s >>> 0) / 4294967296
+  }
+}
+
+function nameToSeed(str) {
+  let h = 5381
+  for (let i = 0; i < str.length; i++) h = (h * 33 ^ str.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function generateSimulatedObservations(targetName, noradId, altKm) {
+  const rng = seededRng(nameToSeed((targetName || '') + (noradId || '') + (altKm || 500)))
+  const COUNT = 10
+  const baseHealth = 40 + rng() * 40
+  const baseMass = 200 + rng() * 1800
+  const material = MATERIALS[Math.floor(rng() * MATERIALS.length)]
+  const baseReflect = 0.15 + rng() * 0.6
+  const baseSpin = rng() * 3
+  const basePerigeeDrift = -(rng() * 0.01)
+  const basePerigee = altKm || 500
+  const now = Date.now()
+
+  return Array.from({ length: COUNT }, (_, i) => {
+    const progress = i / (COUNT - 1)
+    const r = seededRng(nameToSeed(targetName + i))
+    const jitter = () => r() * 2 - 1
+
+    const range = 60 * Math.pow(1 - progress * 0.95, 1.5) + r() * 2
+    const health = baseHealth + progress * 15 + jitter() * 5
+    const stability = progress > 0.4 ? r() > 0.8 : r() > 0.3
+
+    return {
+      object_name: targetName,
+      norad_id: noradId,
+      observation_epoch: new Date(now + i * 8000).toISOString(),
+      source: 'KESTREL-1',
+      derived_health_score: Math.min(100, Math.max(0, health)),
+      estimated_mass_kg: baseMass + jitter() * 20,
+      spin_rate_rpm: Math.max(0, baseSpin - progress * baseSpin * 0.7 + jitter() * 0.2),
+      attitude: {
+        roll_deg: jitter() * 30 * (1 - progress * 0.6),
+        pitch_deg: jitter() * 15 * (1 - progress * 0.5),
+        yaw_deg: jitter() * 45 * (1 - progress * 0.6),
+        stability_flag: stability,
+      },
+      thermal: {
+        surface_temp_K: 270 + jitter() * 30 + progress * 10,
+        temp_variance_30d: Math.max(0, 15 - progress * 12 + r() * 5),
+        anomaly_flag: health < 45 && r() > 0.6,
+      },
+      material_signature: {
+        reflectivity_index: baseReflect + jitter() * 0.05 * (1 - progress * 0.8),
+        inferred_material: material,
+        confidence: 0.3 + progress * 0.65 + r() * 0.05,
+      },
+      proximity_state: {
+        range_km: Math.max(0.1, range),
+        relative_velocity_ms: Math.max(0.01, 0.5 - progress * 0.45 + r() * 0.05),
+      },
+      maneuver_indicator: {
+        delta_v_residual_ms: Math.max(0, 2 - progress * 1.8 + r() * 0.3),
+        confidence: 0.4 + progress * 0.5,
+        flag: progress < 0.2 && r() > 0.5,
+      },
+      orbital_decay_indicator: {
+        perigee_drift_km_per_day: basePerigeeDrift + jitter() * 0.002,
+        estimated_perigee_km: basePerigee + jitter() * 2,
+      },
+    }
+  })
+}
+
 export default function KestrelMissionPage() {
   const [activeSubTab, setActiveSubTab] = useState('launch')
 
@@ -82,6 +161,12 @@ export default function KestrelMissionPage() {
   const [advisorClarifyQuestion, setAdvisorClarifyQuestion] = useState(null)
   const [advisorClarification, setAdvisorClarification] = useState('')
   const [advisorConstraints, setAdvisorConstraints] = useState('')
+
+  const [liveObs, setLiveObs] = useState([])
+  const [collectRunning, setCollectRunning] = useState(false)
+  const [collectDone, setCollectDone] = useState(false)
+  const allSimObs = useRef([])
+  const collectIntervalRef = useRef(null)
 
   const searchDebounce = useRef(null)
   const kestrelPointsRef = useRef(null)
@@ -408,6 +493,38 @@ export default function KestrelMissionPage() {
     }
   }, [scenarios, kestrelElements, targetElements, selectedTarget, missionType, advisorConstraints])
 
+  const handleStartCollection = useCallback(() => {
+    if (!selectedTarget || !targetElements) return
+    if (collectIntervalRef.current) clearInterval(collectIntervalRef.current)
+    const altKm = Math.round(smaToAltitude(targetElements.sma))
+    allSimObs.current = generateSimulatedObservations(
+      selectedTarget.name,
+      selectedTarget.noradId,
+      altKm
+    )
+    setLiveObs([allSimObs.current[0]])
+    setCollectRunning(true)
+    setCollectDone(false)
+    let idx = 1
+    collectIntervalRef.current = setInterval(() => {
+      if (idx >= allSimObs.current.length) {
+        clearInterval(collectIntervalRef.current)
+        collectIntervalRef.current = null
+        setCollectRunning(false)
+        setCollectDone(true)
+        return
+      }
+      setLiveObs(prev => [...prev, allSimObs.current[idx]])
+      idx++
+    }, 2500)
+  }, [selectedTarget, targetElements])
+
+  useEffect(() => {
+    return () => {
+      if (collectIntervalRef.current) clearInterval(collectIntervalRef.current)
+    }
+  }, [])
+
   const kestrelPeriod = orbitalPeriod(altitudeToSMA(altitudeKm))
   const incWarning = Math.abs(launchSite.lat) > incDeg
 
@@ -437,6 +554,16 @@ export default function KestrelMissionPage() {
         >
           AI Mission Advisor
           {advisorResult && <span className="km-tab-badge">✓</span>}
+        </button>
+        <button
+          className={`km-collect-tab${activeSubTab === 'collection' ? ' active' : ''}`}
+          onClick={() => setActiveSubTab('collection')}
+          disabled={!executedScenario}
+          title={!executedScenario ? 'Execute a maneuver scenario first' : ''}
+        >
+          📡 Data Collection
+          {collectDone && <span className="km-tab-badge">✓</span>}
+          {collectRunning && <span className="km-tab-pulse" />}
         </button>
       </div>
 
@@ -914,6 +1041,23 @@ export default function KestrelMissionPage() {
                   to see maneuver details.
                 </p>
               )}
+
+              {executedScenario && (
+                <section className="km-section">
+                  <button
+                    className="km-collect-cta-btn"
+                    onClick={() => {
+                      setActiveSubTab('collection')
+                      if (!collectRunning && !collectDone) handleStartCollection()
+                    }}
+                  >
+                    📡 Begin Data Collection →
+                  </button>
+                  <p className="km-hint-text" style={{ textAlign: 'center', marginTop: '2px' }}>
+                    Kestrel is in proximity — start collecting sensor data
+                  </p>
+                </section>
+              )}
             </aside>
 
             <KestrelCesiumViewer
@@ -1079,6 +1223,121 @@ export default function KestrelMissionPage() {
               targetLabel={selectedTarget?.name}
               emptyMessage="The AI advisor will recommend and execute the best scenario — the result appears here."
             />
+          </>
+        )}
+
+        {activeSubTab === 'collection' && (
+          <>
+            <aside className="km-sidebar">
+              <section className="km-section">
+                <h3>Collection Status</h3>
+                <div className="km-collect-target-card">
+                  <div className="km-collect-target-label">Target</div>
+                  <div className="km-collect-target-name">{selectedTarget?.name || '—'}</div>
+                  {selectedTarget?.noradId && (
+                    <span className="km-badge">NORAD {selectedTarget.noradId}</span>
+                  )}
+                </div>
+                <div className="km-collect-status-row">
+                  <div className={`km-collect-indicator${collectRunning ? ' km-collect-indicator-live' : collectDone ? ' km-collect-indicator-done' : ''}`} />
+                  <span className="km-collect-status-text">
+                    {collectRunning ? 'COLLECTING LIVE DATA…' : collectDone ? 'COLLECTION COMPLETE' : 'STANDBY'}
+                  </span>
+                </div>
+                <div className="km-collect-progress-wrap">
+                  <div className="km-collect-progress-bar">
+                    <div
+                      className="km-collect-progress-fill"
+                      style={{ width: `${liveObs.length * 10}%` }}
+                    />
+                  </div>
+                  <span className="km-collect-progress-label">{liveObs.length} / 10 obs</span>
+                </div>
+                {liveObs.length > 0 && (
+                  <div className="km-orbit-summary" style={{ marginTop: '0.5rem' }}>
+                    <div className="km-sum-item">
+                      <span>Range</span>
+                      <strong style={{ color: '#2980b9' }}>
+                        {liveObs[liveObs.length - 1].proximity_state?.range_km?.toFixed(1)} km
+                      </strong>
+                    </div>
+                    <div className="km-sum-item">
+                      <span>Health</span>
+                      <strong style={{ color: liveObs[liveObs.length - 1].derived_health_score >= 70 ? '#27ae60' : liveObs[liveObs.length - 1].derived_health_score >= 40 ? '#f39c12' : '#e74c3c' }}>
+                        {liveObs[liveObs.length - 1].derived_health_score?.toFixed(1)}
+                      </strong>
+                    </div>
+                    <div className="km-sum-item">
+                      <span>Rel. Vel.</span>
+                      <strong>{liveObs[liveObs.length - 1].proximity_state?.relative_velocity_ms?.toFixed(2)} m/s</strong>
+                    </div>
+                    <div className="km-sum-item">
+                      <span>Material</span>
+                      <strong style={{ fontSize: '0.72rem' }}>
+                        {liveObs[liveObs.length - 1].material_signature?.inferred_material?.replace(/_/g, ' ')}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="km-section">
+                {!collectRunning && !collectDone && (
+                  <button className="km-collect-cta-btn" onClick={handleStartCollection}>
+                    📡 Start Collection
+                  </button>
+                )}
+                {collectDone && (
+                  <button className="km-primary-btn" onClick={handleStartCollection}>
+                    ↺ Restart Collection
+                  </button>
+                )}
+                {collectRunning && (
+                  <div className="km-collect-scanning">
+                    <div className="km-collect-scan-ring" />
+                    <span>Scanning…</span>
+                  </div>
+                )}
+              </section>
+
+              {executedScenario && (
+                <section className="km-section">
+                  <h3>Executed Maneuver</h3>
+                  <div className="km-mission-summary-row">
+                    <span className="km-sum-label">Scenario</span>
+                    <span className="km-sum-value-inline">{executedScenario.name}</span>
+                  </div>
+                  <div className="km-mission-summary-row">
+                    <span className="km-sum-label">ΔV Total</span>
+                    <span className="km-sum-value-inline km-dv">{fmtDv(executedScenario.dvTotal)}</span>
+                  </div>
+                  <div className="km-mission-summary-row">
+                    <span className="km-sum-label">Transfer</span>
+                    <span className="km-sum-value-inline">{fmtTime(executedScenario.transferTime)}</span>
+                  </div>
+                </section>
+              )}
+            </aside>
+
+            <div className="km-collection-main">
+              {liveObs.length > 0 ? (
+                <KestrelDataDials
+                  observations={liveObs}
+                  satelliteName={selectedTarget?.name}
+                />
+              ) : (
+                <div className="km-collect-empty">
+                  <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>📡</div>
+                  <p>Click <strong>Start Collection</strong> to begin streaming sensor data from Kestrel.</p>
+                </div>
+              )}
+              <KestrelCesiumViewer
+                czmlData={maneuverCZML}
+                launchSite={null}
+                targetLabel={selectedTarget?.name}
+                emptyMessage="Trajectory view — Kestrel (blue) in proximity to target (red)."
+              />
+            </div>
           </>
         )}
       </div>
