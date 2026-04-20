@@ -34,6 +34,23 @@ function fmtTime(seconds) {
   return (seconds / 86400).toFixed(2) + ' days'
 }
 
+function fmtRendezvous(seconds) {
+  if (!isFinite(seconds)) return '∞'
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h ${mins}m`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins} min`
+}
+
+function fmtArrivalDate(seconds) {
+  if (!isFinite(seconds)) return '—'
+  const d = new Date(Date.now() + seconds * 1000)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`
+}
+
 function fmtPeriod(seconds) {
   return (seconds / 60).toFixed(1) + ' min'
 }
@@ -227,7 +244,7 @@ export default function KestrelMissionPage() {
       setTargetElements(els)
       setTargetTleSource(tle.source || data.source || 'celestrak')
       setIncDeg(parseFloat((els.inc * RAD).toFixed(1)))
-      setAltitudeKm(Math.max(250, Math.round(smaToAltitude(els.sma)) - 50))
+      setAltitudeKm(Math.max(250, Math.round(smaToAltitude(els.sma)) - 100))
     } catch (err) {
       setTargetFetchError(err.message)
     } finally {
@@ -304,8 +321,8 @@ export default function KestrelMissionPage() {
           const targetPeriod = orbitalPeriod(r2)
           const targetStep = Math.max(10, Math.round(targetPeriod / 240))
 
-          // Preview arc: show transfer starting after 3 parking orbits
-          const arcPreviewWait = period * 3
+          // Preview arc: show full phase-alignment wait before burn (capped at 60 parking orbits for display)
+          const arcPreviewWait = Math.min(burnWindow.synodicPeriod / 2, period * 60)
           const TWO_PI_local = 2 * Math.PI
           const n_park = Math.sqrt(3.986004418e14 / Math.pow(r1, 3))
           const M_burn_preview = ((elements.meanAnomaly0 + n_park * arcPreviewWait) % TWO_PI_local + TWO_PI_local) % TWO_PI_local
@@ -431,8 +448,8 @@ export default function KestrelMissionPage() {
     const tp = targetPointsRef.current
     if (!kp || !tp || !kestrelElements || !targetElements) return
 
-    // Cap displayed wait time at 20 parking orbits so the animation stays manageable
-    const displayWaitTime = Math.min(scenario.waitTime || 0, kp.period * 20)
+    // Cap displayed wait time at 80 parking orbits so the animation stays manageable
+    const displayWaitTime = Math.min(scenario.waitTime || 0, kp.period * 80)
     const displayScenario = { ...scenario, waitTime: displayWaitTime }
 
     // Re-propagate both orbits to cover the full display mission duration
@@ -984,6 +1001,34 @@ export default function KestrelMissionPage() {
                         </p>
                       )}
                     </div>
+
+                    <div className="km-result-block km-timeline-block">
+                      <div className="km-result-title">Mission Timeline to Rendezvous</div>
+                      <div className="km-result-rows">
+                        <div className="km-result-row km-timeline-phase">
+                          <span>Phase 1 — Phase alignment</span>
+                          <strong>{fmtRendezvous(maneuverResult.synodicPeriod / 2)}</strong>
+                        </div>
+                        <div className="km-result-row km-timeline-note">
+                          <span className="km-timeline-sub">Kestrel phasing in lower orbit until optimal burn geometry</span>
+                        </div>
+                        <div className="km-result-row km-timeline-phase">
+                          <span>Phase 2 — Hohmann transfer</span>
+                          <strong>{fmtRendezvous(maneuverResult.transferTime)}</strong>
+                        </div>
+                        <div className="km-result-row km-timeline-note">
+                          <span className="km-timeline-sub">ΔV₁ burn → coast → ΔV₂ circularization</span>
+                        </div>
+                        <div className="km-result-row km-total">
+                          <span>Total time to rendezvous</span>
+                          <strong className="km-timeline-total">{fmtRendezvous(maneuverResult.synodicPeriod / 2 + maneuverResult.transferTime)}</strong>
+                        </div>
+                        <div className="km-result-row km-timeline-arrival-row">
+                          <span>Est. arrival</span>
+                          <strong className="km-timeline-arrival">{fmtArrivalDate(maneuverResult.synodicPeriod / 2 + maneuverResult.transferTime)}</strong>
+                        </div>
+                      </div>
+                    </div>
                   </section>
                 </>
               )}
@@ -1020,6 +1065,7 @@ export default function KestrelMissionPage() {
               czmlData={maneuverCZML}
               launchSite={null}
               targetLabel={selectedTarget?.name}
+              clockMultiplier={2000}
               emptyMessage="Complete the Launch Planner to see the full mission trajectory — Kestrel orbit (blue), target (red), transfer arc (yellow)."
             />
           </>

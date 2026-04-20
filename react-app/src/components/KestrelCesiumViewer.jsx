@@ -64,7 +64,7 @@ function getCartographic(Cesium, entity, time) {
   }
 }
 
-export default function KestrelCesiumViewer({ czmlData, launchSite, emptyMessage, targetLabel }) {
+export default function KestrelCesiumViewer({ czmlData, launchSite, emptyMessage, targetLabel, clockMultiplier = 300 }) {
   const containerRef = useRef(null)
   const viewerRef = useRef(null)
   const lastTickRef = useRef(0)
@@ -173,7 +173,7 @@ export default function KestrelCesiumViewer({ czmlData, launchSite, emptyMessage
             clock.stopTime = Cesium.JulianDate.fromIso8601(parts[1])
             clock.currentTime = clock.startTime.clone()
             clock.clockRange = Cesium.ClockRange.LOOP_STOP
-            clock.multiplier = 300
+            clock.multiplier = clockMultiplier
             clock.shouldAnimate = true
           }
         }
