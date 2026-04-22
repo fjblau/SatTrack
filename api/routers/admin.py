@@ -1,4 +1,6 @@
 from fastapi import APIRouter, HTTPException
+import os
+import shutil
 import subprocess
 import uuid
 import threading
@@ -93,6 +95,44 @@ def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
     with _runs_lock:
         _runs[run_id]["status"] = "success" if proc.returncode == 0 else "error"
         _runs[run_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+
+@router.get("/gmat-status")
+def gmat_status():
+    gmat_home = os.environ.get("GMAT_HOME", "")
+    binary_candidates = [
+        os.path.join(gmat_home, "bin", "GMAT-R2022a"),
+        os.path.join(gmat_home, "bin", "GMAT"),
+        shutil.which("GMAT-R2022a") or "",
+        shutil.which("GMAT") or "",
+    ]
+    binary_path = next((p for p in binary_candidates if p and os.path.isfile(p)), None)
+
+    gmat_dir_exists = bool(gmat_home and os.path.isdir(gmat_home))
+    bin_dir_contents: list[str] = []
+    if gmat_home and os.path.isdir(os.path.join(gmat_home, "bin")):
+        bin_dir_contents = os.listdir(os.path.join(gmat_home, "bin"))
+
+    version_output = None
+    if binary_path:
+        try:
+            result = subprocess.run(
+                [binary_path, "--version"],
+                capture_output=True, text=True, timeout=10
+            )
+            version_output = (result.stdout + result.stderr).strip()[:200]
+        except Exception as exc:
+            version_output = f"error: {exc}"
+
+    return {
+        "gmat_home": gmat_home or None,
+        "gmat_home_exists": gmat_dir_exists,
+        "bin_dir_contents": bin_dir_contents,
+        "binary_found": binary_path or None,
+        "binary_executable": bool(binary_path and os.access(binary_path, os.X_OK)),
+        "version_output": version_output,
+        "status": "ready" if binary_path else "not_installed",
+    }
 
 
 @router.get("/scripts")
