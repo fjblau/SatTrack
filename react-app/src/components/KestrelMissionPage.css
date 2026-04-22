@@ -1078,3 +1078,107 @@
   font-size: 0.9rem;
   flex-shrink: 0;
 }
+
+/* ── GMAT Maneuver Plan main panel ─────────────────────────────────────── */
+
+.km-gmat-plan-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 1.5rem;
+  background: #13161a;
+  gap: 1.25rem;
+}
+
+.km-gmat-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.km-gmat-metrics-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #cdd9e5;
+  letter-spacing: 0.01em;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #2a2f38;
+}
+
+.km-gmat-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.km-gmat-metric-card {
+  background: #1c2128;
+  border: 1px solid #2a2f38;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  transition: border-color 0.2s;
+}
+
+.km-gmat-metric-card:hover {
+  border-color: #444c58;
+}
+
+.km-gmat-metric-card--highlight {
+  border-color: #2a3a50;
+  background: #161e28;
+}
+
+.km-gmat-metric-label {
+  font-size: 0.72rem;
+  color: #768390;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.km-gmat-metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.km-gmat-metric-unit {
+  font-size: 0.75rem;
+  color: #636e7b;
+  font-weight: 500;
+}
+
+.km-gmat-burn-epochs {
+  background: #1c2128;
+  border: 1px solid #2a2f38;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.km-gmat-epoch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+}
+
+.km-gmat-epoch-label {
+  color: #768390;
+  white-space: nowrap;
+  width: 130px;
+  flex-shrink: 0;
+}
+
+.km-gmat-epoch-val {
+  color: #cdd9e5;
+  font-variant-numeric: tabular-nums;
+  font-family: 'Lucida Console', monospace;
+  font-size: 0.78rem;
+}
