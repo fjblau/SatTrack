@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available
 import os
 import shutil
 import subprocess
@@ -126,6 +127,19 @@ def gmat_status():
         except Exception as exc:
             version_output = f"error: {exc}"
 
+    smoke = None
+    if binary_path and os.access(binary_path, os.X_OK):
+        smoke = run_smoke_test()
+
+    overall_status = "not_installed"
+    if binary_path:
+        if smoke and smoke["ok"]:
+            overall_status = "ready"
+        elif smoke:
+            overall_status = "installed_but_broken"
+        else:
+            overall_status = "installed"
+
     return {
         "gmat_home": gmat_home or None,
         "gmat_home_exists": gmat_dir_exists,
@@ -133,7 +147,8 @@ def gmat_status():
         "binary_found": binary_path or None,
         "binary_executable": bool(binary_path and os.access(binary_path, os.X_OK)),
         "version_output": version_output,
-        "status": "ready" if binary_path else "not_installed",
+        "smoke_test": smoke,
+        "status": overall_status,
     }
 
 
