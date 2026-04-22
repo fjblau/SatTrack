@@ -724,13 +724,13 @@ export default function KestrelMissionPage() {
             id: 'transfer',
             label: 'Transfer Arc',
             points: arcPoints,
-            color: [241, 196, 15, 180],
+            color: [241, 196, 15, 230],
             trailTime: transferSecs,
-            leadTime: 0,
-            pointSize: 3,
-            pathWidth: 2,
+            leadTime: displayDuration,
+            pointSize: 8,
+            pathWidth: 5,
             availStartSec: 0,
-            availEndSec: transferSecs,
+            availEndSec: displayDuration,
             noLabel: true,
           },
         ],
@@ -1765,7 +1765,7 @@ export default function KestrelMissionPage() {
                   czmlData={gmatPlanCZML}
                   launchSite={null}
                   targetLabel={selectedTarget?.name}
-                  clockMultiplier={2000}
+                  clockMultiplier={60}
                   emptyMessage="Compute a GMAT maneuver plan to see the intercept trajectory — Kestrel (blue), target (red), transfer arc (yellow)."
                 />
               </div>

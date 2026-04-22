@@ -191,6 +191,10 @@ export function propagateInterceptArc(kElsBurn, tElsBurn, transferSecs, steps = 
     }
     points.push({ t, x: dir[0] * r, y: dir[1] * r, z: dir[2] * r })
   }
+  if (points.length > 0) {
+    const last = points[points.length - 1]
+    points.push({ t: last.t + 1, x: last.x, y: last.y, z: last.z })
+  }
   return points
 }
 
