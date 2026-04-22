@@ -1,0 +1,63 @@
+%----------------------------------------
+% GMAT High-Fidelity Propagation Script
+% Auto-generated — do not edit directly
+% Parameters substituted by gmat_service.py
+%----------------------------------------
+
+%--- Spacecraft ---
+Create Spacecraft Sat;
+Sat.DateFormat          = UTCGregorian;
+Sat.Epoch               = '%EPOCH%';
+Sat.CoordinateSystem    = EarthMJ2000Eq;
+Sat.DisplayStateType    = Keplerian;
+Sat.SMA                 = %SMA_KM%;
+Sat.ECC                 = %ECC%;
+Sat.INC                 = %INC_DEG%;
+Sat.RAAN                = %RAAN_DEG%;
+Sat.AOP                 = %AOP_DEG%;
+Sat.TA                  = %TA_DEG%;
+Sat.DryMass             = 100;
+Sat.Cd                  = 2.2;
+Sat.Cr                  = 1.8;
+Sat.DragArea            = 15;
+Sat.SRPArea             = 15;
+
+%--- Force Model ---
+Create ForceModel HiFiFM;
+HiFiFM.CentralBody                  = Earth;
+HiFiFM.PrimaryBodies                = {Earth};
+HiFiFM.GravityField.Earth.Degree    = 8;
+HiFiFM.GravityField.Earth.Order     = 8;
+HiFiFM.GravityField.Earth.PotentialFile = 'EGM96.cof';
+HiFiFM.Drag.AtmosphereModel         = NRLMSISE00;
+HiFiFM.Drag.HistoricWeatherSource   = ConstantFluxAndGeoMag;
+HiFiFM.Drag.F107                    = 150;
+HiFiFM.Drag.F107A                   = 150;
+HiFiFM.Drag.MagneticIndex           = 3;
+HiFiFM.SRP                          = On;
+HiFiFM.RelativisticCorrection       = Off;
+HiFiFM.ErrorControl                 = RSSStep;
+
+%--- Propagator ---
+Create Propagator HiFiProp;
+HiFiProp.FM             = HiFiFM;
+HiFiProp.Type           = RungeKutta89;
+HiFiProp.InitialStepSize = 60;
+HiFiProp.Accuracy       = 1e-12;
+HiFiProp.MinStep        = 0.001;
+HiFiProp.MaxStep        = 86400;
+HiFiProp.MaxStepAttempts = 50;
+
+%--- Report File ---
+Create ReportFile EphemerisReport;
+EphemerisReport.Filename        = '%OUTPUT_FILE%';
+EphemerisReport.Add             = {Sat.UTCGregorian, Sat.Latitude, Sat.Longitude, Sat.Altitude, Sat.X, Sat.Y, Sat.Z};
+EphemerisReport.WriteHeaders    = true;
+EphemerisReport.ColumnWidth     = 25;
+EphemerisReport.Precision       = 10;
+EphemerisReport.WriteReport     = true;
+
+%--- Mission Sequence ---
+BeginMissionSequence;
+
+Propagate HiFiProp(Sat) {Sat.ElapsedSecs = %DURATION_SECS%};
