@@ -6,6 +6,7 @@ import KestrelDataDials from './KestrelDataDials'
 import {
   propagateOrbit,
   propagateTransferOrbit,
+  propagateInterceptArc,
   propagateScenarioArc,
   launchSiteToOrbitElements,
   altitudeToSMA,
@@ -685,24 +686,13 @@ export default function KestrelMissionPage() {
         meanAnomaly0: ((tEls.meanAnomaly0 + n_t * waitSecs) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
       }
 
-      const M_burn = kElsBurn.meanAnomaly0
-      const ecc_k = kEls.ecc
-      let E_burn = ecc_k < 0.8 ? M_burn : Math.PI
-      for (let i = 0; i < 100; i++) {
-        const dE = (M_burn - E_burn + ecc_k * Math.sin(E_burn)) / (1 - ecc_k * Math.cos(E_burn))
-        E_burn += dE
-        if (Math.abs(dE) < 1e-12) break
-      }
-      const nu_burn = Math.atan2(Math.sqrt(1 - ecc_k * ecc_k) * Math.sin(E_burn), Math.cos(E_burn) - ecc_k)
-      const burnArgPerigee = ((kEls.argPerigee + nu_burn) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL
-
       const displayDuration = transferSecs + tPeriod * 3
       const kStep = Math.max(30, Math.round(kPeriod / 120))
       const tStep = Math.max(30, Math.round(tPeriod / 120))
 
       const kPoints = propagateOrbit(kElsBurn, displayDuration, kStep)
       const tPoints = propagateOrbit(tElsBurn, displayDuration, tStep)
-      const arcPoints = propagateTransferOrbit(kEls.sma, tEls.sma, kEls.raan, kEls.inc, 0, 150, burnArgPerigee)
+      const arcPoints = propagateInterceptArc(kElsBurn, tElsBurn, transferSecs)
 
       const startIso = gmatPlan.burn1_epoch || new Date().toISOString()
 
