@@ -220,7 +220,7 @@ export function propagateTransferOrbit(r1, r2, raan, incKestrel, startSeconds, s
   return points
 }
 
-export function generateCZML(satellites, startIso, totalDurationSeconds) {
+export function generateCZML(satellites, startIso, totalDurationSeconds, clockMultiplier = 60) {
   const startMs = new Date(startIso).getTime()
   const endMs = startMs + totalDurationSeconds * 1000
   const endIso = new Date(endMs).toISOString()
@@ -232,7 +232,7 @@ export function generateCZML(satellites, startIso, totalDurationSeconds) {
     clock: {
       interval: `${startIso}/${endIso}`,
       currentTime: startIso,
-      multiplier: 300,
+      multiplier: clockMultiplier,
       range: 'CLAMPED',
       step: 'SYSTEM_CLOCK_MULTIPLIER',
     },
