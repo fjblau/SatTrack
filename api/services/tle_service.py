@@ -14,11 +14,25 @@ _tle_cache_instance = get_tle_cache()
 CELESTRAK_GP_URL = "https://celestrak.org/NORAD/elements/gp.php"
 CELESTRAK_SATCAT_URL = "https://celestrak.org/satcat/records.php"
 
+_CELESTRAK_GP_BASE = "https://celestrak.org/NORAD/elements/gp.php"
+
+_CELESTRAK_BATCH_GROUPS = [
+    "stations",          # ISS, CSS, and other space stations
+    "iss",               # ISS supplemental — visiting vehicles, nearby objects
+    "weather",           # weather satellites (GEO/LEO)
+    "geo",               # GEO belt
+    "starlink",          # Starlink constellation (inc ≈ 53°, alt 500–550 km)
+    "iridium-NEXT",      # Iridium NEXT (inc ≈ 86°)
+    "resource",          # Earth observation (inc varies)
+    "sarsat",            # Search and rescue (inc varies)
+    "dmc",               # Disaster monitoring (inc ≈ 98°)
+]
+
 _CELESTRAK_BATCH_URLS = [
+    f"{_CELESTRAK_GP_BASE}?GROUP={g}&FORMAT=TLE" for g in _CELESTRAK_BATCH_GROUPS
+] + [
     "https://celestrak.org/NORAD/elements/stations.txt",
     "https://celestrak.org/NORAD/elements/iss.txt",
-    "https://celestrak.org/NORAD/elements/weather.txt",
-    "https://celestrak.org/NORAD/elements/geo.txt",
 ]
 
 
