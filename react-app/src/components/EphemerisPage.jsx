@@ -400,7 +400,9 @@ export default function EphemerisPage() {
                   </div>
                   <div className="eph-summary-item">
                     <span className="eph-sum-label">Propagator</span>
-                    <span className="eph-sum-value">{envelopeDetail.propagator || 'SGP4'}</span>
+                    <span className="eph-sum-value" title={envelopeDetail.propagator}>
+                      {envelopeDetail.propagator === 'GMAT_RK89_EGM96' ? 'GMAT RK89' : (envelopeDetail.propagator || 'SGP4')}
+                    </span>
                   </div>
                 </div>
 
