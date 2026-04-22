@@ -187,6 +187,11 @@ export default function KestrelMissionPage() {
   const [kestrelProxyNoradId, setKestrelProxyNoradId] = useState('')
   const [gmatMaxDv, setGmatMaxDv] = useState(0.5)
   const [gmatMaxDays, setGmatMaxDays] = useState(14)
+  const [showTleOverride, setShowTleOverride] = useState(false)
+  const [targetTleLine1, setTargetTleLine1] = useState('')
+  const [targetTleLine2, setTargetTleLine2] = useState('')
+  const [kestrelTleLine1, setKestrelTleLine1] = useState('')
+  const [kestrelTleLine2, setKestrelTleLine2] = useState('')
 
   const [liveObs, setLiveObs] = useState([])
   const [collectRunning, setCollectRunning] = useState(false)
