@@ -101,10 +101,12 @@ def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
 def gmat_status():
     gmat_home = os.environ.get("GMAT_HOME", "")
     binary_candidates = [
+        os.path.join(gmat_home, "bin", "GmatConsole-R2022a"),
+        os.path.join(gmat_home, "bin", "GmatConsole"),
         os.path.join(gmat_home, "bin", "GMAT-R2022a"),
         os.path.join(gmat_home, "bin", "GMAT"),
+        shutil.which("GmatConsole-R2022a") or "",
         shutil.which("GMAT-R2022a") or "",
-        shutil.which("GMAT") or "",
     ]
     binary_path = next((p for p in binary_candidates if p and os.path.isfile(p)), None)
 
