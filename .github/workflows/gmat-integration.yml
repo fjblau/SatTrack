@@ -1,0 +1,119 @@
+name: GMAT Integration Tests
+
+on:
+  pull_request:
+    paths:
+      - 'api/services/gmat_service.py'
+      - 'gmat_scripts/**'
+      - 'tests/integration/test_gmat_integration.py'
+      - '.github/workflows/gmat-integration.yml'
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Unit Tests (mocked GMAT)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: python -m pytest tests/unit/test_gmat_service.py -v --tb=short
+
+  integration-tests:
+    name: Integration Tests (real GMAT)
+    runs-on: ubuntu-latest
+    env:
+      GMAT_HOME: /opt/gmat
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get install -y libgtk2.0-0 libglu1-mesa
+
+      - name: Download GMAT R2022a binaries
+        env:
+          GMAT_BINARIES_TOKEN: ${{ secrets.GMAT_BINARIES_TOKEN }}
+        run: |
+          if [ -z "$GMAT_BINARIES_TOKEN" ]; then
+            echo "ERROR: GMAT_BINARIES_TOKEN secret is not set in this repository."
+            echo "Go to: SatTrack repo → Settings → Secrets → Actions → New repository secret"
+            echo "Name: GMAT_BINARIES_TOKEN  Value: (PAT with read access to fjblau/gmat-binaries)"
+            exit 1
+          fi
+          echo "Downloading GMAT R2022a binaries..."
+          HTTP_CODE=$(curl -L \
+            -H "Authorization: token $GMAT_BINARIES_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "https://api.github.com/repos/fjblau/gmat-binaries/releases/assets/402371855" \
+            -o /tmp/gmat.tar.gz \
+            -w "%{http_code}")
+          echo "HTTP response: $HTTP_CODE"
+          FILE_SIZE=$(stat -c%s /tmp/gmat.tar.gz)
+          echo "Downloaded file size: $FILE_SIZE bytes"
+          if [ "$HTTP_CODE" != "200" ] || [ "$FILE_SIZE" -lt 1000000 ]; then
+            echo "ERROR: Download failed (HTTP $HTTP_CODE, size $FILE_SIZE). Token may lack access to fjblau/gmat-binaries."
+            cat /tmp/gmat.tar.gz
+            exit 1
+          fi
+          file /tmp/gmat.tar.gz
+          sudo mkdir -p /opt/gmat
+          sudo tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=2 || \
+            sudo tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=1
+          sudo chmod +x /opt/gmat/bin/GmatConsole-R2022a 2>/dev/null || true
+          sudo find /opt/gmat/bin -name "GmatConsole*" -exec chmod +x {} \;
+          echo "GMAT installed at /opt/gmat"
+          ls /opt/gmat/bin/
+
+      - name: Fix case-sensitive gravity path (Linux)
+        run: |
+          if [ -d /opt/gmat/data/gravity/earth ] && [ ! -d /opt/gmat/data/gravity/Earth ]; then
+            sudo ln -sf /opt/gmat/data/gravity/earth /opt/gmat/data/gravity/Earth
+            echo "Symlinked earth -> Earth for GMAT startup file compatibility"
+          fi
+          find /opt/gmat -name "EGM96.cof" | head -5
+
+      - name: Verify GMAT binary exists
+        run: |
+          test -f /opt/gmat/bin/GmatConsole-R2022a || (echo "ERROR: GmatConsole-R2022a not found" && exit 1)
+          ls /opt/gmat/data/gravity/Earth/ 2>/dev/null || echo "WARNING: gravity data not at expected path"
+          find /opt/gmat -name "EGM96.cof" 2>/dev/null | head -5
+
+      - name: Run GMAT integration tests
+        run: python -m pytest tests/integration/test_gmat_integration.py -v --tb=short
+
+      - name: Run smoke test directly
+        run: |
+          python - <<'EOF'
+          import os, sys
+          os.environ["GMAT_HOME"] = "/opt/gmat"
+          sys.path.insert(0, ".")
+          from api.services.gmat_service import run_smoke_test, find_egm96
+          egm96 = find_egm96()
+          print(f"EGM96 path: {egm96}")
+          if not egm96:
+              print("FAIL: EGM96.cof not found")
+              sys.exit(1)
+          result = run_smoke_test()
+          print(f"Smoke test ok: {result['ok']}")
+          print(f"Output: {result['output'][:500]}")
+          if not result["ok"]:
+              print(f"Error: {result['error']}")
+              sys.exit(1)
+          print("PASS")
+          EOF

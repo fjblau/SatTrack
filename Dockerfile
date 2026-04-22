@@ -17,7 +17,10 @@ RUN curl -L \
     -o /tmp/gmat.tar.gz \
     && mkdir -p /opt/gmat \
     && tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=2 \
-    && rm /tmp/gmat.tar.gz
+    && rm /tmp/gmat.tar.gz \
+    && if [ -d /opt/gmat/data/gravity/earth ] && [ ! -d /opt/gmat/data/gravity/Earth ]; then \
+         ln -sf /opt/gmat/data/gravity/earth /opt/gmat/data/gravity/Earth; \
+       fi
 
 ENV GMAT_HOME=/opt/gmat
 

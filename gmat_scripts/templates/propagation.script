@@ -1,6 +1,6 @@
 %----------------------------------------
 % GMAT High-Fidelity Propagation Script
-% Auto-generated — do not edit directly
+% Auto-generated - do not edit directly
 % Parameters substituted by gmat_service.py
 % Force model: EGM96 8x8 gravity only (no drag, no SRP)
 %----------------------------------------
@@ -25,17 +25,17 @@ HiFiFM.CentralBody                  = Earth;
 HiFiFM.PrimaryBodies                = {Earth};
 HiFiFM.GravityField.Earth.Degree    = 8;
 HiFiFM.GravityField.Earth.Order     = 8;
-HiFiFM.GravityField.Earth.PotentialFile = '%EGM96_PATH%';
+HiFiFM.GravityField.Earth.PotentialFile = 'EGM96.cof';
 HiFiFM.ErrorControl                 = RSSStep;
 
 %--- Propagator ---
 Create Propagator HiFiProp;
 HiFiProp.FM             = HiFiFM;
 HiFiProp.Type           = RungeKutta89;
-HiFiProp.InitialStepSize = 60;
+HiFiProp.InitialStepSize = %STEP_SECS%;
 HiFiProp.Accuracy       = 1e-12;
 HiFiProp.MinStep        = 0.001;
-HiFiProp.MaxStep        = 86400;
+HiFiProp.MaxStep        = %STEP_SECS%;
 HiFiProp.MaxStepAttempts = 50;
 
 %--- Report File ---
