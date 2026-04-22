@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available
+from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available, check_data_files
 import os
 import shutil
 import subprocess
@@ -127,6 +127,8 @@ def gmat_status():
         except Exception as exc:
             version_output = f"error: {exc}"
 
+    missing_data_files = check_data_files()
+
     smoke = None
     if binary_path and os.access(binary_path, os.X_OK):
         smoke = run_smoke_test()
@@ -147,6 +149,7 @@ def gmat_status():
         "binary_found": binary_path or None,
         "binary_executable": bool(binary_path and os.access(binary_path, os.X_OK)),
         "version_output": version_output,
+        "missing_data_files": missing_data_files,
         "smoke_test": smoke,
         "status": overall_status,
     }
