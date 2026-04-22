@@ -277,6 +277,10 @@ _PLACEHOLDER_PATTERN = re.compile(r"%[A-Z0-9_]+%")
 def validate_script(script_text: str) -> list[str]:
     """Return a list of validation error strings; empty list means OK."""
     errors: list[str] = []
+    try:
+        script_text.encode("ascii")
+    except UnicodeEncodeError as exc:
+        errors.append(f"Script contains non-ASCII characters (GMAT requires pure ASCII): {exc}")
     remaining = _PLACEHOLDER_PATTERN.findall(script_text)
     if remaining:
         errors.append(f"Unresolved placeholders in script: {remaining}")
@@ -289,7 +293,7 @@ def validate_script(script_text: str) -> list[str]:
 def _build_smoke_script() -> str:
     """Build a smoke-test GMAT script that exercises EGM96 gravity so we catch missing data files."""
     return f"""\
-% GMAT smoke test — EGM96 gravity + 60-second propagation
+% GMAT smoke test - EGM96 gravity + 60-second propagation
 Create Spacecraft Probe;
 Probe.DateFormat          = UTCGregorian;
 Probe.Epoch               = '01 Jan 2024 00:00:00.000';

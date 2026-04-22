@@ -299,6 +299,17 @@ class TestValidateScript(unittest.TestCase):
         self.assertTrue(any("Unresolved placeholders" in e for e in errors))
         self.assertIn("%EPOCH%", str(errors))
 
+    def test_detects_non_ascii(self):
+        script = "Create Spacecraft Sat;\n% em dash \u2014 here\nBeginMissionSequence;"
+        errors = validate_script(script)
+        self.assertTrue(any("non-ASCII" in e for e in errors))
+
+    def test_ascii_only_script_passes_encoding_check(self):
+        script = "Create Spacecraft Sat;\nBeginMissionSequence;"
+        errors = validate_script(script)
+        encoding_errors = [e for e in errors if "non-ASCII" in e]
+        self.assertEqual(encoding_errors, [])
+
     def test_detects_multiple_placeholders(self):
         script = "stuff %SMA_KM% and %ECC% not replaced"
         errors = validate_script(script)

@@ -1,6 +1,6 @@
 %----------------------------------------
 % GMAT High-Fidelity Propagation Script
-% Auto-generated — do not edit directly
+% Auto-generated - do not edit directly
 % Parameters substituted by gmat_service.py
 % Force model: EGM96 8x8 gravity only (no drag, no SRP)
 %----------------------------------------
