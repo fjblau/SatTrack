@@ -1,5 +1,6 @@
 import logging
 import math
+import re
 import os
 import shutil
 import subprocess
@@ -164,6 +165,10 @@ def propagate_hifi(
             .replace("%OUTPUT_FILE%", output_file)
         )
 
+        script_errors = validate_script(script)
+        if script_errors:
+            raise GmatError(f"Generated GMAT script is invalid: {script_errors}")
+
         script_path = os.path.join(tmpdir, "mission.script")
         Path(script_path).write_text(script)
 
@@ -185,6 +190,14 @@ def propagate_hifi(
 
         if result.returncode != 0:
             combined = ((result.stdout or "") + (result.stderr or ""))[-800:]
+            try:
+                script_snippet = Path(script_path).read_text()[:600]
+            except Exception:
+                script_snippet = "<unreadable>"
+            logger.error(
+                "GMAT script failed (exit %d). Script:\n%s\nGMAT output:\n%s",
+                result.returncode, script_snippet, combined,
+            )
             raise GmatError(f"GMAT exited with code {result.returncode}: {combined}")
 
         points = _parse_report(output_file, step_seconds)
@@ -213,3 +226,83 @@ def propagate_hifi(
         "ephemeris_points": points,
         "keplerian_elements": kep,
     }
+
+
+_REQUIRED_SCRIPT_KEYWORDS = [
+    "Create Spacecraft",
+    "Create ForceModel",
+    "Create Propagator",
+    "Create ReportFile",
+    "BeginMissionSequence",
+    "Propagate",
+]
+
+_PLACEHOLDER_PATTERN = re.compile(r"%[A-Z_]+%")
+
+
+def validate_script(script_text: str) -> list[str]:
+    """Return a list of validation error strings; empty list means OK."""
+    errors: list[str] = []
+    remaining = _PLACEHOLDER_PATTERN.findall(script_text)
+    if remaining:
+        errors.append(f"Unresolved placeholders in script: {remaining}")
+    for kw in _REQUIRED_SCRIPT_KEYWORDS:
+        if kw not in script_text:
+            errors.append(f"Required GMAT keyword missing: '{kw}'")
+    return errors
+
+
+_SMOKE_SCRIPT = """\
+% GMAT smoke test — minimal spacecraft creation
+Create Spacecraft Probe;
+Probe.DateFormat    = UTCGregorian;
+Probe.Epoch         = '01 Jan 2024 00:00:00.000';
+Probe.CoordinateSystem = EarthMJ2000Eq;
+Probe.DisplayStateType = Keplerian;
+Probe.SMA  = 6778.0;
+Probe.ECC  = 0.001;
+Probe.INC  = 51.6;
+Probe.RAAN = 0.0;
+Probe.AOP  = 0.0;
+Probe.TA   = 0.0;
+
+Create Propagator SimpleProp;
+
+BeginMissionSequence;
+
+Propagate SimpleProp(Probe) {Probe.ElapsedSecs = 60};
+"""
+
+
+def run_smoke_test() -> dict[str, Any]:
+    """Run a minimal GMAT script to verify the installation is functional.
+
+    Returns a dict with keys: ``ok`` (bool), ``output`` (str), ``error`` (str | None).
+    """
+    binary = _find_binary()
+    if not binary:
+        return {"ok": False, "output": "", "error": "GMAT binary not found"}
+
+    gmat_bin_dir = os.path.join(_GMAT_HOME, "bin")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = os.path.join(tmpdir, "smoke_test.script")
+        Path(script_path).write_text(_SMOKE_SCRIPT)
+        env = {**os.environ, "GMAT_HOME": _GMAT_HOME}
+        try:
+            result = subprocess.run(
+                [binary, script_path],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=env,
+                cwd=gmat_bin_dir,
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "output": "", "error": "Smoke test timed out after 60 s"}
+        except Exception as exc:
+            return {"ok": False, "output": "", "error": f"Failed to launch GMAT: {exc}"}
+
+    combined = ((result.stdout or "") + (result.stderr or ""))
+    ok = result.returncode == 0 and "Application Execution Failed" not in combined
+    error = None if ok else f"exit {result.returncode}: {combined[-400:]}"
+    return {"ok": ok, "output": combined[-400:], "error": error}

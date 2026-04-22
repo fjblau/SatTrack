@@ -6,12 +6,18 @@ from unittest.mock import MagicMock, patch
 
 from api.services.gmat_service import (
     GmatError,
+    _PLACEHOLDER_PATTERN,
+    _REQUIRED_SCRIPT_KEYWORDS,
+    _SMOKE_SCRIPT,
+    _TEMPLATE_DIR,
     _mean_to_true_anomaly,
     _tle_epoch_to_utc_gregorian,
     _tle_to_keplerian,
     _parse_report,
     is_available,
     propagate_hifi,
+    run_smoke_test,
+    validate_script,
 )
 
 
@@ -176,6 +182,13 @@ class TestPropagateHifi(unittest.TestCase):
                 propagate_hifi(ISS_LINE1, ISS_LINE2)
             self.assertIn("not found", str(ctx.exception))
 
+    def test_raises_when_script_invalid(self):
+        with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
+            with patch("api.services.gmat_service.validate_script", return_value=["Unresolved placeholders: ['%BAD%']"]):
+                with self.assertRaises(GmatError) as ctx:
+                    propagate_hifi(ISS_LINE1, ISS_LINE2)
+                self.assertIn("invalid", str(ctx.exception))
+
     def test_raises_on_gmat_timeout(self):
         import subprocess
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
@@ -248,6 +261,217 @@ class TestPropagateHifi(unittest.TestCase):
         self.assertAlmostEqual(kep["sma_km"], 6790, delta=50)
         self.assertAlmostEqual(kep["inc_deg"], 51.64, delta=0.1)
         self.assertIn("ta_deg", kep)
+
+
+class TestValidateScript(unittest.TestCase):
+    def _make_script(self, overrides: dict | None = None) -> str:
+        base = {k: "PLACEHOLDER" for k in _REQUIRED_SCRIPT_KEYWORDS}
+        base.update(overrides or {})
+        return "\n".join(base.values())
+
+    def test_valid_template_has_no_errors(self):
+        template = (_TEMPLATE_DIR / "propagation.script").read_text()
+        kep = _tle_to_keplerian(ISS_LINE1, ISS_LINE2)
+        epoch = _tle_epoch_to_utc_gregorian(ISS_LINE1)
+        script = (
+            template
+            .replace("%EPOCH%", epoch)
+            .replace("%SMA_KM%", str(kep["sma_km"]))
+            .replace("%ECC%", str(kep["ecc"]))
+            .replace("%INC_DEG%", str(kep["inc_deg"]))
+            .replace("%RAAN_DEG%", str(kep["raan_deg"]))
+            .replace("%AOP_DEG%", str(kep["aop_deg"]))
+            .replace("%TA_DEG%", str(kep["ta_deg"]))
+            .replace("%DURATION_SECS%", "3600")
+            .replace("%OUTPUT_FILE%", "/tmp/test_ephemeris.txt")
+        )
+        errors = validate_script(script)
+        self.assertEqual(errors, [], f"Unexpected validation errors: {errors}")
+
+    def test_detects_unresolved_placeholder(self):
+        script = "Create Spacecraft Sat;\n%EPOCH% is not substituted"
+        errors = validate_script(script)
+        self.assertTrue(any("Unresolved placeholders" in e for e in errors))
+        self.assertIn("%EPOCH%", str(errors))
+
+    def test_detects_multiple_placeholders(self):
+        script = "stuff %SMA_KM% and %ECC% not replaced"
+        errors = validate_script(script)
+        matches = _PLACEHOLDER_PATTERN.findall(script)
+        self.assertGreaterEqual(len(matches), 2)
+
+    def test_detects_missing_keywords(self):
+        script = "Create Spacecraft Sat;\nBeginMissionSequence;"
+        errors = validate_script(script)
+        missing = [e for e in errors if "Required GMAT keyword missing" in e]
+        self.assertTrue(len(missing) > 0)
+
+    def test_template_contains_all_required_keywords(self):
+        template = (_TEMPLATE_DIR / "propagation.script").read_text()
+        for kw in _REQUIRED_SCRIPT_KEYWORDS:
+            self.assertIn(kw, template, f"Template missing required keyword: '{kw}'")
+
+    def test_template_has_no_comments_only_placeholders(self):
+        template = (_TEMPLATE_DIR / "propagation.script").read_text()
+        placeholders = _PLACEHOLDER_PATTERN.findall(template)
+        expected = {
+            "%EPOCH%", "%SMA_KM%", "%ECC%", "%INC_DEG%",
+            "%RAAN_DEG%", "%AOP_DEG%", "%TA_DEG%",
+            "%DURATION_SECS%", "%OUTPUT_FILE%",
+        }
+        self.assertEqual(set(placeholders), expected,
+                         f"Unexpected placeholders in template: {set(placeholders) - expected}")
+
+    def test_valid_full_script_passes(self):
+        good_script = "\n".join(_REQUIRED_SCRIPT_KEYWORDS)
+        errors = validate_script(good_script)
+        placeholder_errors = [e for e in errors if "Unresolved" in e]
+        self.assertEqual(placeholder_errors, [])
+
+    def test_smoke_script_has_no_placeholders(self):
+        placeholders = _PLACEHOLDER_PATTERN.findall(_SMOKE_SCRIPT)
+        self.assertEqual(placeholders, [], f"Smoke script has unresolved placeholders: {placeholders}")
+
+    def test_smoke_script_has_begin_mission_sequence(self):
+        self.assertIn("BeginMissionSequence", _SMOKE_SCRIPT)
+
+    def test_smoke_script_has_propagate(self):
+        self.assertIn("Propagate", _SMOKE_SCRIPT)
+
+
+class TestPropagateHifiScriptGeneration(unittest.TestCase):
+    """Tests that the script rendered for GMAT is always valid before subprocess call."""
+
+    def _capture_script(self, line1: str, line2: str, **kwargs) -> str:
+        """Run propagate_hifi with a mock that captures the generated script content."""
+        captured = {}
+
+        def fake_run(cmd, *args, **kwargs_inner):
+            script_path = cmd[1] if len(cmd) > 1 else ""
+            if script_path and os.path.exists(script_path):
+                captured["script"] = open(script_path).read()
+            result = MagicMock()
+            result.returncode = 1
+            result.stdout = "deliberate fail"
+            result.stderr = ""
+            return result
+
+        with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
+            with patch("subprocess.run", side_effect=fake_run):
+                try:
+                    propagate_hifi(line1, line2, **kwargs)
+                except GmatError:
+                    pass
+
+        return captured.get("script", "")
+
+    def test_iss_script_has_no_placeholders(self):
+        script = self._capture_script(ISS_LINE1, ISS_LINE2, duration_hours=1)
+        self.assertNotEqual(script, "", "Script was never written — check tmpdir lifetime")
+        errors = validate_script(script)
+        placeholder_errors = [e for e in errors if "Unresolved" in e]
+        self.assertEqual(placeholder_errors, [], f"Placeholders remain: {placeholder_errors}")
+
+    def test_geo_script_has_no_placeholders(self):
+        script = self._capture_script(GEO_LINE1, GEO_LINE2, duration_hours=1)
+        errors = validate_script(script)
+        placeholder_errors = [e for e in errors if "Unresolved" in e]
+        self.assertEqual(placeholder_errors, [], f"Placeholders remain: {placeholder_errors}")
+
+    def test_iss_script_contains_epoch(self):
+        script = self._capture_script(ISS_LINE1, ISS_LINE2)
+        self.assertIn("2024", script, "Expected year 2024 in epoch line")
+        self.assertIn("Feb", script, "Expected 'Feb' in epoch line")
+
+    def test_iss_script_sma_reasonable(self):
+        import re
+        script = self._capture_script(ISS_LINE1, ISS_LINE2)
+        match = re.search(r"Sat\.SMA\s*=\s*([0-9.]+)", script)
+        self.assertIsNotNone(match, "SMA not found in script")
+        sma = float(match.group(1))
+        self.assertAlmostEqual(sma, 6790, delta=100)
+
+    def test_iss_script_inclination_correct(self):
+        import re
+        script = self._capture_script(ISS_LINE1, ISS_LINE2)
+        match = re.search(r"Sat\.INC\s*=\s*([0-9.]+)", script)
+        self.assertIsNotNone(match)
+        inc = float(match.group(1))
+        self.assertAlmostEqual(inc, 51.6406, delta=0.01)
+
+    def test_duration_substituted_correctly(self):
+        import re
+        script = self._capture_script(ISS_LINE1, ISS_LINE2, duration_hours=2, step_seconds=60)
+        match = re.search(r"ElapsedSecs\s*=\s*([0-9]+)", script)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)), 7200)
+
+    def test_output_file_path_absolute(self):
+        import re
+        script = self._capture_script(ISS_LINE1, ISS_LINE2)
+        match = re.search(r"Filename\s*=\s*'(.+?)'", script)
+        self.assertIsNotNone(match)
+        self.assertTrue(os.path.isabs(match.group(1)), "Report Filename must be an absolute path")
+
+    def test_script_passes_validate_script(self):
+        script = self._capture_script(ISS_LINE1, ISS_LINE2)
+        errors = validate_script(script)
+        self.assertEqual(errors, [], f"Script validation failed: {errors}")
+
+
+class TestRunSmokeTest(unittest.TestCase):
+    def test_returns_dict_with_required_keys(self):
+        with patch("api.services.gmat_service._find_binary", return_value=None):
+            result = run_smoke_test()
+        self.assertIn("ok", result)
+        self.assertIn("output", result)
+        self.assertIn("error", result)
+
+    def test_returns_not_ok_when_no_binary(self):
+        with patch("api.services.gmat_service._find_binary", return_value=None):
+            result = run_smoke_test()
+        self.assertFalse(result["ok"])
+        self.assertIsNotNone(result["error"])
+
+    def test_returns_ok_on_success(self):
+        fake_result = MagicMock()
+        fake_result.returncode = 0
+        fake_result.stdout = "GMAT Build Date: 2022\nScript ran successfully"
+        fake_result.stderr = ""
+        with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
+            with patch("subprocess.run", return_value=fake_result):
+                result = run_smoke_test()
+        self.assertTrue(result["ok"])
+        self.assertIsNone(result["error"])
+
+    def test_returns_not_ok_on_nonzero_exit(self):
+        fake_result = MagicMock()
+        fake_result.returncode = 1
+        fake_result.stdout = "Application Execution Failed: errors in script"
+        fake_result.stderr = ""
+        with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
+            with patch("subprocess.run", return_value=fake_result):
+                result = run_smoke_test()
+        self.assertFalse(result["ok"])
+        self.assertIn("exit 1", result["error"])
+
+    def test_returns_not_ok_on_execution_failed_string(self):
+        fake_result = MagicMock()
+        fake_result.returncode = 0
+        fake_result.stdout = "Application Execution Failed: Errors were found in the script"
+        fake_result.stderr = ""
+        with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
+            with patch("subprocess.run", return_value=fake_result):
+                result = run_smoke_test()
+        self.assertFalse(result["ok"], "Should fail when 'Application Execution Failed' in output")
+
+    def test_returns_not_ok_on_timeout(self):
+        import subprocess
+        with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
+            with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="x", timeout=60)):
+                result = run_smoke_test()
+        self.assertFalse(result["ok"])
+        self.assertIn("timed out", result["error"])
 
 
 if __name__ == "__main__":
