@@ -181,6 +181,7 @@ export default function KestrelMissionPage() {
   const [gmatPlanError, setGmatPlanError] = useState(null)
   const [gmatPlanHistory, setGmatPlanHistory] = useState([])
   const [gmatHistoryLoading, setGmatHistoryLoading] = useState(false)
+  const [gmatPlanCZML, setGmatPlanCZML] = useState(null)
   const [kestrelProxyNoradId, setKestrelProxyNoradId] = useState('')
   const [gmatMaxDv, setGmatMaxDv] = useState(0.5)
   const [gmatMaxDays, setGmatMaxDays] = useState(14)
@@ -637,6 +638,96 @@ export default function KestrelMissionPage() {
   useEffect(() => {
     if (activeSubTab === 'gmatplan') fetchGmatPlanHistory()
   }, [activeSubTab, fetchGmatPlanHistory])
+
+  useEffect(() => {
+    if (!gmatPlan?.kestrel_kep || !gmatPlan?.target_kep) {
+      setGmatPlanCZML(null)
+      return
+    }
+    try {
+      const D2R = Math.PI / 180
+      const kKep = gmatPlan.kestrel_kep
+      const tKep = gmatPlan.target_kep
+
+      const kEls = {
+        sma: kKep.sma_km * 1000,
+        ecc: kKep.ecc,
+        inc: kKep.inc_deg * D2R,
+        raan: kKep.raan_deg * D2R,
+        argPerigee: kKep.aop_deg * D2R,
+        meanAnomaly0: kKep.ta_deg * D2R,
+      }
+      const tEls = {
+        sma: tKep.sma_km * 1000,
+        ecc: tKep.ecc,
+        inc: tKep.inc_deg * D2R,
+        raan: tKep.raan_deg * D2R,
+        argPerigee: tKep.aop_deg * D2R,
+        meanAnomaly0: tKep.ta_deg * D2R,
+      }
+
+      const waitSecs = gmatPlan.wait_time_s || 0
+      const transferSecs = gmatPlan.transfer_time_s || 3600
+      const tPeriod = orbitalPeriod(tEls.sma)
+      const kPeriod = orbitalPeriod(kEls.sma)
+      const displayDuration = waitSecs + transferSecs + tPeriod * 2
+      const kStep = Math.max(30, Math.round(kPeriod / 120))
+      const tStep = Math.max(30, Math.round(tPeriod / 120))
+
+      const kPoints = propagateOrbit(kEls, displayDuration, kStep)
+      const tPoints = propagateOrbit(tEls, displayDuration, tStep)
+      const arcPoints = propagateTransferOrbit(kEls.sma, tEls.sma, kEls.raan, kEls.inc, waitSecs, 150)
+
+      const startIso = gmatPlan.burn1_epoch || new Date().toISOString()
+      const arcStart = arcPoints.length > 0 ? arcPoints[0].t : waitSecs
+      const arcEnd = arcPoints.length > 0 ? arcPoints[arcPoints.length - 1].t : waitSecs + transferSecs
+
+      const czml = generateCZML(
+        [
+          {
+            id: 'kestrel',
+            label: `KESTREL (NORAD ${gmatPlan.kestrel_norad_id})`,
+            points: kPoints,
+            color: [52, 152, 219, 255],
+            trailTime: kPeriod * 2,
+            leadTime: 0,
+            pointSize: 12,
+            pathWidth: 2.5,
+            labelOffsetY: -28,
+          },
+          {
+            id: 'target',
+            label: selectedTarget?.name || `Target (NORAD ${gmatPlan.target_norad_id})`,
+            points: tPoints,
+            color: [231, 76, 60, 255],
+            trailTime: tPeriod / 3,
+            leadTime: tPeriod * 0.67,
+            pointSize: 10,
+            pathWidth: 2,
+            labelOffsetY: 18,
+          },
+          {
+            id: 'transfer',
+            label: 'Transfer Arc',
+            points: arcPoints,
+            color: [241, 196, 15, 180],
+            trailTime: transferSecs,
+            leadTime: 0,
+            pointSize: 3,
+            pathWidth: 2,
+            availStartSec: arcStart,
+            availEndSec: arcEnd,
+            noLabel: true,
+          },
+        ],
+        startIso,
+        displayDuration
+      )
+      setGmatPlanCZML(czml)
+    } catch {
+      setGmatPlanCZML(null)
+    }
+  }, [gmatPlan, selectedTarget])
 
   const kestrelPeriod = orbitalPeriod(altitudeToSMA(altitudeKm))
 
@@ -1525,6 +1616,7 @@ export default function KestrelMissionPage() {
 
             <div className="km-gmat-plan-main">
               {gmatPlan ? (
+                <div className="km-gmat-upper">
                 <div className="km-gmat-metrics">
                   <div className="km-gmat-metrics-title">
                     {gmatPlan.gmat_verified ? '⚙ GMAT High-Fidelity' : '⚡ Analytical'} Maneuver Plan
@@ -1639,6 +1731,7 @@ export default function KestrelMissionPage() {
                     )}
                   </div>
                 </div>
+                </div>
               ) : (
                 <div className="km-collect-empty">
                   <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚙</div>
@@ -1653,6 +1746,15 @@ export default function KestrelMissionPage() {
                   </p>
                 </div>
               )}
+              <div className="km-gmat-cesium">
+                <KestrelCesiumViewer
+                  czmlData={gmatPlanCZML}
+                  launchSite={null}
+                  targetLabel={selectedTarget?.name}
+                  clockMultiplier={2000}
+                  emptyMessage="Compute a GMAT maneuver plan to see the intercept trajectory — Kestrel (blue), target (red), transfer arc (yellow)."
+                />
+              </div>
             </div>
           </>
         )}

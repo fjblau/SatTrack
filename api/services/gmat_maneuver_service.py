@@ -168,6 +168,8 @@ def compute_analytical_maneuver(
         "total_time_s": round(wait_time + t_transfer, 1),
         "burn1_epoch": burn1_iso,
         "burn2_epoch": burn2_iso,
+        "kestrel_kep": kep_k,
+        "target_kep": kep_t,
         "closest_approach_km": None,
         "closest_approach_time": None,
         "gmat_verified": False,
