@@ -61,6 +61,13 @@ export const API_ENDPOINTS = {
     KESTREL_MISSION: '/v2/kestrel-mission',
   },
 
+  KESTREL: {
+    MANEUVER_PLAN: '/v2/kestrel/maneuver-plan',
+    MANEUVER_PLANS: '/v2/kestrel/maneuver-plans',
+    MANEUVER_PLAN_GET: (id) => `/v2/kestrel/maneuver-plans/${id}`,
+    MANEUVER_PLAN_DELETE: (id) => `/v2/kestrel/maneuver-plans/${id}`,
+  },
+
   EPHEMERIS: {
     BASE: '/v2/ephemeris',
     GENERATE: '/v2/ephemeris/generate',

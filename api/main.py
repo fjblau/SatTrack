@@ -6,7 +6,7 @@ import os
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 
@@ -65,3 +65,4 @@ app.include_router(observations.router)
 app.include_router(agent.router)
 app.include_router(docs.router)
 app.include_router(ephemeris.router)
+app.include_router(kestrel.router)

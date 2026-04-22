@@ -18,6 +18,7 @@ COLLECTION_REG_DOCS = "registration_documents"
 COLLECTION_OBSERVATIONS = "observations"
 COLLECTION_OBSERVATION_SOURCES = "observation_sources"
 COLLECTION_EPHEMERIS = "ephemeris_envelopes"
+COLLECTION_MANEUVER_PLANS = "kestrel_maneuver_plans"
 
 OBSERVATION_GRAPH_NAME = "observation_relationships"
 EDGE_COLLECTION_OBS_SATELLITE = "observation_satellite_edges"
@@ -72,6 +73,14 @@ def connect_arangodb():
         eph_col.add_persistent_index(fields=['generated_at'], unique=False)
         eph_col.add_persistent_index(fields=['valid_from'], unique=False)
         eph_col.add_persistent_index(fields=['valid_until'], unique=False)
+
+        # Ensure kestrel_maneuver_plans collection exists
+        if not db.has_collection(COLLECTION_MANEUVER_PLANS):
+            db.create_collection(COLLECTION_MANEUVER_PLANS)
+        mpln_col = db.collection(COLLECTION_MANEUVER_PLANS)
+        mpln_col.add_persistent_index(fields=['kestrel_norad_id'], unique=False)
+        mpln_col.add_persistent_index(fields=['target_norad_id'], unique=False)
+        mpln_col.add_persistent_index(fields=['created_at'], unique=False)
 
         # Ensure observation edge collections exist
         obs_edge_collections = [

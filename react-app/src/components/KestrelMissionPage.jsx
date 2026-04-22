@@ -176,6 +176,15 @@ export default function KestrelMissionPage() {
   const [advisorClarification, setAdvisorClarification] = useState('')
   const [advisorConstraints, setAdvisorConstraints] = useState('')
 
+  const [gmatPlan, setGmatPlan] = useState(null)
+  const [gmatPlanLoading, setGmatPlanLoading] = useState(false)
+  const [gmatPlanError, setGmatPlanError] = useState(null)
+  const [gmatPlanHistory, setGmatPlanHistory] = useState([])
+  const [gmatHistoryLoading, setGmatHistoryLoading] = useState(false)
+  const [kestrelProxyNoradId, setKestrelProxyNoradId] = useState('')
+  const [gmatMaxDv, setGmatMaxDv] = useState(0.5)
+  const [gmatMaxDays, setGmatMaxDays] = useState(14)
+
   const [liveObs, setLiveObs] = useState([])
   const [collectRunning, setCollectRunning] = useState(false)
   const [collectDone, setCollectDone] = useState(false)
@@ -576,6 +585,59 @@ export default function KestrelMissionPage() {
     }
   }, [])
 
+  const handleComputeGmatPlan = useCallback(async () => {
+    if (!selectedTarget?.noradId) {
+      setGmatPlanError('Select a target object with a NORAD ID first.')
+      return
+    }
+    if (!kestrelProxyNoradId || isNaN(parseInt(kestrelProxyNoradId))) {
+      setGmatPlanError('Enter a valid NORAD ID for the Kestrel proxy spacecraft.')
+      return
+    }
+    setGmatPlanLoading(true)
+    setGmatPlanError(null)
+    setGmatPlan(null)
+    try {
+      const res = await apiFetch(API_ENDPOINTS.KESTREL.MANEUVER_PLAN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kestrel_norad_id: parseInt(kestrelProxyNoradId),
+          target_norad_id: selectedTarget.noradId,
+          mission_type: missionType,
+          max_dv_km_s: gmatMaxDv,
+          max_time_days: gmatMaxDays,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Plan computation failed')
+      setGmatPlan(data)
+      fetchGmatPlanHistory()
+    } catch (err) {
+      setGmatPlanError(err.message)
+    } finally {
+      setGmatPlanLoading(false)
+    }
+  }, [selectedTarget, kestrelProxyNoradId, missionType, gmatMaxDv, gmatMaxDays])
+
+  const fetchGmatPlanHistory = useCallback(async () => {
+    setGmatHistoryLoading(true)
+    try {
+      const params = new URLSearchParams({ limit: 10 })
+      if (selectedTarget?.noradId) params.set('target_norad_id', selectedTarget.noradId)
+      const res = await apiFetch(`${API_ENDPOINTS.KESTREL.MANEUVER_PLANS}?${params}`)
+      const data = await res.json()
+      setGmatPlanHistory(data.data || [])
+    } catch {
+    } finally {
+      setGmatHistoryLoading(false)
+    }
+  }, [selectedTarget])
+
+  useEffect(() => {
+    if (activeSubTab === 'gmatplan') fetchGmatPlanHistory()
+  }, [activeSubTab, fetchGmatPlanHistory])
+
   const kestrelPeriod = orbitalPeriod(altitudeToSMA(altitudeKm))
 
   return (
@@ -604,6 +666,15 @@ export default function KestrelMissionPage() {
         >
           AI Mission Advisor
           {advisorResult && <span className="km-tab-badge">✓</span>}
+        </button>
+        <button
+          className={activeSubTab === 'gmatplan' ? 'active' : ''}
+          onClick={() => setActiveSubTab('gmatplan')}
+          disabled={!selectedTarget}
+          title={!selectedTarget ? 'Select a target object first' : ''}
+        >
+          GMAT Maneuver Plan
+          {gmatPlan && <span className="km-tab-badge">✓</span>}
         </button>
         <button
           className={`km-collect-tab${activeSubTab === 'collection' ? ' active' : ''}`}
@@ -1225,6 +1296,364 @@ export default function KestrelMissionPage() {
               targetLabel={selectedTarget?.name}
               emptyMessage="The AI advisor will recommend and execute the best scenario — the result appears here."
             />
+          </>
+        )}
+
+        {activeSubTab === 'gmatplan' && (
+          <>
+            <aside className="km-sidebar">
+              <section className="km-section">
+                <h3>GMAT Maneuver Compute</h3>
+                <div className="km-mission-summary-row">
+                  <span className="km-sum-label">Target</span>
+                  <span className="km-sum-value-inline">{selectedTarget?.name || '—'}</span>
+                </div>
+                <div className="km-mission-summary-row">
+                  <span className="km-sum-label">NORAD</span>
+                  <span className="km-sum-value-inline">{selectedTarget?.noradId || '—'}</span>
+                </div>
+                <div className="km-field" style={{ marginTop: '0.75rem' }}>
+                  <label>Kestrel Proxy NORAD ID</label>
+                  <input
+                    type="number"
+                    className="km-input"
+                    placeholder="e.g. 25544 (ISS as proxy)"
+                    value={kestrelProxyNoradId}
+                    onChange={(e) => setKestrelProxyNoradId(e.target.value)}
+                  />
+                  <p className="km-hint-text">A real catalogued object whose TLE defines Kestrel&apos;s starting orbit.</p>
+                </div>
+                <div className="km-field">
+                  <label>
+                    Max ΔV budget
+                    <span className="km-field-value">{gmatMaxDv.toFixed(2)} km/s</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0.05}
+                    max={2.0}
+                    step={0.05}
+                    value={gmatMaxDv}
+                    onChange={(e) => setGmatMaxDv(parseFloat(e.target.value))}
+                    className="km-slider"
+                  />
+                </div>
+                <div className="km-field">
+                  <label>
+                    Max time
+                    <span className="km-field-value">{gmatMaxDays} days</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={60}
+                    step={1}
+                    value={gmatMaxDays}
+                    onChange={(e) => setGmatMaxDays(parseInt(e.target.value))}
+                    className="km-slider"
+                  />
+                </div>
+                {gmatPlanError && <p className="km-error">{gmatPlanError}</p>}
+                <button
+                  className="km-primary-btn"
+                  onClick={handleComputeGmatPlan}
+                  disabled={gmatPlanLoading || !selectedTarget?.noradId}
+                >
+                  {gmatPlanLoading ? 'Computing…' : '⚙ Compute GMAT Plan'}
+                </button>
+              </section>
+
+              {gmatPlan && (
+                <section className="km-section km-results">
+                  <h3>
+                    Plan Result
+                    <span
+                      className="km-badge"
+                      style={{
+                        marginLeft: '0.5rem',
+                        fontSize: '0.68rem',
+                        background: gmatPlan.gmat_verified ? '#1a4a1a' : '#2a2a1a',
+                        color: gmatPlan.gmat_verified ? '#3fb950' : '#e6b454',
+                        border: `1px solid ${gmatPlan.gmat_verified ? '#3fb950' : '#e6b454'}`,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      {gmatPlan.gmat_verified ? 'GMAT Verified' : 'Analytical'}
+                    </span>
+                  </h3>
+                  <div className="km-result-block">
+                    <div className="km-result-title">ΔV Budget</div>
+                    <div className="km-result-rows">
+                      <div className="km-result-row">
+                        <span>ΔV₁ departure</span>
+                        <strong className="km-dv">{gmatPlan.dv1_ms?.toFixed(1)} m/s</strong>
+                      </div>
+                      <div className="km-result-row">
+                        <span>ΔV₂ arrival</span>
+                        <strong className="km-dv">{gmatPlan.dv2_ms?.toFixed(1)} m/s</strong>
+                      </div>
+                      {gmatPlan.dv_plane_change_ms > 0.1 && (
+                        <div className="km-result-row">
+                          <span>Plane change</span>
+                          <strong className="km-warn">{gmatPlan.dv_plane_change_ms?.toFixed(1)} m/s</strong>
+                        </div>
+                      )}
+                      <div className="km-result-row km-total">
+                        <span>Total ΔV</span>
+                        <strong className="km-dv">{gmatPlan.dv_total_ms?.toFixed(1)} m/s</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="km-result-block">
+                    <div className="km-result-title">Timeline</div>
+                    <div className="km-result-rows">
+                      <div className="km-result-row">
+                        <span>Phase wait</span>
+                        <strong>{fmtTime(gmatPlan.wait_time_s)}</strong>
+                      </div>
+                      <div className="km-result-row">
+                        <span>Transfer arc</span>
+                        <strong>{fmtTime(gmatPlan.transfer_time_s)}</strong>
+                      </div>
+                      <div className="km-result-row km-total">
+                        <span>Total time</span>
+                        <strong>{fmtTime(gmatPlan.total_time_s)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="km-result-block">
+                    <div className="km-result-title">Burn Epochs</div>
+                    <div className="km-result-rows">
+                      <div className="km-result-row">
+                        <span>Burn 1</span>
+                        <strong style={{ fontSize: '0.72rem' }}>
+                          {gmatPlan.burn1_epoch ? new Date(gmatPlan.burn1_epoch).toUTCString().slice(0, 22) : '—'}
+                        </strong>
+                      </div>
+                      <div className="km-result-row">
+                        <span>Burn 2</span>
+                        <strong style={{ fontSize: '0.72rem' }}>
+                          {gmatPlan.burn2_epoch ? new Date(gmatPlan.burn2_epoch).toUTCString().slice(0, 22) : '—'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                  {gmatPlan.closest_approach_km != null && (
+                    <div className="km-result-block">
+                      <div className="km-result-title">Closest Approach</div>
+                      <div className="km-result-rows">
+                        <div className="km-result-row">
+                          <span>Range</span>
+                          <strong style={{ color: '#3fb950' }}>{gmatPlan.closest_approach_km?.toFixed(2)} km</strong>
+                        </div>
+                        <div className="km-result-row">
+                          <span>Time</span>
+                          <strong style={{ fontSize: '0.72rem' }}>
+                            {gmatPlan.closest_approach_time ? new Date(gmatPlan.closest_approach_time).toUTCString().slice(0, 22) : '—'}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="km-result-block">
+                    <div className="km-result-title">Orbital Delta</div>
+                    <div className="km-result-rows">
+                      <div className="km-result-row">
+                        <span>Kestrel alt</span>
+                        <strong>{gmatPlan.kestrel_alt_km?.toFixed(0)} km</strong>
+                      </div>
+                      <div className="km-result-row">
+                        <span>Target alt</span>
+                        <strong>{gmatPlan.target_alt_km?.toFixed(0)} km</strong>
+                      </div>
+                      <div className="km-result-row">
+                        <span>Inc Δ</span>
+                        <strong className={gmatPlan.inc_diff_deg > 5 ? 'km-warn' : ''}>
+                          {gmatPlan.inc_diff_deg?.toFixed(2)}°
+                        </strong>
+                      </div>
+                      <div className="km-result-row">
+                        <span>RAAN Δ</span>
+                        <strong>{gmatPlan.raan_diff_deg?.toFixed(2)}°</strong>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {gmatPlanHistory.length > 0 && (
+                <section className="km-section">
+                  <h3>Plan History</h3>
+                  <p className="km-hint-text" style={{ marginBottom: '0.5rem' }}>
+                    {gmatHistoryLoading ? 'Loading…' : `${gmatPlanHistory.length} saved plan(s) for this target`}
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {gmatPlanHistory.map((p, i) => (
+                      <div
+                        key={p._key || i}
+                        className="km-scenario-card"
+                        style={{ cursor: 'pointer', padding: '0.5rem 0.75rem' }}
+                        onClick={() => setGmatPlan(p)}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#888' }}>
+                            {new Date(p.created_at).toLocaleDateString()}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              background: p.gmat_verified ? '#1a4a1a' : '#2a2a1a',
+                              color: p.gmat_verified ? '#3fb950' : '#e6b454',
+                            }}
+                          >
+                            {p.gmat_verified ? 'GMAT' : 'Analytical'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                          ΔV {p.dv_total_ms?.toFixed(0)} m/s · {fmtTime(p.total_time_s)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </aside>
+
+            <div className="km-gmat-plan-main">
+              {gmatPlan ? (
+                <div className="km-gmat-metrics">
+                  <div className="km-gmat-metrics-title">
+                    {gmatPlan.gmat_verified ? '⚙ GMAT High-Fidelity' : '⚡ Analytical'} Maneuver Plan
+                    {' · '}{selectedTarget?.name}
+                  </div>
+                  <div className="km-gmat-metric-grid">
+                    <div className="km-gmat-metric-card">
+                      <div className="km-gmat-metric-label">ΔV₁ Departure</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#3498db' }}>
+                        {gmatPlan.dv1_ms?.toFixed(1)}
+                      </div>
+                      <div className="km-gmat-metric-unit">m/s</div>
+                    </div>
+                    <div className="km-gmat-metric-card">
+                      <div className="km-gmat-metric-label">ΔV₂ Arrival</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#3498db' }}>
+                        {gmatPlan.dv2_ms?.toFixed(1)}
+                      </div>
+                      <div className="km-gmat-metric-unit">m/s</div>
+                    </div>
+                    <div className="km-gmat-metric-card km-gmat-metric-card--highlight">
+                      <div className="km-gmat-metric-label">Total ΔV</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#e74c3c' }}>
+                        {gmatPlan.dv_total_ms?.toFixed(1)}
+                      </div>
+                      <div className="km-gmat-metric-unit">m/s</div>
+                    </div>
+                    <div className="km-gmat-metric-card">
+                      <div className="km-gmat-metric-label">Phase Wait</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#f39c12' }}>
+                        {(gmatPlan.wait_time_s / 3600).toFixed(1)}
+                      </div>
+                      <div className="km-gmat-metric-unit">hours</div>
+                    </div>
+                    <div className="km-gmat-metric-card">
+                      <div className="km-gmat-metric-label">Transfer Time</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#f39c12' }}>
+                        {(gmatPlan.transfer_time_s / 3600).toFixed(1)}
+                      </div>
+                      <div className="km-gmat-metric-unit">hours</div>
+                    </div>
+                    <div className="km-gmat-metric-card km-gmat-metric-card--highlight">
+                      <div className="km-gmat-metric-label">Total Time</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#e67e22' }}>
+                        {(gmatPlan.total_time_s / 86400).toFixed(2)}
+                      </div>
+                      <div className="km-gmat-metric-unit">days</div>
+                    </div>
+                    <div className="km-gmat-metric-card">
+                      <div className="km-gmat-metric-label">Kestrel Alt</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#2ecc71' }}>
+                        {gmatPlan.kestrel_alt_km?.toFixed(0)}
+                      </div>
+                      <div className="km-gmat-metric-unit">km</div>
+                    </div>
+                    <div className="km-gmat-metric-card">
+                      <div className="km-gmat-metric-label">Target Alt</div>
+                      <div className="km-gmat-metric-value" style={{ color: '#2ecc71' }}>
+                        {gmatPlan.target_alt_km?.toFixed(0)}
+                      </div>
+                      <div className="km-gmat-metric-unit">km</div>
+                    </div>
+                    <div className="km-gmat-metric-card">
+                      <div className="km-gmat-metric-label">Inc Δ</div>
+                      <div
+                        className="km-gmat-metric-value"
+                        style={{ color: gmatPlan.inc_diff_deg > 5 ? '#e74c3c' : '#2ecc71' }}
+                      >
+                        {gmatPlan.inc_diff_deg?.toFixed(2)}
+                      </div>
+                      <div className="km-gmat-metric-unit">deg</div>
+                    </div>
+                    {gmatPlan.closest_approach_km != null && (
+                      <div className="km-gmat-metric-card km-gmat-metric-card--highlight">
+                        <div className="km-gmat-metric-label">Closest Approach</div>
+                        <div className="km-gmat-metric-value" style={{ color: '#3fb950' }}>
+                          {gmatPlan.closest_approach_km?.toFixed(2)}
+                        </div>
+                        <div className="km-gmat-metric-unit">km</div>
+                      </div>
+                    )}
+                    {gmatPlan.dv_plane_change_ms > 0.1 && (
+                      <div className="km-gmat-metric-card">
+                        <div className="km-gmat-metric-label">Plane Change Cost</div>
+                        <div className="km-gmat-metric-value" style={{ color: '#e74c3c' }}>
+                          {gmatPlan.dv_plane_change_ms?.toFixed(1)}
+                        </div>
+                        <div className="km-gmat-metric-unit">m/s</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="km-gmat-burn-epochs">
+                    <div className="km-gmat-epoch-row">
+                      <span className="km-gmat-epoch-label">🔥 Burn 1</span>
+                      <span className="km-gmat-epoch-val">
+                        {gmatPlan.burn1_epoch ? new Date(gmatPlan.burn1_epoch).toUTCString() : '—'}
+                      </span>
+                    </div>
+                    <div className="km-gmat-epoch-row">
+                      <span className="km-gmat-epoch-label">🔥 Burn 2</span>
+                      <span className="km-gmat-epoch-val">
+                        {gmatPlan.burn2_epoch ? new Date(gmatPlan.burn2_epoch).toUTCString() : '—'}
+                      </span>
+                    </div>
+                    {gmatPlan.closest_approach_time && (
+                      <div className="km-gmat-epoch-row">
+                        <span className="km-gmat-epoch-label">🎯 Closest Approach</span>
+                        <span className="km-gmat-epoch-val">
+                          {new Date(gmatPlan.closest_approach_time).toUTCString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="km-collect-empty">
+                  <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚙</div>
+                  <p>
+                    Enter a <strong>Kestrel proxy NORAD ID</strong> and click{' '}
+                    <strong>Compute GMAT Plan</strong> to calculate the high-fidelity
+                    maneuver parameters for this rendezvous.
+                  </p>
+                  <p className="km-hint-text" style={{ marginTop: '0.5rem' }}>
+                    Without GMAT installed, results use the analytical Hohmann transfer model.
+                    With GMAT, the plan is verified using an RK89/EGM96 hi-fi propagator.
+                  </p>
+                </div>
+              )}
+            </div>
           </>
         )}
 
