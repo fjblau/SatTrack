@@ -2,6 +2,7 @@
 % GMAT High-Fidelity Propagation Script
 % Auto-generated — do not edit directly
 % Parameters substituted by gmat_service.py
+% Force model: EGM96 8x8 gravity only (no drag, no SRP)
 %----------------------------------------
 
 %--- Spacecraft ---
@@ -17,25 +18,14 @@ Sat.RAAN                = %RAAN_DEG%;
 Sat.AOP                 = %AOP_DEG%;
 Sat.TA                  = %TA_DEG%;
 Sat.DryMass             = 100;
-Sat.Cd                  = 2.2;
-Sat.Cr                  = 1.8;
-Sat.DragArea            = 15;
-Sat.SRPArea             = 15;
 
-%--- Force Model ---
+%--- Force Model: EGM96 8x8 gravity, no drag, no SRP ---
 Create ForceModel HiFiFM;
 HiFiFM.CentralBody                  = Earth;
 HiFiFM.PrimaryBodies                = {Earth};
 HiFiFM.GravityField.Earth.Degree    = 8;
 HiFiFM.GravityField.Earth.Order     = 8;
 HiFiFM.GravityField.Earth.PotentialFile = '%EGM96_PATH%';
-HiFiFM.Drag.AtmosphereModel         = NRLMSISE00;
-HiFiFM.Drag.HistoricWeatherSource   = ConstantFluxAndGeoMag;
-HiFiFM.Drag.F107                    = 150;
-HiFiFM.Drag.F107A                   = 150;
-HiFiFM.Drag.MagneticIndex           = 3;
-HiFiFM.SRP                          = On;
-HiFiFM.RelativisticCorrection       = Off;
 HiFiFM.ErrorControl                 = RSSStep;
 
 %--- Propagator ---
