@@ -16,7 +16,7 @@ RUN curl -L \
     "https://api.github.com/repos/fjblau/gmat-binaries/releases/assets/402371855" \
     -o /tmp/gmat.tar.gz \
     && mkdir -p /opt/gmat \
-    && tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=1 \
+    && tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=2 \
     && rm /tmp/gmat.tar.gz
 
 ENV GMAT_HOME=/opt/gmat
