@@ -507,6 +507,27 @@
   color: #d4820a !important;
 }
 
+.km-coorbital-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.4);
+  border-left: 4px solid #e74c3c;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  font-size: 0.82rem;
+  color: #e8d5d3;
+  line-height: 1.5;
+}
+
+.km-coorbital-warning .km-warn-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 .km-warn-note {
   font-size: 0.74rem;
   color: #d4820a;

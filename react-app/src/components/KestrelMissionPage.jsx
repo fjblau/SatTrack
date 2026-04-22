@@ -1792,6 +1792,12 @@ export default function KestrelMissionPage() {
                   </p>
                 </div>
               )}
+              {gmatPlan && Math.abs(gmatPlan.kestrel_alt_km - gmatPlan.target_alt_km) < 5 && Math.abs(gmatPlan.inc_diff_deg) < 0.1 && (
+                <div className="km-coorbital-warning">
+                  <span className="km-warn-icon">⚠</span>
+                  <strong>Co-orbital target</strong> — KESTREL and target are in the same orbit (alt diff &lt; 5 km, inc diff &lt; 0.1°). No rendezvous maneuver needed; the spacecraft are already co-orbital. For a rendezvous demonstration, select a target at a different altitude or inclination (e.g. a Starlink at ~540 km, inc ~53°).
+                </div>
+              )}
               <div className="km-gmat-cesium">
                 <KestrelCesiumViewer
                   czmlData={gmatPlanCZML}
