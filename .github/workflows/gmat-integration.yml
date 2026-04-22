@@ -32,7 +32,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GMAT_HOME: /opt/gmat
-      GITHUB_TOKEN: ${{ secrets.GMAT_BINARIES_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -48,15 +47,36 @@ jobs:
           sudo apt-get install -y libgtk2.0-0 libglu1-mesa
 
       - name: Download GMAT R2022a binaries
+        env:
+          GMAT_BINARIES_TOKEN: ${{ secrets.GMAT_BINARIES_TOKEN }}
         run: |
-          curl -L \
-            -H "Authorization: token $GITHUB_TOKEN" \
+          if [ -z "$GMAT_BINARIES_TOKEN" ]; then
+            echo "ERROR: GMAT_BINARIES_TOKEN secret is not set in this repository."
+            echo "Go to: SatTrack repo → Settings → Secrets → Actions → New repository secret"
+            echo "Name: GMAT_BINARIES_TOKEN  Value: (PAT with read access to fjblau/gmat-binaries)"
+            exit 1
+          fi
+          echo "Downloading GMAT R2022a binaries..."
+          HTTP_CODE=$(curl -L \
+            -H "Authorization: token $GMAT_BINARIES_TOKEN" \
             -H "Accept: application/octet-stream" \
             "https://api.github.com/repos/fjblau/gmat-binaries/releases/assets/402371855" \
-            -o /tmp/gmat.tar.gz
+            -o /tmp/gmat.tar.gz \
+            -w "%{http_code}")
+          echo "HTTP response: $HTTP_CODE"
+          FILE_SIZE=$(stat -c%s /tmp/gmat.tar.gz)
+          echo "Downloaded file size: $FILE_SIZE bytes"
+          if [ "$HTTP_CODE" != "200" ] || [ "$FILE_SIZE" -lt 1000000 ]; then
+            echo "ERROR: Download failed (HTTP $HTTP_CODE, size $FILE_SIZE). Token may lack access to fjblau/gmat-binaries."
+            cat /tmp/gmat.tar.gz
+            exit 1
+          fi
+          file /tmp/gmat.tar.gz
           sudo mkdir -p /opt/gmat
-          sudo tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=2
-          sudo chmod +x /opt/gmat/bin/GmatConsole-R2022a
+          sudo tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=2 || \
+            sudo tar -xzf /tmp/gmat.tar.gz -C /opt/gmat --strip-components=1
+          sudo chmod +x /opt/gmat/bin/GmatConsole-R2022a 2>/dev/null || true
+          sudo find /opt/gmat/bin -name "GmatConsole*" -exec chmod +x {} \;
           echo "GMAT installed at /opt/gmat"
           ls /opt/gmat/bin/
 
