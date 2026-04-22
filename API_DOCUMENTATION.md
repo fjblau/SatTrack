@@ -15,6 +15,7 @@ Complete API reference for the Kessler satellite tracking application.
    - [Graphs](#graphs)
    - [Documents](#documents)
    - [TLE Data](#tle-data)
+   - [Ephemeris](#ephemeris)
    - [MQTT Configuration](#mqtt-configuration)
    - [Observations](#observations)
    - [Admin](#admin)
@@ -1141,6 +1142,255 @@ curl "http://localhost:8000/v2/tle/25544"
 
 ---
 
+### Ephemeris
+
+High-fidelity ephemeris generation and storage. Supports two propagators:
+
+- **`SGP4`** (default): Fast, standard SGP4/SDP4 propagation via the `sgp4` library. Available on all deployments.
+- **`HIFI`**: GMAT-based propagation using the Runge-Kutta 89 integrator with EGM96 8×8 gravity. Returns 503 if GMAT is not installed on the server.
+
+---
+
+#### Generate Ephemeris
+
+```http
+POST /v2/ephemeris/generate
+```
+
+Propagates a satellite's TLE forward and saves the resulting ephemeris envelope.
+
+**Request Body:**
+
+```json
+{
+  "norad_id": 25544,
+  "duration_hours": 24.0,
+  "step_seconds": 60,
+  "propagator": "SGP4"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `norad_id` | integer | Yes | NORAD catalog number |
+| `duration_hours` | float | No | Propagation window length (default: 24, max: 168) |
+| `step_seconds` | integer | No | Time step in seconds (default: 60, range: 10–3600) |
+| `propagator` | string | No | `"SGP4"` (default) or `"HIFI"` for GMAT high-fidelity propagation |
+
+**Response:**
+
+```json
+{
+  "envelope_id": "abc123",
+  "norad_id": 25544,
+  "satellite_name": "ISS (ZARYA)",
+  "generated_at": "2026-04-22T10:00:00Z",
+  "valid_from": "2026-04-22T10:00:00Z",
+  "valid_until": "2026-04-23T10:00:00Z",
+  "step_seconds": 60,
+  "num_points": 1440,
+  "orbital_period_minutes": 92.7
+}
+```
+
+**HIFI propagator details** (when `propagator: "HIFI"`):
+
+- Uses NASA GMAT R2022a `GmatConsole` binary (set `GMAT_HOME` environment variable)
+- Force model: EGM96 8×8 spherical harmonic gravity, no drag, no SRP
+- Integrator: Runge-Kutta 89 (adaptive step, accuracy `1e-12`)
+- TLE elements are converted from mean motion to Keplerian elements before being passed to GMAT
+- Returns `503 Service Unavailable` if the GMAT binary is not found
+
+**Errors:**
+
+| Code | Reason |
+|------|--------|
+| 400 | Invalid `duration_hours` or `step_seconds`, or TLE parsing failure |
+| 404 | NORAD ID not found in TLE sources |
+| 503 | `propagator: "HIFI"` requested but GMAT is not installed |
+
+**Example:**
+
+```bash
+# SGP4 propagation (24 h, 60 s steps)
+curl -X POST "http://localhost:8000/v2/ephemeris/generate" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"norad_id": 25544, "duration_hours": 24, "step_seconds": 60}'
+
+# GMAT high-fidelity propagation (requires GMAT installed)
+curl -X POST "http://localhost:8000/v2/ephemeris/generate" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"norad_id": 25544, "duration_hours": 24, "step_seconds": 60, "propagator": "HIFI"}'
+```
+
+---
+
+#### List Ephemeris Envelopes
+
+```http
+GET /v2/ephemeris
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `norad_id` | integer | Filter by NORAD ID |
+| `limit` | integer | Page size (default: 50, max: 200) |
+| `offset` | integer | Pagination offset (default: 0) |
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "_key": "abc123",
+      "norad_id": 25544,
+      "satellite_name": "ISS (ZARYA)",
+      "propagator": "GMAT_RK89_EGM96",
+      "generated_at": "2026-04-22T10:00:00Z",
+      "valid_from": "2026-04-22T10:00:00Z",
+      "valid_until": "2026-04-23T10:00:00Z",
+      "num_points": 1440
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+---
+
+#### Get Ephemeris Envelope
+
+```http
+GET /v2/ephemeris/{envelope_id}
+```
+
+Returns the full ephemeris envelope including all propagated points.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `envelope_id` | string | Ephemeris envelope ID |
+
+**Response:**
+
+```json
+{
+  "_key": "abc123",
+  "norad_id": 25544,
+  "satellite_name": "ISS (ZARYA)",
+  "propagator": "GMAT_RK89_EGM96",
+  "tle_line1": "1 25544U ...",
+  "tle_line2": "2 25544 ...",
+  "source_tle_epoch": "22 Apr 2026 10:00:00.000",
+  "generated_at": "2026-04-22T10:00:00Z",
+  "valid_from": "2026-04-22T10:00:00Z",
+  "valid_until": "2026-04-23T10:00:00Z",
+  "step_seconds": 60,
+  "duration_hours": 24.0,
+  "orbital_period_minutes": 92.7,
+  "num_points": 1440,
+  "ephemeris_points": [
+    {
+      "timestamp": "2026-04-22T10:00:00+00:00",
+      "eci": { "x_km": 3456.7, "y_km": -5123.4, "z_km": 1234.5 },
+      "geodetic": {
+        "latitude": 51.6,
+        "longitude": -75.3,
+        "altitude_km": 418.2
+      },
+      "propagation_age_minutes": null
+    }
+  ],
+  "keplerian_elements": {
+    "sma_km": 6792.5,
+    "ecc": 0.0001387,
+    "inc_deg": 51.6400,
+    "raan_deg": 208.4300,
+    "aop_deg": 90.5300,
+    "ta_deg": 269.5900
+  }
+}
+```
+
+> `keplerian_elements` is only present when the `HIFI` propagator was used; it contains the Keplerian elements passed to GMAT.
+
+---
+
+#### Get Ephemeris as CZML
+
+```http
+GET /v2/ephemeris/{envelope_id}/czml
+```
+
+Returns the ephemeris formatted as [CZML](https://github.com/AnalyticalGraphicsInc/czml-writer/wiki/CZML-Guide) for direct use in Cesium / CesiumJS visualizations.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `envelope_id` | string | Ephemeris envelope ID |
+
+**Response:** `application/json` CZML array
+
+```json
+[
+  {
+    "id": "document",
+    "name": "Ephemeris for ISS (ZARYA)",
+    "version": "1.0",
+    "clock": {
+      "interval": "2026-04-22T10:00:00Z/2026-04-23T10:00:00Z",
+      "currentTime": "2026-04-22T10:00:00Z",
+      "multiplier": 60
+    }
+  },
+  {
+    "id": "satellite/25544",
+    "name": "ISS (ZARYA)",
+    "availability": "2026-04-22T10:00:00Z/2026-04-23T10:00:00Z",
+    "position": {
+      "epoch": "2026-04-22T10:00:00Z",
+      "cartographicDegrees": [...],
+      "interpolationAlgorithm": "LAGRANGE",
+      "interpolationDegree": 5
+    },
+    "point": { "color": {"rgba": [255, 255, 0, 255]}, "pixelSize": 8 },
+    "path": { "width": 1, "leadTime": 3600, "trailTime": 3600 },
+    "label": { "text": "ISS (ZARYA)", "show": true }
+  }
+]
+```
+
+---
+
+#### Delete Ephemeris Envelope
+
+```http
+DELETE /v2/ephemeris/{envelope_id}
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `envelope_id` | string | Ephemeris envelope ID |
+
+**Response:**
+
+```json
+{ "deleted": true, "envelope_id": "abc123" }
+```
+
+---
+
 ### MQTT Configuration
 
 #### List MQTT Configurations
@@ -1571,6 +1821,50 @@ POST /v2/graphs/observations/populate-edges    # Populate observation edges
 ---
 
 ### Admin
+
+#### Get GMAT Status
+
+```http
+GET /v2/admin/gmat-status
+```
+
+Check whether the GMAT engine is installed and functional on the server. Runs a 60-second smoke test (EGM96 gravity, minimal propagation) to verify end-to-end operation.
+
+**Response:**
+
+```json
+{
+  "gmat_home": "/opt/gmat",
+  "gmat_home_exists": true,
+  "bin_dir_contents": ["GmatConsole-R2022a", "libGmat.so"],
+  "binary_found": "/opt/gmat/bin/GmatConsole-R2022a",
+  "binary_executable": true,
+  "version_output": "GMAT R2022a ...",
+  "missing_data_files": [],
+  "egm96_path": "/opt/gmat/data/gravity/Earth/EGM96.cof",
+  "smoke_test": {
+    "ok": true,
+    "output": "...",
+    "error": null
+  },
+  "status": "ready"
+}
+```
+
+**`status` values:**
+
+| Value | Meaning |
+|-------|---------|
+| `not_installed` | GMAT binary not found anywhere on the server |
+| `installed` | Binary found but smoke test was not run (not executable) |
+| `installed_but_broken` | Binary found and executable but smoke test failed |
+| `ready` | Binary found, executable, smoke test passed — safe to use `"HIFI"` propagator |
+
+**`missing_data_files`** lists any required data files (e.g. `EGM96.cof`) that are absent. If non-empty, HIFI propagation will fail even if the binary is present.
+
+**Environment variable:** Set `GMAT_HOME` (default: `/opt/gmat`) to point to your GMAT installation directory.
+
+---
 
 #### List Available Scripts
 
