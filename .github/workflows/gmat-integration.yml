@@ -80,6 +80,14 @@ jobs:
           echo "GMAT installed at /opt/gmat"
           ls /opt/gmat/bin/
 
+      - name: Fix case-sensitive gravity path (Linux)
+        run: |
+          if [ -d /opt/gmat/data/gravity/earth ] && [ ! -d /opt/gmat/data/gravity/Earth ]; then
+            sudo ln -sf /opt/gmat/data/gravity/earth /opt/gmat/data/gravity/Earth
+            echo "Symlinked earth -> Earth for GMAT startup file compatibility"
+          fi
+          find /opt/gmat -name "EGM96.cof" | head -5
+
       - name: Verify GMAT binary exists
         run: |
           test -f /opt/gmat/bin/GmatConsole-R2022a || (echo "ERROR: GmatConsole-R2022a not found" && exit 1)

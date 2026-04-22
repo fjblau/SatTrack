@@ -188,20 +188,18 @@ class TestPropagateHifi(unittest.TestCase):
 
     def test_raises_when_script_invalid(self):
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
-                with patch("api.services.gmat_service.validate_script", return_value=["Unresolved placeholders: ['%BAD%']"]):
-                    with self.assertRaises(GmatError) as ctx:
-                        propagate_hifi(ISS_LINE1, ISS_LINE2)
-                    self.assertIn("invalid", str(ctx.exception))
+            with patch("api.services.gmat_service.validate_script", return_value=["Unresolved placeholders: ['%BAD%']"]):
+                with self.assertRaises(GmatError) as ctx:
+                    propagate_hifi(ISS_LINE1, ISS_LINE2)
+                self.assertIn("invalid", str(ctx.exception))
 
     def test_raises_on_gmat_timeout(self):
         import subprocess
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
-                with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="GMAT", timeout=180)):
-                    with self.assertRaises(GmatError) as ctx:
-                        propagate_hifi(ISS_LINE1, ISS_LINE2)
-                    self.assertIn("timed out", str(ctx.exception))
+            with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="GMAT", timeout=180)):
+                with self.assertRaises(GmatError) as ctx:
+                    propagate_hifi(ISS_LINE1, ISS_LINE2)
+                self.assertIn("timed out", str(ctx.exception))
 
     def test_raises_on_nonzero_exit(self):
         fake_result = MagicMock()
@@ -209,11 +207,10 @@ class TestPropagateHifi(unittest.TestCase):
         fake_result.stdout = "GMAT script error: unknown parameter"
         fake_result.stderr = ""
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
-                with patch("subprocess.run", return_value=fake_result):
-                    with self.assertRaises(GmatError) as ctx:
-                        propagate_hifi(ISS_LINE1, ISS_LINE2)
-                    self.assertIn("exited with code 1", str(ctx.exception))
+            with patch("subprocess.run", return_value=fake_result):
+                with self.assertRaises(GmatError) as ctx:
+                    propagate_hifi(ISS_LINE1, ISS_LINE2)
+                self.assertIn("exited with code 1", str(ctx.exception))
 
     def _make_fake_run(self, sample_report: str):
         from pathlib import Path as P
@@ -245,9 +242,8 @@ class TestPropagateHifi(unittest.TestCase):
             07 Feb 2024 13:07:00.000           50.5           102.0           408.5          -3350.0    5620.0     3350.0
         """)
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
-                with patch("subprocess.run", side_effect=self._make_fake_run(sample_report)):
-                    result = propagate_hifi(ISS_LINE1, ISS_LINE2, duration_hours=1, step_seconds=60)
+            with patch("subprocess.run", side_effect=self._make_fake_run(sample_report)):
+                result = propagate_hifi(ISS_LINE1, ISS_LINE2, duration_hours=1, step_seconds=60)
 
         self.assertIn("ephemeris_points", result)
         self.assertIn("num_points", result)
@@ -263,9 +259,8 @@ class TestPropagateHifi(unittest.TestCase):
             07 Feb 2024 13:06:00.000           51.0           100.0           408.0          100.0   200.0   300.0
         """)
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
-                with patch("subprocess.run", side_effect=self._make_fake_run(sample_report)):
-                    result = propagate_hifi(ISS_LINE1, ISS_LINE2, duration_hours=0.5)
+            with patch("subprocess.run", side_effect=self._make_fake_run(sample_report)):
+                result = propagate_hifi(ISS_LINE1, ISS_LINE2, duration_hours=0.5)
 
         kep = result["keplerian_elements"]
         self.assertAlmostEqual(kep["sma_km"], 6790, delta=50)
@@ -294,7 +289,6 @@ class TestValidateScript(unittest.TestCase):
             .replace("%TA_DEG%", str(kep["ta_deg"]))
             .replace("%DURATION_SECS%", "3600")
             .replace("%OUTPUT_FILE%", "/tmp/test_ephemeris.txt")
-            .replace("%EGM96_PATH%", "/opt/gmat/data/gravity/Earth/EGM96.cof")
         )
         errors = validate_script(script)
         self.assertEqual(errors, [], f"Unexpected validation errors: {errors}")
@@ -328,7 +322,7 @@ class TestValidateScript(unittest.TestCase):
         expected = {
             "%EPOCH%", "%SMA_KM%", "%ECC%", "%INC_DEG%",
             "%RAAN_DEG%", "%AOP_DEG%", "%TA_DEG%",
-            "%DURATION_SECS%", "%OUTPUT_FILE%", "%EGM96_PATH%",
+            "%DURATION_SECS%", "%OUTPUT_FILE%",
         }
         self.assertEqual(set(placeholders), expected,
                          f"Unexpected placeholders in template: {set(placeholders) - expected}")
@@ -350,9 +344,9 @@ class TestValidateScript(unittest.TestCase):
     def test_smoke_script_has_propagate(self):
         self.assertIn("Propagate", _build_smoke_script())
 
-    def test_smoke_script_uses_egm96_absolute_path(self):
+    def test_smoke_script_uses_egm96_cof(self):
         smoke = _build_smoke_script()
-        self.assertIn(_EGM96_PATH, smoke, "Smoke script must use the absolute EGM96 path")
+        self.assertIn("'EGM96.cof'", smoke, "Smoke script must reference EGM96.cof")
 
     def test_smoke_script_uses_force_model(self):
         smoke = _build_smoke_script()
@@ -378,12 +372,11 @@ class TestPropagateHifiScriptGeneration(unittest.TestCase):
             return result
 
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
-                with patch("subprocess.run", side_effect=fake_run):
-                    try:
-                        propagate_hifi(line1, line2, **kwargs)
-                    except GmatError:
-                        pass
+            with patch("subprocess.run", side_effect=fake_run):
+                try:
+                    propagate_hifi(line1, line2, **kwargs)
+                except GmatError:
+                    pass
 
         return captured.get("script", "")
 
@@ -488,13 +481,6 @@ class TestCheckDataFiles(unittest.TestCase):
             result = check_data_files()
         self.assertEqual(result, [])
 
-    def test_propagate_hifi_raises_on_missing_data(self):
-        with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.find_egm96", return_value=None):
-                with patch("glob.glob", return_value=[]):
-                    with self.assertRaises(GmatError) as ctx:
-                        propagate_hifi(ISS_LINE1, ISS_LINE2)
-                    self.assertIn("EGM96", str(ctx.exception))
 
 
 class TestRunSmokeTest(unittest.TestCase):

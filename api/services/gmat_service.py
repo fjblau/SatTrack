@@ -80,12 +80,15 @@ def _mean_to_true_anomaly(mean_anomaly_deg: float, eccentricity: float) -> float
 
 
 def _tle_to_keplerian(line1: str, line2: str) -> dict[str, float]:
-    inclination = float(line2[8:16])
-    raan = float(line2[17:25])
-    eccentricity = float("0." + line2[26:33])
-    aop = float(line2[34:42])
-    mean_anomaly = float(line2[43:51])
-    mean_motion_rev_day = float(line2[52:63])
+    try:
+        inclination = float(line2[8:16])
+        raan = float(line2[17:25])
+        eccentricity = float("0." + line2[26:33])
+        aop = float(line2[34:42])
+        mean_anomaly = float(line2[43:51])
+        mean_motion_rev_day = float(line2[52:63])
+    except (ValueError, IndexError) as exc:
+        raise GmatError(f"Invalid TLE format: {exc}") from exc
 
     GM = 398600.4418
     n_rad_s = mean_motion_rev_day * 2 * math.pi / 86400.0
@@ -171,14 +174,6 @@ def propagate_hifi(
             "and ensure GmatConsole-R2022a is installed."
         )
 
-    egm96_path = find_egm96()
-    if not egm96_path:
-        searched = glob.glob(os.path.join(_GMAT_HOME, "**", "EGM96.cof"), recursive=True)
-        raise GmatError(
-            f"EGM96 gravity file not found under {_GMAT_HOME}. "
-            f"Expected: {_EGM96_CANDIDATE}. glob found: {searched}"
-        )
-
     kep = _tle_to_keplerian(line1, line2)
     epoch_str = _tle_epoch_to_utc_gregorian(line1)
     duration_secs = int(duration_hours * 3600)
@@ -202,7 +197,6 @@ def propagate_hifi(
             .replace("%TA_DEG%", str(kep["ta_deg"]))
             .replace("%DURATION_SECS%", str(duration_secs))
             .replace("%OUTPUT_FILE%", output_file)
-            .replace("%EGM96_PATH%", egm96_path)
         )
 
         script_errors = validate_script(script)
@@ -318,7 +312,7 @@ SmokeHiFiFM.CentralBody                  = Earth;
 SmokeHiFiFM.PrimaryBodies                = {{Earth}};
 SmokeHiFiFM.GravityField.Earth.Degree    = 4;
 SmokeHiFiFM.GravityField.Earth.Order     = 4;
-SmokeHiFiFM.GravityField.Earth.PotentialFile = '{_EGM96_PATH}';
+SmokeHiFiFM.GravityField.Earth.PotentialFile = 'EGM96.cof';
 
 Create Propagator SmokeProp;
 SmokeProp.FM   = SmokeHiFiFM;
@@ -360,5 +354,5 @@ def run_smoke_test() -> dict[str, Any]:
 
     combined = ((result.stdout or "") + (result.stderr or ""))
     ok = result.returncode == 0 and "Application Execution Failed" not in combined
-    error = None if ok else f"exit {result.returncode}: {combined[-400:]}"
-    return {"ok": ok, "output": combined[-400:], "error": error}
+    error = None if ok else f"exit {result.returncode}: {combined[-2000:]}"
+    return {"ok": ok, "output": combined[-2000:], "error": error}

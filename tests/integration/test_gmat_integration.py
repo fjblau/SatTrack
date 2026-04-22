@@ -60,7 +60,7 @@ class TestPropagateHifi(unittest.TestCase):
         self.assertIn("valid_from", result)
         self.assertIn("valid_until", result)
         self.assertIn("propagator", result)
-        self.assertEqual(result["propagator"], "GMAT/RungeKutta89")
+        self.assertEqual(result["propagator"], "GMAT_RK89_EGM96")
 
         points = result["ephemeris_points"]
         self.assertGreaterEqual(len(points), min_points, "Too few ephemeris points")

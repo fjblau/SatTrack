@@ -25,7 +25,7 @@ HiFiFM.CentralBody                  = Earth;
 HiFiFM.PrimaryBodies                = {Earth};
 HiFiFM.GravityField.Earth.Degree    = 8;
 HiFiFM.GravityField.Earth.Order     = 8;
-HiFiFM.GravityField.Earth.PotentialFile = '%EGM96_PATH%';
+HiFiFM.GravityField.Earth.PotentialFile = 'EGM96.cof';
 HiFiFM.ErrorControl                 = RSSStep;
 
 %--- Propagator ---
