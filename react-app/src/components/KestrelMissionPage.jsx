@@ -185,13 +185,9 @@ export default function KestrelMissionPage() {
   const [gmatHistoryLoading, setGmatHistoryLoading] = useState(false)
   const [gmatPlanCZML, setGmatPlanCZML] = useState(null)
   const [kestrelProxyNoradId, setKestrelProxyNoradId] = useState('')
+  const [targetNoradOverride, setTargetNoradOverride] = useState('')
   const [gmatMaxDv, setGmatMaxDv] = useState(0.5)
   const [gmatMaxDays, setGmatMaxDays] = useState(14)
-  const [showTleOverride, setShowTleOverride] = useState(false)
-  const [targetTleLine1, setTargetTleLine1] = useState('')
-  const [targetTleLine2, setTargetTleLine2] = useState('')
-  const [kestrelTleLine1, setKestrelTleLine1] = useState('')
-  const [kestrelTleLine2, setKestrelTleLine2] = useState('')
 
   const [liveObs, setLiveObs] = useState([])
   const [collectRunning, setCollectRunning] = useState(false)
@@ -594,8 +590,11 @@ export default function KestrelMissionPage() {
   }, [])
 
   const handleComputeGmatPlan = useCallback(async () => {
-    if (!selectedTarget?.noradId) {
-      setGmatPlanError('Select a target object with a NORAD ID first.')
+    const resolvedTargetNorad = targetNoradOverride
+      ? parseInt(targetNoradOverride)
+      : selectedTarget?.noradId
+    if (!resolvedTargetNorad || isNaN(resolvedTargetNorad)) {
+      setGmatPlanError('Select a target object or enter a Target NORAD ID override.')
       return
     }
     if (!kestrelProxyNoradId || isNaN(parseInt(kestrelProxyNoradId))) {
@@ -611,7 +610,7 @@ export default function KestrelMissionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           kestrel_norad_id: parseInt(kestrelProxyNoradId),
-          target_norad_id: selectedTarget.noradId,
+          target_norad_id: resolvedTargetNorad,
           mission_type: missionType,
           max_dv_km_s: gmatMaxDv,
           max_time_days: gmatMaxDays,
@@ -626,7 +625,7 @@ export default function KestrelMissionPage() {
     } finally {
       setGmatPlanLoading(false)
     }
-  }, [selectedTarget, kestrelProxyNoradId, missionType, gmatMaxDv, gmatMaxDays])
+  }, [selectedTarget, targetNoradOverride, kestrelProxyNoradId, missionType, gmatMaxDv, gmatMaxDays])
 
   const fetchGmatPlanHistory = useCallback(async () => {
     setGmatHistoryLoading(true)
@@ -1453,6 +1452,17 @@ export default function KestrelMissionPage() {
                 <div className="km-mission-summary-row">
                   <span className="km-sum-label">NORAD</span>
                   <span className="km-sum-value-inline">{selectedTarget?.noradId || '—'}</span>
+                </div>
+                <div className="km-field" style={{ marginTop: '0.5rem' }}>
+                  <label>Target NORAD Override <span style={{ color: '#888', fontWeight: 400 }}>(optional)</span></label>
+                  <input
+                    type="number"
+                    className="km-input"
+                    placeholder="e.g. 44714 (STARLINK-1008)"
+                    value={targetNoradOverride}
+                    onChange={(e) => setTargetNoradOverride(e.target.value)}
+                  />
+                  <p className="km-hint-text">Bypass catalog — enter any active NORAD ID directly. Try <strong>44714</strong> or <strong>44718</strong> (Starlink, inc≈53°, alt≈540 km).</p>
                 </div>
                 <div className="km-field" style={{ marginTop: '0.75rem' }}>
                   <label>Kestrel Proxy NORAD ID</label>
