@@ -766,7 +766,8 @@ export default function KestrelMissionPage() {
           },
         ],
         startIso,
-        displayDuration
+        displayDuration,
+        60
       )
       setGmatPlanCZML(czml)
     } catch {
