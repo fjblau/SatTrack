@@ -1,3 +1,4 @@
+import glob
 import logging
 import math
 import re
@@ -14,8 +15,22 @@ logger = logging.getLogger(__name__)
 _GMAT_HOME = os.environ.get("GMAT_HOME", "/opt/gmat")
 _TEMPLATE_DIR = Path(__file__).parent.parent.parent / "gmat_scripts" / "templates"
 
-_EGM96_PATH = os.path.join(_GMAT_HOME, "data", "gravity", "Earth", "EGM96.cof")
-_NRLMSISE_PATH = os.path.join(_GMAT_HOME, "data", "atmosphere", "Earth", "NRLMSISE-00")
+_EGM96_CANDIDATE = os.path.join(_GMAT_HOME, "data", "gravity", "Earth", "EGM96.cof")
+
+
+def find_egm96() -> str | None:
+    """Return the absolute path to EGM96.cof, searching under GMAT_HOME if the default location fails."""
+    if os.path.isfile(_EGM96_CANDIDATE):
+        return _EGM96_CANDIDATE
+    matches = glob.glob(os.path.join(_GMAT_HOME, "**", "EGM96.cof"), recursive=True)
+    if matches:
+        found = matches[0]
+        logger.info("EGM96.cof found at non-default location: %s", found)
+        return found
+    return None
+
+
+_EGM96_PATH: str = find_egm96() or _EGM96_CANDIDATE
 
 _BINARY_CANDIDATES = [
     os.path.join(_GMAT_HOME, "bin", "GmatConsole-R2022a"),
@@ -40,8 +55,13 @@ def is_available() -> bool:
 def check_data_files() -> list[str]:
     """Return a list of missing required GMAT data files; empty = all present."""
     missing = []
-    if not os.path.isfile(_EGM96_PATH):
-        missing.append(f"EGM96 gravity file not found: {_EGM96_PATH}")
+    if find_egm96() is None:
+        searched = glob.glob(os.path.join(_GMAT_HOME, "**", "EGM96.cof"), recursive=True)
+        missing.append(
+            f"EGM96 gravity file not found anywhere under {_GMAT_HOME}. "
+            f"Searched: {_EGM96_CANDIDATE}. "
+            f"glob result: {searched}"
+        )
     return missing
 
 
@@ -151,9 +171,13 @@ def propagate_hifi(
             "and ensure GmatConsole-R2022a is installed."
         )
 
-    missing_data = check_data_files()
-    if missing_data:
-        raise GmatError(f"GMAT data files missing: {missing_data}")
+    egm96_path = find_egm96()
+    if not egm96_path:
+        searched = glob.glob(os.path.join(_GMAT_HOME, "**", "EGM96.cof"), recursive=True)
+        raise GmatError(
+            f"EGM96 gravity file not found under {_GMAT_HOME}. "
+            f"Expected: {_EGM96_CANDIDATE}. glob found: {searched}"
+        )
 
     kep = _tle_to_keplerian(line1, line2)
     epoch_str = _tle_epoch_to_utc_gregorian(line1)
@@ -178,7 +202,7 @@ def propagate_hifi(
             .replace("%TA_DEG%", str(kep["ta_deg"]))
             .replace("%DURATION_SECS%", str(duration_secs))
             .replace("%OUTPUT_FILE%", output_file)
-            .replace("%EGM96_PATH%", _EGM96_PATH)
+            .replace("%EGM96_PATH%", egm96_path)
         )
 
         script_errors = validate_script(script)
