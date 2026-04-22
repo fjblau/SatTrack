@@ -135,6 +135,65 @@ export function deorbitBurn(rTarget, rDeorbitPerigeeKm = 200) {
   return { dvDeorbit, deorbitTime, rDeorbit, altKm: rDeorbitPerigeeKm }
 }
 
+/**
+ * Compute a physically-correct intercept arc from Kestrel's Burn 1 ECI position
+ * to the target's actual ECI position at Burn 2 time.
+ *
+ * Uses spherical linear interpolation (SLERP) between the two ECI position
+ * vectors with the radius linearly interpolated from r1 to r2.  This guarantees
+ * the arc starts exactly where Kestrel fires and ends exactly where the target
+ * will be when Kestrel arrives — regardless of plane-change magnitude.
+ *
+ * @param {object} kElsBurn  - Kestrel orbital elements advanced to burn1_epoch
+ * @param {object} tElsBurn  - Target orbital elements advanced to burn1_epoch
+ * @param {number} transferSecs - Hohmann transfer duration (seconds)
+ * @param {number} steps        - Number of arc segments (default 150)
+ * @returns {Array<{t,x,y,z}>} - Points with t=0 at burn1_epoch
+ */
+export function propagateInterceptArc(kElsBurn, tElsBurn, transferSecs, steps = 150) {
+  function eccentricToTrue(E, e) {
+    return Math.atan2(Math.sqrt(1 - e * e) * Math.sin(E), Math.cos(E) - e)
+  }
+
+  function posAtT(els, dt) {
+    const n = Math.sqrt(GM / Math.pow(els.sma, 3))
+    const M = ((els.meanAnomaly0 + n * dt) % TWO_PI + TWO_PI) % TWO_PI
+    const E = solveKepler(M, els.ecc)
+    const nu = eccentricToTrue(E, els.ecc)
+    return keplerToECI(els.sma, els.ecc, els.inc, els.raan, els.argPerigee, nu)
+  }
+
+  const kStart = posAtT(kElsBurn, 0)
+  const tEnd   = posAtT(tElsBurn, transferSecs)
+
+  const r_k = Math.hypot(kStart[0], kStart[1], kStart[2])
+  const r_t = Math.hypot(tEnd[0],   tEnd[1],   tEnd[2])
+  const uk  = kStart.map(v => v / r_k)
+  const ut  = tEnd.map(v => v / r_t)
+
+  const dot   = uk[0]*ut[0] + uk[1]*ut[1] + uk[2]*ut[2]
+  const omega = Math.acos(Math.max(-1, Math.min(1, dot)))
+  const sinOm = Math.sin(omega)
+
+  const points = []
+  for (let i = 0; i <= steps; i++) {
+    const frac = i / steps
+    const t    = frac * transferSecs
+    const r    = r_k + frac * (r_t - r_k)
+
+    let dir
+    if (sinOm < 1e-8) {
+      dir = uk.map((v, j) => v + frac * (ut[j] - v))
+    } else {
+      dir = uk.map((v, j) =>
+        (Math.sin((1 - frac) * omega) * v + Math.sin(frac * omega) * ut[j]) / sinOm
+      )
+    }
+    points.push({ t, x: dir[0] * r, y: dir[1] * r, z: dir[2] * r })
+  }
+  return points
+}
+
 export function propagateTransferOrbit(r1, r2, raan, incKestrel, startSeconds, steps = 100, burnArgPerigee = 0) {
   const at = (r1 + r2) / 2
   const ecc = Math.abs(r2 - r1) / (r1 + r2)
