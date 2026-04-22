@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from api.services.gmat_service import (
     GmatError,
+    _EGM96_CANDIDATE,
     _EGM96_PATH,
     _PLACEHOLDER_PATTERN,
     _REQUIRED_SCRIPT_KEYWORDS,
@@ -16,6 +17,7 @@ from api.services.gmat_service import (
     _tle_to_keplerian,
     _parse_report,
     check_data_files,
+    find_egm96,
     is_available,
     propagate_hifi,
     run_smoke_test,
@@ -186,7 +188,7 @@ class TestPropagateHifi(unittest.TestCase):
 
     def test_raises_when_script_invalid(self):
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.check_data_files", return_value=[]):
+            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
                 with patch("api.services.gmat_service.validate_script", return_value=["Unresolved placeholders: ['%BAD%']"]):
                     with self.assertRaises(GmatError) as ctx:
                         propagate_hifi(ISS_LINE1, ISS_LINE2)
@@ -195,7 +197,7 @@ class TestPropagateHifi(unittest.TestCase):
     def test_raises_on_gmat_timeout(self):
         import subprocess
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.check_data_files", return_value=[]):
+            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
                 with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="GMAT", timeout=180)):
                     with self.assertRaises(GmatError) as ctx:
                         propagate_hifi(ISS_LINE1, ISS_LINE2)
@@ -207,7 +209,7 @@ class TestPropagateHifi(unittest.TestCase):
         fake_result.stdout = "GMAT script error: unknown parameter"
         fake_result.stderr = ""
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.check_data_files", return_value=[]):
+            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
                 with patch("subprocess.run", return_value=fake_result):
                     with self.assertRaises(GmatError) as ctx:
                         propagate_hifi(ISS_LINE1, ISS_LINE2)
@@ -243,7 +245,7 @@ class TestPropagateHifi(unittest.TestCase):
             07 Feb 2024 13:07:00.000           50.5           102.0           408.5          -3350.0    5620.0     3350.0
         """)
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.check_data_files", return_value=[]):
+            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
                 with patch("subprocess.run", side_effect=self._make_fake_run(sample_report)):
                     result = propagate_hifi(ISS_LINE1, ISS_LINE2, duration_hours=1, step_seconds=60)
 
@@ -261,7 +263,7 @@ class TestPropagateHifi(unittest.TestCase):
             07 Feb 2024 13:06:00.000           51.0           100.0           408.0          100.0   200.0   300.0
         """)
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.check_data_files", return_value=[]):
+            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
                 with patch("subprocess.run", side_effect=self._make_fake_run(sample_report)):
                     result = propagate_hifi(ISS_LINE1, ISS_LINE2, duration_hours=0.5)
 
@@ -376,7 +378,7 @@ class TestPropagateHifiScriptGeneration(unittest.TestCase):
             return result
 
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.check_data_files", return_value=[]):
+            with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
                 with patch("subprocess.run", side_effect=fake_run):
                     try:
                         propagate_hifi(line1, line2, **kwargs)
@@ -439,40 +441,60 @@ class TestPropagateHifiScriptGeneration(unittest.TestCase):
         self.assertEqual(errors, [], f"Script validation failed: {errors}")
 
 
+class TestFindEgm96(unittest.TestCase):
+    def test_returns_str_or_none(self):
+        result = find_egm96()
+        self.assertIsInstance(result, (str, type(None)))
+
+    def test_returns_path_if_candidate_exists(self):
+        with patch("os.path.isfile", return_value=True):
+            result = find_egm96()
+        self.assertIsNotNone(result)
+        self.assertTrue(result.endswith("EGM96.cof"))
+
+    def test_falls_back_to_glob(self):
+        with patch("os.path.isfile", return_value=False):
+            with patch("glob.glob", return_value=["/opt/gmat/some/other/EGM96.cof"]):
+                result = find_egm96()
+        self.assertEqual(result, "/opt/gmat/some/other/EGM96.cof")
+
+    def test_returns_none_when_missing_everywhere(self):
+        with patch("os.path.isfile", return_value=False):
+            with patch("glob.glob", return_value=[]):
+                result = find_egm96()
+        self.assertIsNone(result)
+
+    def test_egm96_candidate_is_absolute(self):
+        self.assertTrue(os.path.isabs(_EGM96_CANDIDATE))
+
+    def test_egm96_candidate_ends_with_cof(self):
+        self.assertTrue(_EGM96_CANDIDATE.endswith("EGM96.cof"))
+
+
 class TestCheckDataFiles(unittest.TestCase):
     def test_returns_list(self):
         result = check_data_files()
         self.assertIsInstance(result, list)
 
     def test_reports_missing_egm96(self):
-        with patch("api.services.gmat_service._EGM96_PATH", "/nonexistent/EGM96.cof"):
-            with patch("os.path.isfile", return_value=False):
+        with patch("api.services.gmat_service.find_egm96", return_value=None):
+            with patch("glob.glob", return_value=[]):
                 result = check_data_files()
         self.assertTrue(len(result) > 0)
         self.assertTrue(any("EGM96" in e for e in result))
 
-    def test_empty_when_files_present(self):
-        with patch("os.path.isfile", return_value=True):
+    def test_empty_when_egm96_found(self):
+        with patch("api.services.gmat_service.find_egm96", return_value="/opt/gmat/data/gravity/Earth/EGM96.cof"):
             result = check_data_files()
         self.assertEqual(result, [])
 
     def test_propagate_hifi_raises_on_missing_data(self):
         with patch("api.services.gmat_service._find_binary", return_value="/fake/GmatConsole"):
-            with patch("api.services.gmat_service.check_data_files",
-                       return_value=["EGM96 gravity file not found: /opt/gmat/data/gravity/Earth/EGM96.cof"]):
-                with self.assertRaises(GmatError) as ctx:
-                    propagate_hifi(ISS_LINE1, ISS_LINE2)
-                self.assertIn("data files missing", str(ctx.exception))
-                self.assertIn("EGM96", str(ctx.exception))
-
-    def test_egm96_path_ends_with_cof(self):
-        self.assertTrue(_EGM96_PATH.endswith("EGM96.cof"),
-                        f"EGM96 path should end with 'EGM96.cof', got: {_EGM96_PATH}")
-
-    def test_egm96_path_is_absolute(self):
-        import os
-        self.assertTrue(os.path.isabs(_EGM96_PATH),
-                        f"EGM96 path must be absolute, got: {_EGM96_PATH}")
+            with patch("api.services.gmat_service.find_egm96", return_value=None):
+                with patch("glob.glob", return_value=[]):
+                    with self.assertRaises(GmatError) as ctx:
+                        propagate_hifi(ISS_LINE1, ISS_LINE2)
+                    self.assertIn("EGM96", str(ctx.exception))
 
 
 class TestRunSmokeTest(unittest.TestCase):
