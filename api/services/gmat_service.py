@@ -195,6 +195,7 @@ def propagate_hifi(
             .replace("%RAAN_DEG%", str(kep["raan_deg"]))
             .replace("%AOP_DEG%", str(kep["aop_deg"]))
             .replace("%TA_DEG%", str(kep["ta_deg"]))
+            .replace("%STEP_SECS%", str(step_seconds))
             .replace("%DURATION_SECS%", str(duration_secs))
             .replace("%OUTPUT_FILE%", output_file)
         )

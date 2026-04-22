@@ -287,6 +287,7 @@ class TestValidateScript(unittest.TestCase):
             .replace("%RAAN_DEG%", str(kep["raan_deg"]))
             .replace("%AOP_DEG%", str(kep["aop_deg"]))
             .replace("%TA_DEG%", str(kep["ta_deg"]))
+            .replace("%STEP_SECS%", "60")
             .replace("%DURATION_SECS%", "3600")
             .replace("%OUTPUT_FILE%", "/tmp/test_ephemeris.txt")
         )
@@ -333,7 +334,7 @@ class TestValidateScript(unittest.TestCase):
         expected = {
             "%EPOCH%", "%SMA_KM%", "%ECC%", "%INC_DEG%",
             "%RAAN_DEG%", "%AOP_DEG%", "%TA_DEG%",
-            "%DURATION_SECS%", "%OUTPUT_FILE%",
+            "%STEP_SECS%", "%DURATION_SECS%", "%OUTPUT_FILE%",
         }
         self.assertEqual(set(placeholders), expected,
                          f"Unexpected placeholders in template: {set(placeholders) - expected}")

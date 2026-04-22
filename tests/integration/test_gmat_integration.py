@@ -43,7 +43,9 @@ class TestSmoke(unittest.TestCase):
         result = run_smoke_test()
         self.assertIsInstance(result, dict)
         self.assertTrue(result.get("ok"), f"Smoke test failed: {result}")
-        self.assertIn("elapsed_ms", result)
+        self.assertIn("ok", result)
+        self.assertIn("output", result)
+        self.assertIn("error", result)
 
     def test_check_data_files_empty(self):
         missing = check_data_files()

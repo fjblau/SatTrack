@@ -32,10 +32,10 @@ HiFiFM.ErrorControl                 = RSSStep;
 Create Propagator HiFiProp;
 HiFiProp.FM             = HiFiFM;
 HiFiProp.Type           = RungeKutta89;
-HiFiProp.InitialStepSize = 60;
+HiFiProp.InitialStepSize = %STEP_SECS%;
 HiFiProp.Accuracy       = 1e-12;
 HiFiProp.MinStep        = 0.001;
-HiFiProp.MaxStep        = 86400;
+HiFiProp.MaxStep        = %STEP_SECS%;
 HiFiProp.MaxStepAttempts = 50;
 
 %--- Report File ---
