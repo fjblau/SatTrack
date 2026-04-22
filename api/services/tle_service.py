@@ -143,18 +143,54 @@ def _fetch_from_celestrak_by_norad(norad_id: str) -> Optional[Dict]:
     return None
 
 
+_IVANSTANOJEVIC_BASE = "https://tle.ivanstanojevic.me/api/tle"
+
+
+def _fetch_from_ivanstanojevic_by_norad(norad_id: str) -> Optional[Dict]:
+    """
+    Fallback TLE source: tle.ivanstanojevic.me — mirrors CelesTrak data.
+    Used when CelesTrak is unreachable (outage, rate-limit, or cloud-IP block).
+    """
+    try:
+        response = requests.get(f"{_IVANSTANOJEVIC_BASE}/{norad_id}", timeout=8)
+        if response.status_code == 200:
+            data = response.json()
+            line1 = data.get("line1", "")
+            line2 = data.get("line2", "")
+            if line1 and line2:
+                logger.info(f"tle.ivanstanojevic.me hit for NORAD {norad_id}")
+                return {
+                    "name": data.get("name", f"NORAD {norad_id}"),
+                    "line1": line1,
+                    "line2": line2,
+                    "source": "ivanstanojevic",
+                    "date": data.get("date"),
+                    "norad_cat_id": str(norad_id),
+                    "intl_designator": "",
+                }
+        logger.info(f"tle.ivanstanojevic.me: no record for NORAD {norad_id} (status {response.status_code})")
+    except Exception as e:
+        logger.warning(f"tle.ivanstanojevic.me error for NORAD {norad_id}: {e}")
+    return None
+
+
 def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
     """
     Fetch fresh TLE data by NORAD ID.
 
-    Chain: CelesTrak (TLE then JSON format) → last known TLE from satellite DB.
-    SpaceTrack is intentionally not used due to rate limits.
+    Chain: CelesTrak (TLE then JSON format) → tle.ivanstanojevic.me mirror
+           → last known TLE from satellite DB.
     """
     result = _fetch_from_celestrak_by_norad(norad_id)
     if result:
         return result
 
-    logger.info(f"CelesTrak miss for NORAD {norad_id}, trying satellite DB for last known TLE")
+    logger.info(f"CelesTrak miss for NORAD {norad_id}, trying tle.ivanstanojevic.me mirror")
+    result = _fetch_from_ivanstanojevic_by_norad(norad_id)
+    if result:
+        return result
+
+    logger.info(f"All live sources failed for NORAD {norad_id}, trying satellite DB for last known TLE")
     try:
         from database.operations import get_satellite_tle_by_norad_id
         db_tle = get_satellite_tle_by_norad_id(norad_id)
