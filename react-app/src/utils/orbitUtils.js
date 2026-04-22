@@ -189,8 +189,51 @@ export function propagateHohmannArc(kElsBurn, targetSma, steps = 150) {
   return { points, transferSecs }
 }
 
+/**
+ * SLERP intercept arc — starts at Kestrel's burn1 ECI position, ends at
+ * target's ACTUAL ECI position at burn2 (burn1 + transferSecs).
+ * This guarantees the arc visually converges to the target regardless of
+ * inclination or RAAN differences.
+ */
 export function propagateInterceptArc(kElsBurn, tElsBurn, transferSecs, steps = 150) {
-  return propagateHohmannArc(kElsBurn, tElsBurn.sma, steps).points
+  function posAtT(els, dt) {
+    const n = Math.sqrt(GM / Math.pow(els.sma, 3))
+    const M = ((els.meanAnomaly0 + n * dt) % TWO_PI + TWO_PI) % TWO_PI
+    const E = solveKepler(M, els.ecc)
+    const nu = Math.atan2(Math.sqrt(1 - els.ecc * els.ecc) * Math.sin(E), Math.cos(E) - els.ecc)
+    return keplerToECI(els.sma, els.ecc, els.inc, els.raan, els.argPerigee, nu)
+  }
+
+  const kStart = posAtT(kElsBurn, 0)
+  const tEnd   = posAtT(tElsBurn, transferSecs)
+
+  const r_k = Math.hypot(...kStart)
+  const r_t = Math.hypot(...tEnd)
+  const uk  = kStart.map(v => v / r_k)
+  const ut  = tEnd.map(v => v / r_t)
+
+  const dot   = Math.max(-1, Math.min(1, uk[0]*ut[0] + uk[1]*ut[1] + uk[2]*ut[2]))
+  const omega = Math.acos(dot)
+  const sinOm = Math.sin(omega)
+
+  const points = []
+  for (let i = 0; i <= steps; i++) {
+    const frac = i / steps
+    const t    = frac * transferSecs
+    const r    = r_k + frac * (r_t - r_k)
+    let dir
+    if (sinOm < 1e-8) {
+      dir = uk.map((v, j) => v + frac * (ut[j] - v))
+    } else {
+      dir = uk.map((v, j) =>
+        (Math.sin((1 - frac) * omega) * v + Math.sin(frac * omega) * ut[j]) / sinOm
+      )
+    }
+    points.push({ t, x: dir[0] * r, y: dir[1] * r, z: dir[2] * r })
+  }
+  const last = points[points.length - 1]
+  points.push({ t: last.t + 1, x: last.x, y: last.y, z: last.z })
+  return points
 }
 
 export function propagateTransferOrbit(r1, r2, raan, incKestrel, startSeconds, steps = 100, burnArgPerigee = 0) {

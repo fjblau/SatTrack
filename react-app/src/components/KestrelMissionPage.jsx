@@ -691,8 +691,10 @@ export default function KestrelMissionPage() {
         meanAnomaly0: ((tEls.meanAnomaly0 + n_t * waitSecs) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
       }
 
-      const { points: arcPoints, transferSecs: computedTransferSecs } = propagateHohmannArc(kElsBurn, tEls.sma)
+      const { transferSecs: computedTransferSecs } = propagateHohmannArc(kElsBurn, tEls.sma)
       const actualTransferSecs = computedTransferSecs || transferSecs
+
+      const arcPoints = propagateInterceptArc(kElsBurn, tElsBurn, actualTransferSecs)
 
       const displayDuration = actualTransferSecs + tPeriod * 3
       const kStep = Math.max(30, Math.round(kPeriod / 120))
@@ -701,13 +703,14 @@ export default function KestrelMissionPage() {
       const kPoints = propagateOrbit(kElsBurn, actualTransferSecs, kStep)
       const tPoints = propagateOrbit(tElsBurn, displayDuration, tStep)
 
+      const tBurn2MeanAnomaly = ((tElsBurn.meanAnomaly0 + n_t * actualTransferSecs) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL
       const postKestrelEls = {
         sma: tEls.sma,
-        ecc: 0.0001,
-        inc: kElsBurn.inc,
-        raan: kElsBurn.raan,
-        argPerigee: ((kElsBurn.argPerigee + Math.PI) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
-        meanAnomaly0: 0,
+        ecc: tEls.ecc,
+        inc: tEls.inc,
+        raan: tEls.raan,
+        argPerigee: tEls.argPerigee,
+        meanAnomaly0: tBurn2MeanAnomaly,
       }
       const postDuration = tPeriod * 3
       const postStep = Math.max(30, Math.round(tPeriod / 120))
@@ -744,7 +747,7 @@ export default function KestrelMissionPage() {
           },
           {
             id: 'transfer',
-            label: 'Hohmann Transfer Arc',
+            label: 'Transfer Arc',
             points: arcPoints,
             color: [241, 196, 15, 230],
             trailTime: actualTransferSecs,
