@@ -6,6 +6,7 @@ import KestrelDataDials from './KestrelDataDials'
 import {
   propagateOrbit,
   propagateTransferOrbit,
+  propagateHohmannArc,
   propagateInterceptArc,
   propagateScenarioArc,
   launchSiteToOrbitElements,
@@ -686,13 +687,30 @@ export default function KestrelMissionPage() {
         meanAnomaly0: ((tEls.meanAnomaly0 + n_t * waitSecs) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
       }
 
-      const displayDuration = transferSecs + tPeriod * 3
+      const { points: arcPoints, transferSecs: computedTransferSecs } = propagateHohmannArc(kElsBurn, tEls.sma)
+      const actualTransferSecs = computedTransferSecs || transferSecs
+
+      const displayDuration = actualTransferSecs + tPeriod * 3
       const kStep = Math.max(30, Math.round(kPeriod / 120))
       const tStep = Math.max(30, Math.round(tPeriod / 120))
 
-      const kPoints = propagateOrbit(kElsBurn, displayDuration, kStep)
+      const kPoints = propagateOrbit(kElsBurn, actualTransferSecs, kStep)
       const tPoints = propagateOrbit(tElsBurn, displayDuration, tStep)
-      const arcPoints = propagateInterceptArc(kElsBurn, tElsBurn, transferSecs)
+
+      const postKestrelEls = {
+        sma: tEls.sma,
+        ecc: 0.0001,
+        inc: kElsBurn.inc,
+        raan: kElsBurn.raan,
+        argPerigee: ((kElsBurn.argPerigee + Math.PI) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
+        meanAnomaly0: 0,
+      }
+      const postDuration = tPeriod * 3
+      const postStep = Math.max(30, Math.round(tPeriod / 120))
+      const postPoints = propagateOrbit(postKestrelEls, postDuration, postStep).map(p => ({
+        ...p,
+        t: p.t + actualTransferSecs,
+      }))
 
       const startIso = gmatPlan.burn1_epoch || new Date().toISOString()
 
@@ -722,16 +740,29 @@ export default function KestrelMissionPage() {
           },
           {
             id: 'transfer',
-            label: 'Transfer Arc',
+            label: 'Hohmann Transfer Arc',
             points: arcPoints,
             color: [241, 196, 15, 230],
-            trailTime: transferSecs,
+            trailTime: actualTransferSecs,
             leadTime: displayDuration,
             pointSize: 8,
             pathWidth: 5,
             availStartSec: 0,
             availEndSec: displayDuration,
             noLabel: true,
+          },
+          {
+            id: 'kestrel-post',
+            label: 'KESTREL (post-arrival)',
+            points: postPoints,
+            color: [46, 213, 115, 220],
+            trailTime: tPeriod,
+            leadTime: tPeriod,
+            pointSize: 8,
+            pathWidth: 2,
+            availStartSec: actualTransferSecs,
+            availEndSec: displayDuration,
+            labelOffsetY: -28,
           },
         ],
         startIso,

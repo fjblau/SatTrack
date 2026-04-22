@@ -136,66 +136,61 @@ export function deorbitBurn(rTarget, rDeorbitPerigeeKm = 200) {
 }
 
 /**
- * Compute a physically-correct intercept arc from Kestrel's Burn 1 ECI position
- * to the target's actual ECI position at Burn 2 time.
+ * Propagate the actual Hohmann transfer ellipse starting at Kestrel's Burn 1
+ * position and ending at the target's circular orbit altitude.
  *
- * Uses spherical linear interpolation (SLERP) between the two ECI position
- * vectors with the radius linearly interpolated from r1 to r2.  This guarantees
- * the arc starts exactly where Kestrel fires and ends exactly where the target
- * will be when Kestrel arrives — regardless of plane-change magnitude.
+ * The transfer ellipse is in Kestrel's orbital plane (inc, raan). Its periapsis
+ * is at Kestrel's Burn 1 ECI position; its apoapsis is at targetSma radius.
+ * True anomaly sweeps from 0 → π (periapsis → apoapsis) over the half-period.
  *
- * @param {object} kElsBurn  - Kestrel orbital elements advanced to burn1_epoch
- * @param {object} tElsBurn  - Target orbital elements advanced to burn1_epoch
- * @param {number} transferSecs - Hohmann transfer duration (seconds)
- * @param {number} steps        - Number of arc segments (default 150)
- * @returns {Array<{t,x,y,z}>} - Points with t=0 at burn1_epoch
+ * For coplanar scenarios (inc_diff ≈ 0) the arc end lands exactly on the
+ * target orbit.  For inclined cases the arc correctly shows the altitude
+ * change in Kestrel's plane — the plane-change cost shown separately explains
+ * why an additional maneuver is needed.
+ *
+ * @param {object} kElsBurn  - Kestrel elements advanced to burn1_epoch
+ * @param {number} targetSma - Target circular orbit SMA in metres
+ * @param {number} steps     - Arc resolution (default 150)
+ * @returns {{ points: Array<{t,x,y,z}>, transferSecs: number }}
  */
-export function propagateInterceptArc(kElsBurn, tElsBurn, transferSecs, steps = 150) {
-  function eccentricToTrue(E, e) {
-    return Math.atan2(Math.sqrt(1 - e * e) * Math.sin(E), Math.cos(E) - e)
-  }
+export function propagateHohmannArc(kElsBurn, targetSma, steps = 150) {
+  const M0  = kElsBurn.meanAnomaly0
+  const e_k = kElsBurn.ecc
+  const E0  = solveKepler(M0, e_k)
+  const nu0 = Math.atan2(Math.sqrt(1 - e_k * e_k) * Math.sin(E0), Math.cos(E0) - e_k)
 
-  function posAtT(els, dt) {
-    const n = Math.sqrt(GM / Math.pow(els.sma, 3))
-    const M = ((els.meanAnomaly0 + n * dt) % TWO_PI + TWO_PI) % TWO_PI
-    const E = solveKepler(M, els.ecc)
-    const nu = eccentricToTrue(E, els.ecc)
-    return keplerToECI(els.sma, els.ecc, els.inc, els.raan, els.argPerigee, nu)
-  }
+  const p_k    = kElsBurn.sma * (1 - e_k * e_k)
+  const r_peri = p_k / (1 + e_k * Math.cos(nu0))
+  const r_apo  = targetSma
 
-  const kStart = posAtT(kElsBurn, 0)
-  const tEnd   = posAtT(tElsBurn, transferSecs)
+  const a_t = (r_peri + r_apo) / 2
+  const e_t = Math.abs(r_apo - r_peri) / (r_apo + r_peri)
+  const n_t = Math.sqrt(GM / Math.pow(a_t, 3))
+  const transferSecs = Math.PI / n_t
 
-  const r_k = Math.hypot(kStart[0], kStart[1], kStart[2])
-  const r_t = Math.hypot(tEnd[0],   tEnd[1],   tEnd[2])
-  const uk  = kStart.map(v => v / r_k)
-  const ut  = tEnd.map(v => v / r_t)
-
-  const dot   = uk[0]*ut[0] + uk[1]*ut[1] + uk[2]*ut[2]
-  const omega = Math.acos(Math.max(-1, Math.min(1, dot)))
-  const sinOm = Math.sin(omega)
+  const argPerigee_t = ((kElsBurn.argPerigee + nu0) % TWO_PI + TWO_PI) % TWO_PI
+  const ascending    = r_apo >= r_peri
 
   const points = []
   for (let i = 0; i <= steps; i++) {
-    const frac = i / steps
-    const t    = frac * transferSecs
-    const r    = r_k + frac * (r_t - r_k)
+    const nu  = (i / steps) * Math.PI * (ascending ? 1 : -1)
+    const E   = 2 * Math.atan2(
+      Math.sqrt(1 - e_t) * Math.sin(nu / 2),
+      Math.sqrt(1 + e_t) * Math.cos(nu / 2)
+    )
+    const M   = E - e_t * Math.sin(E)
+    const t   = Math.abs(M) / n_t
+    const [x, y, z] = keplerToECI(a_t, e_t, kElsBurn.inc, kElsBurn.raan, argPerigee_t, nu)
+    points.push({ t, x, y, z })
+  }
 
-    let dir
-    if (sinOm < 1e-8) {
-      dir = uk.map((v, j) => v + frac * (ut[j] - v))
-    } else {
-      dir = uk.map((v, j) =>
-        (Math.sin((1 - frac) * omega) * v + Math.sin(frac * omega) * ut[j]) / sinOm
-      )
-    }
-    points.push({ t, x: dir[0] * r, y: dir[1] * r, z: dir[2] * r })
-  }
-  if (points.length > 0) {
-    const last = points[points.length - 1]
-    points.push({ t: last.t + 1, x: last.x, y: last.y, z: last.z })
-  }
-  return points
+  const last = points[points.length - 1]
+  points.push({ t: last.t + 1, x: last.x, y: last.y, z: last.z })
+  return { points, transferSecs }
+}
+
+export function propagateInterceptArc(kElsBurn, tElsBurn, transferSecs, steps = 150) {
+  return propagateHohmannArc(kElsBurn, tElsBurn.sma, steps).points
 }
 
 export function propagateTransferOrbit(r1, r2, raan, incKestrel, startSeconds, steps = 100, burnArgPerigee = 0) {
