@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 _GMAT_HOME = os.environ.get("GMAT_HOME", "/opt/gmat")
 _TEMPLATE_DIR = Path(__file__).parent.parent.parent / "gmat_scripts" / "templates"
 
+_EGM96_PATH = os.path.join(_GMAT_HOME, "data", "gravity", "Earth", "EGM96.cof")
+_NRLMSISE_PATH = os.path.join(_GMAT_HOME, "data", "atmosphere", "Earth", "NRLMSISE-00")
+
 _BINARY_CANDIDATES = [
     os.path.join(_GMAT_HOME, "bin", "GmatConsole-R2022a"),
     os.path.join(_GMAT_HOME, "bin", "GmatConsole"),
@@ -32,6 +35,14 @@ def _find_binary() -> str | None:
 
 def is_available() -> bool:
     return _find_binary() is not None
+
+
+def check_data_files() -> list[str]:
+    """Return a list of missing required GMAT data files; empty = all present."""
+    missing = []
+    if not os.path.isfile(_EGM96_PATH):
+        missing.append(f"EGM96 gravity file not found: {_EGM96_PATH}")
+    return missing
 
 
 def _mean_to_true_anomaly(mean_anomaly_deg: float, eccentricity: float) -> float:
@@ -140,6 +151,10 @@ def propagate_hifi(
             "and ensure GmatConsole-R2022a is installed."
         )
 
+    missing_data = check_data_files()
+    if missing_data:
+        raise GmatError(f"GMAT data files missing: {missing_data}")
+
     kep = _tle_to_keplerian(line1, line2)
     epoch_str = _tle_epoch_to_utc_gregorian(line1)
     duration_secs = int(duration_hours * 3600)
@@ -163,6 +178,7 @@ def propagate_hifi(
             .replace("%TA_DEG%", str(kep["ta_deg"]))
             .replace("%DURATION_SECS%", str(duration_secs))
             .replace("%OUTPUT_FILE%", output_file)
+            .replace("%EGM96_PATH%", _EGM96_PATH)
         )
 
         script_errors = validate_script(script)
@@ -237,7 +253,7 @@ _REQUIRED_SCRIPT_KEYWORDS = [
     "Propagate",
 ]
 
-_PLACEHOLDER_PATTERN = re.compile(r"%[A-Z_]+%")
+_PLACEHOLDER_PATTERN = re.compile(r"%[A-Z0-9_]+%")
 
 
 def validate_script(script_text: str) -> list[str]:
@@ -252,25 +268,41 @@ def validate_script(script_text: str) -> list[str]:
     return errors
 
 
-_SMOKE_SCRIPT = """\
-% GMAT smoke test — minimal spacecraft creation
+def _build_smoke_script() -> str:
+    """Build a smoke-test GMAT script that exercises EGM96 gravity so we catch missing data files."""
+    return f"""\
+% GMAT smoke test — EGM96 gravity + 60-second propagation
 Create Spacecraft Probe;
-Probe.DateFormat    = UTCGregorian;
-Probe.Epoch         = '01 Jan 2024 00:00:00.000';
-Probe.CoordinateSystem = EarthMJ2000Eq;
-Probe.DisplayStateType = Keplerian;
+Probe.DateFormat          = UTCGregorian;
+Probe.Epoch               = '01 Jan 2024 00:00:00.000';
+Probe.CoordinateSystem    = EarthMJ2000Eq;
+Probe.DisplayStateType    = Keplerian;
 Probe.SMA  = 6778.0;
 Probe.ECC  = 0.001;
 Probe.INC  = 51.6;
 Probe.RAAN = 0.0;
 Probe.AOP  = 0.0;
 Probe.TA   = 0.0;
+Probe.DryMass = 100;
+Probe.Cd  = 2.2;
+Probe.Cr  = 1.8;
+Probe.DragArea = 15;
+Probe.SRPArea  = 15;
 
-Create Propagator SimpleProp;
+Create ForceModel SmokeHiFiFM;
+SmokeHiFiFM.CentralBody                  = Earth;
+SmokeHiFiFM.PrimaryBodies                = {{Earth}};
+SmokeHiFiFM.GravityField.Earth.Degree    = 4;
+SmokeHiFiFM.GravityField.Earth.Order     = 4;
+SmokeHiFiFM.GravityField.Earth.PotentialFile = '{_EGM96_PATH}';
+
+Create Propagator SmokeProp;
+SmokeProp.FM   = SmokeHiFiFM;
+SmokeProp.Type = RungeKutta89;
 
 BeginMissionSequence;
 
-Propagate SimpleProp(Probe) {Probe.ElapsedSecs = 60};
+Propagate SmokeProp(Probe) {{Probe.ElapsedSecs = 60}};
 """
 
 
@@ -286,7 +318,7 @@ def run_smoke_test() -> dict[str, Any]:
     gmat_bin_dir = os.path.join(_GMAT_HOME, "bin")
     with tempfile.TemporaryDirectory() as tmpdir:
         script_path = os.path.join(tmpdir, "smoke_test.script")
-        Path(script_path).write_text(_SMOKE_SCRIPT)
+        Path(script_path).write_text(_build_smoke_script())
         env = {**os.environ, "GMAT_HOME": _GMAT_HOME}
         try:
             result = subprocess.run(
