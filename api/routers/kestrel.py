@@ -52,6 +52,8 @@ class ManeuverPlanResponse(BaseModel):
     closest_approach_km: Optional[float]
     closest_approach_time: Optional[str]
     created_at: str
+    kestrel_kep: Optional[dict] = None
+    target_kep: Optional[dict] = None
 
 
 def _fetch_tle_lines(norad_id: int) -> tuple[str, str]:
@@ -132,6 +134,8 @@ def create_maneuver_plan(body: ManeuverPlanRequest):
         closest_approach_km=result.get("closest_approach_km"),
         closest_approach_time=result.get("closest_approach_time"),
         created_at=plan["created_at"],
+        kestrel_kep=result.get("kestrel_kep"),
+        target_kep=result.get("target_kep"),
     )
 
 
