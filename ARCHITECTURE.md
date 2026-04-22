@@ -61,9 +61,10 @@ kessler/
 │   │   ├── graphs.py            # Graph visualization & analytics endpoints
 │   │   ├── documents.py         # UN document metadata
 │   │   ├── tle.py               # TLE data endpoints & orbit propagation
+│   │   ├── ephemeris.py         # Ephemeris generation (SGP4 + GMAT HIFI), CZML export
 │   │   ├── mqtt.py              # MQTT configuration & publishing
 │   │   ├── observations.py      # Observation import, analytics, graph data
-│   │   ├── admin.py             # Admin script execution & run tracking
+│   │   ├── admin.py             # Admin script execution, run tracking, GMAT status
 │   │   └── agent.py             # POST /v2/ask, POST /v2/aql, GET /v2/ask/status (AI agents)
 │   ├── services/                # Business logic services
 │   │   ├── cache_service.py     # Unified caching with LRU & TTL
@@ -73,6 +74,7 @@ kessler/
 │   │   ├── collision_service.py # Collision risk computation
 │   │   ├── lineage_service.py   # Satellite family-tree traversal
 │   │   ├── propagation_service.py # SGP4/Skyfield orbit propagation
+│   │   ├── gmat_service.py      # GMAT high-fidelity propagation (RK89 + EGM96)
 │   │   ├── spacetrack_service.py  # Space-Track API integration
 │   │   ├── index_service.py     # ChromaDB RAG vector store build & load
 │   │   ├── agent_service.py     # LangGraph general assistant (RAG + tools, /v2/ask)
@@ -93,6 +95,11 @@ kessler/
 │   └── utils/
 │       ├── normalization.py     # Country code normalization
 │       └── field_utils.py       # Nested field manipulation utilities
+│
+├── gmat_scripts/                # GMAT script templates & output
+│   ├── templates/
+│   │   └── propagation.script   # Parameterized GMAT script (RK89 + EGM96)
+│   └── output/                  # Ephemeris output files (transient)
 │
 ├── scripts/                     # Organized utility scripts
 │   ├── import/                  # Data import scripts
@@ -166,8 +173,9 @@ kessler/
 │  │  - CacheService, OrbitalService      │   │
 │  │  - TLEService, DocumentService       │   │
 │  │  - CollisionService, LineageService  │   │
-│  │  - PropagationService, SpaceTrack    │   │
-│  │  - IndexService, AgentService        │   │
+│  │  - PropagationService, GmatService   │   │
+│  │  - SpaceTrackService, IndexService   │   │
+│  │  - AgentService, AqlAgentService     │   │
 │  └────────────┬─────────────────────────┘   │
 └───────────────┼──────────────────────────────┘
                 │
@@ -459,6 +467,9 @@ AGENT_MODEL=gpt-4o-mini
 AGENT_VECTOR_STORE_PATH=.chroma
 AGENT_EMBEDDING_MODEL=text-embedding-3-small
 
+# GMAT high-fidelity propagation (optional — required for propagator: "HIFI")
+GMAT_HOME=/opt/gmat   # Path to GMAT installation directory
+
 # Caching
 TLE_CACHE_TTL=3600
 MAX_CACHE_SIZE=1000
@@ -476,12 +487,14 @@ tests/
 │   ├── test_cache_service.py          # 14 tests
 │   ├── test_orbital_service.py        # 22 tests
 │   ├── test_country_normalizer.py     # 15 tests
+│   ├── test_gmat_service.py           # GmatService unit tests (mocked subprocess)
 │   └── ...
 │
 ├── integration/                       # API + Database tests
 │   ├── test_satellite_api.py          # Test /v2/search, /v2/satellite/*
 │   ├── test_metadata_api.py           # Test /v2/countries, /v2/stats
 │   ├── test_graph_api.py              # Test /v2/graphs/*
+│   ├── test_gmat_integration.py       # GMAT ephemeris endpoint integration tests
 │   └── ...
 │
 └── e2e/                               # Full system tests
@@ -653,6 +666,64 @@ Traverses the `satellite_lineage` edge collection to build family trees (ancesto
 ### PropagationService (`api/services/propagation_service.py`)
 
 Uses SGP4 (via `sgp4`) and Skyfield to propagate TLE elements forward in time, computing position/velocity state vectors.
+
+---
+
+### GmatService (`api/services/gmat_service.py`)
+
+**Purpose**: High-fidelity orbit propagation using NASA GMAT R2022a as a subprocess.
+
+**Propagator**: Runge-Kutta 89 (RK89) adaptive integrator, accuracy `1e-12`
+
+**Force model**: EGM96 8×8 spherical harmonic gravity field (no atmospheric drag, no solar radiation pressure)
+
+**Key functions**:
+
+| Function | Description |
+|----------|-------------|
+| `propagate_hifi(line1, line2, duration_hours, step_seconds)` | Main entry point — converts TLE to Keplerian elements, fills the GMAT script template, runs `GmatConsole`, parses the report file, and returns an ephemeris dict |
+| `is_available()` | Returns `True` if a usable GMAT binary is found on `PATH` or under `GMAT_HOME/bin` |
+| `check_data_files()` | Returns a list of missing required GMAT data files (e.g. `EGM96.cof`) |
+| `run_smoke_test()` | Runs a 60-second smoke propagation to verify end-to-end GMAT operation |
+| `validate_script(script_text)` | Validates a GMAT script for required keywords and unresolved placeholders |
+
+**TLE → Keplerian conversion** (internal, no GMAT dependency):
+- Mean motion (rev/day) → semi-major axis via vis-viva
+- Mean anomaly → true anomaly via iterative Kepler equation solver
+- Epoch string → UTCGregorian format expected by GMAT
+
+**Script template**: `gmat_scripts/templates/propagation.script` — a parameterized GMAT script with placeholders (`%EPOCH%`, `%SMA_KM%`, etc.) replaced at runtime.
+
+**Return format** (from `propagate_hifi`):
+
+```python
+{
+    "propagator": "GMAT_RK89_EGM96",
+    "tle_epoch": "22 Apr 2026 10:00:00.000",
+    "valid_from": "2026-04-22T10:00:00+00:00",
+    "valid_until": "2026-04-23T10:00:00+00:00",
+    "step_seconds": 60,
+    "orbital_period_minutes": 92.7,
+    "num_points": 1440,
+    "ephemeris_points": [
+        {
+            "timestamp": "...",
+            "eci": {"x_km": ..., "y_km": ..., "z_km": ...},
+            "geodetic": {"latitude": ..., "longitude": ..., "altitude_km": ...},
+            "propagation_age_minutes": None,
+        }
+    ],
+    "keplerian_elements": {
+        "sma_km": ..., "ecc": ..., "inc_deg": ...,
+        "raan_deg": ..., "aop_deg": ..., "ta_deg": ...
+    },
+}
+```
+
+**Installation requirements**:
+- Set `GMAT_HOME` environment variable (default: `/opt/gmat`)
+- GMAT R2022a binary at `$GMAT_HOME/bin/GmatConsole-R2022a` or `GmatConsole`
+- `EGM96.cof` gravity file at `$GMAT_HOME/data/gravity/Earth/EGM96.cof`
 
 ---
 
