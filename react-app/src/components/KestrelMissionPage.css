@@ -1085,10 +1085,27 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: #13161a;
+  min-height: 0;
+}
+
+.km-gmat-upper {
   overflow-y: auto;
   padding: 1.5rem;
-  background: #13161a;
+  flex: 0 0 auto;
+  max-height: 55%;
+  display: flex;
+  flex-direction: column;
   gap: 1.25rem;
+}
+
+.km-gmat-cesium {
+  flex: 1;
+  min-height: 0;
+  border-top: 1px solid #2a2f38;
+  display: flex;
+  flex-direction: column;
 }
 
 .km-gmat-metrics {
