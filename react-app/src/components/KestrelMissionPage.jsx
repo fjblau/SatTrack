@@ -691,10 +691,8 @@ export default function KestrelMissionPage() {
         meanAnomaly0: ((tEls.meanAnomaly0 + n_t * waitSecs) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
       }
 
-      const { transferSecs: computedTransferSecs } = propagateHohmannArc(kElsBurn, tEls.sma)
+      const { points: arcPoints, transferSecs: computedTransferSecs } = propagateHohmannArc(kElsBurn, tEls.sma)
       const actualTransferSecs = computedTransferSecs || transferSecs
-
-      const arcPoints = propagateInterceptArc(kElsBurn, tElsBurn, actualTransferSecs)
 
       const displayDuration = actualTransferSecs + tPeriod * 3
       const kStep = Math.max(30, Math.round(kPeriod / 120))
