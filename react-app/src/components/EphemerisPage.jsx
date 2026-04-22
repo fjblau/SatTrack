@@ -21,6 +21,11 @@ const DURATION_OPTIONS = [
   { label: '7 days', value: 168 },
 ]
 
+const PROPAGATOR_OPTIONS = [
+  { label: 'SGP4 (fast)', value: 'SGP4' },
+  { label: 'HIFI — GMAT RK89 + EGM96', value: 'HIFI' },
+]
+
 export default function EphemerisPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -29,6 +34,7 @@ export default function EphemerisPage() {
 
   const [stepSeconds, setStepSeconds] = useState(60)
   const [durationHours, setDurationHours] = useState(24)
+  const [propagator, setPropagator] = useState('SGP4')
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState(null)
 
@@ -118,6 +124,7 @@ export default function EphemerisPage() {
           norad_id: selectedSatellite.norad_id,
           duration_hours: durationHours,
           step_seconds: stepSeconds,
+          propagator,
         }),
       })
       if (!res.ok) {
@@ -240,6 +247,19 @@ export default function EphemerisPage() {
               className="eph-select"
             >
               {STEP_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="eph-field">
+            <label>Propagator</label>
+            <select
+              value={propagator}
+              onChange={(e) => setPropagator(e.target.value)}
+              className="eph-select"
+            >
+              {PROPAGATOR_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
