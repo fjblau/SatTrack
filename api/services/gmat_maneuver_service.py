@@ -66,6 +66,8 @@ def _epoch_plus_seconds(epoch_str: str, secs: float) -> str:
         dt = datetime.strptime(epoch_str, fmt).replace(tzinfo=timezone.utc)
     except ValueError:
         dt = datetime.now(timezone.utc)
+    if not math.isfinite(secs):
+        secs = 0.0
     dt2 = dt + timedelta(seconds=secs)
     return dt2.isoformat()
 
@@ -137,7 +139,12 @@ def compute_analytical_maneuver(
     dv1, dv2 = _hohmann_dvs(r1, r2)
     t_transfer = _transfer_time(r1, r2)
     t_synodic = _synodic_period(r1, r2)
-    wait_time = t_synodic / 2.0
+
+    T_target = 2 * math.pi * math.sqrt(r2 ** 3 / _GM)
+    if math.isinf(t_synodic) or math.isnan(t_synodic) or t_synodic > 14 * 86400:
+        wait_time = T_target
+    else:
+        wait_time = t_synodic / 2.0
 
     kestrel_epoch_str = _tle_epoch_to_utc_gregorian(kestrel_line1)
     burn1_iso = _epoch_plus_seconds(kestrel_epoch_str, wait_time)
