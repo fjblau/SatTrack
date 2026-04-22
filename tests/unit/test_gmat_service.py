@@ -202,7 +202,7 @@ class TestPropagateHifi(unittest.TestCase):
         fake_result.stderr = ""
 
         def fake_run(cmd, *args, **kwargs):
-            script_path = cmd[2] if len(cmd) > 2 else ""
+            script_path = cmd[1] if len(cmd) > 1 else ""
             if script_path and os.path.exists(script_path):
                 script_text = P(script_path).read_text()
                 for line in script_text.splitlines():

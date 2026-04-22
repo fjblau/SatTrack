@@ -167,15 +167,16 @@ def propagate_hifi(
         script_path = os.path.join(tmpdir, "mission.script")
         Path(script_path).write_text(script)
 
+        gmat_bin_dir = os.path.join(_GMAT_HOME, "bin")
         env = {**os.environ, "GMAT_HOME": _GMAT_HOME}
         try:
             result = subprocess.run(
-                [binary, "--run", script_path, "--exit"],
+                [binary, script_path],
                 capture_output=True,
                 text=True,
                 timeout=180,
                 env=env,
-                cwd=tmpdir,
+                cwd=gmat_bin_dir,
             )
         except subprocess.TimeoutExpired:
             raise GmatError("GMAT propagation timed out after 180 s")
@@ -183,8 +184,8 @@ def propagate_hifi(
             raise GmatError(f"Failed to launch GMAT: {exc}")
 
         if result.returncode != 0:
-            stderr_tail = (result.stderr or "")[-500:]
-            raise GmatError(f"GMAT exited with code {result.returncode}: {stderr_tail}")
+            combined = ((result.stdout or "") + (result.stderr or ""))[-800:]
+            raise GmatError(f"GMAT exited with code {result.returncode}: {combined}")
 
         points = _parse_report(output_file, step_seconds)
 
