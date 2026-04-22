@@ -14,6 +14,13 @@ _tle_cache_instance = get_tle_cache()
 CELESTRAK_GP_URL = "https://celestrak.org/NORAD/elements/gp.php"
 CELESTRAK_SATCAT_URL = "https://celestrak.org/satcat/records.php"
 
+_CELESTRAK_BATCH_URLS = [
+    "https://celestrak.org/NORAD/elements/stations.txt",
+    "https://celestrak.org/NORAD/elements/iss.txt",
+    "https://celestrak.org/NORAD/elements/weather.txt",
+    "https://celestrak.org/NORAD/elements/geo.txt",
+]
+
 
 def _parse_tle_text(text: str) -> list:
     """
@@ -262,6 +269,44 @@ def fetch_tle_by_norad_id(norad_id: str) -> Optional[Dict]:
         return _fetch_tle_by_norad_id_uncached(norad_id)
 
     return _tle_cache_instance.get_or_fetch(cache_key, fetch_func)
+
+
+def warm_tle_cache() -> int:
+    """
+    Pre-populate the TLE cache from CelesTrak batch files.
+
+    Called once at application startup in a background thread. Ensures that
+    well-known objects (ISS, space stations, GEO, weather) are always
+    available in the individual NORAD lookup cache even if CelesTrak GP API
+    is temporarily unavailable.
+
+    Returns the number of new TLE entries loaded.
+    """
+    loaded = 0
+    for url in _CELESTRAK_BATCH_URLS:
+        try:
+            response = requests.get(url, timeout=15)
+            if response.status_code != 200:
+                logger.warning(f"TLE warm-up: HTTP {response.status_code} for {url}")
+                continue
+            entries = _parse_tle_text(response.text)
+            for e in entries:
+                cache_key = f"tle_norad_{e['norad_cat_id']}"
+                if _tle_cache_instance.get(cache_key) is None:
+                    _tle_cache_instance.set(cache_key, {
+                        "name": e["name"],
+                        "line1": e["line1"],
+                        "line2": e["line2"],
+                        "source": "celestrak_batch",
+                        "date": None,
+                        "norad_cat_id": e["norad_cat_id"],
+                        "intl_designator": e.get("intl_designator", ""),
+                    })
+                    loaded += 1
+        except Exception as exc:
+            logger.warning(f"TLE warm-up failed for {url}: {exc}")
+    logger.info(f"TLE cache warmed with {loaded} new entries from batch files")
+    return loaded
 
 
 def check_decay_from_celestrak(norad_id: str) -> Optional[Dict]:

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
+import threading
 
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
@@ -9,6 +10,7 @@ import mqtt_scheduler
 from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
+from api.services.tle_service import warm_tle_cache
 
 try:
     from dotenv import load_dotenv
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI):
     agent_service.initialize_agent()
     aql_agent_service.initialize_aql_agent()
     kestrel_agent_service.initialize_kestrel_agent()
+    threading.Thread(target=warm_tle_cache, daemon=True, name="tle-cache-warmup").start()
     
     yield
     
