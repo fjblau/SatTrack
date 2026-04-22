@@ -7,6 +7,7 @@ import json
 
 from api.services.tle_service import fetch_tle_by_norad_id, parse_tle_fields
 from api.services.propagation_service import PropagationService, PropagationError
+from api.services.gmat_service import propagate_hifi, GmatError, is_available as gmat_available
 from database.ephemeris_ops import (
     save_ephemeris_envelope,
     list_ephemeris_envelopes,
@@ -124,14 +125,26 @@ def generate_ephemeris(body: GenerateEphemerisRequest):
     if not line1 or not line2:
         raise HTTPException(status_code=400, detail="Invalid TLE data: missing line1 or line2")
 
+    use_gmat = body.propagator.upper() == "HIFI"
+    if use_gmat and not gmat_available():
+        raise HTTPException(status_code=503, detail="GMAT engine not available on this server")
+
     try:
-        result = PropagationService.propagate_window(
-            line1=line1,
-            line2=line2,
-            duration_hours=body.duration_hours,
-            step_seconds=body.step_seconds,
-        )
-    except PropagationError as e:
+        if use_gmat:
+            result = propagate_hifi(
+                line1=line1,
+                line2=line2,
+                duration_hours=body.duration_hours,
+                step_seconds=body.step_seconds,
+            )
+        else:
+            result = PropagationService.propagate_window(
+                line1=line1,
+                line2=line2,
+                duration_hours=body.duration_hours,
+                step_seconds=body.step_seconds,
+            )
+    except (PropagationError, GmatError) as e:
         raise HTTPException(status_code=400, detail=f"Propagation failed: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
@@ -147,7 +160,7 @@ def generate_ephemeris(body: GenerateEphemerisRequest):
         "duration_hours": body.duration_hours,
         "valid_from": result["valid_from"],
         "valid_until": result["valid_until"],
-        "propagator": body.propagator,
+        "propagator": result.get("propagator", body.propagator),
         "orbital_period_minutes": result["orbital_period_minutes"],
         "num_points": result["num_points"],
         "ephemeris_points": result["ephemeris_points"],

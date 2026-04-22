@@ -27,3 +27,5 @@ react-app/dist/
 
 # Zenflow
 .zenflow/
+gmat_scripts/output/*
+!gmat_scripts/output/.gitkeep
