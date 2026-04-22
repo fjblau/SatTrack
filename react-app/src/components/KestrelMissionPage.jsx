@@ -646,6 +646,8 @@ export default function KestrelMissionPage() {
     }
     try {
       const D2R = Math.PI / 180
+      const TWO_PI_LOCAL = 2 * Math.PI
+      const GM_VAL = 3.986004418e14
       const kKep = gmatPlan.kestrel_kep
       const tKep = gmatPlan.target_kep
 
@@ -670,17 +672,39 @@ export default function KestrelMissionPage() {
       const transferSecs = gmatPlan.transfer_time_s || 3600
       const tPeriod = orbitalPeriod(tEls.sma)
       const kPeriod = orbitalPeriod(kEls.sma)
-      const displayDuration = waitSecs + transferSecs + tPeriod * 2
+
+      const n_k = Math.sqrt(GM_VAL / Math.pow(kEls.sma, 3))
+      const n_t = Math.sqrt(GM_VAL / Math.pow(tEls.sma, 3))
+
+      const kElsBurn = {
+        ...kEls,
+        meanAnomaly0: ((kEls.meanAnomaly0 + n_k * waitSecs) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
+      }
+      const tElsBurn = {
+        ...tEls,
+        meanAnomaly0: ((tEls.meanAnomaly0 + n_t * waitSecs) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL,
+      }
+
+      const M_burn = kElsBurn.meanAnomaly0
+      const ecc_k = kEls.ecc
+      let E_burn = ecc_k < 0.8 ? M_burn : Math.PI
+      for (let i = 0; i < 100; i++) {
+        const dE = (M_burn - E_burn + ecc_k * Math.sin(E_burn)) / (1 - ecc_k * Math.cos(E_burn))
+        E_burn += dE
+        if (Math.abs(dE) < 1e-12) break
+      }
+      const nu_burn = Math.atan2(Math.sqrt(1 - ecc_k * ecc_k) * Math.sin(E_burn), Math.cos(E_burn) - ecc_k)
+      const burnArgPerigee = ((kEls.argPerigee + nu_burn) % TWO_PI_LOCAL + TWO_PI_LOCAL) % TWO_PI_LOCAL
+
+      const displayDuration = transferSecs + tPeriod * 3
       const kStep = Math.max(30, Math.round(kPeriod / 120))
       const tStep = Math.max(30, Math.round(tPeriod / 120))
 
-      const kPoints = propagateOrbit(kEls, displayDuration, kStep)
-      const tPoints = propagateOrbit(tEls, displayDuration, tStep)
-      const arcPoints = propagateTransferOrbit(kEls.sma, tEls.sma, kEls.raan, kEls.inc, waitSecs, 150)
+      const kPoints = propagateOrbit(kElsBurn, displayDuration, kStep)
+      const tPoints = propagateOrbit(tElsBurn, displayDuration, tStep)
+      const arcPoints = propagateTransferOrbit(kEls.sma, tEls.sma, kEls.raan, kEls.inc, 0, 150, burnArgPerigee)
 
       const startIso = gmatPlan.burn1_epoch || new Date().toISOString()
-      const arcStart = arcPoints.length > 0 ? arcPoints[0].t : waitSecs
-      const arcEnd = arcPoints.length > 0 ? arcPoints[arcPoints.length - 1].t : waitSecs + transferSecs
 
       const czml = generateCZML(
         [
@@ -689,8 +713,8 @@ export default function KestrelMissionPage() {
             label: `KESTREL (NORAD ${gmatPlan.kestrel_norad_id})`,
             points: kPoints,
             color: [52, 152, 219, 255],
-            trailTime: kPeriod * 2,
-            leadTime: 0,
+            trailTime: kPeriod,
+            leadTime: kPeriod,
             pointSize: 12,
             pathWidth: 2.5,
             labelOffsetY: -28,
@@ -700,8 +724,8 @@ export default function KestrelMissionPage() {
             label: selectedTarget?.name || `Target (NORAD ${gmatPlan.target_norad_id})`,
             points: tPoints,
             color: [231, 76, 60, 255],
-            trailTime: tPeriod / 3,
-            leadTime: tPeriod * 0.67,
+            trailTime: tPeriod,
+            leadTime: tPeriod,
             pointSize: 10,
             pathWidth: 2,
             labelOffsetY: 18,
@@ -715,8 +739,8 @@ export default function KestrelMissionPage() {
             leadTime: 0,
             pointSize: 3,
             pathWidth: 2,
-            availStartSec: arcStart,
-            availEndSec: arcEnd,
+            availStartSec: 0,
+            availEndSec: transferSecs,
             noLabel: true,
           },
         ],
