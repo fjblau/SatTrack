@@ -7,11 +7,15 @@ function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [runs, setRuns] = useState({})
   const [uploads, setUploads] = useState({})
+  const [backups, setBackups] = useState([])
+  const [backupsLoading, setBackupsLoading] = useState(false)
+  const [downloadingBackup, setDownloadingBackup] = useState(null)
   const pollTimers = useRef({})
   const fileInputRefs = useRef({})
 
   useEffect(() => {
     fetchScripts()
+    fetchBackups()
     return () => {
       Object.values(pollTimers.current).forEach(clearInterval)
     }
@@ -27,6 +31,19 @@ function AdminPage() {
       console.error('Error fetching scripts:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchBackups = async () => {
+    setBackupsLoading(true)
+    try {
+      const response = await apiFetch('/v2/admin/backups')
+      const data = await response.json()
+      setBackups(data.backups || [])
+    } catch (error) {
+      console.error('Error fetching backups:', error)
+    } finally {
+      setBackupsLoading(false)
     }
   }
 
@@ -99,20 +116,57 @@ function AdminPage() {
       if (data.status === 'success' || data.status === 'error') {
         clearInterval(pollTimers.current[scriptId])
         delete pollTimers.current[scriptId]
+        fetchBackups()
       }
     } catch (error) {
       console.error('Error polling run:', error)
     }
   }
 
-  const downloadBackup = (runId) => {
-    const url = `/api/v2/admin/runs/${runId}/download`
-    const a = document.createElement('a')
-    a.href = url
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+  const downloadBackup = async (runId) => {
+    try {
+      const response = await apiFetch(`/v2/admin/runs/${runId}/download`)
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const disposition = response.headers.get('Content-Disposition') || ''
+      const match = disposition.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : `backup_${runId}.zip`
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Backup download failed:', error)
+    }
+  }
+
+  const downloadBackupByName = async (dirName) => {
+    setDownloadingBackup(dirName)
+    try {
+      const response = await apiFetch(`/v2/admin/backups/${encodeURIComponent(dirName)}/download`)
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || `Download failed: ${response.status}`)
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${dirName}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Backup download failed:', error)
+      alert(`Download failed: ${error.message}`)
+    } finally {
+      setDownloadingBackup(null)
+    }
   }
 
   const categories = [...new Set(scripts.map(s => s.category))]
@@ -122,6 +176,48 @@ function AdminPage() {
       <div className="admin-header">
         <h2>Data Enrichment Scripts</h2>
       </div>
+
+      {backups.length > 0 && (
+        <div className="backups-section">
+          <div className="backups-section-header">
+            <h3 className="category-title">Existing Backups on Server</h3>
+            <button className="refresh-button" onClick={fetchBackups} disabled={backupsLoading}>
+              {backupsLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+          <div className="backup-list">
+            {backups.map(b => (
+              <div key={b.name} className="backup-item">
+                <div className="backup-item-info">
+                  <span className="backup-item-name">{b.name}</span>
+                  {b.exported_at && (
+                    <span className="backup-item-meta">
+                      {new Date(b.exported_at).toLocaleString()} — {b.total_documents?.toLocaleString() ?? '?'} docs
+                    </span>
+                  )}
+                </div>
+                <button
+                  className="download-button"
+                  onClick={() => downloadBackupByName(b.name)}
+                  disabled={downloadingBackup === b.name}
+                >
+                  {downloadingBackup === b.name ? 'Downloading...' : 'Download .zip'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {backups.length === 0 && !backupsLoading && (
+        <div className="backups-section">
+          <div className="backups-section-header">
+            <h3 className="category-title">Existing Backups on Server</h3>
+            <button className="refresh-button" onClick={fetchBackups}>Refresh</button>
+          </div>
+          <div className="no-backups">No backups found on server.</div>
+        </div>
+      )}
 
       {loading && <div className="admin-loading">Loading scripts...</div>}
 

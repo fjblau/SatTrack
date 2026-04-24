@@ -11,6 +11,9 @@ import uuid
 import threading
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
+
+_BACKUPS_ROOT = Path(__file__).parent.parent.parent / "backups"
 
 router = APIRouter(prefix="/v2/admin", tags=["admin"])
 
@@ -324,6 +327,54 @@ def download_run_backup(run_id: str):
             fpath = os.path.join(backup_dir, fname)
             if os.path.isfile(fpath):
                 zf.write(fpath, arcname=fname)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+    )
+
+
+@router.get("/backups")
+def list_backups():
+    if not _BACKUPS_ROOT.is_dir():
+        return {"backups": []}
+    entries = []
+    for d in sorted(_BACKUPS_ROOT.iterdir(), reverse=True):
+        if d.is_dir():
+            try:
+                meta_file = d / "metadata.json"
+                meta = None
+                if meta_file.exists():
+                    import json as _json
+                    meta = _json.loads(meta_file.read_text())
+                entries.append({
+                    "name": d.name,
+                    "path": str(d),
+                    "total_documents": meta.get("total_documents") if meta else None,
+                    "exported_at": meta.get("exported_at") if meta else None,
+                    "collections": meta.get("collections") if meta else None,
+                })
+            except Exception:
+                entries.append({"name": d.name, "path": str(d)})
+    return {"backups": entries}
+
+
+@router.get("/backups/{dir_name}/download")
+def download_backup_by_name(dir_name: str):
+    if ".." in dir_name or "/" in dir_name or "\\" in dir_name:
+        raise HTTPException(status_code=400, detail="Invalid backup name")
+    backup_dir = _BACKUPS_ROOT / dir_name
+    if not backup_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Backup '{dir_name}' not found on server")
+
+    zip_filename = f"{dir_name}.zip"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for fpath in backup_dir.iterdir():
+            if fpath.is_file():
+                zf.write(fpath, arcname=fpath.name)
     buf.seek(0)
 
     return StreamingResponse(
