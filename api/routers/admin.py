@@ -80,6 +80,13 @@ SCRIPT_CATALOGUE = [
         "category": "maintenance",
         "path": "scripts/maintenance/enrich_registration_doc_links.py",
     },
+    {
+        "id": "import_kestrel_proxy_v2",
+        "name": "Import Kestrel Proxy v2 Observations",
+        "description": "Imports 11,879 Kestrel Proxy Observational Data v2 records (source: kestrel_proxy_v2) for 11 satellites across a 180-day window. Enables observations tracking and creates graph edges.",
+        "category": "import",
+        "path": "scripts/import/import_kestrel_proxy_v2.py",
+    },
 ]
 
 _CATALOGUE_BY_ID = {s["id"]: s for s in SCRIPT_CATALOGUE}
