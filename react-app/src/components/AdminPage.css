@@ -222,3 +222,90 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+.backups-section {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 6px;
+}
+
+.backups-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.backups-section-header .category-title {
+  margin: 0;
+  color: #7b5800;
+}
+
+.refresh-button {
+  padding: 0.3rem 0.75rem;
+  background: transparent;
+  border: 1px solid #c8a000;
+  border-radius: 4px;
+  color: #7b5800;
+  font-size: 0.8em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #fff0b3;
+}
+
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.backup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.backup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.8rem;
+  background: white;
+  border: 1px solid #ffe082;
+  border-radius: 4px;
+}
+
+.backup-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.backup-item-name {
+  font-size: 0.88em;
+  font-weight: 600;
+  color: #333;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.backup-item-meta {
+  font-size: 0.78em;
+  color: #666;
+}
+
+.no-backups {
+  font-size: 0.85em;
+  color: #888;
+  padding: 0.5rem 0;
+}
+
+.download-button:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+}
