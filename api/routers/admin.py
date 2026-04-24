@@ -1,10 +1,15 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available, check_data_files, find_egm96
+import io
 import os
+import re
 import shutil
 import subprocess
+import tempfile
 import uuid
 import threading
+import zipfile
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/v2/admin", tags=["admin"])
@@ -81,11 +86,28 @@ SCRIPT_CATALOGUE = [
         "path": "scripts/maintenance/enrich_registration_doc_links.py",
     },
     {
+        "id": "export_and_clear_observations",
+        "name": "Export & Clear Observations",
+        "description": "Exports all observation documents, source vertices, and graph edges (satellite, source, temporal, correlation) to timestamped JSONL backup files, then wipes those collections. Run this before re-importing observation data.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/export_and_clear_observations.py",
+    },
+    {
         "id": "import_kestrel_proxy_v2",
         "name": "Import Kestrel Proxy v2 Observations",
-        "description": "Imports 11,879 Kestrel Proxy Observational Data v2 records (source: kestrel_proxy_v2) for 11 satellites across a 180-day window. Enables observations tracking and creates graph edges.",
+        "description": "Imports Kestrel Proxy Observational Data v2 records (source: kestrel_proxy_v2) for 11 satellites across a 180-day window. Enables observations tracking and creates graph edges. Upload the .xlsx file before running.",
         "category": "import",
         "path": "scripts/import/import_kestrel_proxy_v2.py",
+        "requires_file": True,
+        "file_arg": "--file",
+        "accepted_extensions": [".xlsx"],
+    },
+    {
+        "id": "populate_observation_edges",
+        "name": "Populate Observation Edges",
+        "description": "Rebuilds all four observation graph edge collections (satellite, source, temporal, anomaly-correlation) from the current observation documents. Run this after importing new observation data.",
+        "category": "population",
+        "path": "scripts/population/populate_observation_edges.py",
     },
 ]
 
@@ -94,6 +116,11 @@ _CATALOGUE_BY_ID = {s["id"]: s for s in SCRIPT_CATALOGUE}
 _runs: dict[str, dict] = {}
 _runs_lock = threading.Lock()
 
+_uploaded_files: dict[str, str] = {}
+_uploaded_files_lock = threading.Lock()
+
+_BACKUP_DIR_PATTERN = re.compile(r"^BACKUP_DIR:\s*(.+)$", re.MULTILINE)
+
 
 def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
     for line in proc.stdout:
@@ -101,8 +128,13 @@ def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
             _runs[run_id]["output"] += line
     proc.wait()
     with _runs_lock:
-        _runs[run_id]["status"] = "success" if proc.returncode == 0 else "error"
+        status = "success" if proc.returncode == 0 else "error"
+        _runs[run_id]["status"] = status
         _runs[run_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        if status == "success":
+            m = _BACKUP_DIR_PATTERN.search(_runs[run_id]["output"])
+            if m:
+                _runs[run_id]["backup_dir"] = m.group(1).strip()
 
 
 @router.get("/gmat-status")
@@ -173,10 +205,44 @@ def list_scripts():
                 "name": s["name"],
                 "description": s["description"],
                 "category": s["category"],
+                "requires_file": s.get("requires_file", False),
+                "accepted_extensions": s.get("accepted_extensions", []),
             }
             for s in SCRIPT_CATALOGUE
         ]
     }
+
+
+@router.post("/scripts/{script_id}/upload")
+async def upload_script_file(script_id: str, file: UploadFile = File(...)):
+    script = _CATALOGUE_BY_ID.get(script_id)
+    if not script:
+        raise HTTPException(status_code=404, detail=f"Script '{script_id}' not found")
+    if not script.get("requires_file"):
+        raise HTTPException(status_code=400, detail=f"Script '{script_id}' does not accept file uploads")
+
+    accepted = script.get("accepted_extensions", [])
+    if accepted:
+        _, ext = os.path.splitext(file.filename or "")
+        if ext.lower() not in accepted:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Accepted: {', '.join(accepted)}"
+            )
+
+    suffix = os.path.splitext(file.filename or "upload")[1] or ".bin"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        contents = await file.read()
+        tmp.write(contents)
+        tmp.flush()
+    finally:
+        tmp.close()
+
+    with _uploaded_files_lock:
+        _uploaded_files[script_id] = tmp.name
+
+    return {"script_id": script_id, "filename": file.filename, "size": len(contents)}
 
 
 @router.post("/scripts/{script_id}/run")
@@ -185,9 +251,22 @@ def run_script(script_id: str):
     if not script:
         raise HTTPException(status_code=404, detail=f"Script '{script_id}' not found")
 
+    cmd = ["python", script["path"]]
+
+    if script.get("requires_file"):
+        with _uploaded_files_lock:
+            uploaded_path = _uploaded_files.get(script_id)
+        if not uploaded_path or not os.path.isfile(uploaded_path):
+            raise HTTPException(
+                status_code=400,
+                detail="This script requires a file to be uploaded first. Use the upload button."
+            )
+        file_arg = script.get("file_arg", "--file")
+        cmd += [file_arg, uploaded_path]
+
     run_id = str(uuid.uuid4())
     proc = subprocess.Popen(
-        ["python", script["path"]],
+        cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -222,4 +301,33 @@ def get_run(run_id: str):
             "output": run["output"],
             "started_at": run["started_at"],
             "finished_at": run["finished_at"],
+            "backup_dir": run.get("backup_dir"),
         }
+
+
+@router.get("/runs/{run_id}/download")
+def download_run_backup(run_id: str):
+    with _runs_lock:
+        run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    backup_dir = run.get("backup_dir")
+    if not backup_dir or not os.path.isdir(backup_dir):
+        raise HTTPException(status_code=404, detail="No backup directory found for this run")
+
+    dir_name = os.path.basename(backup_dir.rstrip("/"))
+    zip_filename = f"{dir_name}.zip"
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for fname in os.listdir(backup_dir):
+            fpath = os.path.join(backup_dir, fname)
+            if os.path.isfile(fpath):
+                zf.write(fpath, arcname=fname)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+    )

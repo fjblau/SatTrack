@@ -15,6 +15,7 @@ mongodb_backup/
 # Data exports
 arango_export/
 mongodb_export.json
+backups/
 
 # Build output
 react-app/dist/
