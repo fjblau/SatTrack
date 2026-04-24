@@ -105,14 +105,25 @@ function AdminPage() {
     }
   }
 
-  const downloadBackup = (runId) => {
-    const url = `/api/v2/admin/runs/${runId}/download`
-    const a = document.createElement('a')
-    a.href = url
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+  const downloadBackup = async (runId) => {
+    try {
+      const response = await apiFetch(`/v2/admin/runs/${runId}/download`)
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const disposition = response.headers.get('Content-Disposition') || ''
+      const match = disposition.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : `backup_${runId}.zip`
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Backup download failed:', error)
+    }
   }
 
   const categories = [...new Set(scripts.map(s => s.category))]
