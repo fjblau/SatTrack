@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available, check_data_files, find_egm96
 import os
 import shutil
 import subprocess
+import tempfile
 import uuid
 import threading
 from datetime import datetime, timezone
@@ -83,9 +84,12 @@ SCRIPT_CATALOGUE = [
     {
         "id": "import_kestrel_proxy_v2",
         "name": "Import Kestrel Proxy v2 Observations",
-        "description": "Imports 11,879 Kestrel Proxy Observational Data v2 records (source: kestrel_proxy_v2) for 11 satellites across a 180-day window. Enables observations tracking and creates graph edges.",
+        "description": "Imports Kestrel Proxy Observational Data v2 records (source: kestrel_proxy_v2) for 11 satellites across a 180-day window. Enables observations tracking and creates graph edges. Upload the .xlsx file before running.",
         "category": "import",
         "path": "scripts/import/import_kestrel_proxy_v2.py",
+        "requires_file": True,
+        "file_arg": "--file",
+        "accepted_extensions": [".xlsx"],
     },
 ]
 
@@ -93,6 +97,9 @@ _CATALOGUE_BY_ID = {s["id"]: s for s in SCRIPT_CATALOGUE}
 
 _runs: dict[str, dict] = {}
 _runs_lock = threading.Lock()
+
+_uploaded_files: dict[str, str] = {}
+_uploaded_files_lock = threading.Lock()
 
 
 def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
@@ -173,10 +180,44 @@ def list_scripts():
                 "name": s["name"],
                 "description": s["description"],
                 "category": s["category"],
+                "requires_file": s.get("requires_file", False),
+                "accepted_extensions": s.get("accepted_extensions", []),
             }
             for s in SCRIPT_CATALOGUE
         ]
     }
+
+
+@router.post("/scripts/{script_id}/upload")
+async def upload_script_file(script_id: str, file: UploadFile = File(...)):
+    script = _CATALOGUE_BY_ID.get(script_id)
+    if not script:
+        raise HTTPException(status_code=404, detail=f"Script '{script_id}' not found")
+    if not script.get("requires_file"):
+        raise HTTPException(status_code=400, detail=f"Script '{script_id}' does not accept file uploads")
+
+    accepted = script.get("accepted_extensions", [])
+    if accepted:
+        _, ext = os.path.splitext(file.filename or "")
+        if ext.lower() not in accepted:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Accepted: {', '.join(accepted)}"
+            )
+
+    suffix = os.path.splitext(file.filename or "upload")[1] or ".bin"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        contents = await file.read()
+        tmp.write(contents)
+        tmp.flush()
+    finally:
+        tmp.close()
+
+    with _uploaded_files_lock:
+        _uploaded_files[script_id] = tmp.name
+
+    return {"script_id": script_id, "filename": file.filename, "size": len(contents)}
 
 
 @router.post("/scripts/{script_id}/run")
@@ -185,9 +226,22 @@ def run_script(script_id: str):
     if not script:
         raise HTTPException(status_code=404, detail=f"Script '{script_id}' not found")
 
+    cmd = ["python", script["path"]]
+
+    if script.get("requires_file"):
+        with _uploaded_files_lock:
+            uploaded_path = _uploaded_files.get(script_id)
+        if not uploaded_path or not os.path.isfile(uploaded_path):
+            raise HTTPException(
+                status_code=400,
+                detail="This script requires a file to be uploaded first. Use the upload button."
+            )
+        file_arg = script.get("file_arg", "--file")
+        cmd += [file_arg, uploaded_path]
+
     run_id = str(uuid.uuid4())
     proc = subprocess.Popen(
-        ["python", script["path"]],
+        cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

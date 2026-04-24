@@ -6,7 +6,9 @@ function AdminPage() {
   const [scripts, setScripts] = useState([])
   const [loading, setLoading] = useState(false)
   const [runs, setRuns] = useState({})
+  const [uploads, setUploads] = useState({})
   const pollTimers = useRef({})
+  const fileInputRefs = useRef({})
 
   useEffect(() => {
     fetchScripts()
@@ -28,12 +30,40 @@ function AdminPage() {
     }
   }
 
+  const handleFileChange = async (scriptId, acceptedExtensions, e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setUploads(prev => ({ ...prev, [scriptId]: { status: 'uploading', filename: file.name } }))
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await apiFetch(`/v2/admin/scripts/${scriptId}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.detail || 'Upload failed')
+      }
+
+      const data = await response.json()
+      setUploads(prev => ({ ...prev, [scriptId]: { status: 'ready', filename: data.filename } }))
+    } catch (error) {
+      setUploads(prev => ({ ...prev, [scriptId]: { status: 'error', filename: file.name, error: String(error) } }))
+    }
+  }
+
   const runScript = async (scriptId) => {
     try {
       const response = await apiFetch(`/v2/admin/scripts/${scriptId}/run`, {
         method: 'POST'
       })
       const data = await response.json()
+      if (!response.ok) throw new Error(data.detail || 'Run failed')
       const runId = data.run_id
 
       setRuns(prev => ({
@@ -86,7 +116,11 @@ function AdminPage() {
           <div className="script-list">
             {scripts.filter(s => s.category === category).map(script => {
               const run = runs[script.id]
+              const upload = uploads[script.id]
               const isRunning = run?.status === 'running'
+              const needsFile = script.requires_file
+              const canRun = !needsFile || upload?.status === 'ready'
+              const accept = (script.accepted_extensions || []).join(',')
 
               return (
                 <div key={script.id} className="script-card">
@@ -96,13 +130,40 @@ function AdminPage() {
                       <div className="script-description">{script.description}</div>
                     </div>
                     <div className="script-controls">
+                      {needsFile && (
+                        <div className="upload-control">
+                          <input
+                            type="file"
+                            accept={accept}
+                            ref={el => fileInputRefs.current[script.id] = el}
+                            style={{ display: 'none' }}
+                            onChange={e => handleFileChange(script.id, script.accepted_extensions, e)}
+                          />
+                          <button
+                            className={`upload-button ${upload?.status === 'ready' ? 'upload-ready' : ''}`}
+                            onClick={() => fileInputRefs.current[script.id]?.click()}
+                            disabled={isRunning || upload?.status === 'uploading'}
+                            title={upload?.filename || 'Choose file to upload'}
+                          >
+                            {upload?.status === 'uploading'
+                              ? 'Uploading...'
+                              : upload?.status === 'ready'
+                              ? `\u2713 ${upload.filename}`
+                              : 'Upload File'}
+                          </button>
+                          {upload?.status === 'error' && (
+                            <span className="upload-error" title={upload.error}>Upload failed</span>
+                          )}
+                        </div>
+                      )}
                       <span className={`status-badge status-${run?.status || 'idle'}`}>
                         {run?.status || 'idle'}
                       </span>
                       <button
                         className="run-button"
                         onClick={() => runScript(script.id)}
-                        disabled={isRunning}
+                        disabled={isRunning || !canRun}
+                        title={needsFile && !canRun ? 'Upload a file first' : undefined}
                       >
                         {isRunning ? 'Running...' : 'Run'}
                       </button>
