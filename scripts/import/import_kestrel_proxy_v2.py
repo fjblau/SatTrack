@@ -243,9 +243,7 @@ def import_records(records: list[dict], batch_size: int, dry_run: bool, create_e
 
 
 def _flush_batch(obs_col, batch: list[dict], create_edges: bool):
-    result = obs_col.import_bulk(batch, on_duplicate="ignore", return_new=create_edges)
-    if create_edges and isinstance(result, dict) and result.get("created"):
-        pass
+    obs_col.import_bulk(batch, on_duplicate="ignore")
     if create_edges:
         cursor = db_conn.db.aql.execute(
             """
