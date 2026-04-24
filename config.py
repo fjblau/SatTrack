@@ -91,25 +91,24 @@ class OrbitalConstants:
 
 class AuthConfig:
     """Authentication configuration"""
-    USERNAME: str = os.getenv("APP_USERNAME", "admin")
-    PASSWORD: str = os.getenv("APP_PASSWORD", "")
-
-    SHANTANU_USERNAME: str = os.getenv("SHANTANU_USERNAME", "shantanu")
-    SHANTANU_PASSWORD: str = os.getenv("SHANTANU_PASSWORD", "")
-
-    def __init__(self):
-        import logging
-        if not self.PASSWORD:
-            logging.getLogger(__name__).warning(
-                "APP_PASSWORD is not set. Authentication will reject all login attempts."
-            )
 
     def valid_users(self) -> dict[str, str]:
+        username = os.getenv("APP_USERNAME", "admin")
+        password = os.getenv("APP_PASSWORD", "")
+        shantanu_username = os.getenv("SHANTANU_USERNAME", "shantanu")
+        shantanu_password = os.getenv("SHANTANU_PASSWORD", "")
+
+        import logging
+        if not password:
+            logging.getLogger(__name__).warning(
+                "APP_PASSWORD is not set. Authentication will reject all non-demo login attempts."
+            )
+
         users = {}
-        if self.USERNAME and self.PASSWORD:
-            users[self.USERNAME] = self.PASSWORD
-        if self.SHANTANU_USERNAME and self.SHANTANU_PASSWORD:
-            users[self.SHANTANU_USERNAME] = self.SHANTANU_PASSWORD
+        if username and password:
+            users[username] = password
+        if shantanu_username and shantanu_password:
+            users[shantanu_username] = shantanu_password
         return users
 
 
