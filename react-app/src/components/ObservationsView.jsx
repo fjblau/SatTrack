@@ -39,7 +39,7 @@ const SECTION_COLUMNS = [
     columns: [
       { key: 'reflectivity_index', label: 'Reflectivity' },
       { key: 'inferred_material', label: 'Material' },
-      { key: 'confidence', label: 'Confidence' },
+      { key: 'material_confidence', label: 'Confidence' },
     ],
   },
   {
@@ -53,8 +53,8 @@ const SECTION_COLUMNS = [
     section: 'Maneuver Indicator',
     columns: [
       { key: 'delta_v_residual_ms', label: 'ΔV Residual (m/s)' },
-      { key: 'confidence', label: 'Confidence' },
-      { key: 'flag', label: 'Flag' },
+      { key: 'maneuver_confidence', label: 'Confidence' },
+      { key: 'maneuver_flag', label: 'Flag' },
     ],
   },
   {
@@ -248,9 +248,12 @@ export default function ObservationsView() {
                       ))}
                       {SECTION_COLUMNS.map(sec => {
                         const nested = obs[SECTION_FIELD_KEYS[sec.section]] || {}
-                        return sec.columns.map((col, i) => (
-                          <td key={`${sec.section}-${col.key}-${i}`}>{formatCell(nested[col.key])}</td>
-                        ))
+                        return sec.columns.map((col, i) => {
+                          const val = obs[col.key] !== undefined && obs[col.key] !== null
+                            ? obs[col.key]
+                            : nested[col.key]
+                          return <td key={`${sec.section}-${col.key}-${i}`}>{formatCell(val)}</td>
+                        })
                       })}
                     </tr>
                   ))}
