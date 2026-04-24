@@ -82,6 +82,13 @@ SCRIPT_CATALOGUE = [
         "path": "scripts/maintenance/enrich_registration_doc_links.py",
     },
     {
+        "id": "export_and_clear_observations",
+        "name": "Export & Clear Observations",
+        "description": "Exports all observation documents, source vertices, and graph edges (satellite, source, temporal, correlation) to timestamped JSONL backup files, then wipes those collections. Run this before re-importing observation data.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/export_and_clear_observations.py",
+    },
+    {
         "id": "import_kestrel_proxy_v2",
         "name": "Import Kestrel Proxy v2 Observations",
         "description": "Imports Kestrel Proxy Observational Data v2 records (source: kestrel_proxy_v2) for 11 satellites across a 180-day window. Enables observations tracking and creates graph edges. Upload the .xlsx file before running.",
@@ -90,6 +97,13 @@ SCRIPT_CATALOGUE = [
         "requires_file": True,
         "file_arg": "--file",
         "accepted_extensions": [".xlsx"],
+    },
+    {
+        "id": "populate_observation_edges",
+        "name": "Populate Observation Edges",
+        "description": "Rebuilds all four observation graph edge collections (satellite, source, temporal, anomaly-correlation) from the current observation documents. Run this after importing new observation data.",
+        "category": "population",
+        "path": "scripts/population/populate_observation_edges.py",
     },
 ]
 
