@@ -138,6 +138,7 @@ def run(output_dir: str | None, dry_run: bool):
     print(flush=True)
     print(f"{'Would delete' if dry_run else 'Deleted'} {total_deleted} documents across {len(COLLECTIONS_TO_EXPORT)} collections", flush=True)
     print(f"Backup saved to: {backup_dir}", flush=True)
+    print(f"BACKUP_DIR: {backup_dir}", flush=True)
     print(flush=True)
     print("Next steps:", flush=True)
     print("  1. Run 'Import Kestrel Proxy v2 Observations' (upload .xlsx)", flush=True)

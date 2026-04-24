@@ -88,7 +88,12 @@ function AdminPage() {
 
       setRuns(prev => ({
         ...prev,
-        [scriptId]: { runId, status: data.status, output: data.output || '' }
+        [scriptId]: {
+          runId,
+          status: data.status,
+          output: data.output || '',
+          backupDir: data.backup_dir || null,
+        }
       }))
 
       if (data.status === 'success' || data.status === 'error') {
@@ -98,6 +103,16 @@ function AdminPage() {
     } catch (error) {
       console.error('Error polling run:', error)
     }
+  }
+
+  const downloadBackup = (runId) => {
+    const url = `/api/v2/admin/runs/${runId}/download`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = ''
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   const categories = [...new Set(scripts.map(s => s.category))]
@@ -169,6 +184,17 @@ function AdminPage() {
                       </button>
                     </div>
                   </div>
+                  {run?.status === 'success' && run?.backupDir && (
+                    <div className="backup-download-bar">
+                      <span className="backup-ready-label">Backup ready</span>
+                      <button
+                        className="download-button"
+                        onClick={() => downloadBackup(run.runId)}
+                      >
+                        Download Backup (.zip)
+                      </button>
+                    </div>
+                  )}
                   {run?.output && (
                     <pre className="script-log">{run.output}</pre>
                   )}

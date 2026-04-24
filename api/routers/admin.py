@@ -1,11 +1,15 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available, check_data_files, find_egm96
+import io
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import uuid
 import threading
+import zipfile
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/v2/admin", tags=["admin"])
@@ -115,6 +119,8 @@ _runs_lock = threading.Lock()
 _uploaded_files: dict[str, str] = {}
 _uploaded_files_lock = threading.Lock()
 
+_BACKUP_DIR_PATTERN = re.compile(r"^BACKUP_DIR:\s*(.+)$", re.MULTILINE)
+
 
 def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
     for line in proc.stdout:
@@ -122,8 +128,13 @@ def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
             _runs[run_id]["output"] += line
     proc.wait()
     with _runs_lock:
-        _runs[run_id]["status"] = "success" if proc.returncode == 0 else "error"
+        status = "success" if proc.returncode == 0 else "error"
+        _runs[run_id]["status"] = status
         _runs[run_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        if status == "success":
+            m = _BACKUP_DIR_PATTERN.search(_runs[run_id]["output"])
+            if m:
+                _runs[run_id]["backup_dir"] = m.group(1).strip()
 
 
 @router.get("/gmat-status")
@@ -290,4 +301,33 @@ def get_run(run_id: str):
             "output": run["output"],
             "started_at": run["started_at"],
             "finished_at": run["finished_at"],
+            "backup_dir": run.get("backup_dir"),
         }
+
+
+@router.get("/runs/{run_id}/download")
+def download_run_backup(run_id: str):
+    with _runs_lock:
+        run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    backup_dir = run.get("backup_dir")
+    if not backup_dir or not os.path.isdir(backup_dir):
+        raise HTTPException(status_code=404, detail="No backup directory found for this run")
+
+    dir_name = os.path.basename(backup_dir.rstrip("/"))
+    zip_filename = f"{dir_name}.zip"
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for fname in os.listdir(backup_dir):
+            fpath = os.path.join(backup_dir, fname)
+            if os.path.isfile(fpath):
+                zf.write(fpath, arcname=fname)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+    )

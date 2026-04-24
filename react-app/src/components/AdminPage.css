@@ -176,6 +176,39 @@
   font-weight: 500;
 }
 
+.backup-download-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  background: #d1e7dd;
+  border: 1px solid #a3cfbb;
+  border-radius: 4px;
+}
+
+.backup-ready-label {
+  font-size: 0.82em;
+  font-weight: 600;
+  color: #0a3622;
+}
+
+.download-button {
+  padding: 0.35rem 0.9rem;
+  background: #198754;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82em;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.download-button:hover {
+  background: #157347;
+}
+
 .script-log {
   margin-top: 0.75rem;
   padding: 0.75rem;
