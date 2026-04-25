@@ -4,7 +4,13 @@ import './ObservationsModal.css'
 import { API_ENDPOINTS } from '../config/constants'
 
 const TOP_LEVEL_COLUMNS = [
+  { key: 'norad_id', label: 'NORAD' },
   { key: 'observation_epoch', label: 'Epoch' },
+  { key: 'pass_id', label: 'Pass ID' },
+  { key: 'frame_index', label: 'Frame' },
+  { key: 'observation_mode', label: 'Mode' },
+  { key: 'sensors_active', label: 'Sensors' },
+  { key: 'illumination', label: 'Illumination' },
   { key: 'source', label: 'Source' },
   { key: 'object_name', label: 'Object Name' },
   { key: 'object_type', label: 'Object Type' },
@@ -37,7 +43,7 @@ const SECTION_COLUMNS = [
     columns: [
       { key: 'reflectivity_index', label: 'Reflectivity' },
       { key: 'inferred_material', label: 'Material' },
-      { key: 'confidence', label: 'Confidence' },
+      { key: 'material_confidence', label: 'Confidence' },
     ],
   },
   {
@@ -51,8 +57,8 @@ const SECTION_COLUMNS = [
     section: 'Maneuver Indicator',
     columns: [
       { key: 'delta_v_residual_ms', label: 'ΔV Residual (m/s)' },
-      { key: 'confidence', label: 'Confidence' },
-      { key: 'flag', label: 'Flag' },
+      { key: 'maneuver_confidence', label: 'Confidence' },
+      { key: 'maneuver_flag', label: 'Flag' },
     ],
   },
   {
@@ -199,9 +205,12 @@ export default function ObservationsModal({ noradId, objectName, onClose }) {
                       ))}
                       {SECTION_COLUMNS.map(sec => {
                         const nested = obs[SECTION_FIELD_KEYS[sec.section]] || {}
-                        return sec.columns.map((col, i) => (
-                          <td key={`${sec.section}-${col.key}-${i}`}>{formatCell(nested[col.key])}</td>
-                        ))
+                        return sec.columns.map((col, i) => {
+                          const val = obs[col.key] !== undefined && obs[col.key] !== null
+                            ? obs[col.key]
+                            : nested[col.key]
+                          return <td key={`${sec.section}-${col.key}-${i}`}>{formatCell(val)}</td>
+                        })
                       })}
                     </tr>
                   ))}
