@@ -73,12 +73,16 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
   const viewerRef = useRef(null)
   const lastTickRef = useRef(0)
   const onTimeChangeRef = useRef(onTimeChange)
+  const obsWindowStartRef = useRef(obsWindowStart)
+  const obsWindowEndRef = useRef(obsWindowEnd)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const [telemetry, setTelemetry] = useState(null)
   const [inObsWindow, setInObsWindow] = useState(false)
 
   useEffect(() => { onTimeChangeRef.current = onTimeChange }, [onTimeChange])
+  useEffect(() => { obsWindowStartRef.current = obsWindowStart }, [obsWindowStart])
+  useEffect(() => { obsWindowEndRef.current = obsWindowEnd }, [obsWindowEnd])
 
   useEffect(() => {
     if (!czmlData || czmlData.length < 2) {
@@ -150,9 +154,59 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
 
         viewer.timeline.zoomTo(clock.startTime, clock.stopTime)
 
-        const entities = dataSource.entities.values
-        if (entities.length > 0) {
-          viewer.zoomTo(dataSource.entities, new Cesium.HeadingPitchRange(0, -Math.PI / 3, 12000000))
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(0, 0, 22000000),
+          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+          duration: 0,
+        })
+
+        const obsWinStart = obsWindowStartRef.current
+        const obsWinEnd = obsWindowEndRef.current
+        if (obsWinStart && obsWinEnd) {
+          const tlContainer = containerRef.current?.querySelector('.cesium-viewer-timelineContainer')
+          if (tlContainer) {
+            const totalMs =
+              Cesium.JulianDate.toDate(clock.stopTime).getTime() -
+              Cesium.JulianDate.toDate(clock.startTime).getTime()
+            const startMs = Cesium.JulianDate.toDate(clock.startTime).getTime()
+            const obsStartFrac = (new Date(obsWinStart).getTime() - startMs) / totalMs
+            const obsEndFrac = (new Date(obsWinEnd).getTime() - startMs) / totalMs
+            const clampedStart = Math.max(0, obsStartFrac)
+            const clampedWidth = Math.min(1, obsEndFrac) - clampedStart
+            if (clampedWidth > 0) {
+              const overlay = document.createElement('div')
+              overlay.className = 'kdg-tl-obs-overlay'
+              overlay.style.cssText = `
+                position:absolute;
+                left:${clampedStart * 100}%;
+                width:${clampedWidth * 100}%;
+                top:0;bottom:0;
+                background:rgba(255,160,40,0.28);
+                border-left:2px solid rgba(255,160,40,0.85);
+                border-right:2px solid rgba(255,160,40,0.85);
+                pointer-events:none;
+                z-index:2;
+              `
+              tlContainer.style.position = 'relative'
+              tlContainer.appendChild(overlay)
+              const label = document.createElement('div')
+              label.style.cssText = `
+                position:absolute;
+                top:2px;
+                left:50%;
+                transform:translateX(-50%);
+                font-size:9px;
+                font-weight:700;
+                color:rgba(255,160,40,0.95);
+                letter-spacing:0.06em;
+                pointer-events:none;
+                white-space:nowrap;
+                text-shadow:0 0 4px rgba(0,0,0,0.8);
+              `
+              label.textContent = 'OBS WINDOW'
+              overlay.appendChild(label)
+            }
+          }
         }
 
         const tickListener = (clock) => {
