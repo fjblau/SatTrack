@@ -602,6 +602,11 @@ export default function ObservationDashboard() {
         estimatedPerigee: obs.estimated_perigee_km ?? obs.orbital_decay_indicator?.estimated_perigee_km,
         mass: obs.estimated_mass_kg,
         spin: obs.spin_rate_rpm,
+        passId: obs.pass_id,
+        frameIndex: obs.frame_index,
+        observationMode: obs.observation_mode,
+        sensorsActive: obs.sensors_active,
+        illumination: obs.illumination,
       }))
   }, [observations])
 
@@ -802,6 +807,43 @@ export default function ObservationDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Metadata breakdown */}
+            {(() => {
+              const modes = [...new Set(chartData.map(d => d.observationMode).filter(Boolean))]
+              const sensors = [...new Set(chartData.map(d => d.sensorsActive).filter(Boolean))]
+              const illuminations = [...new Set(chartData.map(d => d.illumination).filter(Boolean))]
+              const passes = [...new Set(chartData.map(d => d.passId).filter(Boolean))]
+              if (!modes.length && !sensors.length && !illuminations.length && !passes.length) return null
+              return (
+                <div className="obs-meta-breakdown">
+                  {passes.length > 0 && (
+                    <div className="obs-meta-group">
+                      <span className="obs-meta-label">Passes ({passes.length}):</span>
+                      <span className="obs-meta-values">{passes.slice(0, 8).join(', ')}{passes.length > 8 ? ` +${passes.length - 8} more` : ''}</span>
+                    </div>
+                  )}
+                  {modes.length > 0 && (
+                    <div className="obs-meta-group">
+                      <span className="obs-meta-label">Observation Modes:</span>
+                      <span className="obs-meta-values">{modes.join(', ')}</span>
+                    </div>
+                  )}
+                  {sensors.length > 0 && (
+                    <div className="obs-meta-group">
+                      <span className="obs-meta-label">Sensors Active:</span>
+                      <span className="obs-meta-values">{sensors.join(', ')}</span>
+                    </div>
+                  )}
+                  {illuminations.length > 0 && (
+                    <div className="obs-meta-group">
+                      <span className="obs-meta-label">Illumination:</span>
+                      <span className="obs-meta-values">{illuminations.join(', ')}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Charts grid */}
             <div className="obs-charts-grid">
