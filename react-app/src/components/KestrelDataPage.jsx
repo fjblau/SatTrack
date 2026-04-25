@@ -181,6 +181,8 @@ export default function KestrelDataPage() {
   const [czmlData, setCzmlData] = useState(null)
   const [obsWindowStart, setObsWindowStart] = useState(null)
   const [obsWindowEnd, setObsWindowEnd] = useState(null)
+  const [globeWindowStart, setGlobeWindowStart] = useState(null)
+  const [globeWindowEnd, setGlobeWindowEnd] = useState(null)
   const [currentSimTime, setCurrentSimTime] = useState(null)
 
   useEffect(() => {
@@ -213,6 +215,8 @@ export default function KestrelDataPage() {
       setCzmlData(null)
       setObsWindowStart(null)
       setObsWindowEnd(null)
+      setGlobeWindowStart(null)
+      setGlobeWindowEnd(null)
       setCurrentSimTime(null)
       return
     }
@@ -221,6 +225,8 @@ export default function KestrelDataPage() {
       setCzmlData(null)
       setObsWindowStart(null)
       setObsWindowEnd(null)
+      setGlobeWindowStart(null)
+      setGlobeWindowEnd(null)
       return
     }
 
@@ -230,6 +236,8 @@ export default function KestrelDataPage() {
       setCzmlData(result.czml)
       setObsWindowStart(result.obsWindowStart)
       setObsWindowEnd(result.obsWindowEnd)
+      setGlobeWindowStart(result.windowStart)
+      setGlobeWindowEnd(result.windowEnd)
     }
 
     if (tleCache[norad]) {
@@ -360,6 +368,8 @@ export default function KestrelDataPage() {
                 satelliteName={selectedSat?.object_name}
                 healthScore={selectedSat?.latest_health}
                 loading={tleFetching}
+                windowStart={globeWindowStart}
+                windowEnd={globeWindowEnd}
                 obsWindowStart={obsWindowStart}
                 obsWindowEnd={obsWindowEnd}
                 onTimeChange={setCurrentSimTime}
