@@ -6,68 +6,68 @@ import './ObservationsView.css'
 import { API_ENDPOINTS, PAGINATION } from '../config/constants'
 
 const TOP_LEVEL_COLUMNS = [
-  { key: 'norad_id', label: 'NORAD' },
-  { key: 'observation_epoch', label: 'Epoch' },
-  { key: 'pass_id', label: 'Pass ID' },
-  { key: 'frame_index', label: 'Frame' },
-  { key: 'observation_mode', label: 'Mode' },
-  { key: 'sensors_active', label: 'Sensors' },
-  { key: 'illumination', label: 'Illumination' },
-  { key: 'source', label: 'Source' },
-  { key: 'object_name', label: 'Object Name' },
-  { key: 'object_type', label: 'Object Type' },
-  { key: 'origin_country', label: 'Country' },
-  { key: 'estimated_mass_kg', label: 'Mass (kg)' },
-  { key: 'spin_rate_rpm', label: 'Spin (rpm)' },
-  { key: 'derived_health_score', label: 'Health Score' },
+  { key: 'norad_id', label: 'NORAD', sortKey: 'norad_id' },
+  { key: 'observation_epoch', label: 'Epoch', sortKey: 'observation_epoch' },
+  { key: 'pass_id', label: 'Pass ID', sortKey: 'pass_id' },
+  { key: 'frame_index', label: 'Frame', sortKey: 'frame_index' },
+  { key: 'observation_mode', label: 'Mode', sortKey: 'observation_mode' },
+  { key: 'sensors_active', label: 'Sensors', sortKey: 'sensors_active' },
+  { key: 'illumination', label: 'Illumination', sortKey: 'illumination' },
+  { key: 'source', label: 'Source', sortKey: 'source' },
+  { key: 'object_name', label: 'Object Name', sortKey: 'object_name' },
+  { key: 'object_type', label: 'Object Type', sortKey: 'object_type' },
+  { key: 'origin_country', label: 'Country', sortKey: 'origin_country' },
+  { key: 'estimated_mass_kg', label: 'Mass (kg)', sortKey: 'estimated_mass_kg' },
+  { key: 'spin_rate_rpm', label: 'Spin (rpm)', sortKey: 'spin_rate_rpm' },
+  { key: 'derived_health_score', label: 'Health Score', sortKey: 'derived_health_score' },
 ]
 
 const SECTION_COLUMNS = [
   {
     section: 'Attitude',
     columns: [
-      { key: 'roll_deg', label: 'Roll (°)' },
-      { key: 'pitch_deg', label: 'Pitch (°)' },
-      { key: 'yaw_deg', label: 'Yaw (°)' },
-      { key: 'stability_flag', label: 'Stability' },
+      { key: 'roll_deg', label: 'Roll (°)', sortKey: 'attitude.roll_deg' },
+      { key: 'pitch_deg', label: 'Pitch (°)', sortKey: 'attitude.pitch_deg' },
+      { key: 'yaw_deg', label: 'Yaw (°)', sortKey: 'attitude.yaw_deg' },
+      { key: 'stability_flag', label: 'Stability', sortKey: 'attitude.stability_flag' },
     ],
   },
   {
     section: 'Thermal',
     columns: [
-      { key: 'surface_temp_K', label: 'Temp (K)' },
-      { key: 'temp_variance_30d', label: 'Variance 30d' },
-      { key: 'anomaly_flag', label: 'Anomaly' },
+      { key: 'surface_temp_K', label: 'Temp (K)', sortKey: 'thermal.surface_temp_K' },
+      { key: 'temp_variance_30d', label: 'Variance 30d', sortKey: 'thermal.temp_variance_30d' },
+      { key: 'anomaly_flag', label: 'Anomaly', sortKey: 'thermal.anomaly_flag' },
     ],
   },
   {
     section: 'Material Signature',
     columns: [
-      { key: 'reflectivity_index', label: 'Reflectivity' },
-      { key: 'inferred_material', label: 'Material' },
-      { key: 'material_confidence', label: 'Confidence' },
+      { key: 'reflectivity_index', label: 'Reflectivity', sortKey: 'material_signature.reflectivity_index' },
+      { key: 'inferred_material', label: 'Material', sortKey: 'material_signature.inferred_material' },
+      { key: 'material_confidence', label: 'Confidence', sortKey: 'material_signature.material_confidence' },
     ],
   },
   {
     section: 'Proximity State',
     columns: [
-      { key: 'range_km', label: 'Range (km)' },
-      { key: 'relative_velocity_ms', label: 'Velocity (m/s)' },
+      { key: 'range_km', label: 'Range (km)', sortKey: 'proximity_state.range_km' },
+      { key: 'relative_velocity_ms', label: 'Velocity (m/s)', sortKey: 'proximity_state.relative_velocity_ms' },
     ],
   },
   {
     section: 'Maneuver Indicator',
     columns: [
-      { key: 'delta_v_residual_ms', label: 'ΔV Residual (m/s)' },
-      { key: 'maneuver_confidence', label: 'Confidence' },
-      { key: 'maneuver_flag', label: 'Flag' },
+      { key: 'delta_v_residual_ms', label: 'ΔV Residual (m/s)', sortKey: 'maneuver_indicator.delta_v_residual_ms' },
+      { key: 'maneuver_confidence', label: 'Confidence', sortKey: 'maneuver_indicator.maneuver_confidence' },
+      { key: 'maneuver_flag', label: 'Flag', sortKey: 'maneuver_indicator.maneuver_flag' },
     ],
   },
   {
     section: 'Orbital Decay',
     columns: [
-      { key: 'perigee_drift_km_per_day', label: 'Perigee Drift (km/d)' },
-      { key: 'estimated_perigee_km', label: 'Est. Perigee (km)' },
+      { key: 'perigee_drift_km_per_day', label: 'Perigee Drift (km/d)', sortKey: 'orbital_decay_indicator.perigee_drift_km_per_day' },
+      { key: 'estimated_perigee_km', label: 'Est. Perigee (km)', sortKey: 'orbital_decay_indicator.estimated_perigee_km' },
     ],
   },
 ]
@@ -136,6 +136,8 @@ export default function ObservationsView() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sortBy, setSortBy] = useState('observation_epoch')
+  const [sortOrder, setSortOrder] = useState('DESC')
 
   const limit = PAGINATION.DEFAULT_PAGE_SIZE
 
@@ -145,7 +147,7 @@ export default function ObservationsView() {
 
   useEffect(() => {
     fetchObservations(0)
-  }, [filters])
+  }, [filters, sortBy, sortOrder])
 
   const fetchFilterOptions = async () => {
     try {
@@ -178,6 +180,8 @@ export default function ObservationsView() {
 
     params.append('skip', pageNum * limit)
     params.append('limit', limit)
+    params.append('sort_by', sortBy)
+    params.append('sort_order', sortOrder)
 
     try {
       const response = await apiFetch(`${API_ENDPOINTS.OBSERVATIONS}?${params}`)
@@ -195,6 +199,20 @@ export default function ObservationsView() {
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters)
+  }
+
+  const handleSort = (colSortKey) => {
+    if (sortBy === colSortKey) {
+      setSortOrder(prev => prev === 'ASC' ? 'DESC' : 'ASC')
+    } else {
+      setSortBy(colSortKey)
+      setSortOrder('ASC')
+    }
+  }
+
+  const SortIndicator = ({ colSortKey }) => {
+    if (sortBy !== colSortKey) return <span className="sort-indicator sort-indicator-inactive">↕</span>
+    return <span className="sort-indicator sort-indicator-active">{sortOrder === 'ASC' ? '↑' : '↓'}</span>
   }
 
   return (
@@ -228,7 +246,15 @@ export default function ObservationsView() {
                 <thead>
                   <tr>
                     {TOP_LEVEL_COLUMNS.map(col => (
-                      <th key={col.key} rowSpan={2} className="th-top-level">{col.label}</th>
+                      <th
+                        key={col.key}
+                        rowSpan={2}
+                        className="th-top-level th-sortable"
+                        onClick={() => handleSort(col.sortKey)}
+                      >
+                        {col.label}
+                        <SortIndicator colSortKey={col.sortKey} />
+                      </th>
                     ))}
                     {SECTION_COLUMNS.map(sec => (
                       <th key={sec.section} colSpan={sec.columns.length} className="th-section">{sec.section}</th>
@@ -237,7 +263,14 @@ export default function ObservationsView() {
                   <tr>
                     {SECTION_COLUMNS.map(sec =>
                       sec.columns.map((col, i) => (
-                        <th key={`${sec.section}-${col.key}-${i}`} className="th-sub">{col.label}</th>
+                        <th
+                          key={`${sec.section}-${col.key}-${i}`}
+                          className="th-sub th-sortable"
+                          onClick={() => handleSort(col.sortKey)}
+                        >
+                          {col.label}
+                          <SortIndicator colSortKey={col.sortKey} />
+                        </th>
                       ))
                     )}
                   </tr>
