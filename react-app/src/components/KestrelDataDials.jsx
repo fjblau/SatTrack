@@ -109,7 +109,7 @@ function BoolCard({ label, value, trueColor = '#e74c3c', falseColor = '#27ae60' 
 
 const CYCLE_MS = 3000
 
-export default function KestrelDataDials({ observations, satelliteName }) {
+export default function KestrelDataDials({ observations, satelliteName, currentSimTime, obsWindowStart, obsWindowEnd }) {
   const sorted = useMemo(() => {
     if (!observations || !observations.length) return []
     return [...observations].sort((a, b) => {
@@ -125,17 +125,39 @@ export default function KestrelDataDials({ observations, satelliteName }) {
     setIdx(0)
   }, [satelliteName])
 
+  const simTimeMs = currentSimTime ? new Date(currentSimTime).getTime() : null
+  const obsStartMs = obsWindowStart ? new Date(obsWindowStart).getTime() : null
+  const obsEndMs = obsWindowEnd ? new Date(obsWindowEnd).getTime() : null
+  const inObsWindow = simTimeMs != null && obsStartMs != null && obsEndMs != null
+    && simTimeMs >= obsStartMs && simTimeMs <= obsEndMs
+
+  const simDrivenIdx = useMemo(() => {
+    if (!inObsWindow || !sorted.length || simTimeMs == null) return null
+    let best = 0
+    let bestDiff = Infinity
+    for (let i = 0; i < sorted.length; i++) {
+      const eMs = sorted[i].observation_epoch ? new Date(sorted[i].observation_epoch).getTime() : null
+      if (eMs == null) continue
+      const diff = Math.abs(eMs - simTimeMs)
+      if (diff < bestDiff) { bestDiff = diff; best = i }
+    }
+    return best
+  }, [inObsWindow, simTimeMs, sorted])
+
   useEffect(() => {
+    if (simDrivenIdx != null) return
     if (sorted.length <= 1) return
     const id = setInterval(() => {
       setIdx(prev => (prev + 1) % sorted.length)
     }, CYCLE_MS)
     return () => clearInterval(id)
-  }, [sorted.length])
+  }, [sorted.length, simDrivenIdx])
+
+  const activeIdx = simDrivenIdx != null ? simDrivenIdx : idx
 
   if (!sorted.length) return null
 
-  const latest = sorted[idx]
+  const latest = sorted[activeIdx]
 
   const health = latest.derived_health_score
   const mass = latest.estimated_mass_kg
@@ -151,7 +173,7 @@ export default function KestrelDataDials({ observations, satelliteName }) {
     ? new Date(latest.observation_epoch).toISOString().slice(0, 16).replace('T', ' ') + 'Z'
     : null
 
-  const progress = sorted.length > 1 ? idx / (sorted.length - 1) : 1
+  const progress = sorted.length > 1 ? activeIdx / (sorted.length - 1) : 1
 
   return (
     <div className="kdd-strip">
@@ -281,7 +303,8 @@ export default function KestrelDataDials({ observations, satelliteName }) {
 
       </div>
       <div className="kdd-footer">
-        {epoch && <span className="kdd-epoch">obs {idx + 1}/{sorted.length} · {epoch}</span>}
+        {inObsWindow && <span className="kdd-obs-window-badge">● IN OBS WINDOW</span>}
+        {epoch && <span className="kdd-epoch">obs {activeIdx + 1}/{sorted.length} · {epoch}</span>}
         {sorted.length > 1 && (
           <div className="kdd-progress-bar">
             <div className="kdd-progress-fill" style={{ width: `${progress * 100}%` }} />

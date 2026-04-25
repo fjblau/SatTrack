@@ -62,6 +62,19 @@ export function orbitalPeriod(sma) {
   return TWO_PI * Math.sqrt(Math.pow(sma, 3) / GM)
 }
 
+export function parseTLEEpoch(line1) {
+  try {
+    const epochStr = line1.substring(18, 32).trim()
+    const year2 = parseInt(epochStr.substring(0, 2), 10)
+    const day = parseFloat(epochStr.substring(2))
+    const fullYear = year2 >= 57 ? 1900 + year2 : 2000 + year2
+    const jan1Ms = Date.UTC(fullYear, 0, 1)
+    return jan1Ms + (day - 1) * 86400000
+  } catch {
+    return null
+  }
+}
+
 export function parseTLE(line1, line2) {
   try {
     const inc = parseFloat(line2.substring(8, 16)) * (Math.PI / 180)
@@ -306,7 +319,7 @@ export function generateCZML(satellites, startIso, totalDurationSeconds, clockMu
         epoch: startIso,
         cartesian,
       },
-      point: {
+      point: sat.noPoint ? { show: false, pixelSize: 1, color: { rgba: [0, 0, 0, 0] } } : {
         pixelSize: sat.pointSize || 10,
         color: { rgba: sat.color },
         outlineColor: { rgba: [255, 255, 255, 120] },
