@@ -8,78 +8,14 @@ function healthColor(score) {
   return '#e74c3c'
 }
 
-function fmt(v, decimals = 2) {
-  if (v == null) return '—'
-  if (typeof v === 'boolean') return v ? 'Yes' : 'No'
-  if (typeof v === 'number') return v.toFixed(decimals)
-  return String(v)
+function fmtNum(v, decimals) {
+  if (v == null) return null
+  return v.toFixed(decimals)
 }
 
-function ArcGauge({ value, min, max, color, label, unit, size = 80 }) {
-  const pct = value == null ? 0 : Math.max(0, Math.min(1, (value - min) / (max - min)))
-  const r = 28
-  const cx = size / 2
-  const cy = size / 2 + 6
-  const startAngle = -210
-  const sweepTotal = 240
-  const toRad = a => (a * Math.PI) / 180
-  const arcPath = (start, sweep) => {
-    const s = toRad(start)
-    const e = toRad(start + sweep)
-    const x1 = cx + r * Math.cos(s)
-    const y1 = cy + r * Math.sin(s)
-    const x2 = cx + r * Math.cos(e)
-    const y2 = cy + r * Math.sin(e)
-    const large = sweep > 180 ? 1 : 0
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`
-  }
-  const fillSweep = sweepTotal * pct
-
-  return (
-    <div className="kdd-card">
-      <div className="kdd-label">{label}</div>
-      <svg width={size} height={size - 4} viewBox={`0 0 ${size} ${size}`}>
-        <path d={arcPath(startAngle, sweepTotal)} fill="none" stroke="#e9ecef" strokeWidth="5" strokeLinecap="round" />
-        {value != null && (
-          <path d={arcPath(startAngle, fillSweep)} fill="none" stroke={color || healthColor(value)} strokeWidth="5" strokeLinecap="round" />
-        )}
-        <text x={cx} y={cy + 2} textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="700" fill={color || healthColor(value)}>
-          {value != null ? (typeof value === 'number' ? value.toFixed(1) : value) : '—'}
-        </text>
-        {unit && (
-          <text x={cx} y={cy + 14} textAnchor="middle" fontSize="7" fill="#adb5bd">{unit}</text>
-        )}
-      </svg>
-    </div>
-  )
-}
-
-function HBar({ value, min, max, color, label, unit, center = false }) {
-  const pct = value == null ? 0 : Math.max(0, Math.min(1, (value - min) / (max - min)))
-  const centerPct = 0.5
-  const barLeft = center ? Math.min(centerPct, pct) : 0
-  const barWidth = center ? Math.abs(pct - centerPct) : pct
-
-  return (
-    <div className="kdd-card">
-      <div className="kdd-label">{label}</div>
-      <div className="kdd-hbar-value">{fmt(value)}{value != null && unit ? <span className="kdd-unit"> {unit}</span> : ''}</div>
-      <div className="kdd-hbar-track">
-        {center && <div className="kdd-hbar-center-line" />}
-        <div
-          className="kdd-hbar-fill"
-          style={{
-            left: `${barLeft * 100}%`,
-            width: `${barWidth * 100}%`,
-            background: color || '#8b5cf6',
-          }}
-        />
-      </div>
-      <div className="kdd-hbar-range">
-        <span>{min}</span><span>{max}</span>
-      </div>
-    </div>
-  )
+function fmtSigned(v, decimals) {
+  if (v == null) return null
+  return (v >= 0 ? '+' : '') + v.toFixed(decimals)
 }
 
 function ValueCard({ label, value, unit, sub, color }) {
@@ -225,11 +161,11 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
     <div className="kdd-strip">
       <div className="kdd-strip-inner">
 
-        <ArcGauge
+        <ValueCard
           label="HEALTH"
-          value={health}
-          min={0} max={100}
-          unit=""
+          value={fmtNum(health, 1)}
+          unit="%"
+          color={healthColor(health)}
         />
 
         {observation_mode != null && (
@@ -256,31 +192,25 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           />
         )}
 
-        <HBar
+        <ValueCard
           label="ROLL"
-          value={roll_deg}
-          min={-180} max={180}
+          value={fmtNum(roll_deg, 2)}
           unit="°"
           color="#9b59b6"
-          center
         />
 
-        <HBar
+        <ValueCard
           label="PITCH"
-          value={pitch_deg}
-          min={-90} max={90}
+          value={fmtNum(pitch_deg, 2)}
           unit="°"
           color="#3498db"
-          center
         />
 
-        <HBar
+        <ValueCard
           label="YAW"
-          value={yaw_deg}
-          min={-180} max={180}
+          value={fmtNum(yaw_deg, 2)}
           unit="°"
           color="#1abc9c"
-          center
         />
 
         <StatusCard
@@ -288,12 +218,11 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           value={stability_flag}
         />
 
-        <ArcGauge
+        <ValueCard
           label="TEMP"
-          value={surface_temp_K}
-          min={200} max={400}
-          color="#e67e22"
+          value={fmtNum(surface_temp_K, 1)}
           unit="K"
+          color="#e67e22"
         />
 
         <BoolCard
@@ -303,10 +232,9 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           falseColor="#27ae60"
         />
 
-        <HBar
+        <ValueCard
           label="REFLECTIVITY"
-          value={reflectivity_index}
-          min={0} max={1}
+          value={fmtNum(reflectivity_index, 3)}
           color="#16a085"
         />
 
@@ -319,28 +247,25 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
 
         <ValueCard
           label="RANGE"
-          value={range_km != null ? range_km.toFixed(1) : null}
+          value={fmtNum(range_km, 1)}
           unit="km"
           sub={relative_velocity_ms != null ? `${relative_velocity_ms.toFixed(2)} m/s rel.` : null}
           color="#2980b9"
         />
 
-        <HBar
+        <ValueCard
           label="ΔV RESIDUAL"
-          value={delta_v_residual_ms}
-          min={0} max={0.1}
-          color="#6c3483"
+          value={fmtNum(delta_v_residual_ms, 4)}
           unit="m/s"
-          decimals={4}
+          color="#6c3483"
         />
 
         {maneuver_confidence != null && (
-          <ArcGauge
+          <ValueCard
             label="MNV CONF"
-            value={maneuver_confidence * 100}
-            min={0} max={100}
-            color="#6c3483"
+            value={fmtNum(maneuver_confidence * 100, 1)}
             unit="%"
+            color="#6c3483"
           />
         )}
 
@@ -350,12 +275,11 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
         />
 
         {spin != null && (
-          <ArcGauge
+          <ValueCard
             label="SPIN"
-            value={spin}
-            min={0} max={10}
-            color="#2c3e50"
+            value={fmtNum(spin, 2)}
             unit="rpm"
+            color="#2c3e50"
           />
         )}
 
@@ -371,7 +295,7 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
         {perigee_drift_km_per_day != null && (
           <ValueCard
             label="PERIGEE DRIFT"
-            value={`${perigee_drift_km_per_day >= 0 ? '+' : ''}${perigee_drift_km_per_day.toFixed(3)}`}
+            value={fmtSigned(perigee_drift_km_per_day, 3)}
             unit="km/d"
             sub={estimated_perigee_km != null ? `est. ${estimated_perigee_km.toFixed(0)} km` : null}
             color={perigee_drift_km_per_day < -0.01 ? '#e74c3c' : '#27ae60'}
