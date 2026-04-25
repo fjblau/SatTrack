@@ -68,13 +68,17 @@ function getCartographic(Cesium, entity, time) {
   }
 }
 
-export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore, loading, emptyMessage }) {
+export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore, loading, emptyMessage, obsWindowStart, obsWindowEnd, onTimeChange }) {
   const containerRef = useRef(null)
   const viewerRef = useRef(null)
   const lastTickRef = useRef(0)
+  const onTimeChangeRef = useRef(onTimeChange)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const [telemetry, setTelemetry] = useState(null)
+  const [inObsWindow, setInObsWindow] = useState(false)
+
+  useEffect(() => { onTimeChangeRef.current = onTimeChange }, [onTimeChange])
 
   useEffect(() => {
     if (!czmlData || czmlData.length < 2) {
@@ -158,11 +162,15 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
           lastTickRef.current = now
 
           const time = clock.currentTime
+          const isoTime = Cesium.JulianDate.toIso8601(time)
+
+          if (onTimeChangeRef.current) onTimeChangeRef.current(isoTime)
+
           const allEntities = dataSource.entities.values
           if (!allEntities.length) return
 
-          const entity = allEntities[0]
-          const carto = getCartographic(Cesium, entity, time)
+          const mainEntity = allEntities.find(e => e.id && !e.id.startsWith('sat-full-gray') && !e.id.startsWith('sat-obs-highlight')) || allEntities[0]
+          const carto = getCartographic(Cesium, mainEntity, time)
           if (carto) {
             setTelemetry({
               lat: fmtDeg(carto.latitude),
@@ -256,6 +264,8 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
         <div className="kdg-legend">
           <div className="kdg-legend-items">
             <div className="kdg-legend-item"><div className={`kdg-legend-dot ${hc}`} /> {satelliteName}</div>
+            <div className="kdg-legend-item"><div className="kdg-legend-line kdg-legend-line-gray" /> Full Orbit Path</div>
+            {obsWindowStart && <div className="kdg-legend-item"><div className="kdg-legend-line kdg-legend-line-obs" /> Observation Window</div>}
           </div>
         </div>
       )}

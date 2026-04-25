@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
-import { parseTLE, propagateOrbit, generateCZML, orbitalPeriod } from '../utils/orbitUtils'
+import { parseTLE, parseTLEEpoch, propagateOrbit, generateCZML, orbitalPeriod } from '../utils/orbitUtils'
 import KestrelDataGlobe from './KestrelDataGlobe'
 import KestrelDataDials from './KestrelDataDials'
 import './KestrelDataPage.css'
@@ -57,37 +57,116 @@ function groupObservationsBySat(obs) {
   })
 }
 
-function buildSingleSatCZML(sat, tle) {
-  const els = parseTLE(tle.line1 || tle.tle_line1, tle.line2 || tle.tle_line2)
-  if (!els) return null
-  const period = orbitalPeriod(els.sma)
-  const duration = period * 2
-  const step = Math.max(30, period / 120)
-  const points = propagateOrbit(els, duration, step)
-  const score = sat.latest_health
-  const color = score == null
+const TWO_PI = 2 * Math.PI
+const GM_LOCAL = 3.986004418e14
+
+function scoreColor(score) {
+  return score == null
     ? [139, 155, 180, 220]
     : score >= 70 ? [39, 174, 96, 255]
     : score >= 40 ? [243, 156, 18, 255]
     : [231, 76, 60, 255]
+}
 
-  const startIso = new Date().toISOString()
-  return generateCZML(
-    [{
+function buildSingleSatCZML(sat, tle, observations) {
+  const line1 = tle.line1 || tle.tle_line1
+  const line2 = tle.line2 || tle.tle_line2
+  const els = parseTLE(line1, line2)
+  if (!els) return null
+
+  const period = orbitalPeriod(els.sma)
+  const step = Math.max(30, period / 120)
+  const satColor = scoreColor(sat.latest_health)
+
+  const obsEpochMs = (observations || [])
+    .map(o => o.observation_epoch ? new Date(o.observation_epoch).getTime() : null)
+    .filter(t => t != null && !isNaN(t))
+
+  if (obsEpochMs.length === 0) {
+    const duration = period * 2
+    const points = propagateOrbit(els, duration, step)
+    const startIso = new Date().toISOString()
+    return {
+      czml: generateCZML([{
+        id: `sat-${sat.norad_id}`, label: sat.object_name,
+        points, color: satColor, pointSize: 12, pathWidth: 2,
+        trailTime: period, leadTime: 0, availStartSec: 0, availEndSec: duration,
+      }], startIso, duration),
+      windowStart: startIso,
+      windowEnd: new Date(Date.now() + duration * 1000).toISOString(),
+      obsWindowStart: null,
+      obsWindowEnd: null,
+    }
+  }
+
+  const obsStartMs = Math.min(...obsEpochMs)
+  const obsEndMs = Math.max(...obsEpochMs)
+  const windowStartMs = obsStartMs - 24 * 3600 * 1000
+  const windowEndMs = obsEndMs + 24 * 3600 * 1000
+  const totalDuration = (windowEndMs - windowStartMs) / 1000
+  const obsDuration = Math.max((obsEndMs - obsStartMs) / 1000, period)
+  const obsOffsetSec = (obsStartMs - windowStartMs) / 1000
+  const windowStartIso = new Date(windowStartMs).toISOString()
+  const obsStartIso = new Date(obsStartMs).toISOString()
+  const obsEndIso = new Date(obsEndMs).toISOString()
+
+  const tleEpochMs = parseTLEEpoch(line1) || Date.now()
+  const n = Math.sqrt(GM_LOCAL / Math.pow(els.sma, 3))
+  const deltaToWindowStart = (windowStartMs - tleEpochMs) / 1000
+  const MA_at_window_start = ((els.meanAnomaly0 + n * deltaToWindowStart) % TWO_PI + TWO_PI) % TWO_PI
+  const elsAtWindowStart = { ...els, meanAnomaly0: MA_at_window_start }
+
+  const MA_at_obs_start = ((MA_at_window_start + n * obsOffsetSec) % TWO_PI + TWO_PI) % TWO_PI
+  const elsAtObsStart = { ...els, meanAnomaly0: MA_at_obs_start }
+
+  const fullPoints = propagateOrbit(elsAtWindowStart, totalDuration, step)
+  const obsPointsRaw = propagateOrbit(elsAtObsStart, obsDuration, step)
+  const obsPoints = obsPointsRaw.map(pt => ({ ...pt, t: pt.t + obsOffsetSec }))
+
+  const LARGE_TIME = totalDuration * 4
+
+  const czml = generateCZML([
+    {
+      id: 'sat-full-gray',
+      label: '',
+      noLabel: true,
+      noPoint: true,
+      points: fullPoints,
+      color: [140, 160, 180, 90],
+      pathWidth: 2,
+      trailTime: LARGE_TIME,
+      leadTime: LARGE_TIME,
+      availStartSec: 0,
+      availEndSec: totalDuration,
+    },
+    {
+      id: 'sat-obs-highlight',
+      label: '',
+      noLabel: true,
+      noPoint: true,
+      points: obsPoints,
+      color: [255, 160, 40, 220],
+      pathWidth: 3,
+      trailTime: LARGE_TIME,
+      leadTime: LARGE_TIME,
+      availStartSec: 0,
+      availEndSec: totalDuration,
+    },
+    {
       id: `sat-${sat.norad_id}`,
       label: sat.object_name,
-      points,
-      color,
+      points: fullPoints,
+      color: satColor,
       pointSize: 12,
       pathWidth: 2,
       trailTime: period,
       leadTime: 0,
       availStartSec: 0,
-      availEndSec: duration,
-    }],
-    startIso,
-    duration
-  )
+      availEndSec: totalDuration,
+    },
+  ], windowStartIso, totalDuration, 300)
+
+  return { czml, windowStart: windowStartIso, windowEnd: new Date(windowEndMs).toISOString(), obsWindowStart: obsStartIso, obsWindowEnd: obsEndIso }
 }
 
 export default function KestrelDataPage() {
@@ -100,6 +179,9 @@ export default function KestrelDataPage() {
   const [tleCache, setTleCache] = useState({})
   const [tleFetching, setTleFetching] = useState(false)
   const [czmlData, setCzmlData] = useState(null)
+  const [obsWindowStart, setObsWindowStart] = useState(null)
+  const [obsWindowEnd, setObsWindowEnd] = useState(null)
+  const [currentSimTime, setCurrentSimTime] = useState(null)
 
   useEffect(() => {
     const fetchObs = async () => {
@@ -127,13 +209,31 @@ export default function KestrelDataPage() {
   )
 
   useEffect(() => {
-    if (!selectedSat) { setCzmlData(null); return }
+    if (!selectedSat) {
+      setCzmlData(null)
+      setObsWindowStart(null)
+      setObsWindowEnd(null)
+      setCurrentSimTime(null)
+      return
+    }
     const norad = selectedSat.norad_id
-    if (!norad) { setCzmlData(null); return }
+    if (!norad) {
+      setCzmlData(null)
+      setObsWindowStart(null)
+      setObsWindowEnd(null)
+      return
+    }
+
+    const applyResult = (tle) => {
+      const result = buildSingleSatCZML(selectedSat, tle, selectedSat.observations || [])
+      if (!result) { setCzmlData(null); return }
+      setCzmlData(result.czml)
+      setObsWindowStart(result.obsWindowStart)
+      setObsWindowEnd(result.obsWindowEnd)
+    }
 
     if (tleCache[norad]) {
-      const czml = buildSingleSatCZML(selectedSat, tleCache[norad])
-      setCzmlData(czml)
+      applyResult(tleCache[norad])
       return
     }
 
@@ -148,8 +248,7 @@ export default function KestrelDataPage() {
         const tle = data?.data
         if (!tle) { setCzmlData(null); return }
         setTleCache(prev => ({ ...prev, [norad]: tle }))
-        const czml = buildSingleSatCZML(selectedSat, tle)
-        setCzmlData(czml)
+        applyResult(tle)
       })
       .catch(() => { clearTimeout(timeoutId); setCzmlData(null) })
       .finally(() => setTleFetching(false))
@@ -252,12 +351,18 @@ export default function KestrelDataPage() {
               <KestrelDataDials
                 observations={selectedSat?.observations || []}
                 satelliteName={selectedSat?.object_name}
+                currentSimTime={currentSimTime}
+                obsWindowStart={obsWindowStart}
+                obsWindowEnd={obsWindowEnd}
               />
               <KestrelDataGlobe
                 czmlData={czmlData}
                 satelliteName={selectedSat?.object_name}
                 healthScore={selectedSat?.latest_health}
                 loading={tleFetching}
+                obsWindowStart={obsWindowStart}
+                obsWindowEnd={obsWindowEnd}
+                onTimeChange={setCurrentSimTime}
                 emptyMessage={
                   !selectedSat
                     ? 'Select an object from the list to view it in 3D.'
