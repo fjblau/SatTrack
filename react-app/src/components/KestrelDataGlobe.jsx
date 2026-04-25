@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import './KestrelDataGlobe.css'
 
 const CESIUM_VERSION = '1.122'
@@ -58,6 +58,12 @@ function fmtSimTime(julianDate) {
   }
 }
 
+function fmtTimeLabel(ms) {
+  const d = new Date(ms)
+  const mo = d.toUTCString().replace(/.*?,\s*/, '').split(' ')
+  return `${mo[0]} ${mo[1]} ${mo[2]}`
+}
+
 function getCartographic(Cesium, entity, time) {
   try {
     const pos = entity.position.getValue(time)
@@ -68,25 +74,93 @@ function getCartographic(Cesium, entity, time) {
   }
 }
 
-export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore, loading, emptyMessage, obsWindowStart, obsWindowEnd, onTimeChange }) {
+function ObsTimeline({ windowStart, windowEnd, obsStart, obsEnd, currentTime, onSeek }) {
+  const barRef = useRef(null)
+
+  if (!windowStart || !windowEnd) return null
+
+  const wsMs = new Date(windowStart).getTime()
+  const weMs = new Date(windowEnd).getTime()
+  const osMs = obsStart ? new Date(obsStart).getTime() : null
+  const oeMs = obsEnd ? new Date(obsEnd).getTime() : null
+  const ctMs = currentTime ? new Date(currentTime).getTime() : null
+  const totalMs = weMs - wsMs
+
+  const frac = (ms) => Math.max(0, Math.min(1, (ms - wsMs) / totalMs))
+  const obsStartFrac = osMs != null ? frac(osMs) : null
+  const obsEndFrac = oeMs != null ? frac(oeMs) : null
+  const curFrac = ctMs != null ? frac(ctMs) : null
+  const inObs = ctMs != null && osMs != null && oeMs != null && ctMs >= osMs && ctMs <= oeMs
+
+  const handleClick = (e) => {
+    if (!barRef.current || !onSeek) return
+    const rect = barRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const f = Math.max(0, Math.min(1, x / rect.width))
+    onSeek(new Date(wsMs + f * totalMs).toISOString())
+  }
+
+  return (
+    <div className="kdg-tl-wrap">
+      <div className="kdg-tl-header">
+        <span className="kdg-tl-title">OBSERVATION TIMELINE</span>
+        {inObs && <span className="kdg-tl-in-obs">● IN OBS WINDOW</span>}
+      </div>
+      <div className="kdg-tl-bar" ref={barRef} onClick={handleClick} title="Click to seek">
+        <div className="kdg-tl-bg" />
+        {obsStartFrac != null && obsEndFrac != null && (
+          <div
+            className="kdg-tl-obs-band"
+            style={{ left: `${obsStartFrac * 100}%`, width: `${(obsEndFrac - obsStartFrac) * 100}%` }}
+          >
+            <span className="kdg-tl-obs-label">OBS WINDOW</span>
+          </div>
+        )}
+        {curFrac != null && (
+          <div className="kdg-tl-cursor" style={{ left: `${curFrac * 100}%` }} />
+        )}
+      </div>
+      <div className="kdg-tl-labels">
+        <span>{fmtTimeLabel(wsMs)}</span>
+        {obsStartFrac != null && (
+          <span className="kdg-tl-label-obs" style={{ left: `${obsStartFrac * 100}%` }}>
+            ▲ obs start
+          </span>
+        )}
+        {obsEndFrac != null && (
+          <span className="kdg-tl-label-obs" style={{ left: `${obsEndFrac * 100}%` }}>
+            ▲ obs end
+          </span>
+        )}
+        <span>{fmtTimeLabel(weMs)}</span>
+      </div>
+    </div>
+  )
+}
+
+export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore, loading, emptyMessage, windowStart, windowEnd, obsWindowStart, obsWindowEnd, onTimeChange }) {
   const containerRef = useRef(null)
   const viewerRef = useRef(null)
   const lastTickRef = useRef(0)
   const onTimeChangeRef = useRef(onTimeChange)
-  const obsWindowStartRef = useRef(obsWindowStart)
-  const obsWindowEndRef = useRef(obsWindowEnd)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const [telemetry, setTelemetry] = useState(null)
-  const [inObsWindow, setInObsWindow] = useState(false)
+  const [currentTimeIso, setCurrentTimeIso] = useState(null)
 
   useEffect(() => { onTimeChangeRef.current = onTimeChange }, [onTimeChange])
-  useEffect(() => { obsWindowStartRef.current = obsWindowStart }, [obsWindowStart])
-  useEffect(() => { obsWindowEndRef.current = obsWindowEnd }, [obsWindowEnd])
+
+  const handleSeek = useCallback((isoTime) => {
+    if (viewerRef.current && !viewerRef.current.isDestroyed() && window.Cesium) {
+      viewerRef.current.clock.currentTime = window.Cesium.JulianDate.fromIso8601(isoTime)
+      viewerRef.current.clock.shouldAnimate = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!czmlData || czmlData.length < 2) {
       setTelemetry(null)
+      setCurrentTimeIso(null)
       if (viewerRef.current && !viewerRef.current.isDestroyed()) {
         viewerRef.current.dataSources.removeAll()
         viewerRef.current.entities.removeAll()
@@ -100,6 +174,7 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
       setStatus('loading')
       setError(null)
       setTelemetry(null)
+      setCurrentTimeIso(null)
 
       try {
         const Cesium = await loadCesium()
@@ -160,55 +235,6 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
           duration: 0,
         })
 
-        const obsWinStart = obsWindowStartRef.current
-        const obsWinEnd = obsWindowEndRef.current
-        if (obsWinStart && obsWinEnd) {
-          const tlContainer = containerRef.current?.querySelector('.cesium-viewer-timelineContainer')
-          if (tlContainer) {
-            const totalMs =
-              Cesium.JulianDate.toDate(clock.stopTime).getTime() -
-              Cesium.JulianDate.toDate(clock.startTime).getTime()
-            const startMs = Cesium.JulianDate.toDate(clock.startTime).getTime()
-            const obsStartFrac = (new Date(obsWinStart).getTime() - startMs) / totalMs
-            const obsEndFrac = (new Date(obsWinEnd).getTime() - startMs) / totalMs
-            const clampedStart = Math.max(0, obsStartFrac)
-            const clampedWidth = Math.min(1, obsEndFrac) - clampedStart
-            if (clampedWidth > 0) {
-              const overlay = document.createElement('div')
-              overlay.className = 'kdg-tl-obs-overlay'
-              overlay.style.cssText = `
-                position:absolute;
-                left:${clampedStart * 100}%;
-                width:${clampedWidth * 100}%;
-                top:0;bottom:0;
-                background:rgba(255,160,40,0.28);
-                border-left:2px solid rgba(255,160,40,0.85);
-                border-right:2px solid rgba(255,160,40,0.85);
-                pointer-events:none;
-                z-index:2;
-              `
-              tlContainer.style.position = 'relative'
-              tlContainer.appendChild(overlay)
-              const label = document.createElement('div')
-              label.style.cssText = `
-                position:absolute;
-                top:2px;
-                left:50%;
-                transform:translateX(-50%);
-                font-size:9px;
-                font-weight:700;
-                color:rgba(255,160,40,0.95);
-                letter-spacing:0.06em;
-                pointer-events:none;
-                white-space:nowrap;
-                text-shadow:0 0 4px rgba(0,0,0,0.8);
-              `
-              label.textContent = 'OBS WINDOW'
-              overlay.appendChild(label)
-            }
-          }
-        }
-
         const tickListener = (clock) => {
           if (destroyed) return
           const now = Date.now()
@@ -218,6 +244,7 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
           const time = clock.currentTime
           const isoTime = Cesium.JulianDate.toIso8601(time)
 
+          setCurrentTimeIso(isoTime)
           if (onTimeChangeRef.current) onTimeChangeRef.current(isoTime)
 
           const allEntities = dataSource.entities.values
@@ -322,6 +349,17 @@ export default function KestrelDataGlobe({ czmlData, satelliteName, healthScore,
             {obsWindowStart && <div className="kdg-legend-item"><div className="kdg-legend-line kdg-legend-line-obs" /> Observation Window</div>}
           </div>
         </div>
+      )}
+
+      {status === 'ready' && windowStart && windowEnd && (
+        <ObsTimeline
+          windowStart={windowStart}
+          windowEnd={windowEnd}
+          obsStart={obsWindowStart}
+          obsEnd={obsWindowEnd}
+          currentTime={currentTimeIso}
+          onSeek={handleSeek}
+        />
       )}
     </div>
   )

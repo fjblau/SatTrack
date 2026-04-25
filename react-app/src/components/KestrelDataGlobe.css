@@ -1,5 +1,7 @@
 .kdg-wrapper {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   background: #f5f5f5;
@@ -62,8 +64,9 @@
 }
 
 .kdg-container {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
 }
 
 .kdg-overlay {
@@ -218,3 +221,117 @@
 
 .kdg-legend-line-gray { background: rgba(140, 160, 180, 0.8); }
 .kdg-legend-line-obs  { background: rgb(255, 160, 40); }
+
+/* ── Custom Observation Timeline ─────────────────────────────── */
+
+.kdg-tl-wrap {
+  flex-shrink: 0;
+  background: rgba(10, 14, 22, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 14px 10px;
+  z-index: 10;
+}
+
+.kdg-tl-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.kdg-tl-title {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(180, 195, 215, 0.6);
+  text-transform: uppercase;
+}
+
+.kdg-tl-in-obs {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffa028;
+  animation: kdg-tl-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes kdg-tl-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.kdg-tl-bar {
+  position: relative;
+  height: 22px;
+  cursor: pointer;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.kdg-tl-bar:hover .kdg-tl-bg {
+  background: rgba(140, 160, 180, 0.22);
+}
+
+.kdg-tl-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(140, 160, 180, 0.13);
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+.kdg-tl-obs-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(255, 160, 40, 0.32);
+  border-left: 2px solid rgba(255, 160, 40, 0.9);
+  border-right: 2px solid rgba(255, 160, 40, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2px;
+  overflow: hidden;
+}
+
+.kdg-tl-obs-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255, 160, 40, 0.95);
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+.kdg-tl-cursor {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  background: #ffffff;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.7);
+}
+
+.kdg-tl-labels {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 0.58rem;
+  color: rgba(160, 175, 195, 0.6);
+  font-family: 'Courier New', monospace;
+}
+
+.kdg-tl-label-obs {
+  position: absolute;
+  transform: translateX(-50%);
+  color: rgba(255, 160, 40, 0.8);
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}

@@ -314,10 +314,14 @@ export function generateCZML(satellites, startIso, totalDurationSeconds, clockMu
       availability: `${availStart}/${availEnd}`,
       position: {
         interpolationAlgorithm: 'LAGRANGE',
-        interpolationDegree: 5,
+        interpolationDegree: sat.noPoint ? 1 : 5,
         referenceFrame: 'INERTIAL',
         epoch: startIso,
         cartesian,
+        ...(sat.noPoint ? {
+          forwardExtrapolationType: 'NONE',
+          backwardExtrapolationType: 'NONE',
+        } : {}),
       },
       point: sat.noPoint ? { show: false, pixelSize: 1, color: { rgba: [0, 0, 0, 0] } } : {
         pixelSize: sat.pointSize || 10,
