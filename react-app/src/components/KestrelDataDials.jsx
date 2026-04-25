@@ -162,12 +162,36 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
   const health = latest.derived_health_score
   const mass = latest.estimated_mass_kg
   const spin = latest.spin_rate_rpm
+
   const att = latest.attitude || {}
   const th = latest.thermal || {}
   const mat = latest.material_signature || {}
   const prox = latest.proximity_state || {}
   const man = latest.maneuver_indicator || {}
   const decay = latest.orbital_decay_indicator || {}
+
+  const roll_deg = latest.roll_deg ?? att.roll_deg ?? null
+  const pitch_deg = latest.pitch_deg ?? att.pitch_deg ?? null
+  const yaw_deg = latest.yaw_deg ?? att.yaw_deg ?? null
+  const stability_flag = latest.stability_flag ?? att.stability_flag ?? null
+  const surface_temp_K = latest.surface_temp_K ?? th.surface_temp_K ?? null
+  const anomaly_flag = th.anomaly_flag ?? null
+  const reflectivity_index = latest.reflectivity_index ?? mat.reflectivity_index ?? null
+  const inferred_material = latest.inferred_material ?? mat.inferred_material ?? null
+  const material_confidence = latest.material_confidence ?? mat.material_confidence ?? mat.confidence ?? null
+  const range_km = latest.range_km ?? prox.range_km ?? null
+  const relative_velocity_ms = latest.relative_velocity_ms ?? prox.relative_velocity_ms ?? null
+  const delta_v_residual_ms = latest.delta_v_residual_ms ?? man.delta_v_residual_ms ?? null
+  const maneuver_confidence = latest.maneuver_confidence ?? man.maneuver_confidence ?? man.confidence ?? null
+  const maneuver_flag = latest.maneuver_flag ?? man.flag ?? null
+  const perigee_drift_km_per_day = latest.perigee_drift_km_per_day ?? decay.perigee_drift_km_per_day ?? null
+  const estimated_perigee_km = latest.estimated_perigee_km ?? decay.estimated_perigee_km ?? null
+
+  const observation_mode = latest.observation_mode ?? null
+  const sensors_active = latest.sensors_active ?? null
+  const illumination = latest.illumination ?? null
+  const pass_id = latest.pass_id ?? null
+  const frame_index = latest.frame_index ?? null
 
   const epoch = latest.observation_epoch
     ? new Date(latest.observation_epoch).toISOString().slice(0, 16).replace('T', ' ') + 'Z'
@@ -186,9 +210,33 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           unit=""
         />
 
+        {observation_mode != null && (
+          <ValueCard
+            label="OBS MODE"
+            value={String(observation_mode).replace(/_/g, ' ')}
+            color="#2c3e50"
+          />
+        )}
+
+        {illumination != null && (
+          <ValueCard
+            label="ILLUMINATION"
+            value={String(illumination).replace(/_/g, ' ')}
+            color="#e67e22"
+          />
+        )}
+
+        {sensors_active != null && (
+          <ValueCard
+            label="SENSORS"
+            value={String(sensors_active).replace(/_/g, ' ')}
+            color="#2980b9"
+          />
+        )}
+
         <HBar
           label="ROLL"
-          value={att.roll_deg}
+          value={roll_deg}
           min={-180} max={180}
           unit="°"
           color="#9b59b6"
@@ -197,7 +245,7 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
 
         <HBar
           label="PITCH"
-          value={att.pitch_deg}
+          value={pitch_deg}
           min={-90} max={90}
           unit="°"
           color="#3498db"
@@ -206,7 +254,7 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
 
         <HBar
           label="YAW"
-          value={att.yaw_deg}
+          value={yaw_deg}
           min={-180} max={180}
           unit="°"
           color="#1abc9c"
@@ -215,14 +263,14 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
 
         <BoolCard
           label="STABILITY"
-          value={att.stability_flag === false ? true : att.stability_flag === true ? false : null}
+          value={stability_flag === false ? true : stability_flag === true ? false : null}
           trueColor="#e74c3c"
           falseColor="#27ae60"
         />
 
         <ArcGauge
           label="TEMP"
-          value={th.surface_temp_K}
+          value={surface_temp_K}
           min={200} max={400}
           color="#e67e22"
           unit="K"
@@ -230,44 +278,54 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
 
         <BoolCard
           label="THERM. ANOM"
-          value={th.anomaly_flag}
+          value={anomaly_flag}
           trueColor="#e74c3c"
           falseColor="#27ae60"
         />
 
         <HBar
           label="REFLECTIVITY"
-          value={mat.reflectivity_index}
+          value={reflectivity_index}
           min={0} max={1}
           color="#16a085"
         />
 
         <ValueCard
           label="MATERIAL"
-          value={mat.inferred_material?.replace(/_/g, ' ')}
-          sub={mat.confidence != null ? `conf ${(mat.confidence * 100).toFixed(0)}%` : null}
+          value={inferred_material?.replace(/_/g, ' ')}
+          sub={material_confidence != null ? `conf ${(material_confidence * 100).toFixed(0)}%` : null}
           color="#2c3e50"
         />
 
         <ValueCard
           label="RANGE"
-          value={prox.range_km != null ? prox.range_km.toFixed(1) : null}
+          value={range_km != null ? range_km.toFixed(1) : null}
           unit="km"
-          sub={prox.relative_velocity_ms != null ? `${prox.relative_velocity_ms.toFixed(2)} m/s rel.` : null}
+          sub={relative_velocity_ms != null ? `${relative_velocity_ms.toFixed(2)} m/s rel.` : null}
           color="#2980b9"
         />
 
         <HBar
           label="ΔV RESIDUAL"
-          value={man.delta_v_residual_ms}
+          value={delta_v_residual_ms}
           min={0} max={5}
           color="#6c3483"
           unit="m/s"
         />
 
+        {maneuver_confidence != null && (
+          <ArcGauge
+            label="MNV CONF"
+            value={maneuver_confidence * 100}
+            min={0} max={100}
+            color="#6c3483"
+            unit="%"
+          />
+        )}
+
         <BoolCard
           label="MANEUVER"
-          value={man.flag}
+          value={maneuver_flag}
           trueColor="#e67e22"
           falseColor="#27ae60"
         />
@@ -291,13 +349,22 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           />
         )}
 
-        {decay.perigee_drift_km_per_day != null && (
+        {perigee_drift_km_per_day != null && (
           <ValueCard
             label="PERIGEE DRIFT"
-            value={`${decay.perigee_drift_km_per_day >= 0 ? '+' : ''}${decay.perigee_drift_km_per_day.toFixed(3)}`}
+            value={`${perigee_drift_km_per_day >= 0 ? '+' : ''}${perigee_drift_km_per_day.toFixed(3)}`}
             unit="km/d"
-            sub={decay.estimated_perigee_km != null ? `est. ${decay.estimated_perigee_km.toFixed(0)} km` : null}
-            color={decay.perigee_drift_km_per_day < -0.01 ? '#e74c3c' : '#27ae60'}
+            sub={estimated_perigee_km != null ? `est. ${estimated_perigee_km.toFixed(0)} km` : null}
+            color={perigee_drift_km_per_day < -0.01 ? '#e74c3c' : '#27ae60'}
+          />
+        )}
+
+        {pass_id != null && (
+          <ValueCard
+            label="PASS ID"
+            value={String(pass_id)}
+            sub={frame_index != null ? `frame ${frame_index}` : null}
+            color="#adb5bd"
           />
         )}
 
