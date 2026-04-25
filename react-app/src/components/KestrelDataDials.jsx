@@ -107,6 +107,28 @@ function BoolCard({ label, value, trueColor = '#e74c3c', falseColor = '#27ae60' 
   )
 }
 
+const STATUS_COLORS = {
+  nominal: '#27ae60',
+  marginal: '#f1c40f',
+  degraded: '#e67e22',
+  anomalous: '#e74c3c',
+  uncontrolled: '#c0392b',
+  suspected_maneuver: '#e67e22',
+  no_maneuver: '#27ae60',
+}
+
+function StatusCard({ label, value }) {
+  const color = value != null ? (STATUS_COLORS[value] || '#adb5bd') : '#adb5bd'
+  const display = value != null ? String(value).replace(/_/g, ' ') : '—'
+  return (
+    <div className="kdd-card">
+      <div className="kdd-label">{label}</div>
+      <div className="kdd-bool-dot" style={{ background: color }} />
+      <div className="kdd-big-value" style={{ color, fontSize: '0.65rem' }}>{display}</div>
+    </div>
+  )
+}
+
 const CYCLE_MS = 3000
 
 export default function KestrelDataDials({ observations, satelliteName, currentSimTime, obsWindowStart, obsWindowEnd }) {
@@ -261,11 +283,9 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           center
         />
 
-        <BoolCard
+        <StatusCard
           label="STABILITY"
-          value={stability_flag === false ? true : stability_flag === true ? false : null}
-          trueColor="#e74c3c"
-          falseColor="#27ae60"
+          value={stability_flag}
         />
 
         <ArcGauge
@@ -308,9 +328,10 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
         <HBar
           label="ΔV RESIDUAL"
           value={delta_v_residual_ms}
-          min={0} max={5}
+          min={0} max={0.1}
           color="#6c3483"
           unit="m/s"
+          decimals={4}
         />
 
         {maneuver_confidence != null && (
@@ -323,11 +344,9 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           />
         )}
 
-        <BoolCard
+        <StatusCard
           label="MANEUVER"
           value={maneuver_flag}
-          trueColor="#e67e22"
-          falseColor="#27ae60"
         />
 
         {spin != null && (
