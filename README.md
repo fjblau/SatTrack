@@ -34,6 +34,8 @@ Kessler provides a comprehensive satellite tracking system combining:
 - 🔭 **Observations**: Observational data with health trends, anomaly analysis, source statistics, and graph views
 - 📋 **Observation Dashboard**: Multi-domain sensor observations per satellite
 - 📉 **Collision Risk Network**: Graph of high-risk orbital proximity pairs
+- 🚀 **Kestrel Mission Planner**: Rendezvous maneuver planning with analytical Hohmann baseline and optional GMAT RK89/EGM96 verification; burn epoch computation, ΔV budgets, and closest-approach analysis
+- 🌐 **Ephemeris Generation**: SGP4/Skyfield and GMAT high-fidelity ephemeris with CesiumJS CZML export and 3D visualization
 - 🤖 **AI Help Assistant**: LangGraph-powered chat that answers questions using RAG + live data tools
 - 🔑 **Authentication**: Bearer-token login with demo mode
 
@@ -42,7 +44,10 @@ Kessler provides a comprehensive satellite tracking system combining:
 - ✅ **Modular Architecture**: Routers → Services → Database separation of concerns
 - ✅ **Unified Caching**: LRU cache with TTL for TLE and document data
 - ✅ **Two Named Graphs**: `satellite_relationships` and `observation_relationships` in ArangoDB
-- ✅ **LangGraph Agent**: ReAct agent with RAG, satellite search, and read-only AQL tools
+- ✅ **Three LangGraph Agents**: General RAG assistant, AQL translator, and Kestrel mission planner
+- ✅ **GMAT Integration**: Optional high-fidelity RK89/EGM96 propagation; degrades gracefully without GMAT
+- ✅ **CesiumJS 3D Visualization**: Orbit and mission visualization via CZML export
+- ✅ **In-App Documentation**: Markdown docs served as HTML at `/v2/docs`
 - ✅ **Type Safety**: Full type hints and Pydantic models throughout
 - ✅ **OpenAPI Docs**: Auto-generated interactive API documentation
 - ✅ **Configuration Management**: Environment-based configuration via `config.py`
@@ -119,6 +124,9 @@ MAX_CACHE_SIZE=1000
 # Start API server
 uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
 
+# In-app documentation
+# http://localhost:8000/v2/docs
+
 # Start frontend (in separate terminal)
 cd react-app
 npm run dev
@@ -146,10 +154,13 @@ kessler/
 │   │   ├── graphs.py           # Graph visualization & analytics
 │   │   ├── documents.py        # UN document metadata
 │   │   ├── tle.py              # TLE data & orbit propagation
+│   │   ├── ephemeris.py        # Ephemeris generation (SGP4 + GMAT), CZML export
 │   │   ├── mqtt.py             # MQTT configuration & publishing
 │   │   ├── observations.py     # Observation import & analytics
-│   │   ├── admin.py            # Admin script runner
-│   │   └── agent.py            # AI assistant (/v2/ask)
+│   │   ├── admin.py            # Admin script runner, GMAT status
+│   │   ├── agent.py            # AI assistant (/v2/ask), AQL agent (/v2/aql)
+│   │   ├── kestrel.py          # Kestrel rendezvous maneuver planning
+│   │   └── docs.py             # In-app HTML documentation viewer (/v2/docs)
 │   └── services/               # Business logic
 │       ├── cache_service.py    # LRU cache with TTL
 │       ├── orbital_service.py  # Orbital calculations from TLE
@@ -158,9 +169,13 @@ kessler/
 │       ├── collision_service.py # Collision risk computation
 │       ├── lineage_service.py  # Satellite lineage traversal
 │       ├── propagation_service.py # SGP4/Skyfield propagation
+│       ├── gmat_service.py     # GMAT high-fidelity propagation (RK89 + EGM96)
+│       ├── gmat_maneuver_service.py # Kestrel Hohmann + GMAT maneuver planning
 │       ├── spacetrack_service.py  # Space-Track API integration
 │       ├── index_service.py    # ChromaDB RAG vector store
-│       └── agent_service.py    # LangGraph AI agent
+│       ├── agent_service.py    # LangGraph general assistant (/v2/ask)
+│       ├── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
+│       └── kestrel_agent_service.py # LangGraph Kestrel mission agent
 │
 ├── database/                   # Data layer
 │   ├── connection.py           # ArangoDB connection & schema init
@@ -168,6 +183,8 @@ kessler/
 │   ├── graph_operations.py     # Edge CRUD & indexes
 │   ├── graph_analytics.py      # AQL analytics (centrality, communities)
 │   ├── observation_graph_ops.py # Observation edge creation & traversal
+│   ├── ephemeris_ops.py        # Ephemeris envelope storage
+│   ├── maneuver_plan_ops.py    # Kestrel maneuver plan storage
 │   ├── transformations.py      # Data canonicalization
 │   └── mqtt_config.py          # MQTT configuration storage
 │
@@ -188,8 +205,12 @@ kessler/
 │       │   ├── HelpPage.jsx    # AI assistant chat interface
 │       │   ├── AqlEditorPage.jsx # Interactive AQL editor
 │       │   ├── AdminPage.jsx   # Admin script runner
-│       │   └── ...             # Data, graph, observation views
+│       │   ├── EphemerisPage.jsx # Ephemeris generation & CZML export
+│       │   ├── KestrelMissionPage.jsx # Rendezvous mission planning
+│       │   ├── KestrelDataPage.jsx # Kestrel satellite data dashboard
+│       │   └── ...             # Data, graph, observation, Cesium views
 │       ├── utils/apiFetch.js   # Authenticated fetch wrapper
+│       ├── utils/orbitUtils.js # Client-side orbital calculation utilities
 │       └── config/constants.js # API endpoint constants
 │
 ├── config.py                   # Centralized configuration
@@ -398,6 +419,11 @@ from api.services.orbital_service import OrbitalService
 service = OrbitalService()
 params = service.calculate_orbital_parameters(tle_line1, tle_line2)
 ```
+
+**GmatManeuverService**: Kestrel rendezvous maneuver planning
+- Computes analytical Hohmann transfer baseline
+- Optionally verifies with GMAT RK89/EGM96 high-fidelity propagation
+- Returns burn epochs, ΔV budget, and closest-approach distance
 
 For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 

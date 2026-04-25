@@ -65,7 +65,9 @@ kessler/
 │   │   ├── mqtt.py              # MQTT configuration & publishing
 │   │   ├── observations.py      # Observation import, analytics, graph data
 │   │   ├── admin.py             # Admin script execution, run tracking, GMAT status
-│   │   └── agent.py             # POST /v2/ask, POST /v2/aql, GET /v2/ask/status (AI agents)
+│   │   ├── agent.py             # POST /v2/ask, POST /v2/aql, GET /v2/ask/status (AI agents)
+│   │   ├── kestrel.py           # POST /v2/kestrel/maneuver-plan, GET/DELETE /v2/kestrel/maneuver-plans
+│   │   └── docs.py              # GET /v2/docs — HTML documentation viewer
 │   ├── services/                # Business logic services
 │   │   ├── cache_service.py     # Unified caching with LRU & TTL
 │   │   ├── orbital_service.py   # Orbital calculations from TLE
@@ -75,10 +77,12 @@ kessler/
 │   │   ├── lineage_service.py   # Satellite family-tree traversal
 │   │   ├── propagation_service.py # SGP4/Skyfield orbit propagation
 │   │   ├── gmat_service.py      # GMAT high-fidelity propagation (RK89 + EGM96)
+│   │   ├── gmat_maneuver_service.py # Kestrel Hohmann + GMAT rendezvous maneuver planning
 │   │   ├── spacetrack_service.py  # Space-Track API integration
 │   │   ├── index_service.py     # ChromaDB RAG vector store build & load
 │   │   ├── agent_service.py     # LangGraph general assistant (RAG + tools, /v2/ask)
-│   │   └── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
+│   │   ├── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
+│   │   └── kestrel_agent_service.py # LangGraph Kestrel mission planning agent
 │   └── utils/
 │       └── converters.py        # Format conversion utilities
 │
@@ -88,6 +92,8 @@ kessler/
 │   ├── graph_operations.py      # Graph edge CRUD & index management
 │   ├── graph_analytics.py       # AQL graph analytics (centrality, communities, etc.)
 │   ├── observation_graph_ops.py # Observation edge creation & graph traversal
+│   ├── ephemeris_ops.py         # Ephemeris envelope CRUD (ephemeris_envelopes collection)
+│   ├── maneuver_plan_ops.py     # Kestrel maneuver plan CRUD (kestrel_maneuver_plans collection)
 │   ├── transformations.py       # Data canonicalization & transformation
 │   ├── mqtt_config.py           # MQTT configuration storage
 │   ├── data/
@@ -117,14 +123,22 @@ kessler/
 │       ├── config/
 │       │   └── constants.js     # API endpoint constants
 │       ├── utils/
-│       │   └── apiFetch.js      # Authenticated fetch wrapper
+│       │   ├── apiFetch.js      # Authenticated fetch wrapper
+│       │   └── orbitUtils.js    # Client-side orbital calculation utilities
 │       └── components/
 │           ├── DataTable.jsx    # Satellite data grid
 │           ├── DetailPanel.jsx  # Satellite detail view
 │           ├── Filters.jsx      # Search filter sidebar
 │           ├── GraphExplorer.jsx/GraphViewer.jsx  # Graph visualization
 │           ├── TimelineChart.jsx  # Launch timeline
-│           ├── ObservationsView.jsx/ObservationGraphs.jsx
+│           ├── ObservationsView.jsx/ObservationGraphs.jsx/ObservationDashboard.jsx
+│           ├── EphemerisPage.jsx  # Ephemeris generation & CZML export
+│           ├── KestrelMissionPage.jsx  # Rendezvous mission planner (Hohmann + GMAT)
+│           ├── KestrelDataPage.jsx  # Kestrel satellite data dashboard
+│           ├── KestrelCesiumViewer.jsx/KestrelDataGlobe.jsx/KestrelDataDials.jsx
+│           ├── CesiumViewer.jsx  # General-purpose CesiumJS 3D viewer
+│           ├── CentralityView.jsx/CollisionRiskView.jsx/ConstellationBrowser.jsx
+│           ├── SatelliteNeighborhood.jsx/EvolutionTimelineView.jsx/PathFinderPanel.jsx
 │           ├── AqlEditorPage.jsx  # Interactive AQL query editor
 │           ├── HelpPage.jsx     # AI assistant chat interface
 │           ├── AdminPage.jsx    # Admin script runner
@@ -359,6 +373,8 @@ band = service.classify_orbital_band(altitude_km=500.0)
 | `registration_documents` | UN registration document metadata | — |
 | `observations` | Observational data records (health, mass, thermal, spin) | `norad_id`, `source`, `observation_epoch` |
 | `observation_sources` | Observation data source metadata | — |
+| `ephemeris_envelopes` | Stored ephemeris envelopes (SGP4 or GMAT RK89) | `norad_id`, `generated_at`, `valid_from`, `valid_until` |
+| `kestrel_maneuver_plans` | Kestrel rendezvous maneuver plans | `kestrel_norad_id`, `target_norad_id`, `created_at` |
 | `mqtt_configurations` | MQTT broker configurations for TLE publishing | — |
 
 #### Edge Collections
@@ -730,6 +746,30 @@ Uses SGP4 (via `sgp4`) and Skyfield to propagate TLE elements forward in time, c
 ### SpaceTrackService (`api/services/spacetrack_service.py`)
 
 Authenticates with Space-Track.org and fetches historical TLE data as a fallback when CelesTrak does not have a record.
+
+---
+
+### GmatManeuverService (`api/services/gmat_maneuver_service.py`)
+
+**Purpose**: Kestrel rendezvous maneuver planning — serves `POST /v2/kestrel/maneuver-plan`
+
+**Planning pipeline**:
+1. Parse TLE for both the Kestrel spacecraft and the target object
+2. Compute analytical Hohmann transfer baseline (ΔV₁, ΔV₂, transfer time, wait time)
+3. If `GmatService.is_available()`: run GMAT RK89/EGM96 propagation to produce high-fidelity burn epochs and closest-approach distance
+4. Return combined result with `gmat_verified: true/false`
+
+**Output fields**: `dv1_ms`, `dv2_ms`, `dv_total_ms`, `dv_plane_change_ms`, `transfer_time_s`, `wait_time_s`, `total_time_s`, `burn1_epoch`, `burn2_epoch`, `closest_approach_km`, `closest_approach_time`, `kestrel_kep`, `target_kep`
+
+---
+
+### KestrelAgentService (`api/services/kestrel_agent_service.py`)
+
+**Purpose**: LangGraph agent specialized for Kestrel mission planning — called from `POST /v2/kestrel/...`
+
+**Architecture**: ReAct agent with tools for TLE lookup, maneuver computation, and AQL queries. Maintains session state for multi-turn mission planning conversations.
+
+**Initialization**: Called once at startup. Requires `OPENAI_API_KEY`.
 
 ---
 
