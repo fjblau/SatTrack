@@ -6,7 +6,13 @@ import './ObservationsView.css'
 import { API_ENDPOINTS, PAGINATION } from '../config/constants'
 
 const TOP_LEVEL_COLUMNS = [
+  { key: 'norad_id', label: 'NORAD' },
   { key: 'observation_epoch', label: 'Epoch' },
+  { key: 'pass_id', label: 'Pass ID' },
+  { key: 'frame_index', label: 'Frame' },
+  { key: 'observation_mode', label: 'Mode' },
+  { key: 'sensors_active', label: 'Sensors' },
+  { key: 'illumination', label: 'Illumination' },
   { key: 'source', label: 'Source' },
   { key: 'object_name', label: 'Object Name' },
   { key: 'object_type', label: 'Object Type' },

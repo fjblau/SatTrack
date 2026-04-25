@@ -336,6 +336,36 @@
   flex-shrink: 0;
 }
 
+/* ── Metadata breakdown ──────────────────────────────── */
+.obs-meta-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.65rem 1rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  font-size: 0.82em;
+}
+
+.obs-meta-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.obs-meta-label {
+  font-weight: 600;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.obs-meta-values {
+  color: #343a40;
+}
+
 /* ── Charts grid ─────────────────────────────────────── */
 .obs-charts-grid {
   display: grid;
