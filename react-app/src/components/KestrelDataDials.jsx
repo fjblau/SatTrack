@@ -54,7 +54,7 @@ function ArcGauge({ value, min, max, color, label, unit, size = 80 }) {
   )
 }
 
-function HBar({ value, min, max, color, label, unit, center = false }) {
+function HBar({ value, min, max, color, label, unit, center = false, decimals = 2 }) {
   const pct = value == null ? 0 : Math.max(0, Math.min(1, (value - min) / (max - min)))
   const centerPct = 0.5
   const barLeft = center ? Math.min(centerPct, pct) : 0
@@ -63,7 +63,7 @@ function HBar({ value, min, max, color, label, unit, center = false }) {
   return (
     <div className="kdd-card">
       <div className="kdd-label">{label}</div>
-      <div className="kdd-hbar-value">{fmt(value)}{value != null && unit ? <span className="kdd-unit"> {unit}</span> : ''}</div>
+      <div className="kdd-hbar-value">{fmt(value, decimals)}{value != null && unit ? <span className="kdd-unit"> {unit}</span> : ''}</div>
       <div className="kdd-hbar-track">
         {center && <div className="kdd-hbar-center-line" />}
         <div
