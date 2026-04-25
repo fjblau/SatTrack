@@ -89,11 +89,18 @@ SCRIPT_CATALOGUE = [
         "path": "scripts/maintenance/enrich_registration_doc_links.py",
     },
     {
-        "id": "export_and_clear_observations",
-        "name": "Export & Clear Observations",
-        "description": "Exports all observation documents, source vertices, and graph edges (satellite, source, temporal, correlation) to timestamped JSONL backup files, then wipes those collections. Run this before re-importing observation data.",
+        "id": "export_observations",
+        "name": "Export Observations",
+        "description": "Exports all observation documents, source vertices, and graph edges (satellite, source, temporal, correlation) to timestamped JSONL backup files.",
         "category": "maintenance",
-        "path": "scripts/maintenance/export_and_clear_observations.py",
+        "path": "scripts/maintenance/export_observations.py",
+    },
+    {
+        "id": "clear_observations",
+        "name": "Clear Observations",
+        "description": "Wipes all observation documents, source vertices, and graph edges (satellite, source, temporal, correlation) from the database. Run after exporting a backup.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/clear_observations.py",
     },
     {
         "id": "import_kestrel_proxy_v2",
