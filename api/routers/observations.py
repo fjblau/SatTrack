@@ -14,8 +14,17 @@ from database.observation_graph_ops import create_edges_for_observation
 router = APIRouter(tags=["observations"])
 
 ALLOWED_SORT_FIELDS = {
-    'observation_epoch', 'source', 'object_name', 'object_type',
-    'origin_country', 'derived_health_score', 'estimated_mass_kg', 'spin_rate_rpm'
+    'norad_id', 'observation_epoch', 'pass_id', 'frame_index', 'observation_mode',
+    'sensors_active', 'illumination', 'source', 'object_name', 'object_type',
+    'origin_country', 'estimated_mass_kg', 'spin_rate_rpm', 'derived_health_score',
+    'attitude.roll_deg', 'attitude.pitch_deg', 'attitude.yaw_deg', 'attitude.stability_flag',
+    'thermal.surface_temp_K', 'thermal.temp_variance_30d', 'thermal.anomaly_flag',
+    'material_signature.reflectivity_index', 'material_signature.inferred_material',
+    'material_signature.material_confidence',
+    'proximity_state.range_km', 'proximity_state.relative_velocity_ms',
+    'maneuver_indicator.delta_v_residual_ms', 'maneuver_indicator.maneuver_confidence',
+    'maneuver_indicator.maneuver_flag',
+    'orbital_decay_indicator.perigee_drift_km_per_day', 'orbital_decay_indicator.estimated_perigee_km',
 }
 
 
