@@ -246,7 +246,7 @@ export default function KestrelDataPage() {
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    const timeoutId = setTimeout(() => controller.abort(), 25000)
 
     setTleFetching(true)
     apiFetch(`${API_ENDPOINTS.TLE}/${norad}`, { signal: controller.signal })
