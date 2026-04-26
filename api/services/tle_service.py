@@ -81,65 +81,56 @@ def _fetch_from_celestrak_by_norad(norad_id: str) -> Optional[Dict]:
     Attempt to fetch a fresh TLE from CelesTrak GP API.
 
     Tries TLE format first; on a non-200 or empty response also tries JSON format.
-    Uses a short timeout (5s) with a single retry so failures are fast.
+    Uses a short timeout (3s) with no retry so failures are fast.
     Returns None if CelesTrak is unavailable or the object is not listed.
     """
     for fmt in ("TLE", "JSON"):
         params = {"CATNR": norad_id, "FORMAT": fmt}
-        for attempt in range(2):
-            try:
-                response = requests.get(CELESTRAK_GP_URL, params=params, timeout=5)
-                if response.status_code == 200:
-                    if fmt == "TLE":
-                        entries = _parse_tle_text(response.text)
-                        if entries:
-                            e = entries[0]
-                            logger.info(f"CelesTrak TLE hit for NORAD {norad_id}")
-                            return {
-                                "name": e["name"],
-                                "line1": e["line1"],
-                                "line2": e["line2"],
-                                "source": "celestrak",
-                                "date": None,
-                                "norad_cat_id": e["norad_cat_id"],
-                                "intl_designator": e["intl_designator"],
-                            }
-                    else:
-                        try:
-                            records = response.json()
-                            if records:
-                                r = records[0]
-                                line1 = r.get("TLE_LINE1", "")
-                                line2 = r.get("TLE_LINE2", "")
-                                if line1 and line2:
-                                    logger.info(f"CelesTrak JSON hit for NORAD {norad_id}")
-                                    return {
-                                        "name": r.get("OBJECT_NAME", f"NORAD {norad_id}"),
-                                        "line1": line1,
-                                        "line2": line2,
-                                        "source": "celestrak",
-                                        "date": r.get("EPOCH"),
-                                        "norad_cat_id": str(r.get("NORAD_CAT_ID", norad_id)),
-                                        "intl_designator": r.get("INTLDES", ""),
-                                    }
-                        except Exception:
-                            pass
-                    break
-                elif response.status_code == 404:
-                    logger.info(f"CelesTrak 404 for NORAD {norad_id} ({fmt})")
-                    break
+        try:
+            response = requests.get(CELESTRAK_GP_URL, params=params, timeout=3)
+            if response.status_code == 200:
+                if fmt == "TLE":
+                    entries = _parse_tle_text(response.text)
+                    if entries:
+                        e = entries[0]
+                        logger.info(f"CelesTrak TLE hit for NORAD {norad_id}")
+                        return {
+                            "name": e["name"],
+                            "line1": e["line1"],
+                            "line2": e["line2"],
+                            "source": "celestrak",
+                            "date": None,
+                            "norad_cat_id": e["norad_cat_id"],
+                            "intl_designator": e["intl_designator"],
+                        }
                 else:
-                    logger.warning(f"CelesTrak returned {response.status_code} for NORAD {norad_id} ({fmt})")
-                    break
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                if attempt == 0:
-                    logger.warning(f"CelesTrak timeout for NORAD {norad_id} ({fmt}), retrying once...")
-                    time.sleep(0.5)
-                else:
-                    logger.warning(f"CelesTrak still unavailable for NORAD {norad_id} ({fmt}), giving up")
-            except Exception as e:
-                logger.error(f"CelesTrak unexpected error for NORAD {norad_id}: {e}")
-                break
+                    try:
+                        records = response.json()
+                        if records:
+                            r = records[0]
+                            line1 = r.get("TLE_LINE1", "")
+                            line2 = r.get("TLE_LINE2", "")
+                            if line1 and line2:
+                                logger.info(f"CelesTrak JSON hit for NORAD {norad_id}")
+                                return {
+                                    "name": r.get("OBJECT_NAME", f"NORAD {norad_id}"),
+                                    "line1": line1,
+                                    "line2": line2,
+                                    "source": "celestrak",
+                                    "date": r.get("EPOCH"),
+                                    "norad_cat_id": str(r.get("NORAD_CAT_ID", norad_id)),
+                                    "intl_designator": r.get("INTLDES", ""),
+                                }
+                    except Exception:
+                        pass
+            elif response.status_code == 404:
+                logger.info(f"CelesTrak 404 for NORAD {norad_id} ({fmt})")
+            else:
+                logger.warning(f"CelesTrak returned {response.status_code} for NORAD {norad_id} ({fmt})")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            logger.warning(f"CelesTrak unavailable for NORAD {norad_id} ({fmt})")
+        except Exception as e:
+            logger.error(f"CelesTrak unexpected error for NORAD {norad_id}: {e}")
     return None
 
 
@@ -152,7 +143,7 @@ def _fetch_from_ivanstanojevic_by_norad(norad_id: str) -> Optional[Dict]:
     Used when CelesTrak is unreachable (outage, rate-limit, or cloud-IP block).
     """
     try:
-        response = requests.get(f"{_IVANSTANOJEVIC_BASE}/{norad_id}", timeout=8)
+        response = requests.get(f"{_IVANSTANOJEVIC_BASE}/{norad_id}", timeout=4)
         if response.status_code == 200:
             data = response.json()
             line1 = data.get("line1", "")
