@@ -21,9 +21,13 @@ _SCHEMA_CONTEXT_BASE = """
 - `canonical.launch_date`: string (ISO date)
 - `canonical.norad_cat_id`: integer
 - `canonical.international_designator`: string
-- `canonical.apogee_km`: float
-- `canonical.perigee_km`: float
-- `canonical.inclination_deg`: float
+- `canonical.object_type`: string — e.g. "Payload", "Rocket Body", "Debris"
+- `canonical.rcs`: float — radar cross section in m² (best available proxy for physical size)
+- `canonical.function`: string — stated mission/purpose
+- `canonical.orbit.apogee_km`: float
+- `canonical.orbit.perigee_km`: float
+- `canonical.orbit.inclination_degrees`: float
+- `canonical.orbit.period_minutes`: float
 
 **registration_documents** (UN document metadata)
 - `_id`: "registration_documents/<key>"
@@ -250,6 +254,8 @@ Rules:
 - Always include LIMIT (default 20) unless the user asks for counts or aggregates.
 - Always inline values as string literals directly in the AQL — never use @bind_var placeholders. The query must be self-contained and runnable as-is.
 - If you receive an error from a previous attempt, fix the query accordingly.
+- For "physical size", "physical dimensions", or "dimensions" of satellites, use `canonical.rcs` (radar cross section in m²). Never invent fields that are not listed in the schema above.
+- For "mass" or "weight" of satellites, use `mass_kg` from the observations collection.
 
 Respond with a JSON object and no other text:
 {
@@ -268,6 +274,7 @@ The Kessler satellite database has these potentially ambiguous concepts:
 - "active" or "operational" satellites → `canonical.status == 'in orbit'`
 - "inactive" / "dead" / "decommissioned" → `canonical.status == 'decayed'`
 - "name" could mean `canonical.name`, `canonical.object_name`, or `canonical.satellite_name`
+- "size" or "largest" for satellites → use `canonical.rcs` (radar cross section in m², the best physical size proxy available). If the user says "physical size", "physical dimensions", or "dimensions", use `canonical.rcs`. If the user says "mass" or "weight", use `observations.mass_kg`. Do NOT ask for clarification about size — always default to `canonical.rcs` unless mass is explicitly requested.
 
 If the question is clear enough to generate AQL without guessing, respond:
 {"needs_clarification": false}
