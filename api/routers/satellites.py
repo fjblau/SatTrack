@@ -105,7 +105,7 @@ def get_satellite_v2(identifier: str):
                     }
                     try:
                         db_conn.db.aql.execute("""
-                            FOR doc IN satellites
+                            FOR doc IN objects
                                 FILTER doc._key == @key
                                 UPDATE doc WITH {
                                     canonical: MERGE(doc.canonical, {
@@ -117,7 +117,7 @@ def get_satellite_v2(identifier: str):
                                         transformations: APPEND(doc.metadata.transformations || [], [@transformation]),
                                         last_updated_at: @ts
                                     })
-                                } IN satellites
+                                } IN objects
                         """, bind_vars={
                             "key": sat["_key"],
                             "decay_date": satcat["decay_date"],

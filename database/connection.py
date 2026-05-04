@@ -6,7 +6,7 @@ ARANGO_HOST = os.getenv("ARANGO_HOST", "http://localhost:8529")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "kessler_dev_password")
 DB_NAME = "kessler"
-COLLECTION_NAME = "satellites"
+COLLECTION_NAME = "objects"
 
 GRAPH_NAME = "satellite_relationships"
 EDGE_COLLECTION_CONSTELLATION = "constellation_membership"
@@ -29,6 +29,7 @@ EDGE_COLLECTION_OBS_TEMPORAL = "observation_temporal_edges"
 client = None
 db = None
 satellites_collection = None
+objects_collection = None
 
 
 def connect_arangodb():
@@ -93,6 +94,49 @@ def connect_arangodb():
             if not db.has_collection(edge_col_name):
                 db.create_collection(edge_col_name, edge=True)
 
+        # Ensure satellite_relationships graph exists (pointing at objects collection)
+        if not db.has_graph(GRAPH_NAME):
+            satellite_edge_collections = [
+                EDGE_COLLECTION_CONSTELLATION,
+                EDGE_COLLECTION_REGISTRATION,
+                EDGE_COLLECTION_PROXIMITY,
+                EDGE_COLLECTION_COLLISION_RISK,
+                EDGE_COLLECTION_SATELLITE_LINEAGE,
+            ]
+            for ecol in satellite_edge_collections:
+                if not db.has_collection(ecol):
+                    db.create_collection(ecol, edge=True)
+            db.create_graph(
+                GRAPH_NAME,
+                edge_definitions=[
+                    {
+                        "edge_collection": EDGE_COLLECTION_CONSTELLATION,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_REGISTRATION,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_REG_DOCS],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_PROXIMITY,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_COLLISION_RISK,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_SATELLITE_LINEAGE,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                ],
+            )
+
         # Ensure observation graph exists
         if not db.has_graph(OBSERVATION_GRAPH_NAME):
             db.create_graph(
@@ -125,6 +169,7 @@ def connect_arangodb():
         if pkg is not None:
             pkg.db = db
             pkg.satellites_collection = satellites_collection
+            pkg.objects_collection = satellites_collection
 
         print(f"Connected to ArangoDB: {DB_NAME}.{COLLECTION_NAME}")
         return True
@@ -150,9 +195,14 @@ def disconnect_mongodb():
     disconnect_arangodb()
 
 
-def get_satellites_collection():
-    """Get satellites collection (lazy initialization)"""
+def get_objects_collection():
+    """Get objects collection (lazy initialization)"""
     global satellites_collection
     if satellites_collection is None:
         connect_arangodb()
     return satellites_collection
+
+
+def get_satellites_collection():
+    """Get objects collection (deprecated alias for get_objects_collection)"""
+    return get_objects_collection()

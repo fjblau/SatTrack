@@ -65,7 +65,7 @@ def _build_tools(retriever) -> list:
             import database.connection as db_conn
             cursor = db_conn.db.aql.execute(
                 """
-                FOR s IN satellites
+                FOR s IN objects
                     FILTER s.canonical.norad_cat_id == @norad_id
                     LIMIT 1
                     RETURN s.canonical
@@ -89,7 +89,7 @@ def _build_tools(retriever) -> list:
         Use this to look up satellites, relationships, collision risks, or proximity data.
 
         Example:
-          FOR s IN satellites FILTER s.canonical.status == 'in orbit' LIMIT 5 RETURN s.identifier
+          FOR s IN objects FILTER s.canonical.status == 'in orbit' LIMIT 5 RETURN s.identifier
         """
         forbidden = ["INSERT", "UPDATE", "REPLACE", "REMOVE", "UPSERT"]
         aql_upper = aql.upper()

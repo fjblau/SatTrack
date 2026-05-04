@@ -15,7 +15,8 @@ class DatabaseConfig:
     PASSWORD: str = os.getenv("ARANGO_PASSWORD", "kessler_dev_password")
     DB_NAME: str = "kessler"
     
-    COLLECTION_SATELLITES: str = "satellites"
+    COLLECTION_OBJECTS: str = "objects"
+    COLLECTION_SATELLITES: str = "objects"
     COLLECTION_REG_DOCS: str = "registration_documents"
     
     COLLECTION_OBSERVATIONS: str = "observations"

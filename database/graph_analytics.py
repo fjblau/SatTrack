@@ -83,7 +83,7 @@ def find_shortest_path(
             )
             LET reg_data = (
                 FOR vertex IN enriched_vertices
-                    FILTER STARTS_WITH(vertex._id, "satellites/")
+                    FILTER STARTS_WITH(vertex._id, "objects/")
                     FOR reg_doc, reg_edge IN 1..1 ANY vertex._id {EDGE_COLLECTION_REGISTRATION}
                         FILTER STARTS_WITH(reg_doc._id, "{COLLECTION_REG_DOCS}/")
                         RETURN {{
@@ -188,7 +188,7 @@ def find_all_paths(
             )
             LET reg_data = (
                 FOR vertex IN enriched_vertices
-                    FILTER STARTS_WITH(vertex._id, "satellites/")
+                    FILTER STARTS_WITH(vertex._id, "objects/")
                     FOR reg_doc, reg_edge IN 1..1 ANY vertex._id {EDGE_COLLECTION_REGISTRATION}
                         FILTER STARTS_WITH(reg_doc._id, "{COLLECTION_REG_DOCS}/")
                         RETURN {{

@@ -350,6 +350,21 @@ def get_all_object_types() -> List[str]:
     return result[0] if result else []
 
 
+def get_all_object_classes() -> List[str]:
+    """Get list of unique object classes"""
+    collection = get_satellites_collection()
+    aql = """
+    RETURN UNIQUE(
+        FOR doc IN @@collection
+            FILTER doc.canonical.object_class != null
+            RETURN doc.canonical.object_class
+    )
+    """
+    cursor = db_conn.db.aql.execute(aql, bind_vars={'@collection': COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else []
+
+
 def clear_collection():
     """Clear all documents from satellites collection"""
     collection = get_satellites_collection()

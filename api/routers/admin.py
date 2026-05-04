@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available, check_data_files, find_egm96
 import io
 import os
@@ -119,6 +120,72 @@ SCRIPT_CATALOGUE = [
         "category": "population",
         "path": "scripts/population/populate_observation_edges.py",
     },
+    {
+        "id": "migrate_collection_rename",
+        "name": "Migrate: Rename satellites → objects",
+        "description": "Renames the ArangoDB 'satellites' collection to 'objects', recreates indexes, and ensures the satellite_relationships graph points at the objects collection.",
+        "category": "migration",
+        "path": "scripts/migration/migrate_collection_rename.py",
+        "order_hint": 1,
+        "depends_on": [],
+        "estimated_duration": "2-5 minutes",
+        "reversibility": "irreversible (backup required)",
+    },
+    {
+        "id": "migrate_create_new_indexes",
+        "name": "Migrate: Create new indexes",
+        "description": "Creates hash indexes on canonical.object_class, identifier_aliases.norad, and identifier_aliases.cospar.",
+        "category": "migration",
+        "path": "scripts/migration/migrate_create_new_indexes.py",
+        "order_hint": 2,
+        "depends_on": ["migrate_collection_rename"],
+        "estimated_duration": "1-3 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "migrate_classify_objects",
+        "name": "Migrate: Classify objects (add object_class)",
+        "description": "Adds canonical.object_class to every object document by mapping from canonical.object_type (ALL CAPS source values supported). object_type is kept as a deprecated field.",
+        "category": "migration",
+        "path": "scripts/migration/migrate_classify_objects.py",
+        "order_hint": 3,
+        "depends_on": ["migrate_collection_rename"],
+        "estimated_duration": "5-15 minutes",
+        "reversibility": "reversible (object_type preserved)",
+    },
+    {
+        "id": "migrate_backfill_aliases",
+        "name": "Migrate: Backfill identifier_aliases",
+        "description": "Adds top-level identifier_aliases field {norad, cospar} to every object document, backfilled from canonical fields.",
+        "category": "migration",
+        "path": "scripts/migration/migrate_backfill_aliases.py",
+        "order_hint": 4,
+        "depends_on": ["migrate_collection_rename"],
+        "estimated_duration": "5-15 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "migrate_rebuild_aql_rag",
+        "name": "Migrate: Rebuild AQL/RAG context",
+        "description": "Updates _SCHEMA_CONTEXT_BASE in aql_agent_service.py to reference objects/object_class/identifier_aliases, and rebuilds the ChromaDB index for the /v2/ask assistant.",
+        "category": "migration",
+        "path": "scripts/migration/migrate_rebuild_aql_rag.py",
+        "order_hint": 5,
+        "depends_on": ["migrate_collection_rename"],
+        "estimated_duration": "1-5 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "migrate_verify_object_model",
+        "name": "Migrate: Verify object model",
+        "description": "Runs post-migration verification: checks collection exists, spot-checks object_class values, identifier_aliases presence, and index availability.",
+        "category": "migration",
+        "path": "scripts/migration/migrate_verify_object_model.py",
+        "order_hint": 6,
+        "depends_on": ["migrate_classify_objects", "migrate_backfill_aliases", "migrate_create_new_indexes"],
+        "estimated_duration": "< 1 minute",
+        "reversibility": "read-only",
+    },
 ]
 
 _CATALOGUE_BY_ID = {s["id"]: s for s in SCRIPT_CATALOGUE}
@@ -217,6 +284,10 @@ def list_scripts():
                 "category": s["category"],
                 "requires_file": s.get("requires_file", False),
                 "accepted_extensions": s.get("accepted_extensions", []),
+                "order_hint": s.get("order_hint"),
+                "depends_on": s.get("depends_on", []),
+                "estimated_duration": s.get("estimated_duration"),
+                "reversibility": s.get("reversibility"),
             }
             for s in SCRIPT_CATALOGUE
         ]
@@ -389,3 +460,35 @@ def download_backup_by_name(dir_name: str):
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
     )
+
+
+class MergeObjectsRequest(BaseModel):
+    primary_key: str
+    secondary_key: str
+    operator: str = "admin"
+    reason: str = ""
+    dry_run: bool = False
+
+
+@router.post("/merge-objects")
+def merge_objects_endpoint(body: MergeObjectsRequest):
+    """
+    Merge a secondary object document into a primary.
+    All edges referencing the secondary are rewritten to the primary.
+    The secondary document is retired (marked as merged) but not deleted.
+    Requires operator identity for audit trail.
+    """
+    from database.merge_operations import merge_objects
+    try:
+        audit = merge_objects(
+            primary_key=body.primary_key,
+            secondary_key=body.secondary_key,
+            operator=body.operator,
+            reason=body.reason,
+            dry_run=body.dry_run,
+        )
+        return audit
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Merge failed: {exc}")

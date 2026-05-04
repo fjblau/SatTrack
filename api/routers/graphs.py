@@ -60,7 +60,9 @@ def _resolve_satellite_doc_id(input_id: str) -> Optional[str]:
     """
     stripped = input_id.strip()
 
-    if stripped.startswith("satellites/"):
+    if stripped.startswith("objects/"):
+        key = stripped[len("objects/"):]
+    elif stripped.startswith("satellites/"):
         key = stripped[len("satellites/"):]
     else:
         key = stripped
@@ -80,7 +82,7 @@ def _resolve_satellite_doc_id(input_id: str) -> Optional[str]:
         import database as db_module
         if db_module.db:
             cursor = db_module.db.aql.execute(
-                "FOR s IN satellites FILTER s.canonical.norad_cat_id == @norad LIMIT 1 RETURN s",
+                "FOR s IN objects FILTER s.canonical.norad_cat_id == @norad LIMIT 1 RETURN s",
                 bind_vars={"norad": int(key)},
             )
             sat = next(cursor, None)
