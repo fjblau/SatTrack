@@ -59,6 +59,9 @@ def run(dry_run=False):
             return False
         print("'objects' collection is empty. Will drop it and rename 'satellites' → 'objects'.")
         if not dry_run:
+            if db.has_graph(GRAPH_NAME):
+                print(f"Dropping graph '{GRAPH_NAME}' so the empty '{NEW_COLLECTION}' collection can be deleted...")
+                db.delete_graph(GRAPH_NAME, drop_collections=False)
             db.delete_collection(NEW_COLLECTION)
     
     if has_old:
