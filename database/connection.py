@@ -26,6 +26,18 @@ EDGE_COLLECTION_OBS_SOURCE = "observation_source_edges"
 EDGE_COLLECTION_OBS_CORRELATION = "observation_correlation_edges"
 EDGE_COLLECTION_OBS_TEMPORAL = "observation_temporal_edges"
 
+PROVENANCE_GRAPH_NAME = "provenance_relationships"
+COLLECTION_FRAGMENTATION_EVENTS = "fragmentation_events"
+COLLECTION_LAUNCH_EVENTS = "launch_events"
+COLLECTION_LAUNCH_VEHICLES = "launch_vehicles"
+COLLECTION_LAUNCH_SITES = "launch_sites"
+COLLECTION_ENTITIES = "entities"
+EDGE_COLLECTION_FRAGMENTED_FROM = "fragmented_from"
+EDGE_COLLECTION_CAUSED_BY = "caused_by"
+EDGE_COLLECTION_LAUNCHED_BY = "launched_by"
+EDGE_COLLECTION_LAUNCHED_VIA = "launched_via"
+EDGE_COLLECTION_LAUNCHED_FROM = "launched_from"
+
 client = None
 db = None
 satellites_collection = None
@@ -161,6 +173,63 @@ def connect_arangodb():
                         "edge_collection": EDGE_COLLECTION_OBS_TEMPORAL,
                         "from_vertex_collections": [COLLECTION_OBSERVATIONS],
                         "to_vertex_collections": [COLLECTION_OBSERVATIONS],
+                    },
+                ],
+            )
+
+        # Ensure provenance vertex collections exist
+        provenance_vertex_collections = [
+            COLLECTION_FRAGMENTATION_EVENTS,
+            COLLECTION_LAUNCH_EVENTS,
+            COLLECTION_LAUNCH_VEHICLES,
+            COLLECTION_LAUNCH_SITES,
+            COLLECTION_ENTITIES,
+        ]
+        for vcol_name in provenance_vertex_collections:
+            if not db.has_collection(vcol_name):
+                db.create_collection(vcol_name)
+
+        # Ensure provenance edge collections exist
+        provenance_edge_collections = [
+            EDGE_COLLECTION_FRAGMENTED_FROM,
+            EDGE_COLLECTION_CAUSED_BY,
+            EDGE_COLLECTION_LAUNCHED_BY,
+            EDGE_COLLECTION_LAUNCHED_VIA,
+            EDGE_COLLECTION_LAUNCHED_FROM,
+        ]
+        for ecol_name in provenance_edge_collections:
+            if not db.has_collection(ecol_name):
+                db.create_collection(ecol_name, edge=True)
+
+        # Ensure provenance_relationships named graph exists
+        if not db.has_graph(PROVENANCE_GRAPH_NAME):
+            db.create_graph(
+                PROVENANCE_GRAPH_NAME,
+                edge_definitions=[
+                    {
+                        "edge_collection": EDGE_COLLECTION_FRAGMENTED_FROM,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_CAUSED_BY,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_FRAGMENTATION_EVENTS],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_LAUNCHED_BY,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_ENTITIES],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_LAUNCHED_VIA,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_LAUNCH_VEHICLES],
+                    },
+                    {
+                        "edge_collection": EDGE_COLLECTION_LAUNCHED_FROM,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_LAUNCH_SITES],
                     },
                 ],
             )

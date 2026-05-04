@@ -75,6 +75,11 @@ class ExternalServicesConfig:
     
     REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "5"))
 
+    DISCOS_BASE_URL: str = os.getenv("DISCOS_BASE_URL", "https://discosweb.esoc.esa.int/api")
+    DISCOS_API_TOKEN: str = os.getenv("DISCOS_API_TOKEN", "")
+    DISCOS_CACHE_TTL: int = int(os.getenv("DISCOS_CACHE_TTL", "86400"))
+    DISCOS_REQUEST_TIMEOUT: int = int(os.getenv("DISCOS_REQUEST_TIMEOUT", "30"))
+
 
 class OrbitalConstants:
     """Physical constants for orbital calculations"""

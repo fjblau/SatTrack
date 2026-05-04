@@ -82,6 +82,114 @@ _SCHEMA_CONTEXT_BASE = """
 - If the user says "debris" they likely want `object_class IN ["Rocket Fragmentation Debris", "Payload Fragmentation Debris", "Unknown"]`
 - If the user says "rocket body" or "rocket bodies" they want `object_class == "Rocket Body"`
 - If the user says "payload" or "satellite" in a functional sense they want `object_class == "Payload"`
+
+---
+
+## Provenance Graph Collections (DISCOS Spec 2)
+
+### Vertex Collections
+
+**fragmentation_events** (ESA DISCOS fragmentation events)
+- `_id`: "fragmentation_events/<key>"
+- `identifier`: string — e.g. "DISCOS-FRAG-1234"
+- `canonical.epoch`: string (ISO date) — when the fragmentation occurred
+- `canonical.altitude_km`: float — altitude of breakup
+- `canonical.event_type`: string — "Explosion", "Collision", "ASAT Test", "Unknown"
+- `canonical.fragment_count`: integer
+- `canonical.casualty_risk`: float or null
+- `metadata.policy_overlay`: null (stub field; populated in follow-on PR)
+
+**launch_events** (ESA DISCOS launch events)
+- `_id`: "launch_events/<key>"
+- `identifier`: string — e.g. "1999-025" (cosparLaunchId)
+- `canonical.cospar_launch_id`: string
+- `canonical.launch_date`: string (ISO date)
+- `sources.discos.discos_id`: string
+
+**launch_vehicles** (ESA DISCOS launch vehicle records)
+- `_id`: "launch_vehicles/<key>"
+- `canonical.name`: string — e.g. "Soyuz-U"
+- `canonical.family`: string
+
+**launch_sites** (ESA DISCOS launch site records)
+- `_id`: "launch_sites/<key>"
+- `canonical.name`: string — e.g. "Baikonur"
+- `canonical.latitude`: float
+- `canonical.longitude`: float
+
+**entities** (ESA DISCOS operators / countries / organisations)
+- `_id`: "entities/<key>"
+- `canonical.name`: string — operator name
+- `canonical.country`: string
+- `canonical.entity_type`: string
+
+### Provenance Edge Collections
+
+| Collection | From → To | Notable fields |
+|-----------|-----------|----------------|
+| `fragmented_from` | objects → objects | `confidence` (0–1), `confidence_label` ("high"/"medium"/"low") |
+| `caused_by` | objects → fragmentation_events | `confidence` (0–1) |
+| `launched_by` | objects → entities | — |
+| `launched_via` | objects → launch_vehicles | — |
+| `launched_from` | objects → launch_sites | — |
+
+Named graph: **provenance_relationships**
+
+### Provenance AQL Tips
+- Confidence thresholds: ≥0.9 = high, 0.7–0.9 = medium, <0.7 = low (require explicit filter)
+- Siblings (other fragments from same parent) require two-hop traversal:
+  `FOR e IN fragmented_from FILTER e._from == @obj_id LET parent = DOCUMENT(e._to) FOR e2 IN fragmented_from FILTER e2._to == parent._id RETURN DOCUMENT(e2._from)`
+- `metadata.attribution_status` on objects: "attributed" = has fragmented_from edge, "pending" = no explicit DISCOS event
+
+### Provenance Few-Shot Examples
+
+**Q: Find the parent object of a debris fragment**
+```aql
+LET fragment = DOCUMENT("objects/1999-025AHH")
+FOR e IN fragmented_from
+    FILTER e._from == fragment._id AND (e.confidence == null OR e.confidence >= 0.7)
+    RETURN {parent: DOCUMENT(e._to), confidence: e.confidence}
+```
+
+**Q: List all fragments of the Kosmos-2251 collision event**
+```aql
+FOR e IN fragmentation_events
+    FILTER e.canonical.epoch >= "2009-02-10" AND e.canonical.epoch <= "2009-02-11"
+    FOR caused IN caused_by
+        FILTER caused._to == e._id
+        RETURN DOCUMENT(caused._from)
+```
+
+**Q: Find the operator of an object**
+```aql
+FOR obj IN objects
+    FILTER obj.identifier_aliases.norad == "25544"
+    FOR e IN launched_by
+        FILTER e._from == obj._id
+        RETURN DOCUMENT(e._to)
+```
+
+**Q: Find all objects launched from Baikonur**
+```aql
+FOR site IN launch_sites
+    FILTER CONTAINS(LOWER(site.canonical.name), "baikonur")
+    FOR e IN launched_from
+        FILTER e._to == site._id
+        LIMIT 100
+        RETURN DOCUMENT(e._from)
+```
+
+**Q: Count fragments per fragmentation event**
+```aql
+FOR ev IN fragmentation_events
+    LET frag_count = LENGTH(
+        FOR e IN caused_by FILTER e._to == ev._id RETURN 1
+    )
+    FILTER frag_count > 0
+    SORT frag_count DESC
+    LIMIT 20
+    RETURN {event: ev.identifier, fragment_count: frag_count, epoch: ev.canonical.epoch}
+```
 """
 
 _COUNTRY_ALIASES: dict[str, str] = {
