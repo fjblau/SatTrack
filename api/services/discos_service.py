@@ -29,7 +29,9 @@ _cache: Dict[str, tuple] = {}
 _cache_lock = threading.Lock()
 
 _RATE_LIMIT_BACKOFF_BASE = 2.0
-_RATE_LIMIT_MAX_RETRIES = 3
+_RATE_LIMIT_MAX_RETRIES = 5
+_RATE_LIMIT_FALLBACK_WAIT = 60.0
+_RATE_LIMIT_REMAINING_THRESHOLD = 5
 
 
 def _token_configured() -> bool:
@@ -84,17 +86,37 @@ def _do_get(path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict
                 timeout=config.external.DISCOS_REQUEST_TIMEOUT,
             )
             if resp.status_code == 200:
+                remaining = resp.headers.get("X-Ratelimit-Remaining")
+                if remaining is not None:
+                    try:
+                        if int(remaining) <= _RATE_LIMIT_REMAINING_THRESHOLD:
+                            retry_after = resp.headers.get("Retry-After")
+                            wait = float(retry_after) + 1.0 if retry_after else _RATE_LIMIT_FALLBACK_WAIT
+                            logger.warning(
+                                f"DISCOS rate budget nearly exhausted "
+                                f"(remaining={remaining}); pausing {wait:.0f}s"
+                            )
+                            time.sleep(wait)
+                    except ValueError:
+                        pass
                 return resp.json()
             elif resp.status_code == 429:
                 if attempt < _RATE_LIMIT_MAX_RETRIES:
-                    backoff = _RATE_LIMIT_BACKOFF_BASE ** attempt
+                    retry_after = resp.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            wait = float(retry_after) + 1.0
+                        except ValueError:
+                            wait = _RATE_LIMIT_FALLBACK_WAIT
+                    else:
+                        wait = _RATE_LIMIT_FALLBACK_WAIT
                     logger.warning(
-                        f"DISCOS rate limit hit; retrying in {backoff:.1f}s (attempt {attempt + 1})"
+                        f"DISCOS rate limit hit; retrying in {wait:.0f}s (attempt {attempt + 1})"
                     )
-                    time.sleep(backoff)
+                    time.sleep(wait)
                     continue
                 else:
-                    logger.error("DISCOS rate limit exhausted; giving up")
+                    logger.error("DISCOS rate limit exhausted after all retries; giving up")
                     return None
             elif resp.status_code == 401:
                 logger.error("DISCOS authentication failed; check DISCOS_API_TOKEN")
