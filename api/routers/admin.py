@@ -148,6 +148,7 @@ SCRIPT_CATALOGUE = [
         "description": "Adds canonical.object_class to every object document by mapping from canonical.object_type (ALL CAPS source values supported). object_type is kept as a deprecated field.",
         "category": "migration",
         "path": "scripts/migration/migrate_classify_objects.py",
+        "args": ["--yes"],
         "order_hint": 3,
         "depends_on": ["migrate_collection_rename"],
         "estimated_duration": "5-15 minutes",
@@ -159,6 +160,7 @@ SCRIPT_CATALOGUE = [
         "description": "Adds top-level identifier_aliases field {norad, cospar} to every object document, backfilled from canonical fields.",
         "category": "migration",
         "path": "scripts/migration/migrate_backfill_aliases.py",
+        "args": ["--yes"],
         "order_hint": 4,
         "depends_on": ["migrate_collection_rename"],
         "estimated_duration": "5-15 minutes",
@@ -332,7 +334,7 @@ def run_script(script_id: str):
     if not script:
         raise HTTPException(status_code=404, detail=f"Script '{script_id}' not found")
 
-    cmd = ["python", script["path"]]
+    cmd = ["python", script["path"]] + script.get("args", [])
 
     if script.get("requires_file"):
         with _uploaded_files_lock:
