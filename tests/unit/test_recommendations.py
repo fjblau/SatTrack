@@ -16,7 +16,7 @@ class TestRecommendations(unittest.TestCase):
         self.mock_db = Mock()
         self.mock_cursor = Mock()
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_jaccard_similarity_basic(self, mock_db):
         """Test calculating Jaccard similarity between two satellites"""
         mock_cursor = MagicMock()
@@ -31,7 +31,7 @@ class TestRecommendations(unittest.TestCase):
         self.assertEqual(result, 0.5)
         mock_db.aql.execute.assert_called_once()
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_jaccard_similarity_no_common_neighbors(self, mock_db):
         """Test Jaccard similarity with no common neighbors"""
         mock_cursor = MagicMock()
@@ -45,7 +45,7 @@ class TestRecommendations(unittest.TestCase):
         
         self.assertEqual(result, 0.0)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_jaccard_similarity_with_edge_types(self, mock_db):
         """Test Jaccard similarity with specific edge types"""
         mock_cursor = MagicMock()
@@ -63,7 +63,7 @@ class TestRecommendations(unittest.TestCase):
         query = call_args[0][0]
         self.assertIn("orbital_proximity", query)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_similar_satellites_basic(self, mock_db):
         """Test finding similar satellites"""
         mock_cursor = MagicMock()
@@ -98,7 +98,7 @@ class TestRecommendations(unittest.TestCase):
         self.assertEqual(result[1]["similarity_score"], 0.6)
         self.assertGreater(result[0]["similarity_score"], result[1]["similarity_score"])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_similar_satellites_with_min_similarity(self, mock_db):
         """Test finding similar satellites with minimum similarity threshold"""
         mock_cursor = MagicMock()
@@ -128,7 +128,7 @@ class TestRecommendations(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['min_similarity'], 0.5)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_similar_satellites_empty_result(self, mock_db):
         """Test finding similar satellites when none exist"""
         mock_cursor = MagicMock()
@@ -139,7 +139,7 @@ class TestRecommendations(unittest.TestCase):
         
         self.assertEqual(len(result), 0)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_neighbor_based_recommendations_similar_neighbors(self, mock_db):
         """Test neighbor-based recommendations with similar_neighbors strategy"""
         mock_cursor = MagicMock()
@@ -166,7 +166,7 @@ class TestRecommendations(unittest.TestCase):
         self.assertEqual(result[0]["recommendation_type"], "similar_neighbors")
         self.assertEqual(result[0]["relevance_score"], 3)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_neighbor_based_recommendations_second_degree(self, mock_db):
         """Test neighbor-based recommendations with second_degree strategy"""
         mock_cursor = MagicMock()
@@ -192,7 +192,7 @@ class TestRecommendations(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["recommendation_type"], "second_degree")
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_neighbor_based_recommendations_common_neighbors(self, mock_db):
         """Test neighbor-based recommendations with common_neighbors strategy"""
         mock_cursor = MagicMock()
@@ -219,7 +219,7 @@ class TestRecommendations(unittest.TestCase):
         self.assertEqual(result[0]["recommendation_type"], "common_neighbors")
         self.assertEqual(result[0]["relevance_score"], 5)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_neighbor_based_recommendations_invalid_strategy(self, mock_db):
         """Test neighbor-based recommendations with invalid strategy"""
         result = get_neighbor_based_recommendations(
@@ -230,7 +230,7 @@ class TestRecommendations(unittest.TestCase):
         
         self.assertEqual(len(result), 0)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_collaborative_filtering_recommendations_basic(self, mock_db):
         """Test collaborative filtering recommendations"""
         mock_cursor = MagicMock()
@@ -270,7 +270,7 @@ class TestRecommendations(unittest.TestCase):
         self.assertEqual(result[0]["common_connections"], 4)
         self.assertGreaterEqual(result[0]["relevance_score"], result[1]["relevance_score"])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_collaborative_filtering_recommendations_with_min_connections(self, mock_db):
         """Test collaborative filtering with minimum common connections"""
         mock_cursor = MagicMock()
@@ -301,7 +301,7 @@ class TestRecommendations(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['min_common_connections'], 5)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_collaborative_filtering_recommendations_with_edge_types(self, mock_db):
         """Test collaborative filtering with specific edge types"""
         mock_cursor = MagicMock()
@@ -318,7 +318,7 @@ class TestRecommendations(unittest.TestCase):
         query = call_args[0][0]
         self.assertIn("constellation_membership", query)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_collaborative_filtering_recommendations_empty_result(self, mock_db):
         """Test collaborative filtering when no recommendations exist"""
         mock_cursor = MagicMock()
@@ -332,7 +332,7 @@ class TestRecommendations(unittest.TestCase):
         
         self.assertEqual(len(result), 0)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_recommendations_sorted_by_relevance(self, mock_db):
         """Test that recommendations are sorted by relevance score"""
         mock_cursor = MagicMock()

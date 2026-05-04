@@ -11,7 +11,7 @@ This module provides helper functions for:
 from typing import Optional, Dict, List, Any, Set
 import datetime
 import database.connection as db_conn
-from database.connection import COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK, EDGE_COLLECTION_SATELLITE_LINEAGE, EDGE_COLLECTION_REGISTRATION, COLLECTION_REG_DOCS
+from database.connection import COLLECTION_NAME, EDGE_COLLECTION_COLLISION_RISK, EDGE_COLLECTION_SATELLITE_LINEAGE, EDGE_COLLECTION_REGISTRATION, COLLECTION_REG_DOCS, EDGE_COLLECTION_CONSTELLATION, EDGE_COLLECTION_PROXIMITY
 
 
 def find_shortest_path(
@@ -41,11 +41,6 @@ def find_shortest_path(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -146,11 +141,6 @@ def find_all_paths(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -245,11 +235,6 @@ def calculate_degree_centrality(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -320,11 +305,6 @@ def traverse_graph(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -383,11 +363,6 @@ def get_neighbors(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -429,12 +404,6 @@ def count_edges_by_type(vertex_id: str) -> Dict[str, int]:
         Dictionary mapping edge collection names to counts
     """
     try:
-        from database.connection import (
-            EDGE_COLLECTION_CONSTELLATION,
-            EDGE_COLLECTION_REGISTRATION,
-            EDGE_COLLECTION_PROXIMITY
-        )
-        
         edge_collections = [
             EDGE_COLLECTION_CONSTELLATION,
             EDGE_COLLECTION_REGISTRATION,
@@ -500,11 +469,6 @@ def calculate_betweenness_centrality(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -597,11 +561,6 @@ def calculate_closeness_centrality(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -668,11 +627,6 @@ def find_connected_components(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -854,11 +808,6 @@ def find_cross_constellation_proximity(
         Dictionary containing nodes and edges showing cross-constellation proximity
     """
     try:
-        from database.connection import (
-            EDGE_COLLECTION_CONSTELLATION,
-            EDGE_COLLECTION_PROXIMITY
-        )
-        
         query = f"""
         LET proximity_pairs = (
             FOR edge IN {EDGE_COLLECTION_PROXIMITY}
@@ -1141,8 +1090,6 @@ def find_function_based_clusters(
         Dictionary containing function-based clusters
     """
     try:
-        from database.connection import EDGE_COLLECTION_PROXIMITY
-        
         band_filter = ""
         bind_vars = {
             'limit': limit,
@@ -1537,11 +1484,6 @@ def detect_communities_label_propagation(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -1786,13 +1728,6 @@ def get_graph_snapshot_by_date(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY,
-                EDGE_COLLECTION_COLLISION_RISK,
-                EDGE_COLLECTION_SATELLITE_LINEAGE
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -1930,13 +1865,6 @@ def calculate_graph_evolution_timeline(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY,
-                EDGE_COLLECTION_COLLISION_RISK,
-                EDGE_COLLECTION_SATELLITE_LINEAGE
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -2071,11 +1999,6 @@ def calculate_jaccard_similarity(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -2146,11 +2069,6 @@ def get_similar_satellites(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -2242,11 +2160,6 @@ def get_neighbor_based_recommendations(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,
@@ -2415,11 +2328,6 @@ def get_collaborative_filtering_recommendations(
         edge_collections = edge_types if edge_types else []
         
         if not edge_collections:
-            from database.connection import (
-                EDGE_COLLECTION_CONSTELLATION,
-                EDGE_COLLECTION_REGISTRATION,
-                EDGE_COLLECTION_PROXIMITY
-            )
             edge_collections = [
                 EDGE_COLLECTION_CONSTELLATION,
                 EDGE_COLLECTION_REGISTRATION,

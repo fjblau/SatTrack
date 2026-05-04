@@ -21,7 +21,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.mock_db = Mock()
         self.mock_cursor = Mock()
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_find_shortest_path_success(self, mock_db):
         """Test finding shortest path between two satellites"""
         mock_cursor = MagicMock()
@@ -39,7 +39,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(len(result["vertices"]), 2)
         mock_db.aql.execute.assert_called_once()
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_find_shortest_path_no_path(self, mock_db):
         """Test finding shortest path when no path exists"""
         mock_cursor = MagicMock()
@@ -50,7 +50,7 @@ class TestGraphAnalytics(unittest.TestCase):
         
         self.assertIsNone(result)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_find_shortest_path_with_edge_types(self, mock_db):
         """Test finding shortest path with specific edge types"""
         mock_cursor = MagicMock()
@@ -72,7 +72,7 @@ class TestGraphAnalytics(unittest.TestCase):
         query = call_args[0][0]
         self.assertIn("orbital_proximity", query)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_find_all_paths(self, mock_db):
         """Test finding all paths between two satellites"""
         mock_cursor = MagicMock()
@@ -87,7 +87,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(len(result), 2)
         mock_db.aql.execute.assert_called_once()
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_find_all_paths_with_limit(self, mock_db):
         """Test finding all paths with result limit"""
         mock_cursor = MagicMock()
@@ -106,7 +106,7 @@ class TestGraphAnalytics(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['limit'], 5)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_degree_centrality(self, mock_db):
         """Test calculating degree centrality"""
         mock_cursor = MagicMock()
@@ -136,7 +136,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(result[0]["degree"], 10)
         self.assertEqual(result[1]["degree"], 8)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_degree_centrality_with_edge_types(self, mock_db):
         """Test calculating degree centrality for specific edge types"""
         mock_cursor = MagicMock()
@@ -152,7 +152,7 @@ class TestGraphAnalytics(unittest.TestCase):
         query = call_args[0][0]
         self.assertIn("constellation_membership", query)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_traverse_graph_outbound(self, mock_db):
         """Test outbound graph traversal"""
         mock_cursor = MagicMock()
@@ -175,7 +175,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["depth"], 1)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_traverse_graph_with_limit(self, mock_db):
         """Test graph traversal with result limit"""
         mock_cursor = MagicMock()
@@ -191,7 +191,7 @@ class TestGraphAnalytics(unittest.TestCase):
         query = call_args[0][0]
         self.assertIn("LIMIT 100", query)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_neighbors(self, mock_db):
         """Test getting direct neighbors"""
         mock_cursor = MagicMock()
@@ -209,7 +209,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["edge_type"], "orbital_proximity")
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_get_neighbors_inbound(self, mock_db):
         """Test getting inbound neighbors"""
         mock_cursor = MagicMock()
@@ -222,7 +222,7 @@ class TestGraphAnalytics(unittest.TestCase):
         query = call_args[0][0]
         self.assertIn("INBOUND", query)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_count_edges_by_type(self, mock_db):
         """Test counting edges by type"""
         def mock_execute(query, bind_vars):
@@ -239,7 +239,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertTrue(len(result) > 0)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_count_edges_by_type_error_handling(self, mock_db):
         """Test edge counting error handling"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -248,7 +248,7 @@ class TestGraphAnalytics(unittest.TestCase):
         
         self.assertEqual(result, {})
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_find_connected_components(self, mock_db):
         """Test finding connected components"""
         mock_cursor = MagicMock()
@@ -270,7 +270,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(result[0]["size"], 5)
         self.assertEqual(result[1]["size"], 3)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_find_connected_components_with_edge_types(self, mock_db):
         """Test finding connected components with specific edge types"""
         mock_cursor = MagicMock()
@@ -288,7 +288,7 @@ class TestGraphAnalytics(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['min_size'], 5)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_error_handling_find_shortest_path(self, mock_db):
         """Test error handling in find_shortest_path"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -297,7 +297,7 @@ class TestGraphAnalytics(unittest.TestCase):
         
         self.assertIsNone(result)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_error_handling_calculate_centrality(self, mock_db):
         """Test error handling in calculate_degree_centrality"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -306,7 +306,7 @@ class TestGraphAnalytics(unittest.TestCase):
         
         self.assertEqual(result, [])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_error_handling_traverse_graph(self, mock_db):
         """Test error handling in traverse_graph"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -315,7 +315,7 @@ class TestGraphAnalytics(unittest.TestCase):
         
         self.assertEqual(result, [])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_betweenness_centrality(self, mock_db):
         """Test calculating betweenness centrality"""
         mock_cursor = MagicMock()
@@ -344,7 +344,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(result[1]["betweenness_centrality"], 18)
         self.assertIn("normalized_score", result[0])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_betweenness_centrality_with_edge_types(self, mock_db):
         """Test calculating betweenness centrality for specific edge types"""
         mock_cursor = MagicMock()
@@ -364,7 +364,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(bind_vars['sample_size'], 50)
         self.assertEqual(bind_vars['limit'], 10)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_closeness_centrality(self, mock_db):
         """Test calculating closeness centrality"""
         mock_cursor = MagicMock()
@@ -396,7 +396,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertIn("reachable_nodes", result[0])
         self.assertIn("avg_distance", result[0])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_calculate_closeness_centrality_with_edge_types(self, mock_db):
         """Test calculating closeness centrality for specific edge types"""
         mock_cursor = MagicMock()
@@ -416,7 +416,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(bind_vars['max_depth'], 3)
         self.assertEqual(bind_vars['limit'], 15)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_error_handling_betweenness_centrality(self, mock_db):
         """Test error handling in calculate_betweenness_centrality"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -425,7 +425,7 @@ class TestGraphAnalytics(unittest.TestCase):
         
         self.assertEqual(result, [])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_error_handling_closeness_centrality(self, mock_db):
         """Test error handling in calculate_closeness_centrality"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -434,7 +434,7 @@ class TestGraphAnalytics(unittest.TestCase):
         
         self.assertEqual(result, [])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_betweenness_centrality_default_parameters(self, mock_db):
         """Test betweenness centrality with default parameters"""
         mock_cursor = MagicMock()
@@ -448,7 +448,7 @@ class TestGraphAnalytics(unittest.TestCase):
         self.assertEqual(bind_vars['limit'], 100)
         self.assertEqual(bind_vars['sample_size'], 100)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_closeness_centrality_default_parameters(self, mock_db):
         """Test closeness centrality with default parameters"""
         mock_cursor = MagicMock()
