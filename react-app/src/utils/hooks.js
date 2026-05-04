@@ -84,17 +84,17 @@ export function useFragmentationEvents({ limit = 100, skip = 0 } = {}) {
     setError(null)
     const aql = `
 FOR ev IN fragmentation_events
-  SORT ev.epoch DESC
+  SORT ev.canonical.epoch DESC
   LIMIT ${skip}, ${limit}
   RETURN {
     _key: ev._key,
     _id: ev._id,
-    name: ev.name,
-    epoch: ev.epoch,
-    event_type: ev.event_type,
-    parent_cospar: ev.parent_cospar,
-    orbital_regime: ev.orbital_regime,
-    fragment_count: ev.fragment_count
+    identifier: ev.identifier,
+    epoch: ev.canonical.epoch,
+    event_type: ev.canonical.event_type,
+    fragment_count: ev.canonical.fragment_count,
+    altitude_km: ev.canonical.altitude_km,
+    casualty_risk: ev.canonical.casualty_risk
   }
 `.trim()
 

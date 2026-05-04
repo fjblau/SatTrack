@@ -25,7 +25,8 @@ function EventDetail({ eventKey, onBack }) {
     return () => { cancelled = true }
   }, [eventKey])
 
-  const ev = detail?.event
+  const evDoc = detail?.event
+  const evCanonical = evDoc?.canonical || {}
   const fragments = detail?.fragments || []
   const pagedFragments = fragments.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const totalPages = Math.ceil(fragments.length / PAGE_SIZE)
@@ -42,15 +43,15 @@ function EventDetail({ eventKey, onBack }) {
       {loading && <p style={{ color: '#6c757d' }}>Loading event…</p>}
       {error && <p style={{ color: '#dc3545' }}>{error}</p>}
 
-      {ev && (
+      {evDoc && (
         <>
-          <h3 style={{ marginBottom: '0.5rem' }}>{ev.name || eventKey}</h3>
+          <h3 style={{ marginBottom: '0.5rem' }}>{evDoc.identifier || eventKey}</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
             {[
-              { label: 'Event Type', value: ev.event_type },
-              { label: 'Epoch', value: ev.epoch },
-              { label: 'Parent COSPAR', value: ev.parent_cospar },
-              { label: 'Orbital Regime', value: ev.orbital_regime },
+              { label: 'Event Type', value: evCanonical.event_type },
+              { label: 'Epoch', value: evCanonical.epoch },
+              { label: 'Altitude (km)', value: evCanonical.altitude_km },
+              { label: 'Casualty Risk', value: evCanonical.casualty_risk },
               { label: 'Fragment Count', value: detail.fragment_count },
             ].filter(x => x.value != null).map((x, i) => (
               <div key={i} style={{ background: '#f8f9fa', border: '1px solid #e9ecef', borderRadius: '6px', padding: '0.75rem' }}>
@@ -148,24 +149,24 @@ export default function FragmentationEventsPage() {
     setError(null)
     try {
       const filters = []
-      if (typeFilter) filters.push(`FILTER LOWER(ev.event_type) == LOWER("${typeFilter}")`)
-      if (dateFrom) filters.push(`FILTER ev.epoch >= "${dateFrom}"`)
-      if (dateTo) filters.push(`FILTER ev.epoch <= "${dateTo}"`)
+      if (typeFilter) filters.push(`FILTER LOWER(ev.canonical.event_type) == LOWER("${typeFilter}")`)
+      if (dateFrom) filters.push(`FILTER ev.canonical.epoch >= "${dateFrom}"`)
+      if (dateTo) filters.push(`FILTER ev.canonical.epoch <= "${dateTo}"`)
       const filterStr = filters.join('\n  ')
 
       const aql = `
 FOR ev IN fragmentation_events
   ${filterStr}
-  SORT ev.epoch DESC
+  SORT ev.canonical.epoch DESC
   LIMIT ${pageNum * PAGE_SIZE}, ${PAGE_SIZE}
   RETURN {
     _key: ev._key,
-    name: ev.name,
-    epoch: ev.epoch,
-    event_type: ev.event_type,
-    parent_cospar: ev.parent_cospar,
-    orbital_regime: ev.orbital_regime,
-    fragment_count: ev.fragment_count
+    identifier: ev.identifier,
+    epoch: ev.canonical.epoch,
+    event_type: ev.canonical.event_type,
+    fragment_count: ev.canonical.fragment_count,
+    altitude_km: ev.canonical.altitude_km,
+    casualty_risk: ev.canonical.casualty_risk
   }`.trim()
 
       const countAql = `
@@ -271,8 +272,8 @@ RETURN LENGTH(
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Event</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Type</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Epoch</th>
-                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Parent COSPAR</th>
-                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Orbital Regime</th>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Altitude (km)</th>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Casualty Risk</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Fragments</th>
               </tr>
             </thead>
@@ -286,12 +287,14 @@ RETURN LENGTH(
                   onMouseLeave={e => e.currentTarget.style.background = ''}
                 >
                   <td style={{ padding: '0.45rem 0.75rem', fontWeight: 500, color: '#2980b9' }}>
-                    {ev.name || ev._key}
+                    {ev.identifier || ev._key}
                   </td>
                   <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>{ev.event_type || '—'}</td>
                   <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>{ev.epoch ? String(ev.epoch).slice(0, 10) : '—'}</td>
-                  <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>{ev.parent_cospar || '—'}</td>
-                  <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>{ev.orbital_regime || '—'}</td>
+                  <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>
+                    {ev.altitude_km != null ? ev.altitude_km.toLocaleString() : '—'}
+                  </td>
+                  <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>{ev.casualty_risk || '—'}</td>
                   <td style={{ padding: '0.45rem 0.75rem', textAlign: 'right', color: '#6c757d', fontSize: '0.82rem' }}>
                     {ev.fragment_count != null ? ev.fragment_count.toLocaleString() : '—'}
                   </td>
