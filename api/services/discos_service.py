@@ -223,7 +223,7 @@ def get_fragmentation_events(filters: Optional[Dict[str, Any]] = None) -> List[D
     if cached is not None:
         return cached
 
-    items = _get_paginated("/fragmentation-events", dict(filters or {}))
+    items = _get_paginated("/fragmentations", dict(filters or {}))
     result = [_parse_attributes(i) for i in items]
     _cache_set(cache_key, result)
     return result
@@ -308,7 +308,7 @@ def get_object_attributions(discos_id: str) -> List[Dict]:
     if cached is not None:
         return cached
 
-    data = _do_get(f"/objects/{discos_id}/relationships/fragmentation-events")
+    data = _do_get(f"/objects/{discos_id}/relationships/fragmentations")
     if data is None:
         return []
     items = data.get("data", [])
