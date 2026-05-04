@@ -2165,7 +2165,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         )}
       </div>
       
-      <div className="graph-container" ref={containerRef}>
+      <div className="graph-container">
+        <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
         {loading && <div className="loading-overlay">Loading graph...</div>}
         {error && !loading && (
           <div className="error-overlay">
