@@ -41,6 +41,7 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "kessler_dev_password")
 DB_NAME = "kessler"
 OLD_PREFIX = "satellites/"
 NEW_PREFIX = "objects/"
+OLD_LEN = len(OLD_PREFIX)
 
 EDGE_COLLECTIONS = [
     "constellation_membership",
@@ -59,13 +60,21 @@ EDGE_COLLECTIONS = [
     "launched_from",
 ]
 
-BATCH_SIZE = 500
+BATCH_SIZE = 2000
 
 
 def normalize(id_str):
     if id_str and id_str.startswith(OLD_PREFIX):
-        return NEW_PREFIX + id_str[len(OLD_PREFIX):]
+        return NEW_PREFIX + id_str[OLD_LEN:]
     return id_str
+
+
+def count_stale(db, col_name):
+    cursor = db.aql.execute(
+        "RETURN LENGTH(FOR e IN @@col FILTER STARTS_WITH(e._from, @old) OR STARTS_WITH(e._to, @old) RETURN 1)",
+        bind_vars={"@col": col_name, "old": OLD_PREFIX},
+    )
+    return next(cursor)
 
 
 def migrate_collection(db, col_name, dry_run):
@@ -74,45 +83,70 @@ def migrate_collection(db, col_name, dry_run):
         return 0
 
     col = db.collection(col_name)
+    total = count_stale(db, col_name)
 
-    cursor = db.aql.execute(
-        """
-        FOR e IN @@col
-            FILTER STARTS_WITH(e._from, @old) OR STARTS_WITH(e._to, @old)
-            RETURN e
-        """,
-        bind_vars={"@col": col_name, "old": OLD_PREFIX},
-        batch_size=BATCH_SIZE,
-    )
-    stale = list(cursor)
-
-    if not stale:
+    if total == 0:
         print(f"  [{col_name}] no stale edges")
         return 0
 
-    print(f"  [{col_name}] {len(stale)} stale edge(s) found")
+    print(f"  [{col_name}] {total} stale edge(s) found")
+
     if dry_run:
-        for e in stale[:5]:
+        sample = list(db.aql.execute(
+            "FOR e IN @@col FILTER STARTS_WITH(e._from, @old) OR STARTS_WITH(e._to, @old) LIMIT 5 RETURN e",
+            bind_vars={"@col": col_name, "old": OLD_PREFIX},
+        ))
+        for e in sample:
             print(f"    would fix: {e['_id']}  _from={e['_from']}  _to={e['_to']}")
-        if len(stale) > 5:
-            print(f"    ... and {len(stale) - 5} more")
-        return len(stale)
+        if total > 5:
+            print(f"    ... and {total - 5} more")
+        return total
 
     fixed = 0
     errors = 0
-    for edge in stale:
-        new_edge = {k: v for k, v in edge.items() if k not in ("_id", "_rev")}
-        new_edge["_from"] = normalize(edge["_from"])
-        new_edge["_to"] = normalize(edge["_to"])
-        try:
-            col.delete(edge["_key"])
-            col.insert(new_edge)
-            fixed += 1
-        except Exception as exc:
-            print(f"    ERROR on {edge['_id']}: {exc}")
-            errors += 1
 
-    print(f"  [{col_name}] fixed {fixed}, errors {errors}")
+    while True:
+        # Always fetch from the start — deleted edges won't appear again
+        batch = list(db.aql.execute(
+            """
+            FOR e IN @@col
+                FILTER STARTS_WITH(e._from, @old) OR STARTS_WITH(e._to, @old)
+                LIMIT @batch_size
+                RETURN e
+            """,
+            bind_vars={"@col": col_name, "old": OLD_PREFIX, "batch_size": BATCH_SIZE},
+        ))
+
+        if not batch:
+            break
+
+        new_edges = [
+            {**{k: v for k, v in e.items() if k not in ("_id", "_rev")},
+             "_from": normalize(e["_from"]),
+             "_to": normalize(e["_to"])}
+            for e in batch
+        ]
+
+        keys = [{"_key": e["_key"]} for e in batch]
+
+        try:
+            col.delete_many(keys, silent=True)
+        except Exception as exc:
+            print(f"\n    ERROR bulk-deleting {len(batch)} edges: {exc}")
+            errors += len(batch)
+            break
+
+        try:
+            col.insert_many(new_edges, silent=True)
+            fixed += len(batch)
+        except Exception as exc:
+            print(f"\n    ERROR bulk-inserting {len(batch)} edges: {exc}")
+            errors += len(batch)
+            break
+
+        print(f"    {fixed}/{total} rewritten...", end="\r", flush=True)
+
+    print(f"  [{col_name}] fixed {fixed}, errors {errors}        ")
     return fixed
 
 
