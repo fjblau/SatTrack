@@ -10,7 +10,9 @@ Complete API reference for the Kessler satellite tracking application.
 2. [Authentication](#authentication)
 3. [Endpoints](#endpoints)
    - [Auth](#auth)
-   - [Satellites](#satellites)
+   - [Satellites](#satellites) *(deprecated — use Objects)*
+   - [Objects](#objects)
+   - [Provenance](#provenance)
    - [Metadata](#metadata)
    - [Graphs](#graphs)
    - [Documents](#documents)
@@ -119,6 +121,8 @@ POST /v2/auth/logout
 ---
 
 ### Satellites
+
+> **Deprecated**: The `/v2/satellite/*` endpoints are preserved for backward compatibility and will be removed in Spec 3. Use the `/v2/objects/*` endpoints instead.
 
 #### Search Satellites
 
@@ -257,6 +261,425 @@ curl "http://localhost:8000/v2/satellite/1998-067A"
 
 # By name (URL encoded)
 curl "http://localhost:8000/v2/satellite/ISS%20(ZARYA)"
+```
+
+---
+
+### Objects
+
+The `/v2/objects/*` endpoints replace `/v2/satellite/*`. They expose the unified `objects` collection which includes payloads, rocket bodies, debris, and mission-related objects — all tracked via canonical fields and cross-source identifier aliases.
+
+#### Search Space Objects
+
+```http
+GET /v2/objects
+GET /v2/objects/search
+```
+
+Search and filter all space objects in the registry.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `q` | string | No | Free-text search across name and identifier fields |
+| `country` | string | No | Filter by country code |
+| `status` | string | No | Filter by status (e.g. `operational`, `decayed`) |
+| `orbital_band` | string | No | Filter by orbital band (LEO, MEO, GEO, HEO) |
+| `object_class` | string | No | Filter by object class (e.g. `Payload`, `Rocket Body`, `Unknown`) |
+| `object_type` | string | No | Filter by legacy object type field |
+| `skip` | integer | No | Pagination offset (default: 0) |
+| `limit` | integer | No | Page size (default: 100, max: 1000) |
+| `sort_by` | string | No | Sort field |
+| `sort_order` | string | No | `asc` or `desc` |
+
+**Response:**
+
+```json
+{
+  "count": 26742,
+  "skip": 0,
+  "limit": 100,
+  "data": [
+    {
+      "identifier": "1998-067A",
+      "canonical": {
+        "norad_cat_id": 25544,
+        "international_designator": "1998-067A",
+        "name": "ISS (ZARYA)",
+        "object_class": "Payload",
+        "status": "operational",
+        "country_of_origin": "USA",
+        "orbital_band": "LEO"
+      },
+      "identifier_aliases": {
+        "norad": "25544",
+        "cospar": "1998-067A"
+      },
+      "sources_available": ["unoosa", "celestrak", "discos"]
+    }
+  ]
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/objects?object_class=Payload&country=USA&limit=10"
+```
+
+---
+
+#### Get Space Object by Identifier
+
+```http
+GET /v2/objects/{identifier}
+```
+
+Retrieve a single space object. The `identifier` can be a COSPAR ID, NORAD ID, or document key. Only `Payload` objects are returned by this endpoint; use `/v2/objects/by-class` for other classes.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `identifier` | string | Yes | COSPAR ID, NORAD ID, or document key |
+
+**Response:**
+
+```json
+{
+  "data": {
+    "identifier": "1998-067A",
+    "canonical": {
+      "norad_cat_id": 25544,
+      "international_designator": "1998-067A",
+      "name": "ISS (ZARYA)",
+      "object_class": "Payload",
+      "status": "operational",
+      "country_of_origin": "USA",
+      "launch_date": "1998-11-20",
+      "orbital_band": "LEO"
+    },
+    "identifier_aliases": {
+      "norad": "25544",
+      "cospar": "1998-067A",
+      "discos": "12345"
+    },
+    "sources": {
+      "unoosa": { "...": "..." },
+      "celestrak": { "...": "..." }
+    },
+    "metadata": {
+      "sources_available": ["unoosa", "celestrak"],
+      "attribution_status": "attributed"
+    }
+  }
+}
+```
+
+---
+
+#### Get Objects by Class
+
+```http
+GET /v2/objects/by-class/{object_class}
+```
+
+Retrieve all space objects of a given class.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `object_class` | string | Yes | One of: `Payload`, `Rocket Body`, `Mission-Related Object`, `Rocket Fragmentation Debris`, `Payload Fragmentation Debris`, `Unknown` |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `skip` | integer | No | Pagination offset (default: 0) |
+| `limit` | integer | No | Page size (default: 100, max: 1000) |
+
+**Response:**
+
+```json
+{
+  "count": 5432,
+  "skip": 0,
+  "limit": 100,
+  "object_class": "Rocket Body",
+  "data": [ { "...": "..." } ]
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/objects/by-class/Rocket%20Body?limit=20"
+```
+
+---
+
+#### Get Object by Alias
+
+```http
+GET /v2/objects/by-alias/{alias_type}/{value}
+```
+
+Look up a space object by one of its cross-source identifier aliases.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `alias_type` | string | Yes | One of: `norad`, `cospar`, `discos`, `vimpel`, `kestrel` |
+| `value` | string | Yes | The alias value to match |
+
+**Response:**
+
+```json
+{
+  "data": {
+    "identifier": "1998-067A",
+    "canonical": { "...": "..." },
+    "identifier_aliases": {
+      "norad": "25544",
+      "cospar": "1998-067A",
+      "discos": "12345"
+    },
+    "sources": { "...": "..." },
+    "metadata": { "...": "..." }
+  }
+}
+```
+
+**Examples:**
+
+```bash
+# By NORAD ID
+curl "http://localhost:8000/v2/objects/by-alias/norad/25544"
+
+# By DISCOS internal ID
+curl "http://localhost:8000/v2/objects/by-alias/discos/12345"
+```
+
+---
+
+#### Get Object Statistics
+
+```http
+GET /v2/objects/stats
+```
+
+Return counts of space objects broken down by class and status.
+
+**Response:**
+
+```json
+{
+  "total": 26742,
+  "by_class": [
+    { "class": "Payload", "count": 8432 },
+    { "class": "Rocket Body", "count": 3210 },
+    { "class": "Unknown", "count": 12100 }
+  ],
+  "by_status": [
+    { "status": "operational", "count": 6543 },
+    { "status": "decayed", "count": 15000 }
+  ]
+}
+```
+
+---
+
+### Provenance
+
+The `/v2/provenance/*` endpoints expose the `provenance_relationships` named graph, which links space objects to fragmentation events, launch events, launch vehicles, launch sites, and operator entities via DISCOS-sourced data.
+
+**Confidence thresholds**: Edges with `confidence < 0.7` are excluded by default. Pass `min_confidence` to lower the threshold. Edges with `0.7 ≤ confidence < 0.9` include a `caveat` in the response.
+
+**Note**: Raw DISCOS records are not exposed directly per redistribution policy. Only derived graph relationships and aggregated metadata are returned.
+
+#### Get Provenance Chain
+
+```http
+GET /v2/provenance/objects/{object_key}/chain
+```
+
+Return the full provenance chain for a space object: fragmentation event → parent object → launch event → launch vehicle → operator.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `object_key` | string | Yes | ArangoDB document key from the `objects` collection |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `min_confidence` | float | No | Minimum edge confidence (0.0–1.0; default: 0.7) |
+
+**Response:**
+
+```json
+{
+  "object_key": "1998-067A",
+  "chain": {
+    "object": { "...": "..." },
+    "fragmented_from": null,
+    "fragmentation_confidence": null,
+    "fragmentation_event": null,
+    "operator": { "name": "NASA", "country": "USA" },
+    "launch_vehicle": { "name": "Proton-K" },
+    "launch_site": { "name": "Baikonur Cosmodrome" }
+  },
+  "caveat": null
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/provenance/objects/1998-067A/chain"
+curl "http://localhost:8000/v2/provenance/objects/1999-025C/chain?min_confidence=0.5"
+```
+
+---
+
+#### Get Sibling Fragments
+
+```http
+GET /v2/provenance/objects/{object_key}/siblings
+```
+
+Return other fragments sharing the same parent object via a two-hop graph traversal. Siblings are not stored as direct edges — they are computed on-demand.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `object_key` | string | Yes | ArangoDB document key |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `limit` | integer | No | Max siblings to return (default: 50, max: 500) |
+| `min_confidence` | float | No | Minimum edge confidence (default: 0.7) |
+
+**Response:**
+
+```json
+{
+  "parent": { "identifier": "1999-025", "canonical": { "...": "..." } },
+  "siblings": [ { "...": "..." } ],
+  "sibling_count": 42
+}
+```
+
+---
+
+#### Get Fragmentation Event
+
+```http
+GET /v2/provenance/events/{event_key}
+```
+
+Return a fragmentation event document and all fragments attributed to it.
+
+**Response:**
+
+```json
+{
+  "event": {
+    "_key": "evt-001",
+    "name": "Fengyun-1C ASAT test",
+    "epoch": "2007-01-11T00:00:00Z"
+  },
+  "fragment_count": 2841,
+  "fragments": [
+    {
+      "object": { "identifier": "...", "canonical": { "...": "..." } },
+      "confidence": 0.95
+    }
+  ]
+}
+```
+
+---
+
+#### Get Launch Event
+
+```http
+GET /v2/provenance/launches/{launch_key}
+```
+
+Return a launch event document with the objects it launched, the launch vehicle, and the launch site.
+
+**Response:**
+
+```json
+{
+  "launch_event": { "_key": "launch-001", "epoch": "1998-11-20T00:00:00Z" },
+  "object_count": 1,
+  "objects": [ { "...": "..." } ],
+  "launch_vehicle": { "name": "Proton-K" },
+  "launch_site": { "name": "Baikonur Cosmodrome" }
+}
+```
+
+---
+
+#### Get Entity
+
+```http
+GET /v2/provenance/entities/{entity_key}
+```
+
+Return an entity (operator/country) document and the objects it launched (up to 100).
+
+**Response:**
+
+```json
+{
+  "entity": { "_key": "entity-001", "name": "NASA", "country": "USA" },
+  "launched_object_count": 423,
+  "launched_objects": [ { "...": "..." } ]
+}
+```
+
+---
+
+#### Provenance Summary
+
+```http
+GET /v2/provenance/summary
+```
+
+Return counts for all provenance graph collections and edge sets.
+
+**Response:**
+
+```json
+{
+  "fragmentation_events": 543,
+  "launch_events": 8732,
+  "launch_vehicles": 312,
+  "launch_sites": 89,
+  "entities": 178,
+  "fragmented_from_edges": 19423,
+  "caused_by_edges": 19423,
+  "launched_by_edges": 26742,
+  "launched_via_edges": 26742,
+  "launched_from_edges": 26742
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/provenance/summary"
 ```
 
 ---
@@ -2059,7 +2482,7 @@ Pass `clarification` (user's answer) when the previous response contained a
 
 ```json
 {
-  "aql": "FOR s IN satellites FILTER s.canonical.country_of_origin == 'Austria' AND s.canonical.status == 'in orbit' LIMIT 20 RETURN s",
+  "aql": "FOR s IN objects FILTER s.canonical.country_of_origin == 'Austria' AND s.canonical.status == 'in orbit' LIMIT 20 RETURN s",
   "bind_vars": {},
   "result": [ { ... }, { ... } ],
   "explanation": "Returns up to 20 active satellites registered in Austria.",
@@ -2123,5 +2546,5 @@ Import this into tools like Postman, Insomnia, or API testing frameworks.
 
 ---
 
-**Last Updated**: April 10, 2026  
-**API Version**: 2.1.0
+**Last Updated**: May 4, 2026  
+**API Version**: 2.2.0

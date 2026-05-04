@@ -56,7 +56,10 @@ kessler/
 │   │   └── auth.py              # Bearer-token authentication middleware
 │   ├── routers/                 # API endpoints by domain
 │   │   ├── auth.py              # POST /v2/auth/login, POST /v2/auth/logout
-│   │   ├── satellites.py        # Satellite search & retrieval
+│   │   ├── satellites.py        # Satellite search & retrieval (legacy /v2/satellite/* — deprecated, to be removed in Spec 3)
+│   │   ├── objects.py           # Space object search & retrieval (/v2/objects/*)
+│   │   ├── provenance.py        # Provenance graph traversal (/v2/provenance/*)
+│   │   ├── inference.py         # ML inference stubs (/v2/inference/*; not yet implemented)
 │   │   ├── metadata.py          # Countries, statuses, orbital bands, stats
 │   │   ├── graphs.py            # Graph visualization & analytics endpoints
 │   │   ├── documents.py         # UN document metadata
@@ -79,6 +82,7 @@ kessler/
 │   │   ├── gmat_service.py      # GMAT high-fidelity propagation (RK89 + EGM96)
 │   │   ├── gmat_maneuver_service.py # Kestrel Hohmann + GMAT rendezvous maneuver planning
 │   │   ├── spacetrack_service.py  # Space-Track API integration
+│   │   ├── discos_service.py    # ESA DISCOSweb v2 API client (objects, launches, fragmentations, entities)
 │   │   ├── index_service.py     # ChromaDB RAG vector store build & load
 │   │   ├── agent_service.py     # LangGraph general assistant (RAG + tools, /v2/ask)
 │   │   ├── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
@@ -87,8 +91,9 @@ kessler/
 │       └── converters.py        # Format conversion utilities
 │
 ├── database/                    # Data Layer
-│   ├── connection.py            # ArangoDB connection, collection & graph init
-│   ├── operations.py            # CRUD operations (satellites)
+│   ├── connection.py            # ArangoDB connection, collection & graph init (all collections & named graphs)
+│   ├── operations.py            # CRUD operations (objects collection)
+│   ├── identifier_operations.py # Alias-based lookups (norad, cospar, discos, vimpel, kestrel)
 │   ├── graph_operations.py      # Graph edge CRUD & index management
 │   ├── graph_analytics.py       # AQL graph analytics (centrality, communities, etc.)
 │   ├── observation_graph_ops.py # Observation edge creation & graph traversal
@@ -369,39 +374,101 @@ band = service.classify_orbital_band(altitude_km=500.0)
 
 | Collection | Description | Key Indexes |
 |-----------|-------------|-------------|
-| `satellites` | Primary satellite registry — all UNOOSA/NORAD records with canonical fields | `identifier` (unique), `canonical.international_designator`, `canonical.registration_number` |
+| `objects` | Primary space-object registry — all UNOOSA/NORAD records with canonical fields, `object_class`, and `identifier_aliases` | `identifier` (unique), `canonical.international_designator`, `canonical.registration_number`, `canonical.object_class`, `identifier_aliases.norad`, `identifier_aliases.cospar` |
 | `registration_documents` | UN registration document metadata | — |
 | `observations` | Observational data records (health, mass, thermal, spin) | `norad_id`, `source`, `observation_epoch` |
 | `observation_sources` | Observation data source metadata | — |
 | `ephemeris_envelopes` | Stored ephemeris envelopes (SGP4 or GMAT RK89) | `norad_id`, `generated_at`, `valid_from`, `valid_until` |
 | `kestrel_maneuver_plans` | Kestrel rendezvous maneuver plans | `kestrel_norad_id`, `target_norad_id`, `created_at` |
 | `mqtt_configurations` | MQTT broker configurations for TLE publishing | — |
+| `fragmentation_events` | DISCOS fragmentation/breakup event records | — |
+| `launch_events` | DISCOS launch event records | — |
+| `launch_vehicles` | DISCOS launch vehicle records | — |
+| `launch_sites` | DISCOS launch site records | — |
+| `entities` | DISCOS operator/country entity records | — |
+
+#### Object Document Structure
+
+Each document in the `objects` collection follows a multi-source canonical model:
+
+```json
+{
+  "identifier": "1998-067A",
+  "canonical": {
+    "norad_cat_id": 25544,
+    "international_designator": "1998-067A",
+    "name": "ISS (ZARYA)",
+    "object_class": "Payload",
+    "object_type": "PAYLOAD",
+    "status": "operational",
+    "country_of_origin": "USA",
+    "launch_date": "1998-11-20",
+    "orbital_band": "LEO"
+  },
+  "identifier_aliases": {
+    "norad": "25544",
+    "cospar": "1998-067A",
+    "discos": "12345"
+  },
+  "sources": {
+    "unoosa": { ... },
+    "celestrak": { ... },
+    "discos": { ... }
+  },
+  "metadata": {
+    "sources_available": ["unoosa", "celestrak", "discos"],
+    "transformations": [ ... ],
+    "attribution_status": "attributed"
+  }
+}
+```
+
+**`object_class` enum values** (set by Spec 1 migration):
+
+| Value | Description |
+|-------|-------------|
+| `Payload` | Active or inactive spacecraft |
+| `Rocket Body` | Launch vehicle upper stages |
+| `Mission-Related Object` | Fairings, adapter rings, deployment hardware |
+| `Rocket Fragmentation Debris` | Debris attributed to a rocket body |
+| `Payload Fragmentation Debris` | Debris attributed to a payload |
+| `Unknown` | Unclassified or unattributed debris |
 
 #### Edge Collections
 
 | Collection | From | To | Description |
 |-----------|------|----|-------------|
-| `constellation_membership` | `satellites` | `satellites` | Maps a satellite to its constellation hub |
-| `registration_links` | `satellites` | `registration_documents` | Satellite ↔ UN registration document |
-| `orbital_proximity` | `satellites` | `satellites` | Satellites within ±50 km apogee/perigee, ±5° inclination |
-| `collision_risk_edges` | `satellites` | `satellites` | Computed collision-risk pairs with risk score and min-distance |
-| `satellite_lineage` | `satellites` | `satellites` | Predecessor/successor relationships between satellite generations |
-| `observation_satellite_edges` | `observations` | `satellites` | Links an observation to the satellite being tracked |
+| `constellation_membership` | `objects` | `objects` | Maps a space object to its constellation hub |
+| `registration_links` | `objects` | `registration_documents` | Space object ↔ UN registration document |
+| `orbital_proximity` | `objects` | `objects` | Objects within ±50 km apogee/perigee, ±5° inclination |
+| `collision_risk_edges` | `objects` | `objects` | Computed collision-risk pairs with risk score and min-distance |
+| `satellite_lineage` | `objects` | `objects` | Predecessor/successor relationships between satellite generations |
+| `observation_satellite_edges` | `observations` | `objects` | Links an observation to the object being tracked |
 | `observation_source_edges` | `observations` | `observation_sources` | Links an observation to its reporting source |
 | `observation_correlation_edges` | `observations` | `observations` | Correlates observations sharing characteristics (same source, band, etc.) |
 | `observation_temporal_edges` | `observations` | `observations` | Sequential chain of observations over time for the same NORAD ID |
+| `fragmented_from` | `objects` | `objects` | Fragment → parent object relationship (from DISCOS attributions) |
+| `caused_by` | `objects` | `fragmentation_events` | Fragment → fragmentation event that produced it |
+| `launched_by` | `objects` | `entities` | Object → operator/country entity |
+| `launched_via` | `objects` | `launch_vehicles` | Object → launch vehicle used |
+| `launched_from` | `objects` | `launch_sites` | Object → launch site |
 
 #### Named Graphs
 
 **`satellite_relationships`**
-- Vertex collections: `satellites`, `registration_documents`
+- Vertex collections: `objects`, `registration_documents`
 - Edge collections: `constellation_membership`, `registration_links`, `orbital_proximity`, `collision_risk_edges`, `satellite_lineage`
 - Used for: constellation browsing, registration document graphs, proximity analysis, collision risk network, lineage trees
 
 **`observation_relationships`**
-- Vertex collections: `observations`, `satellites`, `observation_sources`
+- Vertex collections: `observations`, `objects`, `observation_sources`
 - Edge collections: `observation_satellite_edges`, `observation_source_edges`, `observation_correlation_edges`, `observation_temporal_edges`
 - Used for: observation neighborhood graphs, source networks, temporal health chains, anomaly correlation
+
+**`provenance_relationships`**
+- Vertex collections: `objects`, `fragmentation_events`, `launch_events`, `launch_vehicles`, `launch_sites`, `entities`
+- Edge collections: `fragmented_from`, `caused_by`, `launched_by`, `launched_via`, `launched_from`
+- Used for: full provenance chain traversal (fragment → event → parent → launch vehicle → operator), sibling fragment discovery, launch event and entity lookups
 
 ---
 
@@ -432,6 +499,10 @@ class ExternalServicesConfig:
     CELESTRAK_BASE_URL: str = "https://celestrak.org/NORAD/elements"
     CELESTRAK_TLE_FILES: list       # stations, resource, sarsat, dmc, weather, geo, iss
     SPACETRACK_BASE_URL: str        # SPACETRACK_USERNAME / SPACETRACK_PASSWORD
+    DISCOS_BASE_URL: str            # DISCOS_BASE_URL (default: https://discosweb.esoc.esa.int/api)
+    DISCOS_API_TOKEN: str           # DISCOS_API_TOKEN (Bearer token for ESA DISCOSweb v2)
+    DISCOS_CACHE_TTL: int = 86400   # DISCOS_CACHE_TTL (default: 24 hours)
+    DISCOS_REQUEST_TIMEOUT: int = 30 # DISCOS_REQUEST_TIMEOUT
 
 class OrbitalConstants:
     GM: float = 398600.4418         # Earth gravitational parameter (km³/s²)
@@ -476,6 +547,12 @@ SHANTANU_PASSWORD=changeme
 # Space-Track (optional TLE fallback)
 SPACETRACK_USERNAME=your_email@example.com
 SPACETRACK_PASSWORD=your_password
+
+# ESA DISCOSweb (optional — required for DISCOS provenance ingestion)
+DISCOS_API_TOKEN=your_discos_bearer_token
+DISCOS_BASE_URL=https://discosweb.esoc.esa.int/api
+DISCOS_CACHE_TTL=86400
+DISCOS_REQUEST_TIMEOUT=30
 
 # LangGraph AI Agents (required for /v2/ask and /v2/aql)
 OPENAI_API_KEY=sk-...
@@ -746,6 +823,49 @@ Uses SGP4 (via `sgp4`) and Skyfield to propagate TLE elements forward in time, c
 ### SpaceTrackService (`api/services/spacetrack_service.py`)
 
 Authenticates with Space-Track.org and fetches historical TLE data as a fallback when CelesTrak does not have a record.
+
+---
+
+### DiscosService (`api/services/discos_service.py`)
+
+**Purpose**: ESA DISCOSweb v2 API client — fetches space object metadata, fragmentation events, launch events, launch vehicles, launch sites, and entities from ESA's DISCOS database.
+
+**Authentication**: Bearer token from `DISCOS_API_TOKEN` env var. All requests include `DiscosWeb-Api-Version: 2` and `Accept: application/vnd.api+json` headers.
+
+**Caching**: All responses are cached for 24 hours by default (`DISCOS_CACHE_TTL`). Cache is stored in-memory with thread-safe access.
+
+**Rate limiting**: 429 responses are retried with exponential backoff (up to 5 retries). When the remaining rate-limit budget (`X-Ratelimit-Remaining`) falls below 5 requests, the service proactively pauses before making the next call.
+
+**Key functions**:
+
+| Function | Description |
+|----------|-------------|
+| `get_objects(filters)` | Fetch paginated space objects with optional JSON:API filter params |
+| `get_object_by_cospar(cospar_id)` | Look up a single object by COSPAR / international designator |
+| `get_object_by_discos_id(discos_id)` | Look up a single object by its DISCOS internal ID |
+| `get_fragmentation_events(filters)` | Fetch fragmentation/breakup events |
+| `get_launch_events(filters)` | Fetch launch events |
+| `get_launch_vehicles(filters)` | Fetch launch vehicles |
+| `get_launch_sites(filters)` | Fetch launch sites |
+| `get_entities(filters)` | Fetch operator/country entities |
+| `get_object_attributions(discos_id)` | Fetch fragmentation attributions for an object |
+| `health_check()` | Verify connectivity by fetching a single object |
+| `clear_cache()` | Clear the in-memory response cache |
+
+**Configuration** (via `ExternalServicesConfig`):
+- `DISCOS_BASE_URL`: default `https://discosweb.esoc.esa.int/api`
+- `DISCOS_API_TOKEN`: required for any DISCOS API call
+- `DISCOS_CACHE_TTL`: default 86400 seconds (24 hours)
+- `DISCOS_REQUEST_TIMEOUT`: default 30 seconds
+
+**Population scripts** using this service:
+- `scripts/population/ingest_discos_objects.py` — bulk ingest DISCOS object metadata into `objects` collection
+- `scripts/population/ingest_discos_launches.py` — ingest launch events into `launch_events` collection
+- `scripts/population/ingest_discos_fragmentations.py` — ingest fragmentation events into `fragmentation_events` collection
+- `scripts/population/ingest_discos_attributions.py` — create `fragmented_from` and `caused_by` edges
+- `scripts/population/ingest_discos_launch_sites.py` — ingest launch sites into `launch_sites` collection
+- `scripts/population/ingest_discos_launch_vehicles.py` — ingest launch vehicles into `launch_vehicles` collection
+- `scripts/population/ingest_discos_entities.py` — ingest entities into `entities` collection
 
 ---
 
