@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './Filters.css'
-import { FILTER_LABELS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
+import { FILTER_LABELS, UI_TEXT, NUMBER_FORMATS, OBJECT_CLASSES } from '../config/constants'
 
 export default function Filters({ filters, filterOptions, onFilterChange }) {
   const [localFilters, setLocalFilters] = useState(filters)
@@ -93,6 +93,20 @@ export default function Filters({ filters, filterOptions, onFilterChange }) {
           <option value="">{FILTER_LABELS.ALL_CONGESTION_RISKS}</option>
           {filterOptions.congestion_risks?.map(risk => (
             <option key={risk} value={risk}>{risk}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="filter-group">
+        <label htmlFor="object-class">Object Class</label>
+        <select
+          id="object-class"
+          value={localFilters.object_class || ''}
+          onChange={(e) => handleChange('object_class', e.target.value)}
+        >
+          <option value="">{FILTER_LABELS.ALL_OBJECT_CLASSES}</option>
+          {OBJECT_CLASSES.map(cls => (
+            <option key={cls} value={cls}>{cls}</option>
           ))}
         </select>
       </div>

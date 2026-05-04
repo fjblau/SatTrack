@@ -16,6 +16,9 @@ const SAMPLE_QUESTIONS = [
   'What orbital bands are tracked?',
   'How do I interpret collision risk data?',
   'What graph relationships are available?',
+  'What is the object_class taxonomy?',
+  'How does fragmentation provenance work?',
+  'What DISCOS data is available?',
 ]
 
 export default function HelpPage() {
@@ -71,6 +74,8 @@ export default function HelpPage() {
         role: 'assistant',
         content: data.answer,
         sources: data.sources,
+        clarifying_question: data.clarifying_question || null,
+        provenance_links: data.provenance_links || [],
       }])
     } catch (err) {
       setMessages(prev => [...prev, {
@@ -200,6 +205,20 @@ export default function HelpPage() {
                   <div className="help-message-content">
                     {msg.content}
                   </div>
+                  {msg.clarifying_question && (
+                    <div className="help-message-clarify">
+                      <span className="help-clarify-label">Clarification needed: </span>
+                      {msg.clarifying_question}
+                    </div>
+                  )}
+                  {msg.provenance_links && msg.provenance_links.length > 0 && (
+                    <div className="help-message-sources">
+                      <span className="help-sources-label">Provenance:</span>
+                      {msg.provenance_links.map((link, j) => (
+                        <span key={j} className="help-source-tag">{link.label || link}</span>
+                      ))}
+                    </div>
+                  )}
                   {msg.sources && msg.sources.length > 0 && (
                     <div className="help-message-sources">
                       <span className="help-sources-label">Sources:</span>

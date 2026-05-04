@@ -8,11 +8,72 @@ import ObservationsModal from './ObservationsModal'
 import { API_ENDPOINTS, EXTERNAL_URLS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
 const DEBRIS_OBJECT_TYPES = ['debris', 'rocket body', 'unknown']
+const DEBRIS_OBJECT_CLASSES = ['Rocket Fragmentation Debris', 'Payload Fragmentation Debris', 'Rocket Body']
 
-function isDebrisObject(object) {
+function isDebrisObject(object, fullDoc) {
   if (!object) return false
+  const cls = fullDoc?.canonical?.object_class || ''
+  if (DEBRIS_OBJECT_CLASSES.includes(cls)) return true
   const type = (object['Object Type'] || '').toLowerCase()
   return DEBRIS_OBJECT_TYPES.some(t => type.includes(t))
+}
+
+function ProvenancePanel({ objectKey }) {
+  const [chain, setChain] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!objectKey) return
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    apiFetch(API_ENDPOINTS.PROVENANCE.CHAIN(objectKey))
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then(data => {
+        if (!cancelled) setChain(data)
+      })
+      .catch(err => {
+        if (!cancelled) setError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [objectKey])
+
+  if (loading) return <p className="detail-loading">Loading provenance…</p>
+  if (error) return <p className="detail-info">Provenance data unavailable</p>
+  if (!chain) return null
+
+  const { chain: c, caveat } = chain
+  const items = [
+    c?.operator && { label: 'Operator', value: c.operator?.name || c.operator?._key },
+    c?.launch_site && { label: 'Launch Site', value: c.launch_site?.name || c.launch_site?._key },
+    c?.launch_vehicle && { label: 'Launch Vehicle', value: c.launch_vehicle?.name || c.launch_vehicle?._key },
+    c?.fragmentation_event && { label: 'Fragmentation Event', value: c.fragmentation_event?.name || c.fragmentation_event?._key },
+    c?.fragmented_from && { label: 'Parent Object', value: c.fragmented_from?.canonical?.object_name || c.fragmented_from?._key },
+    chain.fragmentation_confidence != null && { label: 'Attribution Confidence', value: `${(chain.fragmentation_confidence * 100).toFixed(0)}%` },
+  ].filter(Boolean)
+
+  if (items.length === 0) return <p className="detail-info">No provenance data linked to this object.</p>
+
+  return (
+    <>
+      {caveat && (
+        <div className="provenance-caveat">{caveat}</div>
+      )}
+      {items.map((item, i) => (
+        <div key={i} className="detail-row">
+          <span className="detail-label">{item.label}</span>
+          <span className="detail-value">{item.value || '—'}</span>
+        </div>
+      ))}
+    </>
+  )
 }
 
 export default function DetailPanel({ object, isDemo = false }) {
@@ -137,7 +198,7 @@ export default function DetailPanel({ object, isDemo = false }) {
   useEffect(() => {
     const noradId = fullDocument?.canonical?.norad_cat_id
     const intlDes = object?.['International Designator']
-    const debris = isDebrisObject(object)
+    const debris = isDebrisObject(object, fullDocument)
 
     if (!object || (!noradId && !debris)) {
       setCurrentTle(null)
@@ -286,6 +347,12 @@ export default function DetailPanel({ object, isDemo = false }) {
             <span className="detail-label">International Designator</span>
             <span className="detail-value">{formatValue(object['International Designator'])}</span>
           </div>
+          {fullDocument?.canonical?.object_class && (
+            <div className="detail-row">
+              <span className="detail-label">Object Class</span>
+              <span className="detail-value object-class-badge">{fullDocument.canonical.object_class}</span>
+            </div>
+          )}
           <div className="detail-row">
             <span className="detail-label">Country of Origin</span>
             <span className="detail-value">{formatValue(object['Country of Origin'])}</span>
@@ -298,6 +365,17 @@ export default function DetailPanel({ object, isDemo = false }) {
             <span className="detail-label">Status</span>
             <span className="detail-value">{formatValue(object['Status'])}</span>
           </div>
+          {fullDocument?.identifier_aliases && Object.keys(fullDocument.identifier_aliases).length > 0 && (
+            <div className="detail-row">
+              <span className="detail-label">Identifiers</span>
+              <span className="detail-value">
+                {Object.entries(fullDocument.identifier_aliases)
+                  .filter(([, v]) => v != null && v !== '')
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(' · ')}
+              </span>
+            </div>
+          )}
           {object['Secretariat Remarks'] && (
             <div className="detail-row remarks-row">
               <span className="detail-label">Remarks</span>
@@ -400,7 +478,7 @@ export default function DetailPanel({ object, isDemo = false }) {
           {error && <p className="detail-error">{error}</p>}
         </div>
 
-        {(fullDocument?.canonical?.norad_cat_id || isDebrisObject(object)) && (
+        {(fullDocument?.canonical?.norad_cat_id || isDebrisObject(object, fullDocument)) && (
           <div className="detail-section">
             <h3>Two-Line Element (TLE)</h3>
             {tleLoading && <p className="detail-loading">Loading current TLE...</p>}
@@ -430,6 +508,13 @@ export default function DetailPanel({ object, isDemo = false }) {
             ) : !tleLoading && !currentTle ? (
               <p className="detail-info">TLE data not available for this object</p>
             ) : null}
+          </div>
+        )}
+
+        {isDebrisObject(object, fullDocument) && fullDocument?.identifier && (
+          <div className="detail-section">
+            <h3>Provenance</h3>
+            <ProvenancePanel objectKey={fullDocument.identifier} />
           </div>
         )}
 

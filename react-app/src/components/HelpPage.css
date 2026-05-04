@@ -417,3 +417,17 @@
   background: #adb5bd;
   cursor: not-allowed;
 }
+
+.help-message-clarify {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #856404;
+}
+
+.help-clarify-label {
+  font-weight: 600;
+}
