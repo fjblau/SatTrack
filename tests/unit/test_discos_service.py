@@ -66,6 +66,7 @@ class TestDoGet(unittest.TestCase):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": [], "links": {}}
+        mock_resp.headers.get.return_value = None
         mock_get.return_value = mock_resp
         result = svc._do_get("/objects")
         self.assertEqual(result, {"data": [], "links": {}})
@@ -103,9 +104,11 @@ class TestDoGet(unittest.TestCase):
         mock_config.external.DISCOS_REQUEST_TIMEOUT = 30
         rate_resp = MagicMock()
         rate_resp.status_code = 429
+        rate_resp.headers.get.return_value = None
         ok_resp = MagicMock()
         ok_resp.status_code = 200
         ok_resp.json.return_value = {"data": []}
+        ok_resp.headers.get.return_value = None
         mock_get.side_effect = [rate_resp, ok_resp]
         result = svc._do_get("/objects")
         self.assertEqual(result, {"data": []})

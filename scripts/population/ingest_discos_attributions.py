@@ -196,7 +196,7 @@ def _process_event(event_doc: dict, dry_run: bool) -> dict:
     return {"processed": len(attributions), "edges_created": edges_created, "pending": pending_count}
 
 
-def run(dry_run: bool = False, max_events: int = 0):
+def run(dry_run: bool = False, max_events: int = 0, request_delay: float = 1.0):
     if not db_conn.connect_arangodb():
         logger.error("Failed to connect to ArangoDB")
         sys.exit(1)
@@ -207,7 +207,10 @@ def run(dry_run: bool = False, max_events: int = 0):
         bind_vars={"max": max_events if max_events > 0 else 100000},
     )
     events = list(cursor)
-    logger.info(f"Processing attributions for {len(events)} fragmentation events")
+    logger.info(
+        f"Processing attributions for {len(events)} fragmentation events "
+        f"(request_delay={request_delay}s)"
+    )
 
     total_processed = 0
     total_edges = 0
@@ -225,7 +228,8 @@ def run(dry_run: bool = False, max_events: int = 0):
         except Exception as exc:
             logger.error(f"Failed processing event {event_key}: {exc}")
 
-        time.sleep(0.1)
+        if request_delay > 0 and i < len(events) - 1:
+            time.sleep(request_delay)
 
     logger.info(
         f"Done — events={len(events)} attributions_processed={total_processed} "
@@ -237,5 +241,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest DISCOS attributions (fragmented_from + caused_by edges)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-events", type=int, default=0, help="Limit number of events to process (0 = all)")
+    parser.add_argument(
+        "--request-delay",
+        type=float,
+        default=1.0,
+        help="Seconds to sleep between per-event DISCOS API calls (default: 1.0)",
+    )
     args = parser.parse_args()
-    run(dry_run=args.dry_run, max_events=args.max_events)
+    run(dry_run=args.dry_run, max_events=args.max_events, request_delay=args.request_delay)
