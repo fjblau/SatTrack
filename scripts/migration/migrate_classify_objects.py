@@ -16,7 +16,10 @@ the DISCOSweb-aligned object_class enum:
 canonical.object_type is KEPT (deprecated; removed in follow-on PR).
 
 USAGE:
-    python migrate_classify_objects.py [--dry-run]
+    python migrate_classify_objects.py [--dry-run] [--yes]
+
+Pass --yes (or -y) to skip the interactive confirmation prompt (required
+when stdin is not a TTY, e.g. Docker / Railway / CI environments).
 """
 
 import sys
@@ -87,7 +90,7 @@ def classify(object_type):
     return "Unknown"
 
 
-def run(dry_run=False):
+def run(dry_run=False, yes=False):
     if not db_module.connect_mongodb():
         print("Failed to connect to ArangoDB")
         return False
@@ -128,11 +131,19 @@ def run(dry_run=False):
         db_module.disconnect_mongodb()
         return True
 
-    response = input(f"\nClassify all {total:,} documents? (y/N): ").strip().lower()
-    if response not in ("y", "yes"):
-        print("Cancelled.")
-        db_module.disconnect_mongodb()
-        return False
+    if yes:
+        print(f"\nClassify all {total:,} documents? (y/N): y  [--yes flag set]")
+    else:
+        try:
+            response = input(f"\nClassify all {total:,} documents? (y/N): ").strip().lower()
+        except EOFError:
+            print("\nERROR: stdin is not interactive. Re-run with --yes to skip this prompt.")
+            db_module.disconnect_mongodb()
+            return False
+        if response not in ("y", "yes"):
+            print("Cancelled.")
+            db_module.disconnect_mongodb()
+            return False
 
     timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -204,5 +215,6 @@ def run(dry_run=False):
 
 if __name__ == "__main__":
     dry_run = "--dry-run" in sys.argv
-    success = run(dry_run=dry_run)
+    yes = "--yes" in sys.argv or "-y" in sys.argv
+    success = run(dry_run=dry_run, yes=yes)
     sys.exit(0 if success else 1)

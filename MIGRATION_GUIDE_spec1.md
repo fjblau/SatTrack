@@ -72,8 +72,10 @@ These indexes are additive and safe to run at any time.
 ### Step 3 — Classify objects (add `canonical.object_class`)
 
 ```sh
-python scripts/migration/migrate_classify_objects.py
+python scripts/migration/migrate_classify_objects.py --yes
 ```
+
+> **Non-interactive environments (Docker / Railway / CI):** pass `--yes` (or `-y`) to skip the confirmation prompt. Without it the script will print an error and exit if stdin is not a TTY.
 
 What it does:
 - Reads each document's `canonical.object_type` and maps it to the new `canonical.object_class` enum
@@ -92,38 +94,23 @@ Mapping applied (ALL CAPS production values included):
 | `Mission-Related Object`, `MRO` | `Mission-Related Object` |
 | anything else | `Unknown` |
 
-You will be shown a distribution preview and prompted to confirm before any writes are made. Type `y` to proceed.
-
-Expected confirmation prompt:
-```
-=== Classify objects (add canonical.object_class) ===
-
-Total documents: 26,742
-
-Current object_type distribution:
-  PAYLOAD                       :   18,431  →  Payload
-  DEBRIS                        :    5,210  →  Unknown
-  ROCKET BODY                   :    2,891  →  Rocket Body
-  UNKNOWN                       :      210  →  Unknown
-
-Classify all 26,742 documents? (y/N):
-```
+Without `--yes`, you will be shown a distribution preview and prompted to confirm before any writes are made.
 
 ---
 
 ### Step 4 — Backfill `identifier_aliases`
 
 ```sh
-python scripts/migration/migrate_backfill_aliases.py
+python scripts/migration/migrate_backfill_aliases.py --yes
 ```
+
+> **Non-interactive environments (Docker / Railway / CI):** pass `--yes` (or `-y`) to skip the confirmation prompt.
 
 What it does:
 - Adds the top-level `identifier_aliases` field to every document
 - Backfills `identifier_aliases.norad` from `canonical.norad_cat_id`
 - Backfills `identifier_aliases.cospar` from `canonical.international_designator`
 - Idempotent — skips documents that already have both keys set
-
-You will be shown a count of documents that need backfilling and prompted to confirm.
 
 ---
 
