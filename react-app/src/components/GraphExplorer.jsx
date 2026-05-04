@@ -178,8 +178,8 @@ function GraphExplorer() {
       
       if (data.data) {
         const results = data.data.map(item => ({
-          id: item._id,
-          name: item.canonical?.object_name || item.canonical?.name || item.canonical?.registration_number || item._id,
+          id: item.identifier,
+          name: item.canonical?.object_name || item.canonical?.name || item.canonical?.registration_number || item.identifier,
           registration: item.canonical?.registration_number || ''
         }))
         setSatelliteSearchResults(results)
