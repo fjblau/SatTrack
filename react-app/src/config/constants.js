@@ -6,6 +6,27 @@ export const API_ENDPOINTS = {
   OBJECT_TYPES: '/v2/object-types',
   SEARCH: '/v2/search',
   SATELLITE_DETAIL: '/v2/satellite',
+
+  OBJECTS: {
+    SEARCH: '/v2/objects',
+    GET: (identifier) => `/v2/objects/${encodeURIComponent(identifier)}`,
+    BY_CLASS: (objectClass) => `/v2/objects/by-class/${encodeURIComponent(objectClass)}`,
+    BY_ALIAS: (aliasType, value) => `/v2/objects/by-alias/${encodeURIComponent(aliasType)}/${encodeURIComponent(value)}`,
+    STATS: '/v2/objects/stats',
+  },
+
+  PROVENANCE: {
+    CHAIN: (objectKey) => `/v2/provenance/objects/${encodeURIComponent(objectKey)}/chain`,
+    SIBLINGS: (objectKey) => `/v2/provenance/objects/${encodeURIComponent(objectKey)}/siblings`,
+    EVENT: (eventKey) => `/v2/provenance/events/${encodeURIComponent(eventKey)}`,
+    LAUNCH: (launchKey) => `/v2/provenance/launches/${encodeURIComponent(launchKey)}`,
+    ENTITY: (entityKey) => `/v2/provenance/entities/${encodeURIComponent(entityKey)}`,
+    SUMMARY: '/v2/provenance/summary',
+  },
+
+  ADMIN: {
+    DISCOS_STATUS: '/v2/admin/discos-status',
+  },
   TLE: '/v2/tle',
   TLE_INTLDES: '/v2/tle/intldes',
   OBSERVATIONS: '/v2/observations',
@@ -112,11 +133,21 @@ export const SATELLITE_STATUS = {
   DEORBITED: 'deorbited',
 }
 
+export const OBJECT_CLASSES = [
+  'Payload',
+  'Rocket Body',
+  'Mission-Related Object',
+  'Rocket Fragmentation Debris',
+  'Payload Fragmentation Debris',
+  'Unknown',
+]
+
 export const FILTER_LABELS = {
   ALL_COUNTRIES: 'All Countries',
   ALL_STATUSES: 'All Statuses',
   ALL_ORBITAL_BANDS: 'All Orbital Bands',
   ALL_CONGESTION_RISKS: 'All Congestion Risks',
+  ALL_OBJECT_CLASSES: 'All Object Classes',
   ALL_OBJECT_TYPES: 'All Object Types',
 }
 

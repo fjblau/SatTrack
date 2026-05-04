@@ -367,3 +367,23 @@
     grid-template-columns: 1fr;
   }
 }
+
+.object-class-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  background: #e9ecef;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.provenance-caveat {
+  padding: 0.4rem 0.6rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #856404;
+  margin-bottom: 0.5rem;
+}

@@ -22,29 +22,50 @@ const SAMPLE_QUERIES = [
     query: 'LET sat_edges = LENGTH(observation_satellite_edges)\nLET src_edges = LENGTH(observation_source_edges)\nLET temp_edges = LENGTH(observation_temporal_edges)\nLET corr_edges = LENGTH(observation_correlation_edges)\nRETURN { satellite_edges: sat_edges, source_edges: src_edges, temporal_edges: temp_edges, correlation_edges: corr_edges }'
   },
   {
-    label: 'Source-Satellite Connections',
-    query: 'FOR e IN observation_satellite_edges\n  LET obs = DOCUMENT(e._from)\n  LET sat = DOCUMENT(e._to)\n  COLLECT source = obs.source, sat_name = sat.canonical.name WITH COUNT INTO obs_count\n  SORT obs_count DESC\n  LIMIT 20\n  RETURN { source, satellite: sat_name, observations: obs_count }'
+    label: 'Source-Object Connections',
+    query: 'FOR e IN observation_satellite_edges\n  LET obs = DOCUMENT(e._from)\n  LET obj = DOCUMENT(e._to)\n  COLLECT source = obs.source, obj_name = obj.canonical.object_name WITH COUNT INTO obs_count\n  SORT obs_count DESC\n  LIMIT 20\n  RETURN { source, object: obj_name, observations: obs_count }'
   },
   {
     label: 'Temporal Health Drift',
     query: 'FOR e IN observation_temporal_edges\n  FILTER e.health_delta != null\n  FILTER ABS(e.health_delta) > 10\n  LET from_obs = DOCUMENT(e._from)\n  LET to_obs = DOCUMENT(e._to)\n  SORT ABS(e.health_delta) DESC\n  LIMIT 20\n  RETURN { norad_id: e.norad_id, from_epoch: e.from_epoch, to_epoch: e.to_epoch, health_delta: e.health_delta, from_health: from_obs.derived_health_score, to_health: to_obs.derived_health_score }'
   },
   {
-    label: 'Satellite Catalog Stats',
-    query: 'LET total = LENGTH(satellites)\nLET by_status = (\n  FOR s IN satellites\n    COLLECT status = s.canonical.status WITH COUNT INTO cnt\n    SORT cnt DESC\n    RETURN { status, count: cnt }\n)\nLET by_band = (\n  FOR s IN satellites\n    COLLECT band = s.canonical.orbital_band WITH COUNT INTO cnt\n    SORT cnt DESC\n    RETURN { band, count: cnt }\n)\nRETURN { total_satellites: total, by_status, by_orbital_band: by_band }'
+    label: 'Object Catalog Stats',
+    query: 'LET total = LENGTH(objects)\nLET by_class = (\n  FOR o IN objects\n    COLLECT cls = o.canonical.object_class WITH COUNT INTO cnt\n    SORT cnt DESC\n    RETURN { object_class: cls, count: cnt }\n)\nLET by_status = (\n  FOR o IN objects\n    COLLECT status = o.canonical.status WITH COUNT INTO cnt\n    SORT cnt DESC\n    RETURN { status, count: cnt }\n)\nLET by_band = (\n  FOR o IN objects\n    COLLECT band = o.canonical.orbital_band WITH COUNT INTO cnt\n    SORT cnt DESC\n    RETURN { band, count: cnt }\n)\nRETURN { total_objects: total, by_object_class: by_class, by_status, by_orbital_band: by_band }'
   },
   {
     label: 'Graph Traversal Example',
-    query: '// Traverse constellation membership edges from a satellite\nFOR v, e, p IN 1..2 ANY "satellites/2023-155H" constellation_membership\n  LIMIT 20\n  RETURN { vertex: v.canonical.name || v._key, edge_type: e._id }'
+    query: '// Traverse constellation membership edges from an object\nFOR v, e, p IN 1..2 ANY "objects/2023-155H" constellation_membership\n  LIMIT 20\n  RETURN { vertex: v.canonical.object_name || v._key, edge_type: e._id }'
+  },
+  {
+    label: 'Fragmentation Events',
+    query: 'FOR ev IN fragmentation_events\n  SORT ev.epoch DESC\n  LIMIT 20\n  RETURN {\n    key: ev._key,\n    name: ev.name,\n    epoch: ev.epoch,\n    event_type: ev.event_type,\n    parent_cospar: ev.parent_cospar,\n    fragment_count: ev.fragment_count\n  }'
+  },
+  {
+    label: 'Objects by Class',
+    query: 'FOR o IN objects\n  COLLECT cls = o.canonical.object_class WITH COUNT INTO cnt\n  SORT cnt DESC\n  RETURN { object_class: cls, count: cnt }'
+  },
+  {
+    label: 'Debris Attribution',
+    query: 'FOR e IN fragmented_from\n  LET fragment = DOCUMENT(e._from)\n  LET parent = DOCUMENT(e._to)\n  FILTER fragment != null AND parent != null\n  SORT e.confidence DESC\n  LIMIT 20\n  RETURN {\n    fragment: fragment.canonical.object_name || fragment._key,\n    fragment_class: fragment.canonical.object_class,\n    parent: parent.canonical.object_name || parent._key,\n    confidence: e.confidence\n  }'
   }
 ]
 
 const GRAPH_SAMPLE_QUERIES = [
   {
-    label: 'Satellite Neighborhood Graph',
-    query: '// Returns Cytoscape-compatible graph \u2014 toggle to Graph view\nLET sat = FIRST(FOR s IN satellites FILTER s.canonical.norad_cat_id == 25544 LIMIT 1 RETURN s)\nLET obs = (FOR o IN observations FILTER o.norad_id == 25544 SORT o.observation_epoch DESC LIMIT 10 RETURN o)\nLET sources = (FOR o IN obs COLLECT src = o.source RETURN src)\nRETURN {\n  nodes: APPEND(\n    APPEND(\n      [{ data: { id: sat._id, label: sat.canonical.name || sat._key, type: "satellite", background_color: "#2ecc71", node_size: 45 } }],\n      obs[* RETURN { data: { id: CURRENT._id, label: SUBSTRING(CURRENT.observation_epoch, 0, 16), type: "observation", background_color: "#3498db", node_size: 30 } }]\n    ),\n    sources[* RETURN { data: { id: CONCAT("source/", CURRENT), label: CURRENT, type: "source", background_color: "#e67e22", node_size: 35 } }]\n  ),\n  edges: APPEND(\n    obs[* RETURN { data: { id: CONCAT("e_sat_", CURRENT._key), source: sat._id, target: CURRENT._id, relationship_type: "observed_by" } }],\n    obs[* RETURN { data: { id: CONCAT("e_src_", CURRENT._key), source: CURRENT._id, target: CONCAT("source/", CURRENT.source), relationship_type: "reported_by" } }]\n  )\n}'
+    label: 'Object Neighborhood Graph',
+    query: '// Returns Cytoscape-compatible graph \u2014 toggle to Graph view\nLET obj = FIRST(FOR o IN objects FILTER o.canonical.norad_cat_id == 25544 LIMIT 1 RETURN o)\nLET obs = (FOR o IN observations FILTER o.norad_id == 25544 SORT o.observation_epoch DESC LIMIT 10 RETURN o)\nLET sources = (FOR o IN obs COLLECT src = o.source RETURN src)\nRETURN {\n  nodes: APPEND(\n    APPEND(\n      [{ data: { id: obj._id, label: obj.canonical.object_name || obj._key, type: "object", background_color: "#2ecc71", node_size: 45 } }],\n      obs[* RETURN { data: { id: CURRENT._id, label: SUBSTRING(CURRENT.observation_epoch, 0, 16), type: "observation", background_color: "#3498db", node_size: 30 } }]\n    ),\n    sources[* RETURN { data: { id: CONCAT("source/", CURRENT), label: CURRENT, type: "source", background_color: "#e67e22", node_size: 35 } }]\n  ),\n  edges: APPEND(\n    obs[* RETURN { data: { id: CONCAT("e_obj_", CURRENT._key), source: obj._id, target: CURRENT._id, relationship_type: "observed_by" } }],\n    obs[* RETURN { data: { id: CONCAT("e_src_", CURRENT._key), source: CURRENT._id, target: CONCAT("source/", CURRENT.source), relationship_type: "reported_by" } }]\n  )\n}'
   }
 ]
+
+function rewriteSatellitesCollection(query) {
+  return query
+    .replace(/\bFOR\s+(\w+)\s+IN\s+satellites\b/g, 'FOR $1 IN objects')
+    .replace(/\bLENGTH\(satellites\)/g, 'LENGTH(objects)')
+    .replace(/"satellites\//g, '"objects/')
+    .replace(/'satellites\//g, "'objects/")
+    .replace(/\bsatellites\b(?!\s*\/)/g, 'objects')
+}
 
 export default function AqlEditorPage() {
   const [aqlQuery, setAqlQuery] = useState('FOR obs IN observations\n  SORT obs.observation_epoch DESC\n  LIMIT 10\n  RETURN obs')
@@ -53,6 +74,7 @@ export default function AqlEditorPage() {
   const [error, setError] = useState(null)
   const [viewAsGraph, setViewAsGraph] = useState(false)
   const [exportingFormat, setExportingFormat] = useState(null)
+  const [rewriteNotice, setRewriteNotice] = useState(false)
 
   const [nlQuestion, setNlQuestion] = useState('')
   const [nlLoading, setNlLoading] = useState(false)
@@ -126,11 +148,20 @@ export default function AqlEditorPage() {
     setError(null)
     setAqlResults(null)
 
+    const rewritten = rewriteSatellitesCollection(aqlQuery)
+    const wasRewritten = rewritten !== aqlQuery
+    if (wasRewritten) {
+      setAqlQuery(rewritten)
+      setRewriteNotice(true)
+    } else {
+      setRewriteNotice(false)
+    }
+
     try {
       const response = await apiFetch(API_ENDPOINTS.OBSERVATION_ANALYTICS.AQL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: aqlQuery })
+        body: JSON.stringify({ query: wasRewritten ? rewritten : aqlQuery })
       })
       const result = await response.json()
       if (!response.ok) {
@@ -152,7 +183,7 @@ export default function AqlEditorPage() {
       const response = await apiFetch(API_ENDPOINTS.OBSERVATION_ANALYTICS.AQL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: aqlQuery, format })
+        body: JSON.stringify({ query: rewriteSatellitesCollection(aqlQuery), format })
       })
 
       if (!response.ok) {
@@ -296,6 +327,11 @@ export default function AqlEditorPage() {
           />
 
           <div className="aql-actions">
+            {rewriteNotice && (
+              <div style={{ padding: '0.5rem 0.75rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '6px', fontSize: '0.8rem', color: '#856404', marginBottom: '0.5rem' }}>
+                Query auto-rewritten: <code>satellites</code> → <code>objects</code>
+              </div>
+            )}
             {error && <div className="aql-error">{error}</div>}
             <div className="aql-buttons">
               <button

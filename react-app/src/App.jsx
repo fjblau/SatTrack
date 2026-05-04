@@ -17,6 +17,10 @@ import HelpPage from './components/HelpPage'
 import EphemerisPage from './components/EphemerisPage'
 import KestrelMissionPage from './components/KestrelMissionPage'
 import KestrelDataPage from './components/KestrelDataPage'
+import DiscosStatusPage from './components/DiscosStatusPage'
+import FragmentationEventsPage from './components/FragmentationEventsPage'
+import ObjectProvenancePage from './components/ObjectProvenancePage'
+import CatalogByClassPage from './components/CatalogByClassPage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
@@ -26,6 +30,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('satellite-catalog')
   const [activeCatalogSubTab, setActiveCatalogSubTab] = useState('table')
   const [activeObservationsSubTab, setActiveObservationsSubTab] = useState('observations')
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState('scripts')
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
   const [launchYears, setLaunchYears] = useState([])
   const [objects, setObjects] = useState([])
@@ -123,6 +128,7 @@ function App() {
     if (filters.status) params.append('status', filters.status)
     if (filters.orbital_band) params.append('orbital_band', filters.orbital_band)
     if (filters.congestion_risk) params.append('congestion_risk', filters.congestion_risk)
+    if (filters.object_class) params.append('object_class', filters.object_class)
     if (filters.object_type) params.append('object_type', filters.object_type)
     
     if (sortConfig.length > 0) {
@@ -152,6 +158,7 @@ function App() {
           'Status': canonical.status || '',
           'Orbital Band': canonical.orbital_band || '',
           'Congestion Risk': canonical.congestion_risk || '',
+          'Object Class': canonical.object_class || '',
           'Object Type': canonical.object_type || '',
           'Apogee (km)': orbit.apogee_km,
           'Perigee (km)': orbit.perigee_km,
@@ -303,6 +310,22 @@ function App() {
           >
             Kestrel Data
           </button>
+          {!isDemo && (
+            <button
+              className={activeTab === 'fragmentation-events' ? 'active' : ''}
+              onClick={() => setActiveTab('fragmentation-events')}
+            >
+              Fragmentation
+            </button>
+          )}
+          {!isDemo && (
+            <button
+              className={activeTab === 'provenance' ? 'active' : ''}
+              onClick={() => setActiveTab('provenance')}
+            >
+              Provenance
+            </button>
+          )}
           <button
             className={`help-button${activeTab === 'help' ? ' active' : ''}`}
             onClick={() => setActiveTab('help')}
@@ -346,6 +369,29 @@ function App() {
             onClick={() => setActiveCatalogSubTab('timeline')}
           >
             Timeline
+          </button>
+          <button
+            className={activeCatalogSubTab === 'by-class' ? 'active' : ''}
+            onClick={() => setActiveCatalogSubTab('by-class')}
+          >
+            By Class
+          </button>
+        </nav>
+      )}
+
+      {activeTab === 'admin' && (
+        <nav className="app-subnav">
+          <button
+            className={activeAdminSubTab === 'scripts' ? 'active' : ''}
+            onClick={() => setActiveAdminSubTab('scripts')}
+          >
+            Scripts
+          </button>
+          <button
+            className={activeAdminSubTab === 'discos-status' ? 'active' : ''}
+            onClick={() => setActiveAdminSubTab('discos-status')}
+          >
+            DISCOS Status
           </button>
         </nav>
       )}
@@ -437,9 +483,27 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'admin' && (
+      {activeTab === 'admin' && activeAdminSubTab === 'scripts' && (
         <div className="analytics-view-container">
           <AdminPage />
+        </div>
+      )}
+
+      {activeTab === 'admin' && activeAdminSubTab === 'discos-status' && (
+        <div className="analytics-view-container">
+          <DiscosStatusPage />
+        </div>
+      )}
+
+      {activeTab === 'fragmentation-events' && !isDemo && (
+        <div className="analytics-view-container">
+          <FragmentationEventsPage />
+        </div>
+      )}
+
+      {activeTab === 'provenance' && !isDemo && (
+        <div className="analytics-view-container">
+          <ObjectProvenancePage />
         </div>
       )}
 
@@ -496,6 +560,12 @@ function App() {
           <div className="timeline-main">
             <TimelineChart selectedTimePeriod={selectedTimePeriod} />
           </div>
+        </div>
+      )}
+
+      {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'by-class' && (
+        <div className="analytics-view-container">
+          <CatalogByClassPage />
         </div>
       )}
     </div>
