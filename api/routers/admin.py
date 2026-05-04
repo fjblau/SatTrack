@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available, check_data_files, find_egm96
+import api.services.discos_service as _discos_svc
 import io
 import os
 import re
@@ -188,6 +189,160 @@ SCRIPT_CATALOGUE = [
         "estimated_duration": "< 1 minute",
         "reversibility": "read-only",
     },
+    {
+        "id": "ingest_discos_entities",
+        "name": "Ingest DISCOS Entities",
+        "description": "Ingests ESA DISCOS entity records (operators, countries) into the entities vertex collection. Run first in the DISCOS ingestion sequence.",
+        "category": "population",
+        "path": "scripts/population/ingest_discos_entities.py",
+        "order_hint": 10,
+        "depends_on": [],
+        "estimated_duration": "5-15 minutes",
+        "reversibility": "reversible (truncate entities collection)",
+    },
+    {
+        "id": "ingest_discos_launch_sites",
+        "name": "Ingest DISCOS Launch Sites",
+        "description": "Ingests ESA DISCOS launch site records into the launch_sites vertex collection.",
+        "category": "population",
+        "path": "scripts/population/ingest_discos_launch_sites.py",
+        "order_hint": 11,
+        "depends_on": ["ingest_discos_entities"],
+        "estimated_duration": "2-5 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "ingest_discos_launch_vehicles",
+        "name": "Ingest DISCOS Launch Vehicles",
+        "description": "Ingests ESA DISCOS launch vehicle records into the launch_vehicles vertex collection.",
+        "category": "population",
+        "path": "scripts/population/ingest_discos_launch_vehicles.py",
+        "order_hint": 12,
+        "depends_on": ["ingest_discos_entities"],
+        "estimated_duration": "2-5 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "ingest_discos_launches",
+        "name": "Ingest DISCOS Launch Events",
+        "description": "Ingests ESA DISCOS launch event records into the launch_events vertex collection.",
+        "category": "population",
+        "path": "scripts/population/ingest_discos_launches.py",
+        "order_hint": 13,
+        "depends_on": ["ingest_discos_launch_sites", "ingest_discos_launch_vehicles"],
+        "estimated_duration": "5-15 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "ingest_discos_objects",
+        "name": "Ingest DISCOS Objects",
+        "description": "Ingests ESA DISCOS space object records, joining to existing objects via cosparId. Objects with no cospar match receive a surrogate key DISCOS-<discosId>.",
+        "category": "population",
+        "path": "scripts/population/ingest_discos_objects.py",
+        "order_hint": 14,
+        "depends_on": ["ingest_discos_launches"],
+        "estimated_duration": "30-90 minutes",
+        "reversibility": "reversible (DISCOS source envelope removed from object documents)",
+    },
+    {
+        "id": "ingest_discos_fragmentations",
+        "name": "Ingest DISCOS Fragmentation Events",
+        "description": "Ingests ESA DISCOS fragmentation event records into the fragmentation_events vertex collection.",
+        "category": "population",
+        "path": "scripts/population/ingest_discos_fragmentations.py",
+        "order_hint": 15,
+        "depends_on": ["ingest_discos_objects"],
+        "estimated_duration": "5-20 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "ingest_discos_attributions",
+        "name": "Ingest DISCOS Attributions",
+        "description": "Creates fragmented_from and caused_by edges by fetching per-event attribution data from DISCOS. Runs as per-event sub-jobs with a master coordinator. May run for several hours depending on rate budget.",
+        "category": "population",
+        "path": "scripts/population/ingest_discos_attributions.py",
+        "order_hint": 16,
+        "depends_on": ["ingest_discos_fragmentations", "ingest_discos_objects"],
+        "estimated_duration": "2-8 hours",
+        "reversibility": "reversible (truncate fragmented_from, caused_by edge collections)",
+    },
+    {
+        "id": "promote_discos_event_types",
+        "name": "Promote DISCOS Event Types",
+        "description": "Promotes DISCOS event type classifications to canonical fields on fragmentation_events documents.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_discos_event_types.py",
+        "order_hint": 20,
+        "depends_on": ["ingest_discos_fragmentations"],
+        "estimated_duration": "1-5 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "promote_discos_object_attributes",
+        "name": "Promote DISCOS Object Attributes",
+        "description": "Promotes DISCOS-sourced attributes (mass, RCS, shape) to canonical fields on object documents.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_discos_object_attributes.py",
+        "order_hint": 21,
+        "depends_on": ["ingest_discos_objects"],
+        "estimated_duration": "5-30 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "promote_discos_object_class",
+        "name": "Promote DISCOS Object Class",
+        "description": "Promotes DISCOS object type classification to canonical.object_class on object documents.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_discos_object_class.py",
+        "order_hint": 22,
+        "depends_on": ["ingest_discos_objects"],
+        "estimated_duration": "5-20 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "promote_discos_launches",
+        "name": "Promote DISCOS Launches",
+        "description": "Creates launched_by, launched_via, and launched_from edges between objects, entities, vehicles, and sites.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_discos_launches.py",
+        "order_hint": 23,
+        "depends_on": ["ingest_discos_objects", "ingest_discos_launches"],
+        "estimated_duration": "10-30 minutes",
+        "reversibility": "reversible (truncate launched_by, launched_via, launched_from edge collections)",
+    },
+    {
+        "id": "promote_discos_attributions",
+        "name": "Promote DISCOS Attributions",
+        "description": "Promotes attribution metadata and confidence scores onto fragmented_from edges.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_discos_attributions.py",
+        "order_hint": 24,
+        "depends_on": ["ingest_discos_attributions"],
+        "estimated_duration": "5-20 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "promote_discos_fragmentations",
+        "name": "Promote DISCOS Fragmentations",
+        "description": "Promotes fragmentation event metadata (epoch, altitude, casualty risk) to canonical fields.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_discos_fragmentations.py",
+        "order_hint": 25,
+        "depends_on": ["ingest_discos_fragmentations"],
+        "estimated_duration": "1-5 minutes",
+        "reversibility": "reversible",
+    },
+    {
+        "id": "verify_discos_provenance_e2e",
+        "name": "Verify DISCOS Provenance E2E",
+        "description": "End-to-end verification of the DISCOS provenance graph: checks collection counts, spot-checks provenance chains, validates edge integrity.",
+        "category": "migration",
+        "path": "scripts/verification/verify_discos_provenance_e2e.py",
+        "order_hint": 30,
+        "depends_on": ["promote_discos_launches", "promote_discos_attributions", "promote_discos_fragmentations"],
+        "estimated_duration": "2-5 minutes",
+        "reversibility": "read-only",
+    },
 ]
 
 _CATALOGUE_BY_ID = {s["id"]: s for s in SCRIPT_CATALOGUE}
@@ -271,6 +426,30 @@ def gmat_status():
         "missing_data_files": missing_data_files,
         "egm96_path": egm96_actual_path,
         "smoke_test": smoke,
+        "status": overall_status,
+    }
+
+
+@router.get("/discos-status")
+def discos_status():
+    token_configured = bool(_discos_svc.config.external.DISCOS_API_TOKEN)
+    base_url = _discos_svc.config.external.DISCOS_BASE_URL
+
+    check_result = None
+    if token_configured:
+        check_result = _discos_svc.health_check()
+
+    if not token_configured:
+        overall_status = "not_configured"
+    elif check_result and check_result.get("status") == "ready":
+        overall_status = "ready"
+    else:
+        overall_status = "error"
+
+    return {
+        "token_configured": token_configured,
+        "base_url": base_url,
+        "health_check": check_result,
         "status": overall_status,
     }
 
