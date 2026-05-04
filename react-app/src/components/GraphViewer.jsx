@@ -6,6 +6,8 @@ import './GraphViewer.css'
 
 cytoscape.use(cola)
 
+const normalizeId = (id) => (id && typeof id === 'string') ? id.replace(/^satellites\//, 'objects/') : id
+
 function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionClusters }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
@@ -607,7 +609,11 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       }
       
       if (data.data && data.data.nodes && data.data.nodes.length > 0) {
-        const filteredEdges = data.data.edges.filter(edge => edge.source < edge.target)
+        const filteredEdges = data.data.edges.filter(edge => edge.source < edge.target).map(edge => ({
+          ...edge,
+          source: normalizeId(edge.source),
+          target: normalizeId(edge.target)
+        }))
         
         const edgeCounts = {}
         filteredEdges.forEach(edge => {
@@ -619,12 +625,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         
         const elements = {
           nodes: data.data.nodes.map(node => {
-            const edgeCount = edgeCounts[node.id] || 0
+            const nid = normalizeId(node.id)
+            const edgeCount = edgeCounts[nid] || 0
             const nodeSize = 25 + (edgeCount / maxEdgeCount) * 40
             
             return {
               data: {
-                id: node.id,
+                id: nid,
                 label: node.name || node.identifier,
                 congestion_risk: node.congestion_risk ? node.congestion_risk.toLowerCase() : 'unknown',
                 edge_count: edgeCount,
@@ -1198,7 +1205,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         const edges = path.edges || []
 
         vertices.forEach(vertex => {
-          const nodeId = vertex._id || vertex
+          const nodeId = normalizeId(vertex._id || vertex)
           if (!pathNodes.has(nodeId)) {
             let nodeRole = 'intermediate'
             if (nodeId === sourceId) nodeRole = 'source'
@@ -1216,8 +1223,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         })
 
         edges.forEach(edge => {
-          const source = edge._from || edge.source
-          const target = edge._to || edge.target
+          const source = normalizeId(edge._from || edge.source)
+          const target = normalizeId(edge._to || edge.target)
           if (source && target) {
             const edgeId = `${source}_to_${target}`
             if (!pathEdgesMap.has(edgeId)) {
@@ -1242,7 +1249,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       const supplementaryEdges = paths.flatMap(p => p.supplementary_edges || [])
 
       supplementaryNodes.forEach(node => {
-        const nodeId = node._id || node.id
+        const nodeId = normalizeId(node._id || node.id)
         if (nodeId && !pathNodes.has(nodeId)) {
           pathNodes.set(nodeId, {
             id: nodeId,
@@ -1254,8 +1261,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       })
 
       supplementaryEdges.forEach(edge => {
-        const source = edge._from || edge.source
-        const target = edge._to || edge.target
+        const source = normalizeId(edge._from || edge.source)
+        const target = normalizeId(edge._to || edge.target)
         if (source && target) {
           const edgeId = `supp_${source}_to_${target}`
           if (!pathEdgesMap.has(edgeId)) {
@@ -1422,7 +1429,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       const elements = {
         nodes: (data.nodes || []).map(node => ({
           data: {
-            id: node.id || node._id,
+            id: normalizeId(node.id || node._id),
             label: node.name || node.identifier || (node.id?.split('/')[1]),
             congestion_risk: node.congestion_risk,
             node_size: 25,
@@ -1431,9 +1438,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         })),
         edges: (data.edges || []).map(edge => ({
           data: {
-            id: edge.id || `${edge.source}_to_${edge.target}`,
-            source: edge.source || edge._from,
-            target: edge.target || edge._to,
+            id: edge.id || `${normalizeId(edge.source || edge._from)}_to_${normalizeId(edge.target || edge._to)}`,
+            source: normalizeId(edge.source || edge._from),
+            target: normalizeId(edge.target || edge._to),
             collision_risk: edge.risk_score || edge.proximity_score,
             risk_color: getRiskColor(edge.risk_score || edge.proximity_score || 0),
             risk_width: getRiskWidth(edge.risk_score || edge.proximity_score || 0),
@@ -1492,16 +1499,16 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         nodes: (data.nodes || []).map(node => ({
           data: {
             ...node,
-            id: node.id || node._id,
+            id: normalizeId(node.id || node._id),
             label: node.name || node.identifier || (node.id?.split('/')[1]),
             node_size: node.is_hub === true ? 45 : 30
           }
         })),
         edges: (data.edges || []).map(edge => ({
           data: {
-            id: edge.id || `${edge.source}_to_${edge.target}`,
-            source: edge.source || edge._from,
-            target: edge.target || edge._to,
+            id: edge.id || `${normalizeId(edge.source || edge._from)}_to_${normalizeId(edge.target || edge._to)}`,
+            source: normalizeId(edge.source || edge._from),
+            target: normalizeId(edge.target || edge._to),
             ...edge
           }
         }))
@@ -1598,7 +1605,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         nodes: (data.nodes || []).filter(node => (node.id || node._id) != null).map(node => ({
           data: {
             ...node,
-            id: node.id || node._id,
+            id: normalizeId(node.id || node._id),
             label: node.name || node.identifier || (node.id?.split('/')[1]),
             is_source: node.is_source,
             distance: node.distance,
@@ -1608,9 +1615,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         edges: (data.edges || []).filter(edge => (edge.source || edge._from) != null && (edge.target || edge._to) != null).map(edge => {
           const label = getEdgeLabel(edge)
           const edgeData = {
-            id: edge.id || `${edge.source}_to_${edge.target}`,
-            source: edge.source || edge._from,
-            target: edge.target || edge._to,
+            id: edge.id || `${normalizeId(edge.source || edge._from)}_to_${normalizeId(edge.target || edge._to)}`,
+            source: normalizeId(edge.source || edge._from),
+            target: normalizeId(edge.target || edge._to),
             ...edge,
             edge_type: edge.type,
             edge_width: getEdgeWidth(edge)
@@ -1877,9 +1884,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           descendant: '#2ecc71'
         }
         
+        const rootId = normalizeId(data.data.root._id)
         nodes.push({
           data: {
-            id: data.data.root._id,
+            id: rootId,
             label: data.data.root.name || data.data.root.identifier,
             node_type: 'root',
             family: data.data.root.family,
@@ -1893,9 +1901,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         
         (data.data.ancestors || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
+          const satId = normalizeId(sat._id)
           nodes.push({
             data: {
-              id: sat._id,
+              id: satId,
               label: sat.name || sat.identifier,
               node_type: 'ancestor',
               generation: item.generation,
@@ -1909,9 +1918,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           if (item.edge) {
             edges.push({
               data: {
-                id: `${sat._id}_to_${data.data.root._id}`,
-                source: sat._id,
-                target: data.data.root._id,
+                id: `${satId}_to_${rootId}`,
+                source: satId,
+                target: rootId,
                 relationship: item.edge.relationship_type
               }
             })
@@ -1920,9 +1929,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         
         (data.data.descendants || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
+          const satId = normalizeId(sat._id)
           nodes.push({
             data: {
-              id: sat._id,
+              id: satId,
               label: sat.name || sat.identifier,
               node_type: 'descendant',
               generation: item.generation,
@@ -1936,9 +1946,9 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           if (item.edge) {
             edges.push({
               data: {
-                id: `${data.data.root._id}_to_${sat._id}`,
-                source: data.data.root._id,
-                target: sat._id,
+                id: `${rootId}_to_${satId}`,
+                source: rootId,
+                target: satId,
                 relationship: item.edge.relationship_type
               }
             })
