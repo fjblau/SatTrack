@@ -201,7 +201,7 @@ class TestLineageRelationshipDetection(unittest.TestCase):
 
 class TestLineageService(unittest.TestCase):
     
-    @patch('api.services.lineage_service.db')
+    @patch('database.connection.db')
     def test_get_satellite_lineage_both_directions(self, mock_db):
         """Test getting lineage in both directions"""
         mock_cursor = MagicMock()
@@ -224,7 +224,7 @@ class TestLineageService(unittest.TestCase):
         self.assertIn("descendants", result)
         self.assertIn("stats", result)
     
-    @patch('api.services.lineage_service.db')
+    @patch('database.connection.db')
     def test_get_satellite_lineage_not_found(self, mock_db):
         """Test getting lineage for non-existent satellite"""
         mock_cursor = MagicMock()
@@ -236,7 +236,7 @@ class TestLineageService(unittest.TestCase):
         self.assertIsNone(result["root"])
         self.assertIn("error", result)
     
-    @patch('api.services.lineage_service.db')
+    @patch('database.connection.db')
     def test_get_lineage_statistics(self, mock_db):
         """Test getting lineage statistics"""
         mock_cursor = MagicMock()
@@ -265,7 +265,7 @@ class TestLineageService(unittest.TestCase):
         self.assertIn("families", stats)
         self.assertIn("gap_stats", stats)
     
-    @patch('api.services.lineage_service.db')
+    @patch('database.connection.db')
     def test_get_satellite_family_tree(self, mock_db):
         """Test getting complete family tree"""
         mock_cursor = MagicMock()
@@ -298,7 +298,7 @@ class TestLineageService(unittest.TestCase):
         self.assertEqual(len(tree["nodes"]), 2)
         self.assertEqual(len(tree["edges"]), 1)
     
-    @patch('api.services.lineage_service.db')
+    @patch('database.connection.db')
     def test_get_family_tree_empty_family(self, mock_db):
         """Test getting family tree for non-existent family"""
         mock_cursor = MagicMock()

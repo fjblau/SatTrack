@@ -125,7 +125,7 @@ def import_observations(body: ObservationImportRequest):
     norad_ids = list({obs.norad_id for obs in observations})
     allowed_cursor = db.aql.execute(
         """
-        FOR sat IN satellites
+        FOR sat IN objects
             FILTER sat.canonical.norad_cat_id IN @norad_ids
             FILTER sat.canonical.observations_enabled == true
             RETURN sat.canonical.norad_cat_id
@@ -217,7 +217,7 @@ def get_allowed_objects():
 
     cursor = db.aql.execute(
         """
-        FOR sat IN satellites
+        FOR sat IN objects
             FILTER sat.canonical.observations_enabled == true
             RETURN {
                 norad_id: sat.canonical.norad_cat_id,
@@ -237,7 +237,7 @@ def enable_observations_for_object(norad_id: int):
 
     cursor = db.aql.execute(
         """
-        FOR sat IN satellites
+        FOR sat IN objects
             FILTER sat.canonical.norad_cat_id == @norad_id
             LIMIT 1
             RETURN sat._key
@@ -250,9 +250,9 @@ def enable_observations_for_object(norad_id: int):
 
     db.aql.execute(
         """
-        FOR sat IN satellites
+        FOR sat IN objects
             FILTER sat.canonical.norad_cat_id == @norad_id
-            UPDATE sat WITH {canonical: MERGE(sat.canonical, {observations_enabled: true})} IN satellites
+            UPDATE sat WITH {canonical: MERGE(sat.canonical, {observations_enabled: true})} IN objects
         """,
         bind_vars={"norad_id": norad_id}
     )
@@ -267,7 +267,7 @@ def disable_observations_for_object(norad_id: int):
 
     cursor = db.aql.execute(
         """
-        FOR sat IN satellites
+        FOR sat IN objects
             FILTER sat.canonical.norad_cat_id == @norad_id
             LIMIT 1
             RETURN sat._key
@@ -280,9 +280,9 @@ def disable_observations_for_object(norad_id: int):
 
     db.aql.execute(
         """
-        FOR sat IN satellites
+        FOR sat IN objects
             FILTER sat.canonical.norad_cat_id == @norad_id
-            UPDATE sat WITH {canonical: MERGE(sat.canonical, {observations_enabled: false})} IN satellites
+            UPDATE sat WITH {canonical: MERGE(sat.canonical, {observations_enabled: false})} IN objects
         """,
         bind_vars={"norad_id": norad_id}
     )

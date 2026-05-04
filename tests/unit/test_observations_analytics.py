@@ -63,8 +63,7 @@ class TestObservationsAnalytics(unittest.TestCase):
     def test_execute_aql_admin_success(self, mock_db):
         # Login as admin
         with patch("api.routers.auth.config") as mock_config:
-            mock_config.auth.USERNAME = "admin"
-            mock_config.auth.PASSWORD = "admin"
+            mock_config.auth.valid_users.return_value = {"admin": "admin"}
             login_resp = self.client.post("/v2/auth/login", json={"username": "admin", "password": "admin"})
         
         token = login_resp.json()["token"]

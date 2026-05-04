@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+markers = [
+    "requires_discos: marks tests requiring the real DISCOS API (deselect with -m 'not requires_discos')",
+    "integration: marks integration tests that require a running ArangoDB instance",
+]

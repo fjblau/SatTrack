@@ -11,8 +11,8 @@ _SCHEMA_CONTEXT_BASE = """
 
 ### Vertex Collections
 
-**satellites** (primary registry)
-- `_id`: "satellites/<identifier>"
+**objects** (primary space object registry — formerly 'satellites')
+- `_id`: "objects/<identifier>"
 - `identifier`: string e.g. "2023-001A", "25544"
 - `canonical.satellite_name` / `canonical.object_name`: string (either may be null)
 - `canonical.country_of_origin`: string — full country name (see ENUM VALUES below)
@@ -21,13 +21,19 @@ _SCHEMA_CONTEXT_BASE = """
 - `canonical.launch_date`: string (ISO date)
 - `canonical.norad_cat_id`: integer
 - `canonical.international_designator`: string
-- `canonical.object_type`: string — e.g. "Payload", "Rocket Body", "Debris"
+- `canonical.object_class`: string — DISCOSweb-aligned classification (see ENUM VALUES below)
+- `canonical.object_type`: string — legacy field, deprecated; prefer object_class
 - `canonical.rcs`: float — radar cross section in m² (best available proxy for physical size)
 - `canonical.function`: string — stated mission/purpose
 - `canonical.orbit.apogee_km`: float
 - `canonical.orbit.perigee_km`: float
 - `canonical.orbit.inclination_degrees`: float
 - `canonical.orbit.period_minutes`: float
+- `identifier_aliases.norad`: string — NORAD catalog ID as string
+- `identifier_aliases.cospar`: string — COSPAR / international designator
+- `identifier_aliases.discos`: string — DISCOSweb object ID
+- `identifier_aliases.vimpel`: string — Vimpel catalog number
+- `identifier_aliases.kestrel`: string — Kestrel internal ID
 
 **registration_documents** (UN document metadata)
 - `_id`: "registration_documents/<key>"
@@ -51,24 +57,31 @@ _SCHEMA_CONTEXT_BASE = """
 
 | Collection | From → To | Notable fields |
 |-----------|-----------|----------------|
-| `constellation_membership` | satellites → satellites | `constellation_name` |
-| `registration_links` | satellites → registration_documents | — |
-| `orbital_proximity` | satellites → satellites | `delta_apogee_km`, `delta_perigee_km`, `delta_inclination_deg` |
-| `collision_risk_edges` | satellites → satellites | `risk_score` (0–1), `min_distance_km` |
-| `satellite_lineage` | satellites → satellites | `relationship` ("predecessor"/"successor") |
-| `observation_satellite_edges` | observations → satellites | — |
+| `constellation_membership` | objects → objects | `constellation_name` |
+| `registration_links` | objects → registration_documents | — |
+| `orbital_proximity` | objects → objects | `delta_apogee_km`, `delta_perigee_km`, `delta_inclination_deg` |
+| `collision_risk_edges` | objects → objects | `risk_score` (0–1), `min_distance_km` |
+| `satellite_lineage` | objects → objects | `relationship` ("predecessor"/"successor") |
+| `observation_satellite_edges` | observations → objects | — |
 | `observation_source_edges` | observations → observation_sources | — |
 | `observation_correlation_edges` | observations → observations | `correlation_type` |
 | `observation_temporal_edges` | observations → observations | temporal ordering |
 
 ### AQL Tips
-- `FOR s IN satellites FILTER ... RETURN s` for document queries
-- `FOR v, e IN 1..1 OUTBOUND "satellites/<id>" <edge_col>` for graph traversal
+- `FOR s IN objects FILTER ... RETURN s` for document queries
+- `FOR v, e IN 1..1 OUTBOUND "objects/<id>" <edge_col>` for graph traversal
 - **LIMIT must always appear before RETURN** — never after it:
-  - CORRECT: `FOR s IN satellites FILTER ... SORT s.canonical.launch_date DESC LIMIT 20 RETURN s`
-  - WRONG:   `FOR s IN satellites FILTER ... RETURN s LIMIT 20`
+  - CORRECT: `FOR s IN objects FILTER ... SORT s.canonical.launch_date DESC LIMIT 20 RETURN s`
+  - WRONG:   `FOR s IN objects FILTER ... RETURN s LIMIT 20`
 - `canonical.satellite_name` may be null — prefer `canonical.satellite_name || canonical.object_name`
 - NORAD IDs are integers — do not quote them
+- To filter by object class: `FILTER s.canonical.object_class == "Payload"` (or "Rocket Body", "Unknown", etc.)
+- To look up by NORAD alias: `FILTER s.identifier_aliases.norad == "25544"`
+
+### Clarifying questions for ambiguous queries
+- If the user says "debris" they likely want `object_class IN ["Rocket Fragmentation Debris", "Payload Fragmentation Debris", "Unknown"]`
+- If the user says "rocket body" or "rocket bodies" they want `object_class == "Rocket Body"`
+- If the user says "payload" or "satellite" in a functional sense they want `object_class == "Payload"`
 """
 
 _COUNTRY_ALIASES: dict[str, str] = {
@@ -205,15 +218,15 @@ def _fetch_enum_values() -> dict:
 
         return {
             "countries": _collect(
-                "FOR s IN satellites "
+                "FOR s IN objects "
                 "COLLECT c = s.canonical.country_of_origin RETURN c"
             ),
             "statuses": _collect(
-                "FOR s IN satellites "
+                "FOR s IN objects "
                 "COLLECT v = s.canonical.status RETURN v"
             ),
             "orbital_bands": _collect(
-                "FOR s IN satellites "
+                "FOR s IN objects "
                 "COLLECT v = s.canonical.orbital_band RETURN v"
             ),
         }
@@ -269,12 +282,14 @@ Respond with a JSON object and no other text:
 
 _CLARIFY_SYSTEM_PROMPT = """You are an assistant that detects when a natural language database query is ambiguous.
 
-The Kessler satellite database has these potentially ambiguous concepts:
-- "country" could mean `canonical.country_of_origin` (where the satellite was built/registered by) OR a launch registration nation — always prefer `country_of_origin` unless the user explicitly asks about registration.
-- "active" or "operational" satellites → `canonical.status == 'in orbit'`
+The Kessler space object database (collection: 'objects') has these potentially ambiguous concepts:
+- "country" could mean `canonical.country_of_origin` (where the object was built/registered by) OR a launch registration nation — always prefer `country_of_origin` unless the user explicitly asks about registration.
+- "active" or "operational" objects → `canonical.status == 'in orbit'`
 - "inactive" / "dead" / "decommissioned" → `canonical.status == 'decayed'`
 - "name" could mean `canonical.name`, `canonical.object_name`, or `canonical.satellite_name`
-- "size" or "largest" for satellites → use `canonical.rcs` (radar cross section in m², the best physical size proxy available). If the user says "physical size", "physical dimensions", or "dimensions", use `canonical.rcs`. If the user says "mass" or "weight", use `observations.mass_kg`. Do NOT ask for clarification about size — always default to `canonical.rcs` unless mass is explicitly requested.
+- "size" or "largest" for objects → use `canonical.rcs` (radar cross section in m², the best physical size proxy available). If the user says "physical size", "physical dimensions", or "dimensions", use `canonical.rcs`. If the user says "mass" or "weight", use `observations.mass_kg`. Do NOT ask for clarification about size — always default to `canonical.rcs` unless mass is explicitly requested.
+- "debris" is ambiguous — ask whether the user wants `Rocket Fragmentation Debris`, `Payload Fragmentation Debris`, `Unknown`, or all debris-like classes together.
+- "satellite" in a functional sense usually means `canonical.object_class == 'Payload'`.
 
 If the question is clear enough to generate AQL without guessing, respond:
 {"needs_clarification": false}

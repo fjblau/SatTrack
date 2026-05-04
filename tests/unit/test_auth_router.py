@@ -23,8 +23,7 @@ class TestAuthRouter(unittest.TestCase):
 
     def test_login_success(self):
         with patch("api.routers.auth.config") as mock_config:
-            mock_config.auth.USERNAME = "admin"
-            mock_config.auth.PASSWORD = "secret"
+            mock_config.auth.valid_users.return_value = {"admin": "secret"}
             response = self.client.post(
                 "/v2/auth/login", json={"username": "admin", "password": "secret"}
             )
@@ -37,8 +36,7 @@ class TestAuthRouter(unittest.TestCase):
 
     def test_login_wrong_password(self):
         with patch("api.routers.auth.config") as mock_config:
-            mock_config.auth.USERNAME = "admin"
-            mock_config.auth.PASSWORD = "secret"
+            mock_config.auth.valid_users.return_value = {"admin": "secret"}
             response = self.client.post(
                 "/v2/auth/login", json={"username": "admin", "password": "wrong"}
             )
@@ -47,8 +45,7 @@ class TestAuthRouter(unittest.TestCase):
 
     def test_login_wrong_username(self):
         with patch("api.routers.auth.config") as mock_config:
-            mock_config.auth.USERNAME = "admin"
-            mock_config.auth.PASSWORD = "secret"
+            mock_config.auth.valid_users.return_value = {"admin": "secret"}
             response = self.client.post(
                 "/v2/auth/login", json={"username": "hacker", "password": "secret"}
             )
@@ -56,8 +53,7 @@ class TestAuthRouter(unittest.TestCase):
 
     def test_logout_invalidates_token(self):
         with patch("api.routers.auth.config") as mock_config:
-            mock_config.auth.USERNAME = "admin"
-            mock_config.auth.PASSWORD = "secret"
+            mock_config.auth.valid_users.return_value = {"admin": "secret"}
             login_response = self.client.post(
                 "/v2/auth/login", json={"username": "admin", "password": "secret"}
             )

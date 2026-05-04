@@ -63,7 +63,7 @@ class TestCollisionRiskCalculation(unittest.TestCase):
 class TestCollisionRiskQueries(unittest.TestCase):
     """Test collision risk query functions"""
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risks_no_filters(self, mock_db):
         """Test querying collision risks without filters"""
         mock_cursor = MagicMock()
@@ -84,7 +84,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         self.assertEqual(results[0]["risk_score"], 0.85)
         self.assertEqual(results[0]["risk_level"], "high")
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risks_with_threshold(self, mock_db):
         """Test querying collision risks with risk threshold"""
         mock_cursor = MagicMock()
@@ -108,7 +108,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['risk_threshold'], 0.8)
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risks_with_orbital_band(self, mock_db):
         """Test querying collision risks filtered by orbital band"""
         mock_cursor = MagicMock()
@@ -122,7 +122,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['orbital_band'], "LEO")
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risks_with_risk_level(self, mock_db):
         """Test querying collision risks filtered by risk level"""
         mock_cursor = MagicMock()
@@ -136,7 +136,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['risk_level'], "high")
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risks_for_satellite(self, mock_db):
         """Test querying collision risks for a specific satellite"""
         mock_cursor = MagicMock()
@@ -156,7 +156,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         self.assertEqual(results[0]["risk_score"], 0.75)
         mock_db.aql.execute.assert_called_once()
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risks_for_satellite_with_full_id(self, mock_db):
         """Test querying collision risks with full document ID"""
         mock_cursor = MagicMock()
@@ -170,7 +170,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['satellite_id'], "satellites/SAT1")
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risk_network(self, mock_db):
         """Test building collision risk network graph"""
         mock_cursor = MagicMock()
@@ -204,7 +204,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         self.assertEqual(len(result["nodes"]), 2)
         self.assertEqual(len(result["edges"]), 1)
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risk_statistics(self, mock_db):
         """Test collision risk statistics calculation"""
         mock_cursor = MagicMock()
@@ -236,7 +236,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         self.assertIn("orbital_bands", stats)
         self.assertEqual(stats["total_edges"], 1000)
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risks_error_handling(self, mock_db):
         """Test error handling in collision risk queries"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -245,7 +245,7 @@ class TestCollisionRiskQueries(unittest.TestCase):
         
         self.assertEqual(results, [])
     
-    @patch('api.services.collision_service.db')
+    @patch('database.connection.db')
     def test_get_collision_risk_network_error_handling(self, mock_db):
         """Test error handling in network building"""
         mock_db.aql.execute.side_effect = Exception("Database error")

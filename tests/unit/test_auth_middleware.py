@@ -57,8 +57,7 @@ class TestAuthMiddleware(unittest.TestCase):
     def test_login_endpoint_bypassed(self):
         from unittest.mock import patch
         with patch("api.routers.auth.config") as mock_config:
-            mock_config.auth.USERNAME = "admin"
-            mock_config.auth.PASSWORD = "secret"
+            mock_config.auth.valid_users.return_value = {"admin": "secret"}
             response = self.client.post(
                 "/v2/auth/login", json={"username": "admin", "password": "secret"}
             )

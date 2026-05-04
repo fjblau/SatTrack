@@ -132,17 +132,15 @@ class TestParseTleText(unittest.TestCase):
 
 class TestFetchTleByIntlDesUncached(unittest.TestCase):
 
-    @patch("api.services.tle_service.fetch_tle_from_spacetrack_by_intl_des", return_value=None)
     @patch("api.services.tle_service.requests.get")
-    def test_non_tle_celestrak_response_falls_back_to_spacetrack(self, mock_get, mock_spacetrack):
-        """Regression: if CelesTrak returns non-TLE text (e.g. old JSON format), fall back to SpaceTrack."""
+    def test_non_tle_celestrak_response_returns_none(self, mock_get):
+        """Regression: if CelesTrak returns non-TLE text (e.g. old JSON format), result is None."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '[{"OBJECT_NAME":"SLS DEB","OBJECT_ID":"2022-156D","MEAN_MOTION":7.23}]'
         mock_get.return_value = mock_response
 
         result = _fetch_tle_by_intl_des_uncached("2022-156D")
-        mock_spacetrack.assert_called_once_with("2022-156D")
         self.assertIsNone(result)
 
     @patch("api.services.tle_service.requests.get")
@@ -172,17 +170,14 @@ class TestFetchTleByIntlDesUncached(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["norad_cat_id"], "55904")
 
-    @patch("api.services.tle_service.fetch_tle_from_spacetrack_by_intl_des")
     @patch("api.services.tle_service.requests.get")
-    def test_falls_back_to_spacetrack_on_empty_response(self, mock_get, mock_spacetrack):
+    def test_returns_none_on_empty_celestrak_response(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = ""
         mock_get.return_value = mock_response
-        mock_spacetrack.return_value = None
 
         result = _fetch_tle_by_intl_des_uncached("2022-156D")
-        mock_spacetrack.assert_called_once_with("2022-156D")
         self.assertIsNone(result)
 
 
@@ -205,17 +200,15 @@ class TestFetchTleByNoradIdUncached(unittest.TestCase):
         self.assertEqual(result["intl_designator"], "2022-156D")
         self.assertEqual(result["source"], "celestrak")
 
-    @patch("api.services.tle_service.fetch_tle_from_spacetrack_by_norad_id")
     @patch("api.services.tle_service.requests.get")
-    def test_falls_back_to_spacetrack_on_empty_response(self, mock_get, mock_spacetrack):
+    def test_returns_none_when_all_sources_fail(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = ""
+        mock_response.json.return_value = []
         mock_get.return_value = mock_response
-        mock_spacetrack.return_value = None
 
         result = _fetch_tle_by_norad_id_uncached("55904")
-        mock_spacetrack.assert_called_once_with("55904")
         self.assertIsNone(result)
 
     @patch("api.services.tle_service.requests.get")
@@ -223,13 +216,14 @@ class TestFetchTleByNoradIdUncached(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = ""
+        mock_response.json.return_value = []
         mock_get.return_value = mock_response
 
         _fetch_tle_by_norad_id_uncached("55904")
-        call_kwargs = mock_get.call_args
-        params = call_kwargs[1].get("params") or call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {}
+        first_call = mock_get.call_args_list[0]
+        params = first_call.kwargs.get("params") or (first_call[0][1] if len(first_call[0]) > 1 else {})
         if not params:
-            params = call_kwargs.kwargs.get("params", {})
+            params = first_call[1].get("params", {})
         self.assertEqual(params.get("FORMAT"), "TLE")
 
 

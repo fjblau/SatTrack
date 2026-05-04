@@ -15,7 +15,7 @@ class TestCommunityDetection(unittest.TestCase):
         self.mock_db = Mock()
         self.mock_cursor = Mock()
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_detect_communities_label_propagation_success(self, mock_db):
         """Test label propagation community detection"""
         mock_cursor = MagicMock()
@@ -57,7 +57,7 @@ class TestCommunityDetection(unittest.TestCase):
         self.assertEqual(result[0]["algorithm"], "label_propagation")
         mock_db.aql.execute.assert_called_once()
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_detect_communities_label_propagation_with_edge_types(self, mock_db):
         """Test label propagation with specific edge types"""
         mock_cursor = MagicMock()
@@ -75,7 +75,7 @@ class TestCommunityDetection(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['min_community_size'], 3)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_detect_communities_label_propagation_empty_result(self, mock_db):
         """Test label propagation with no communities found"""
         mock_cursor = MagicMock()
@@ -86,7 +86,7 @@ class TestCommunityDetection(unittest.TestCase):
         
         self.assertEqual(result, [])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_detect_communities_label_propagation_error_handling(self, mock_db):
         """Test error handling in label propagation"""
         mock_db.aql.execute.side_effect = Exception("Database error")
@@ -136,7 +136,7 @@ class TestCommunityDetection(unittest.TestCase):
         )
     
     @patch('database.graph_analytics.find_connected_components')
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_detect_communities_with_connected_components(self, mock_db, mock_components):
         """Test detect_communities with connected components algorithm"""
         mock_sat = {
@@ -172,7 +172,7 @@ class TestCommunityDetection(unittest.TestCase):
         mock_components.assert_called_once()
     
     @patch('database.graph_analytics.find_connected_components')
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_detect_communities_connected_components_with_edge_types(self, mock_db, mock_components):
         """Test connected components with specific edge types"""
         mock_components.return_value = []
@@ -203,7 +203,7 @@ class TestCommunityDetection(unittest.TestCase):
         
         self.assertEqual(result, [])
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_label_propagation_with_limit(self, mock_db):
         """Test label propagation respects limit parameter"""
         mock_cursor = MagicMock()
@@ -216,7 +216,7 @@ class TestCommunityDetection(unittest.TestCase):
         bind_vars = call_args[1]['bind_vars']
         self.assertEqual(bind_vars['limit'], 50)
     
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_label_propagation_community_statistics(self, mock_db):
         """Test that label propagation returns correct community statistics"""
         mock_cursor = MagicMock()
@@ -251,7 +251,7 @@ class TestCommunityDetection(unittest.TestCase):
         self.assertIn("country_distribution", community)
     
     @patch('database.graph_analytics.find_connected_components')
-    @patch('database.graph_analytics.db')
+    @patch('database.connection.db')
     def test_connected_components_enrichment(self, mock_db, mock_components):
         """Test that connected components are enriched with metadata"""
         mock_sat1 = {

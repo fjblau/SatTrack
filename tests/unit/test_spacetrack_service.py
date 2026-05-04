@@ -126,59 +126,38 @@ class TestFetchByIntlDes(unittest.TestCase):
 
 
 class TestTleServiceFallback(unittest.TestCase):
-    """Test that tle_service falls back to SpaceTrack when CelesTrak returns nothing."""
+    """Test tle_service fallback chain: CelesTrak (TLE→JSON) → ivanstanojevic → DB."""
 
-    @patch("api.services.tle_service.fetch_tle_from_spacetrack_by_norad_id")
-    @patch("api.services.tle_service._tle_cache_instance")
-    def test_norad_fallback_called_when_celestrak_fails(self, mock_cache, mock_st_fetch):
+    def test_norad_returns_none_when_all_live_sources_fail(self):
         from api.services.tle_service import _fetch_tle_by_norad_id_uncached
-
-        mock_st_fetch.return_value = {
-            "name": "COSMOS DEB",
-            "line1": SAMPLE_GP_ENTRY["TLE_LINE1"],
-            "line2": SAMPLE_GP_ENTRY["TLE_LINE2"],
-            "source": "spacetrack",
-        }
 
         with patch("api.services.tle_service.requests.get") as mock_get:
             resp = MagicMock()
             resp.status_code = 200
+            resp.text = ""
             resp.json.return_value = []
             mock_get.return_value = resp
 
-            result = _fetch_tle_by_norad_id_uncached("33895")
+            with patch("api.services.tle_service._fetch_from_ivanstanojevic_by_norad", return_value=None):
+                with patch("database.operations.get_satellite_tle_by_norad_id", return_value=None):
+                    result = _fetch_tle_by_norad_id_uncached("33895")
 
-        mock_st_fetch.assert_called_once_with("33895")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["source"], "spacetrack")
+        self.assertIsNone(result)
 
-    @patch("api.services.tle_service.fetch_tle_from_spacetrack_by_intl_des")
-    @patch("api.services.tle_service._tle_cache_instance")
-    def test_intldes_fallback_called_when_celestrak_fails(self, mock_cache, mock_st_fetch):
+    def test_intldes_returns_none_when_celestrak_returns_empty(self):
         from api.services.tle_service import _fetch_tle_by_intl_des_uncached
-
-        mock_st_fetch.return_value = {
-            "name": "COSMOS DEB",
-            "line1": SAMPLE_GP_ENTRY["TLE_LINE1"],
-            "line2": SAMPLE_GP_ENTRY["TLE_LINE2"],
-            "source": "spacetrack",
-        }
 
         with patch("api.services.tle_service.requests.get") as mock_get:
             resp = MagicMock()
             resp.status_code = 200
-            resp.json.return_value = []
+            resp.text = ""
             mock_get.return_value = resp
 
             result = _fetch_tle_by_intl_des_uncached("1993-036AHH")
 
-        mock_st_fetch.assert_called_once_with("1993-036AHH")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["source"], "spacetrack")
+        self.assertIsNone(result)
 
-    @patch("api.services.tle_service.fetch_tle_from_spacetrack_by_norad_id")
-    @patch("api.services.tle_service._tle_cache_instance")
-    def test_spacetrack_not_called_when_celestrak_succeeds(self, mock_cache, mock_st_fetch):
+    def test_celestrak_json_result_returned_when_tle_text_empty(self):
         from api.services.tle_service import _fetch_tle_by_norad_id_uncached
 
         celestrak_entry = {
@@ -193,12 +172,12 @@ class TestTleServiceFallback(unittest.TestCase):
         with patch("api.services.tle_service.requests.get") as mock_get:
             resp = MagicMock()
             resp.status_code = 200
+            resp.text = ""
             resp.json.return_value = [celestrak_entry]
             mock_get.return_value = resp
 
             result = _fetch_tle_by_norad_id_uncached("25544")
 
-        mock_st_fetch.assert_not_called()
         self.assertIsNotNone(result)
         self.assertEqual(result["source"], "celestrak")
 

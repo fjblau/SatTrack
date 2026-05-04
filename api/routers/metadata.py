@@ -7,6 +7,7 @@ from database import (
     get_all_orbital_bands,
     get_all_congestion_risks,
     get_all_object_types,
+    get_all_object_classes,
     count_satellites
 )
 
@@ -69,6 +70,25 @@ def get_object_types_v2():
     return {
         "count": len(object_types),
         "object_types": sorted([t for t in object_types if t and t.strip()])
+    }
+
+
+@router.get("/object-classes")
+def get_object_classes_v2():
+    """Get list of all object classes (DISCOSweb-aligned enum)"""
+    object_classes = get_all_object_classes()
+    if not object_classes:
+        object_classes = [
+            "Payload",
+            "Rocket Body",
+            "Mission-Related Object",
+            "Rocket Fragmentation Debris",
+            "Payload Fragmentation Debris",
+            "Unknown",
+        ]
+    return {
+        "count": len(object_classes),
+        "object_classes": sorted([c for c in object_classes if c and c.strip()])
     }
 
 

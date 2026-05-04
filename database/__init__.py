@@ -30,10 +30,12 @@ from database.connection import (
     client,
     db,
     satellites_collection,
+    objects_collection,
     connect_arangodb,
     connect_mongodb,  # Backward compatibility alias
     disconnect_arangodb,
     disconnect_mongodb,  # Backward compatibility alias
+    get_objects_collection,
     get_satellites_collection,
 )
 
@@ -48,6 +50,7 @@ from database.operations import (
     get_all_orbital_bands,
     get_all_congestion_risks,
     get_all_object_types,
+    get_all_object_classes,
     clear_collection,
     update_satellite_tle,
 )
@@ -149,12 +152,14 @@ __all__ = [
     'client',
     'db',
     'satellites_collection',
+    'objects_collection',
     
     # Connection
     'connect_arangodb',
     'connect_mongodb',
     'disconnect_arangodb',
     'disconnect_mongodb',
+    'get_objects_collection',
     'get_satellites_collection',
     
     # Operations
@@ -167,6 +172,7 @@ __all__ = [
     'get_all_orbital_bands',
     'get_all_congestion_risks',
     'get_all_object_types',
+    'get_all_object_classes',
     'clear_collection',
     'update_satellite_tle',
     
