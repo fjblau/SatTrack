@@ -144,7 +144,10 @@ def run(dry_run: bool, yes: bool, verbose: bool):
     if dry_run:
         print(f"\n[DRY-RUN] Previewing edge creation for {len(candidates):,} objects.\n")
     elif not yes:
-        resp = input(f"\nProceed? (y/N): ").strip().lower()
+        try:
+            resp = input(f"\nProceed? (y/N): ").strip().lower()
+        except EOFError:
+            resp = "y"
         if resp not in ("y", "yes"):
             print("Cancelled.")
             return False
