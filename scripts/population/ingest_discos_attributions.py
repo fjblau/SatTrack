@@ -29,7 +29,7 @@ load_dotenv()
 
 import database.connection as db_conn
 import database as db_module
-from api.services import discos_service
+from api.services.discos_service import get_fragmentation_attributed_objects
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -119,7 +119,30 @@ def _process_event(event_doc: dict, dry_run: bool) -> dict:
         return {"processed": 0, "edges_created": 0, "pending": 0}
 
     now = datetime.now(timezone.utc).isoformat()
-    attributions = discos_service.get_object_attributions(str(discos_event_id))
+    attributions = get_fragmentation_attributed_objects(str(discos_event_id))
+
+    frag_events_col = db_module.db.collection("fragmentation_events")
+    try:
+        current_canonical = event_doc.get("canonical", {})
+        fragment_count = len(attributions)
+        transformations = event_doc.get("metadata", {}).get("transformations", [])
+        transformations.append({
+            "source": "discos",
+            "action": "update_fragment_count",
+            "timestamp": now,
+            "operator": "ingest_discos_attributions",
+            "fragment_count": fragment_count,
+        })
+        frag_events_col.update({
+            "_key": event_key,
+            "canonical": {**current_canonical, "fragment_count": fragment_count},
+            "metadata": {
+                **event_doc.get("metadata", {}),
+                "transformations": transformations[-10:],
+            },
+        })
+    except Exception as exc:
+        logger.warning(f"Failed to update fragment_count on {event_key}: {exc}")
 
     if not attributions:
         return {"processed": 0, "edges_created": 0, "pending": 0}
