@@ -159,14 +159,15 @@ FOR ev IN fragmentation_events
   ${filterStr}
   SORT ev.canonical.epoch DESC
   LIMIT ${pageNum * PAGE_SIZE}, ${PAGE_SIZE}
+  LET edge_fragment_count = LENGTH(FOR e IN caused_by FILTER e._to == ev._id RETURN 1)
   RETURN {
     _key: ev._key,
     identifier: ev.identifier,
     epoch: ev.canonical.epoch,
     event_type: ev.canonical.event_type,
-    fragment_count: ev.canonical.fragment_count,
+    fragment_count: edge_fragment_count > 0 ? edge_fragment_count : ev.canonical.fragment_count,
     altitude_km: ev.canonical.altitude_km,
-    casualty_risk: ev.canonical.casualty_risk
+    comment: ev.canonical.comment
   }`.trim()
 
       const countAql = `
@@ -273,7 +274,7 @@ RETURN LENGTH(
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Type</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Epoch</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Altitude (km)</th>
-                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Casualty Risk</th>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Comment</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Fragments</th>
               </tr>
             </thead>
@@ -294,7 +295,9 @@ RETURN LENGTH(
                   <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>
                     {ev.altitude_km != null ? ev.altitude_km.toLocaleString() : '—'}
                   </td>
-                  <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem' }}>{ev.casualty_risk || '—'}</td>
+                  <td style={{ padding: '0.45rem 0.75rem', color: '#6c757d', fontSize: '0.82rem', maxWidth: '320px' }} title={ev.comment || undefined}>
+                    {ev.comment ? ev.comment.slice(0, 80) + (ev.comment.length > 80 ? '…' : '') : '—'}
+                  </td>
                   <td style={{ padding: '0.45rem 0.75rem', textAlign: 'right', color: '#6c757d', fontSize: '0.82rem' }}>
                     {ev.fragment_count != null ? ev.fragment_count.toLocaleString() : '—'}
                   </td>

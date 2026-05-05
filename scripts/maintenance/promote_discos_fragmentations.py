@@ -22,7 +22,7 @@ import database as db_module
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-CANONICAL_FIELDS = ["epoch", "altitude_km", "fragment_count", "casualty_risk", "event_type", "comment"]
+CANONICAL_FIELDS = ["epoch", "altitude_km", "latitude", "longitude", "event_type", "comment"]
 
 
 def run(dry_run: bool = False):
@@ -58,13 +58,13 @@ def run(dry_run: bool = False):
         if raw_alt is not None and current_canonical.get("altitude_km") is None:
             updates["altitude_km"] = raw_alt
 
-        raw_count = raw.get("fragmentCount") or raw.get("fragment_count")
-        if raw_count is not None and current_canonical.get("fragment_count") is None:
-            updates["fragment_count"] = raw_count
+        raw_lat = raw.get("latitude")
+        if raw_lat is not None and current_canonical.get("latitude") is None:
+            updates["latitude"] = raw_lat
 
-        raw_risk = raw.get("casualtyRisk") or raw.get("casualty_risk")
-        if raw_risk is not None and current_canonical.get("casualty_risk") is None:
-            updates["casualty_risk"] = raw_risk
+        raw_lon = raw.get("longitude")
+        if raw_lon is not None and current_canonical.get("longitude") is None:
+            updates["longitude"] = raw_lon
 
         if not updates:
             skipped += 1
