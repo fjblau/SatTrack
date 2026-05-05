@@ -302,7 +302,7 @@ function App() {
               className={activeTab === 'satellite-catalog' ? 'active' : ''}
               onClick={() => setActiveTab('satellite-catalog')}
             >
-              Satellite Catalog
+              Object Catalog
             </button>
           )}
           {isTabVisible('observations') && (
@@ -390,7 +390,7 @@ function App() {
               className={activeCatalogSubTab === 'table' ? 'active' : ''}
               onClick={() => setActiveCatalogSubTab('table')}
             >
-              Satellite Catalog
+              Object Catalog
             </button>
           )}
           {isSubtabVisible('satellite-catalog', 'satellite-graphs') && (

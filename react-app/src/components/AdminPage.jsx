@@ -5,10 +5,10 @@ import './AdminPage.css'
 const DEMO_TABS = [
   {
     id: 'satellite-catalog',
-    label: 'Satellite Catalog',
+    label: 'Object Catalog',
     defaultEnabled: true,
     subtabs: [
-      { id: 'table', label: 'Satellite Catalog' },
+      { id: 'table', label: 'Object Catalog' },
       { id: 'satellite-graphs', label: 'Satellite Graphs' },
       { id: 'function-similarity', label: 'Function Similarity' },
       { id: 'registration-docs', label: 'Registration Docs' },

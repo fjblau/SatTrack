@@ -2,9 +2,14 @@
 """
 Ingest ESA DISCOS space object records, enriching existing objects via cosparId join.
 
-Join key: cosparId (COSPAR / international designator).
+Join key: cosparId (COSPAR / international designator), with satno (NORAD) fallback.
 - Match found: enrich the existing object document with a DISCOS source envelope.
 - No match: create a surrogate document with key DISCOS-<discosId>.
+
+The cospar lookup tries the full cosparId (e.g. "2022-151B") and also the base
+launch designator without piece letter (e.g. "2022-151"). If neither matches, a
+satno (NORAD number) lookup is attempted. This handles cases where GCAT stores
+the international_designator without a piece letter while DISCOS includes it.
 
 cosparId conflicts (cospar match but satno differs) are logged in metadata.transformations
 and surfaced for operator review via the merge utility.
@@ -14,6 +19,7 @@ Run order: 5th in the DISCOS ingestion sequence (after launches).
 Usage:
     python scripts/population/ingest_discos_objects.py [--dry-run] [--batch-size N]
 """
+import re
 import sys
 import argparse
 import logging
@@ -34,24 +40,54 @@ logger = logging.getLogger(__name__)
 
 
 def _lookup_by_cospar(cospar_id: str):
-    """Find an existing object by COSPAR / international designator."""
+    """Find an existing object by COSPAR / international designator.
+
+    Tries the full cosparId first (e.g. "2022-151B"), then strips the trailing
+    piece letter and retries with the base launch designator (e.g. "2022-151").
+    """
     if not cospar_id:
         return None
+    candidates = [cospar_id]
+    base = re.sub(r'[A-Z]+$', '', cospar_id)
+    if base and base != cospar_id:
+        candidates.append(base)
     try:
         cursor = db_module.db.aql.execute(
             """
             FOR obj IN objects
-                FILTER obj.canonical.international_designator == @cospar
-                   OR obj.identifier_aliases.cospar == @cospar
+                FILTER obj.canonical.international_designator IN @candidates
+                   OR obj.identifier_aliases.cospar IN @candidates
                 LIMIT 1
                 RETURN obj
             """,
-            bind_vars={"cospar": cospar_id},
+            bind_vars={"candidates": candidates},
         )
         rows = list(cursor)
         return rows[0] if rows else None
     except Exception as exc:
         logger.warning(f"cospar lookup failed for {cospar_id}: {exc}")
+        return None
+
+
+def _lookup_by_satno(satno):
+    """Find an existing object by satno (NORAD catalogue number)."""
+    if satno is None:
+        return None
+    try:
+        cursor = db_module.db.aql.execute(
+            """
+            FOR obj IN objects
+                FILTER obj.canonical.norad_cat_id == @satno
+                   OR obj.identifier_aliases.norad == TO_STRING(@satno)
+                LIMIT 1
+                RETURN obj
+            """,
+            bind_vars={"satno": satno},
+        )
+        rows = list(cursor)
+        return rows[0] if rows else None
+    except Exception as exc:
+        logger.warning(f"satno lookup failed for {satno}: {exc}")
         return None
 
 
@@ -140,6 +176,13 @@ def run(dry_run: bool = False, batch_size: int = 500):
         now = datetime.now(timezone.utc).isoformat()
 
         existing = _lookup_by_cospar(cospar_id) if cospar_id else None
+        if existing is None and satno is not None:
+            existing = _lookup_by_satno(satno)
+            if existing:
+                logger.info(
+                    f"Matched discos_id={discos_id} cospar={cospar_id} "
+                    f"to {existing['_key']} via satno={satno} fallback"
+                )
 
         if existing:
             existing_satno = (
