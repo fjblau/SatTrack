@@ -21,10 +21,10 @@
 }
 
 .header-logo {
-  height: 2.5rem;
+  height: 3.5rem;
   width: auto;
-  filter: invert(1);
   flex-shrink: 0;
+  border-radius: 4px;
 }
 
 .app-nav {
