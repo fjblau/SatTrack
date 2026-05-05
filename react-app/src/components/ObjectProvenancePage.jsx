@@ -17,9 +17,9 @@ function buildGraph(chain, objectKey) {
   if (!chain) return { nodes: [], links: [] }
   const nodes = []
   const links = []
-  const addNode = (id, label, type) => {
+  const addNode = (id, label, type, synthetic = false) => {
     if (!id || nodes.find(n => n.id === id)) return
-    nodes.push({ id, label, type })
+    nodes.push({ id, label, type, synthetic })
   }
   const addLink = (source, target, label) => {
     if (!source || !target) return
@@ -27,8 +27,9 @@ function buildGraph(chain, objectKey) {
   }
 
   const c = chain.chain || {}
+  const canonical = c.object?.canonical || {}
   const rootId = objectKey
-  addNode(rootId, c.object?.canonical?.object_name || objectKey, 'object')
+  addNode(rootId, canonical.object_name || canonical.name || objectKey, 'object')
 
   if (c.fragmented_from) {
     const pid = c.fragmented_from._key || c.fragmented_from._id
@@ -46,6 +47,11 @@ function buildGraph(chain, objectKey) {
     const oid = c.operator._key || c.operator._id
     addNode(oid, c.operator.name || oid, 'operator')
     addLink(rootId, oid, 'launched by')
+  } else if (canonical.country_of_origin || canonical.country) {
+    const label = canonical.country_of_origin || canonical.country
+    const sid = `syn_country_${label}`
+    addNode(sid, label, 'operator', true)
+    addLink(rootId, sid, 'country of origin')
   }
 
   if (c.launch_vehicle) {
@@ -58,6 +64,10 @@ function buildGraph(chain, objectKey) {
     const sid = c.launch_site._key || c.launch_site._id
     addNode(sid, c.launch_site.name || sid, 'launch_site')
     addLink(rootId, sid, 'from')
+  } else if (canonical.launch_site) {
+    const sid = `syn_site_${canonical.launch_site}`
+    addNode(sid, canonical.launch_site, 'launch_site', true)
+    addLink(rootId, sid, 'launch site')
   }
 
   return { nodes, links }
@@ -144,14 +154,16 @@ function ProvenanceGraph({ chain, objectKey }) {
     node.append('circle')
       .attr('r', 24)
       .attr('fill', d => NODE_COLORS[d.type] || NODE_COLORS.unknown)
-      .attr('stroke', '#fff')
+      .attr('fill-opacity', d => d.synthetic ? 0.3 : 1)
+      .attr('stroke', d => d.synthetic ? (NODE_COLORS[d.type] || NODE_COLORS.unknown) : '#fff')
       .attr('stroke-width', 2)
+      .attr('stroke-dasharray', d => d.synthetic ? '5,3' : 'none')
 
     node.append('text')
       .attr('text-anchor', 'middle')
       .attr('dy', '0.35em')
       .attr('font-size', '10px')
-      .attr('fill', '#fff')
+      .attr('fill', d => d.synthetic ? (NODE_COLORS[d.type] || NODE_COLORS.unknown) : '#fff')
       .attr('font-weight', 600)
       .text(d => {
         const words = d.label.split(/[\s-_]+/)
@@ -167,7 +179,7 @@ function ProvenanceGraph({ chain, objectKey }) {
 
     node
       .on('mouseenter', (event, d) => {
-        tooltipText.text(d.label)
+        tooltipText.text(d.synthetic ? `${d.label} (from canonical record)` : d.label)
         const bbox = tooltipText.node().getBBox()
         tooltipRect.attr('x', bbox.x - 6).attr('y', bbox.y - 4).attr('width', bbox.width + 12).attr('height', bbox.height + 8)
         tooltip.attr('transform', `translate(${d.x + 30},${d.y - 20})`).style('opacity', 1)
@@ -200,6 +212,57 @@ const LEGEND_ITEMS = Object.entries(NODE_COLORS).map(([type, color]) => ({
   type: type.replace(/_/g, ' '),
   color,
 }))
+
+function InfoRow({ label, value }) {
+  if (value == null || value === '') return null
+  return (
+    <tr style={{ borderBottom: '1px solid #f1f3f5' }}>
+      <td style={{ padding: '0.4rem 1rem', color: '#6c757d', fontWeight: 500, whiteSpace: 'nowrap', width: '35%', fontSize: '0.82rem' }}>{label}</td>
+      <td style={{ padding: '0.4rem 1rem', color: '#212529', fontSize: '0.82rem' }}>{value}</td>
+    </tr>
+  )
+}
+
+function ObjectInfoPanel({ chain }) {
+  const c = chain?.chain || {}
+  const canonical = c.object?.canonical || {}
+
+  if (!Object.keys(canonical).length) return null
+
+  const orbit = canonical.orbit || {}
+  const orbitParts = [
+    orbit.apogee_km != null && `${orbit.apogee_km} km apogee`,
+    orbit.perigee_km != null && `${orbit.perigee_km} km perigee`,
+    orbit.inclination_degrees != null && `${orbit.inclination_degrees}° inc`,
+    orbit.period_minutes != null && `${orbit.period_minutes} min period`,
+  ].filter(Boolean)
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #dee2e6', borderRadius: '8px', overflow: 'hidden', marginBottom: '1rem' }}>
+      <div style={{ padding: '0.65rem 1rem', background: '#f8f9fa', borderBottom: '1px solid #dee2e6', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>Known Provenance Data</span>
+        <span style={{ fontSize: '0.75rem', color: '#6c757d', background: '#e9ecef', borderRadius: '4px', padding: '0.1rem 0.45rem' }}>canonical record</span>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <tbody>
+          <InfoRow label="Name" value={canonical.object_name || canonical.name} />
+          <InfoRow label="NORAD ID" value={canonical.norad_cat_id} />
+          <InfoRow label="COSPAR / Int'l Designator" value={canonical.international_designator} />
+          <InfoRow label="Status" value={canonical.status} />
+          <InfoRow label="Object Class" value={canonical.object_class} />
+          <InfoRow label="Country of Origin" value={canonical.country_of_origin || canonical.country} />
+          <InfoRow label="Launch Date" value={canonical.launch_date || canonical.date_of_launch} />
+          <InfoRow label="Launch Site" value={canonical.launch_site} />
+          <InfoRow label="Orbit" value={orbitParts.length ? orbitParts.join(', ') : null} />
+          <InfoRow label="Orbital Band" value={canonical.orbital_band} />
+          <InfoRow label="UN Registered" value={canonical.un_registered === 'T' ? 'Yes' : null} />
+          <InfoRow label="Registration Number" value={canonical.registration_number} />
+          <InfoRow label="Function" value={canonical.function} />
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 export default function ObjectProvenancePage() {
   const [identifier, setIdentifier] = useState('')
@@ -280,14 +343,20 @@ export default function ObjectProvenancePage() {
             <ProvenanceGraph chain={chain} objectKey={identifier} />
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8rem', marginBottom: '1.5rem' }}>
             {LEGEND_ITEMS.map(({ type, color }) => (
               <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: color }} />
                 <span style={{ color: '#6c757d', textTransform: 'capitalize' }}>{type}</span>
               </div>
             ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px dashed #adb5bd', background: 'transparent' }} />
+              <span style={{ color: '#6c757d' }}>dashed = derived from canonical record</span>
+            </div>
           </div>
+
+          <ObjectInfoPanel chain={chain} />
         </>
       )}
 
