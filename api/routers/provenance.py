@@ -10,6 +10,8 @@ from typing import Optional
 import logging
 
 import database as db
+from database.operations import find_satellite
+from database.identifier_operations import lookup_by_norad, lookup_by_cospar
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,19 @@ def _get_db():
     if db.db is None:
         raise HTTPException(status_code=503, detail="Database not available")
     return db.db
+
+
+def _resolve_object_key(identifier: str) -> Optional[str]:
+    doc = (
+        find_satellite(identifier=identifier)
+        or find_satellite(international_designator=identifier)
+        or find_satellite(registration_number=identifier)
+        or lookup_by_norad(identifier)
+        or lookup_by_cospar(identifier)
+    )
+    if doc:
+        return doc.get("_key")
+    return None
 
 
 def _confidence_caveat(confidence: Optional[float]) -> Optional[str]:
@@ -45,6 +60,10 @@ def get_provenance_chain(
     """
     database = _get_db()
     effective_min = min_confidence if min_confidence is not None else 0.7
+
+    resolved_key = _resolve_object_key(object_key)
+    if resolved_key:
+        object_key = resolved_key
 
     aql = """
     LET obj = DOCUMENT(CONCAT("objects/", @key))
@@ -136,6 +155,10 @@ def get_siblings(
     """
     database = _get_db()
     effective_min = min_confidence if min_confidence is not None else 0.7
+
+    resolved_key = _resolve_object_key(object_key)
+    if resolved_key:
+        object_key = resolved_key
 
     aql = """
     LET obj = DOCUMENT(CONCAT("objects/", @key))
