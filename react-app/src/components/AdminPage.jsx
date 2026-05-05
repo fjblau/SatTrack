@@ -8,6 +8,7 @@ const DEMO_TABS = [
   {
     id: 'satellite-catalog',
     label: 'Satellite Catalog',
+    defaultEnabled: true,
     subtabs: [
       { id: 'table', label: 'Satellite Catalog' },
       { id: 'satellite-graphs', label: 'Satellite Graphs' },
@@ -20,6 +21,7 @@ const DEMO_TABS = [
   {
     id: 'kestrel-mission',
     label: 'Kestrel Mission',
+    defaultEnabled: true,
     subtabs: [
       { id: 'launch', label: 'Intercept Setup' },
       { id: 'maneuver', label: 'Maneuver Plan' },
@@ -31,14 +33,40 @@ const DEMO_TABS = [
   {
     id: 'kestrel-data',
     label: 'Kestrel Data',
+    defaultEnabled: true,
     subtabs: [
       { id: 'globe', label: '3D Globe View' },
       { id: 'observations', label: 'Observation Log' },
     ]
   },
   {
+    id: 'aql-editor',
+    label: 'AQL Editor',
+    defaultEnabled: false,
+    subtabs: []
+  },
+  {
+    id: 'ephemeris',
+    label: 'Ephemeris',
+    defaultEnabled: false,
+    subtabs: []
+  },
+  {
+    id: 'fragmentation-events',
+    label: 'Fragmentation',
+    defaultEnabled: false,
+    subtabs: []
+  },
+  {
+    id: 'provenance',
+    label: 'Provenance',
+    defaultEnabled: false,
+    subtabs: []
+  },
+  {
     id: 'help',
     label: '? Help',
+    defaultEnabled: true,
     subtabs: []
   }
 ]
@@ -46,9 +74,10 @@ const DEMO_TABS = [
 const getDefaultDemoConfig = () => {
   const config = {}
   DEMO_TABS.forEach(tab => {
-    config[tab.id] = { enabled: true, subtabs: {} }
+    const enabled = tab.defaultEnabled !== false
+    config[tab.id] = { enabled, subtabs: {} }
     tab.subtabs.forEach(subtab => {
-      config[tab.id].subtabs[subtab.id] = true
+      config[tab.id].subtabs[subtab.id] = enabled
     })
   })
   return config

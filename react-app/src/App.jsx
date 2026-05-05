@@ -317,7 +317,7 @@ function App() {
               Admin
             </button>
           )}
-          {!isDemo && (
+          {(!isDemo || isTabVisible('aql-editor')) && (
             <button
               className={activeTab === 'aql-editor' ? 'active' : ''}
               onClick={() => setActiveTab('aql-editor')}
@@ -325,7 +325,7 @@ function App() {
               AQL Editor
             </button>
           )}
-          {!isDemo && (
+          {(!isDemo || isTabVisible('ephemeris')) && (
             <button
               className={activeTab === 'ephemeris' ? 'active' : ''}
               onClick={() => setActiveTab('ephemeris')}
@@ -349,7 +349,7 @@ function App() {
               Kestrel Data
             </button>
           )}
-          {!isDemo && (
+          {(!isDemo || isTabVisible('fragmentation-events')) && (
             <button
               className={activeTab === 'fragmentation-events' ? 'active' : ''}
               onClick={() => setActiveTab('fragmentation-events')}
@@ -357,7 +357,7 @@ function App() {
               Fragmentation
             </button>
           )}
-          {!isDemo && (
+          {(!isDemo || isTabVisible('provenance')) && (
             <button
               className={activeTab === 'provenance' ? 'active' : ''}
               onClick={() => setActiveTab('provenance')}
@@ -548,19 +548,19 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'fragmentation-events' && !isDemo && (
+      {activeTab === 'fragmentation-events' && (!isDemo || isTabVisible('fragmentation-events')) && (
         <div className="analytics-view-container">
           <FragmentationEventsPage />
         </div>
       )}
 
-      {activeTab === 'provenance' && !isDemo && (
+      {activeTab === 'provenance' && (!isDemo || isTabVisible('provenance')) && (
         <div className="analytics-view-container">
           <ObjectProvenancePage />
         </div>
       )}
 
-      {activeTab === 'aql-editor' && !isDemo && (
+      {activeTab === 'aql-editor' && (!isDemo || isTabVisible('aql-editor')) && (
         <AqlEditorPage />
       )}
 
@@ -568,7 +568,7 @@ function App() {
         <HelpPage />
       )}
 
-      {activeTab === 'ephemeris' && !isDemo && (
+      {activeTab === 'ephemeris' && (!isDemo || isTabVisible('ephemeris')) && (
         <EphemerisPage />
       )}
 
