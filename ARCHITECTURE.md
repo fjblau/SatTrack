@@ -146,7 +146,7 @@ kessler/
 │           ├── SatelliteNeighborhood.jsx/EvolutionTimelineView.jsx/PathFinderPanel.jsx
 │           ├── AqlEditorPage.jsx  # Interactive AQL query editor
 │           ├── HelpPage.jsx     # AI assistant chat interface
-│           ├── AdminPage.jsx    # Admin script runner
+│           ├── AdminPage.jsx    # Admin script runner + Demo Contents checklist (single source of truth for demo-mode tab/subtab visibility; persisted in localStorage)
 │           └── LoginPage.jsx    # Authentication
 │
 └── mqtt_publisher.py            # MQTT publishing service
@@ -381,7 +381,7 @@ band = service.classify_orbital_band(altitude_km=500.0)
 | `ephemeris_envelopes` | Stored ephemeris envelopes (SGP4 or GMAT RK89) | `norad_id`, `generated_at`, `valid_from`, `valid_until` |
 | `kestrel_maneuver_plans` | Kestrel rendezvous maneuver plans | `kestrel_norad_id`, `target_norad_id`, `created_at` |
 | `mqtt_configurations` | MQTT broker configurations for TLE publishing | — |
-| `fragmentation_events` | DISCOS fragmentation/breakup event records | — |
+| `fragmentation_events` | DISCOS fragmentation/breakup event records; canonical fields include `epoch`, `altitude`, `latitude`, `longitude`, `eventType`, `comment`; fragment count is computed dynamically from `caused_by` graph edges | — |
 | `launch_events` | DISCOS launch event records | — |
 | `launch_vehicles` | DISCOS launch vehicle records | — |
 | `launch_sites` | DISCOS launch site records | — |
@@ -861,7 +861,7 @@ Authenticates with Space-Track.org and fetches historical TLE data as a fallback
 **Population scripts** using this service:
 - `scripts/population/ingest_discos_objects.py` — bulk ingest DISCOS object metadata into `objects` collection
 - `scripts/population/ingest_discos_launches.py` — ingest launch events into `launch_events` collection
-- `scripts/population/ingest_discos_fragmentations.py` — ingest fragmentation events into `fragmentation_events` collection
+- `scripts/population/ingest_discos_fragmentations.py` — ingest fragmentation events into `fragmentation_events` collection (stores `epoch`, `altitude`, `latitude`, `longitude`, `eventType`, `comment`, `discos_id`; does not map `fragmentCount` or `casualtyRisk`, which are absent from the DISCOS API response)
 - `scripts/population/ingest_discos_attributions.py` — create `fragmented_from` and `caused_by` edges
 - `scripts/population/ingest_discos_launch_sites.py` — ingest launch sites into `launch_sites` collection
 - `scripts/population/ingest_discos_launch_vehicles.py` — ingest launch vehicles into `launch_vehicles` collection

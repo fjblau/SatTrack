@@ -1,6 +1,6 @@
-# Kessler
+# Kessler — TALON
 
-> Satellite tracking and orbital debris monitoring application with UNOOSA registry viewer
+> Satellite tracking and orbital debris monitoring application with UNOOSA registry viewer. The frontend UI is branded as **TALON** (with the Kesdyn logo).
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Latest-green.svg)](https://fastapi.tiangolo.com/)
@@ -37,7 +37,8 @@ Kessler provides a comprehensive satellite tracking system combining:
 - 🚀 **Kestrel Mission Planner**: Rendezvous maneuver planning with analytical Hohmann baseline and optional GMAT RK89/EGM96 verification; burn epoch computation, ΔV budgets, and closest-approach analysis
 - 🌐 **Ephemeris Generation**: SGP4/Skyfield and GMAT high-fidelity ephemeris with CesiumJS CZML export and 3D visualization
 - 🤖 **AI Help Assistant**: LangGraph-powered chat that answers questions using RAG + live data tools
-- 🔑 **Authentication**: Bearer-token login with demo mode
+- 💥 **Fragmentation Events**: DISCOS breakup/fragmentation event table with Comment column, fragment count derived from graph edges, 30 rows/page, and 1600px-wide layout
+- 🔑 **Authentication**: Bearer-token login with demo mode; **Demo Contents** checklist in Admin page controls which tabs are visible per demo session
 
 ### Technical Features
 
@@ -204,7 +205,7 @@ kessler/
 │       ├── components/         # React components
 │       │   ├── HelpPage.jsx    # AI assistant chat interface
 │       │   ├── AqlEditorPage.jsx # Interactive AQL editor
-│       │   ├── AdminPage.jsx   # Admin script runner
+│       │   ├── AdminPage.jsx   # Admin script runner + Demo Contents checklist (controls demo-mode tab visibility)
 │       │   ├── EphemerisPage.jsx # Ephemeris generation & CZML export
 │       │   ├── KestrelMissionPage.jsx # Rendezvous mission planning
 │       │   ├── KestrelDataPage.jsx # Kestrel satellite data dashboard
