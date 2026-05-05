@@ -165,21 +165,43 @@ def _fetch_from_ivanstanojevic_by_norad(norad_id: str) -> Optional[Dict]:
     return None
 
 
+def _norad_matches(result: Dict, requested: str) -> bool:
+    """Return True if the TLE result's NORAD catalogue number matches the requested ID."""
+    returned = str(result.get("norad_cat_id", "")).strip().lstrip("0")
+    req = str(requested).strip().lstrip("0")
+    return not returned or returned == req
+
+
 def _fetch_tle_by_norad_id_uncached(norad_id: str) -> Optional[Dict]:
     """
     Fetch fresh TLE data by NORAD ID.
 
     Chain: CelesTrak (TLE then JSON format) → tle.ivanstanojevic.me mirror
            → last known TLE from satellite DB.
+
+    Each external result is validated: if the returned TLE's NORAD catalogue number
+    does not match the requested norad_id, it is discarded and the next source is tried.
+    This prevents a mismatched TLE (e.g. adjacent piece from same launch) from being
+    stored on the wrong object.
     """
     result = _fetch_from_celestrak_by_norad(norad_id)
     if result:
-        return result
+        if _norad_matches(result, norad_id):
+            return result
+        logger.warning(
+            f"CelesTrak returned NORAD {result.get('norad_cat_id')} "
+            f"when asked for {norad_id}; discarding"
+        )
 
     logger.info(f"CelesTrak miss for NORAD {norad_id}, trying tle.ivanstanojevic.me mirror")
     result = _fetch_from_ivanstanojevic_by_norad(norad_id)
     if result:
-        return result
+        if _norad_matches(result, norad_id):
+            return result
+        logger.warning(
+            f"tle.ivanstanojevic.me returned NORAD {result.get('norad_cat_id')} "
+            f"when asked for {norad_id}; discarding"
+        )
 
     logger.info(f"All live sources failed for NORAD {norad_id}, trying satellite DB for last known TLE")
     try:

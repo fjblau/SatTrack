@@ -35,6 +35,17 @@ def persist_tle(norad_id: str, body: TlePersistRequest):
             detail="Invalid TLE data: missing line1 or line2"
         )
 
+    returned_norad = str(tle.get("norad_cat_id", "")).strip().lstrip("0")
+    requested_norad = str(norad_id).strip().lstrip("0")
+    if returned_norad and returned_norad != requested_norad:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"TLE NORAD mismatch: requested {norad_id} but source returned {tle.get('norad_cat_id')}. "
+                f"Refusing to persist to prevent wrong TLE being stored on object."
+            )
+        )
+
     parsed = parse_tle_fields(name, line1, line2)
 
     updated = update_satellite_tle(

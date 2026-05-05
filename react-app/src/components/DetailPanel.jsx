@@ -205,6 +205,14 @@ export default function DetailPanel({ object, isDemo = false }) {
       return
     }
 
+    // Don't run the intl_des fallback until fullDocument has loaded.
+    // If fullDocument is still null the NORAD is unknown — fetching by intl_des
+    // would pick up the first piece of the launch (which may be the wrong object)
+    // and could persist that TLE onto this object under the wrong NORAD.
+    if (fullDocument === null) {
+      return
+    }
+
     const fetchCurrentTle = async () => {
       setTleLoading(true)
       try {
@@ -267,7 +275,7 @@ export default function DetailPanel({ object, isDemo = false }) {
     }
 
     fetchCurrentTle()
-  }, [fullDocument?.canonical?.norad_cat_id, object?.['International Designator'], object?.['Object Type']])
+  }, [fullDocument, object?.['International Designator'], object?.['Object Type']])
 
   if (!object) {
     return (
