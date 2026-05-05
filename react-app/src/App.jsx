@@ -301,7 +301,7 @@ function App() {
               Satellite Catalog
             </button>
           )}
-          {!isDemo && (
+          {isTabVisible('observations') && (
             <button 
               className={activeTab === 'observations' ? 'active' : ''}
               onClick={() => setActiveTab('observations')}
@@ -317,7 +317,7 @@ function App() {
               Admin
             </button>
           )}
-          {!isDemo && (
+          {isTabVisible('aql-editor') && (
             <button
               className={activeTab === 'aql-editor' ? 'active' : ''}
               onClick={() => setActiveTab('aql-editor')}
@@ -325,7 +325,7 @@ function App() {
               AQL Editor
             </button>
           )}
-          {!isDemo && (
+          {isTabVisible('ephemeris') && (
             <button
               className={activeTab === 'ephemeris' ? 'active' : ''}
               onClick={() => setActiveTab('ephemeris')}
@@ -349,7 +349,7 @@ function App() {
               Kestrel Data
             </button>
           )}
-          {!isDemo && (
+          {isTabVisible('fragmentation-events') && (
             <button
               className={activeTab === 'fragmentation-events' ? 'active' : ''}
               onClick={() => setActiveTab('fragmentation-events')}
@@ -357,7 +357,7 @@ function App() {
               Fragmentation
             </button>
           )}
-          {!isDemo && (
+          {isTabVisible('provenance') && (
             <button
               className={activeTab === 'provenance' ? 'active' : ''}
               onClick={() => setActiveTab('provenance')}
@@ -449,26 +449,32 @@ function App() {
         </nav>
       )}
 
-      {activeTab === 'observations' && !isDemo && (
+      {activeTab === 'observations' && isTabVisible('observations') && (
         <nav className="app-subnav">
-          <button
-            className={activeObservationsSubTab === 'observations' ? 'active' : ''}
-            onClick={() => setActiveObservationsSubTab('observations')}
-          >
-            Observations
-          </button>
-          <button
-            className={activeObservationsSubTab === 'observation-graphs' ? 'active' : ''}
-            onClick={() => setActiveObservationsSubTab('observation-graphs')}
-          >
-            Observation Graphs
-          </button>
-          <button
-            className={activeObservationsSubTab === 'observation-dashboard' ? 'active' : ''}
-            onClick={() => setActiveObservationsSubTab('observation-dashboard')}
-          >
-            Observation Dashboard
-          </button>
+          {isSubtabVisible('observations', 'observations') && (
+            <button
+              className={activeObservationsSubTab === 'observations' ? 'active' : ''}
+              onClick={() => setActiveObservationsSubTab('observations')}
+            >
+              Observations
+            </button>
+          )}
+          {isSubtabVisible('observations', 'observation-graphs') && (
+            <button
+              className={activeObservationsSubTab === 'observation-graphs' ? 'active' : ''}
+              onClick={() => setActiveObservationsSubTab('observation-graphs')}
+            >
+              Observation Graphs
+            </button>
+          )}
+          {isSubtabVisible('observations', 'observation-dashboard') && (
+            <button
+              className={activeObservationsSubTab === 'observation-dashboard' ? 'active' : ''}
+              onClick={() => setActiveObservationsSubTab('observation-dashboard')}
+            >
+              Observation Dashboard
+            </button>
+          )}
         </nav>
       )}
       
@@ -522,15 +528,15 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'observations' && !isDemo && activeObservationsSubTab === 'observations' && (
+      {activeTab === 'observations' && isSubtabVisible('observations', 'observations') && activeObservationsSubTab === 'observations' && (
         <ObservationsView />
       )}
 
-      {activeTab === 'observations' && !isDemo && activeObservationsSubTab === 'observation-graphs' && (
+      {activeTab === 'observations' && isSubtabVisible('observations', 'observation-graphs') && activeObservationsSubTab === 'observation-graphs' && (
         <ObservationGraphs />
       )}
 
-      {activeTab === 'observations' && !isDemo && activeObservationsSubTab === 'observation-dashboard' && (
+      {activeTab === 'observations' && isSubtabVisible('observations', 'observation-dashboard') && activeObservationsSubTab === 'observation-dashboard' && (
         <div className="analytics-view-container">
           <ObservationDashboard />
         </div>
@@ -548,19 +554,19 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'fragmentation-events' && !isDemo && (
+      {activeTab === 'fragmentation-events' && isTabVisible('fragmentation-events') && (
         <div className="analytics-view-container">
           <FragmentationEventsPage />
         </div>
       )}
 
-      {activeTab === 'provenance' && !isDemo && (
+      {activeTab === 'provenance' && isTabVisible('provenance') && (
         <div className="analytics-view-container">
           <ObjectProvenancePage />
         </div>
       )}
 
-      {activeTab === 'aql-editor' && !isDemo && (
+      {activeTab === 'aql-editor' && isTabVisible('aql-editor') && (
         <AqlEditorPage />
       )}
 
@@ -568,7 +574,7 @@ function App() {
         <HelpPage />
       )}
 
-      {activeTab === 'ephemeris' && !isDemo && (
+      {activeTab === 'ephemeris' && isTabVisible('ephemeris') && (
         <EphemerisPage />
       )}
 
