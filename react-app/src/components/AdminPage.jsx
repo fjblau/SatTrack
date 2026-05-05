@@ -2,6 +2,80 @@ import apiFetch from '../utils/apiFetch'
 import { useState, useEffect, useRef } from 'react'
 import './AdminPage.css'
 
+const DEMO_CONTENTS_KEY = 'demoContentsConfig'
+
+const DEMO_TABS = [
+  {
+    id: 'satellite-catalog',
+    label: 'Satellite Catalog',
+    subtabs: [
+      { id: 'table', label: 'Satellite Catalog' },
+      { id: 'satellite-graphs', label: 'Satellite Graphs' },
+      { id: 'function-similarity', label: 'Function Similarity' },
+      { id: 'registration-docs', label: 'Registration Docs' },
+      { id: 'timeline', label: 'Timeline' },
+      { id: 'by-class', label: 'By Class' },
+    ]
+  },
+  {
+    id: 'kestrel-mission',
+    label: 'Kestrel Mission',
+    subtabs: [
+      { id: 'launch', label: 'Intercept Setup' },
+      { id: 'maneuver', label: 'Maneuver Plan' },
+      { id: 'advisor', label: 'AI Mission Advisor' },
+      { id: 'gmatplan', label: 'GMAT Maneuver Plan' },
+      { id: 'collection', label: 'Data Collection' },
+    ]
+  },
+  {
+    id: 'kestrel-data',
+    label: 'Kestrel Data',
+    subtabs: [
+      { id: 'globe', label: '3D Globe View' },
+      { id: 'observations', label: 'Observation Log' },
+    ]
+  },
+  {
+    id: 'help',
+    label: '? Help',
+    subtabs: []
+  }
+]
+
+const getDefaultDemoConfig = () => {
+  const config = {}
+  DEMO_TABS.forEach(tab => {
+    config[tab.id] = { enabled: true, subtabs: {} }
+    tab.subtabs.forEach(subtab => {
+      config[tab.id].subtabs[subtab.id] = true
+    })
+  })
+  return config
+}
+
+const loadDemoConfig = () => {
+  try {
+    const stored = localStorage.getItem(DEMO_CONTENTS_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      const defaults = getDefaultDemoConfig()
+      const merged = { ...defaults }
+      Object.keys(parsed).forEach(tabId => {
+        if (merged[tabId]) {
+          merged[tabId] = {
+            ...merged[tabId],
+            ...parsed[tabId],
+            subtabs: { ...merged[tabId].subtabs, ...parsed[tabId].subtabs }
+          }
+        }
+      })
+      return merged
+    }
+  } catch {}
+  return getDefaultDemoConfig()
+}
+
 function AdminPage() {
   const [scripts, setScripts] = useState([])
   const [loading, setLoading] = useState(false)
@@ -10,8 +84,36 @@ function AdminPage() {
   const [backups, setBackups] = useState([])
   const [backupsLoading, setBackupsLoading] = useState(false)
   const [downloadingBackup, setDownloadingBackup] = useState(null)
+  const [demoConfig, setDemoConfig] = useState(loadDemoConfig)
   const pollTimers = useRef({})
   const fileInputRefs = useRef({})
+
+  const saveDemoConfig = (newConfig) => {
+    setDemoConfig(newConfig)
+    localStorage.setItem(DEMO_CONTENTS_KEY, JSON.stringify(newConfig))
+  }
+
+  const handleTabToggle = (tabId) => {
+    const newEnabled = !demoConfig[tabId].enabled
+    const newSubtabs = {}
+    Object.keys(demoConfig[tabId].subtabs).forEach(subId => {
+      newSubtabs[subId] = newEnabled
+    })
+    saveDemoConfig({
+      ...demoConfig,
+      [tabId]: { ...demoConfig[tabId], enabled: newEnabled, subtabs: newSubtabs }
+    })
+  }
+
+  const handleSubtabToggle = (tabId, subtabId) => {
+    saveDemoConfig({
+      ...demoConfig,
+      [tabId]: {
+        ...demoConfig[tabId],
+        subtabs: { ...demoConfig[tabId].subtabs, [subtabId]: !demoConfig[tabId].subtabs[subtabId] }
+      }
+    })
+  }
 
   useEffect(() => {
     fetchScripts()
@@ -175,6 +277,48 @@ function AdminPage() {
     <div className="admin-page">
       <div className="admin-header">
         <h2>Data Enrichment Scripts</h2>
+      </div>
+
+      <div className="demo-contents-section">
+        <div className="demo-contents-header">
+          <h3 className="category-title">Demo Contents</h3>
+          <p className="demo-contents-desc">Configure which tabs are visible when logged in as demo.</p>
+        </div>
+        <div className="demo-tab-list">
+          {DEMO_TABS.map(tab => {
+            const tabConfig = demoConfig[tab.id]
+            return (
+              <div key={tab.id} className="demo-tab-item">
+                <label className="demo-tab-label">
+                  <input
+                    type="checkbox"
+                    checked={tabConfig.enabled}
+                    onChange={() => handleTabToggle(tab.id)}
+                  />
+                  <span className="demo-tab-name">{tab.label}</span>
+                </label>
+                {tab.subtabs.length > 0 && (
+                  <div className="demo-subtab-list">
+                    {tab.subtabs.map(subtab => (
+                      <label
+                        key={subtab.id}
+                        className={`demo-subtab-label${!tabConfig.enabled ? ' demo-subtab-disabled' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={tabConfig.subtabs[subtab.id]}
+                          disabled={!tabConfig.enabled}
+                          onChange={() => handleSubtabToggle(tab.id, subtab.id)}
+                        />
+                        <span className="demo-subtab-name">{subtab.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {backups.length > 0 && (

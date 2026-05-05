@@ -20,6 +20,13 @@
   font-size: 2em;
 }
 
+.header-logo {
+  height: 2.5rem;
+  width: auto;
+  filter: invert(1);
+  flex-shrink: 0;
+}
+
 .app-nav {
   display: flex;
   gap: 0.5rem;

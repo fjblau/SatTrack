@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import './App.css'
+import kesdynLogo from './assets/kesdyn-logo.jpeg'
 import DataTable from './components/DataTable'
 import DetailPanel from './components/DetailPanel'
 import Filters from './components/Filters'
@@ -43,6 +44,35 @@ function App() {
   const [sortConfig, setSortConfig] = useState([])
 
   const limit = PAGINATION.DEFAULT_PAGE_SIZE
+
+  const demoConfig = useMemo(() => {
+    if (!isDemo) return null
+    try {
+      const stored = localStorage.getItem('demoContentsConfig')
+      if (stored) return JSON.parse(stored)
+    } catch {}
+    return null
+  }, [isDemo])
+
+  const isTabVisible = (tabId) => {
+    if (!isDemo || !demoConfig) return true
+    return demoConfig[tabId]?.enabled !== false
+  }
+
+  const isSubtabVisible = (tabId, subtabId) => {
+    if (!isDemo || !demoConfig) return true
+    if (demoConfig[tabId]?.enabled === false) return false
+    return demoConfig[tabId]?.subtabs?.[subtabId] !== false
+  }
+
+  const getDemoAllowedSubtabs = (tabId) => {
+    if (!isDemo || !demoConfig) return null
+    const tabConfig = demoConfig[tabId]
+    if (!tabConfig?.enabled) return []
+    return Object.entries(tabConfig.subtabs || {})
+      .filter(([, enabled]) => enabled)
+      .map(([id]) => id)
+  }
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -260,14 +290,17 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
+        <img src={kesdynLogo} alt="Kesdyn logo" className="header-logo" />
         <h1>Talon</h1>
         <nav className="app-nav">
-          <button 
-            className={activeTab === 'satellite-catalog' ? 'active' : ''}
-            onClick={() => setActiveTab('satellite-catalog')}
-          >
-            Satellite Catalog
-          </button>
+          {isTabVisible('satellite-catalog') && (
+            <button 
+              className={activeTab === 'satellite-catalog' ? 'active' : ''}
+              onClick={() => setActiveTab('satellite-catalog')}
+            >
+              Satellite Catalog
+            </button>
+          )}
           {!isDemo && (
             <button 
               className={activeTab === 'observations' ? 'active' : ''}
@@ -276,12 +309,14 @@ function App() {
               Observations
             </button>
           )}
-          <button
-            className={activeTab === 'admin' ? 'active' : ''}
-            onClick={() => setActiveTab('admin')}
-          >
-            Admin
-          </button>
+          {!isDemo && (
+            <button
+              className={activeTab === 'admin' ? 'active' : ''}
+              onClick={() => setActiveTab('admin')}
+            >
+              Admin
+            </button>
+          )}
           {!isDemo && (
             <button
               className={activeTab === 'aql-editor' ? 'active' : ''}
@@ -298,18 +333,22 @@ function App() {
               Ephemeris
             </button>
           )}
-          <button
-            className={`kestrel-button${activeTab === 'kestrel-mission' ? ' active' : ''}`}
-            onClick={() => setActiveTab('kestrel-mission')}
-          >
-            Kestrel Mission
-          </button>
-          <button
-            className={`kestrel-button${activeTab === 'kestrel-data' ? ' active' : ''}`}
-            onClick={() => setActiveTab('kestrel-data')}
-          >
-            Kestrel Data
-          </button>
+          {isTabVisible('kestrel-mission') && (
+            <button
+              className={`kestrel-button${activeTab === 'kestrel-mission' ? ' active' : ''}`}
+              onClick={() => setActiveTab('kestrel-mission')}
+            >
+              Kestrel Mission
+            </button>
+          )}
+          {isTabVisible('kestrel-data') && (
+            <button
+              className={`kestrel-button${activeTab === 'kestrel-data' ? ' active' : ''}`}
+              onClick={() => setActiveTab('kestrel-data')}
+            >
+              Kestrel Data
+            </button>
+          )}
           {!isDemo && (
             <button
               className={activeTab === 'fragmentation-events' ? 'active' : ''}
@@ -326,12 +365,14 @@ function App() {
               Provenance
             </button>
           )}
-          <button
-            className={`help-button${activeTab === 'help' ? ' active' : ''}`}
-            onClick={() => setActiveTab('help')}
-          >
-            ? Help
-          </button>
+          {isTabVisible('help') && (
+            <button
+              className={`help-button${activeTab === 'help' ? ' active' : ''}`}
+              onClick={() => setActiveTab('help')}
+            >
+              ? Help
+            </button>
+          )}
         </nav>
         {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'table' && <p>{total} objects</p>}
         {activeTab === 'observations' && <p>Observational Data</p>}
@@ -340,42 +381,54 @@ function App() {
 
       {activeTab === 'satellite-catalog' && (
         <nav className="app-subnav">
-          <button
-            className={activeCatalogSubTab === 'table' ? 'active' : ''}
-            onClick={() => setActiveCatalogSubTab('table')}
-          >
-            Satellite Catalog
-          </button>
-          <button
-            className={activeCatalogSubTab === 'satellite-graphs' ? 'active' : ''}
-            onClick={() => setActiveCatalogSubTab('satellite-graphs')}
-          >
-            Satellite Graphs
-          </button>
-          <button
-            className={activeCatalogSubTab === 'function-similarity' ? 'active' : ''}
-            onClick={() => setActiveCatalogSubTab('function-similarity')}
-          >
-            Function Similarity
-          </button>
-          <button
-            className={activeCatalogSubTab === 'registration-docs' ? 'active' : ''}
-            onClick={() => setActiveCatalogSubTab('registration-docs')}
-          >
-            Registration Docs
-          </button>
-          <button
-            className={activeCatalogSubTab === 'timeline' ? 'active' : ''}
-            onClick={() => setActiveCatalogSubTab('timeline')}
-          >
-            Timeline
-          </button>
-          <button
-            className={activeCatalogSubTab === 'by-class' ? 'active' : ''}
-            onClick={() => setActiveCatalogSubTab('by-class')}
-          >
-            By Class
-          </button>
+          {isSubtabVisible('satellite-catalog', 'table') && (
+            <button
+              className={activeCatalogSubTab === 'table' ? 'active' : ''}
+              onClick={() => setActiveCatalogSubTab('table')}
+            >
+              Satellite Catalog
+            </button>
+          )}
+          {isSubtabVisible('satellite-catalog', 'satellite-graphs') && (
+            <button
+              className={activeCatalogSubTab === 'satellite-graphs' ? 'active' : ''}
+              onClick={() => setActiveCatalogSubTab('satellite-graphs')}
+            >
+              Satellite Graphs
+            </button>
+          )}
+          {isSubtabVisible('satellite-catalog', 'function-similarity') && (
+            <button
+              className={activeCatalogSubTab === 'function-similarity' ? 'active' : ''}
+              onClick={() => setActiveCatalogSubTab('function-similarity')}
+            >
+              Function Similarity
+            </button>
+          )}
+          {isSubtabVisible('satellite-catalog', 'registration-docs') && (
+            <button
+              className={activeCatalogSubTab === 'registration-docs' ? 'active' : ''}
+              onClick={() => setActiveCatalogSubTab('registration-docs')}
+            >
+              Registration Docs
+            </button>
+          )}
+          {isSubtabVisible('satellite-catalog', 'timeline') && (
+            <button
+              className={activeCatalogSubTab === 'timeline' ? 'active' : ''}
+              onClick={() => setActiveCatalogSubTab('timeline')}
+            >
+              Timeline
+            </button>
+          )}
+          {isSubtabVisible('satellite-catalog', 'by-class') && (
+            <button
+              className={activeCatalogSubTab === 'by-class' ? 'active' : ''}
+              onClick={() => setActiveCatalogSubTab('by-class')}
+            >
+              By Class
+            </button>
+          )}
         </nav>
       )}
 
@@ -520,11 +573,11 @@ function App() {
       )}
 
       {activeTab === 'kestrel-mission' && (
-        <KestrelMissionPage />
+        <KestrelMissionPage allowedSubtabs={getDemoAllowedSubtabs('kestrel-mission')} />
       )}
 
       {activeTab === 'kestrel-data' && (
-        <KestrelDataPage />
+        <KestrelDataPage allowedSubtabs={getDemoAllowedSubtabs('kestrel-data')} />
       )}
 
       {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'function-similarity' && (
