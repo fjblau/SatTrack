@@ -291,7 +291,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <img src={kesdynLogo} alt="Kesdyn logo" className="header-logo" />
-        <h1>Talon</h1>
+        <h1>TALON</h1>
         <nav className="app-nav">
           {isTabVisible('satellite-catalog') && (
             <button 
