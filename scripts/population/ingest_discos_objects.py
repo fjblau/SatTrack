@@ -167,6 +167,7 @@ def run(dry_run: bool = False, batch_size: int = 500):
     surrogates_created = 0
     surrogates_updated = 0
     conflicts_logged = 0
+    surrogates_deleted = 0
     errors = 0
 
     for discos_obj in discos_objs:
@@ -215,9 +216,12 @@ def run(dry_run: bool = False, batch_size: int = 500):
                 conflicts_logged += 1
 
             if dry_run:
+                surrogate_key = f"DISCOS-{discos_id}"
+                surrogate_exists = surrogate_key != existing["_key"] and col.get(surrogate_key) is not None
                 logger.info(
                     f"[DRY RUN] Would enrich existing object {existing['_key']} "
                     f"with DISCOS source (cospar={cospar_id})"
+                    + (f"; would delete orphan surrogate {surrogate_key}" if surrogate_exists else "")
                 )
                 enriched += 1
                 continue
@@ -247,6 +251,20 @@ def run(dry_run: bool = False, batch_size: int = 500):
                     },
                 })
                 enriched += 1
+
+                surrogate_key = f"DISCOS-{discos_id}"
+                if surrogate_key != existing["_key"]:
+                    try:
+                        surrogate = col.get(surrogate_key)
+                        if surrogate:
+                            col.delete(surrogate_key)
+                            surrogates_deleted += 1
+                            logger.info(
+                                f"Deleted orphan surrogate {surrogate_key} "
+                                f"(data now on {existing['_key']})"
+                            )
+                    except Exception as exc:
+                        logger.warning(f"Could not delete surrogate {surrogate_key}: {exc}")
             except Exception as exc:
                 logger.error(f"Failed to enrich {existing.get('_key')}: {exc}")
                 errors += 1
@@ -279,8 +297,8 @@ def run(dry_run: bool = False, batch_size: int = 500):
 
     logger.info(
         f"Done — enriched={enriched} surrogates_created={surrogates_created} "
-        f"surrogates_updated={surrogates_updated} conflicts_logged={conflicts_logged} "
-        f"errors={errors} total={len(discos_objs)}"
+        f"surrogates_updated={surrogates_updated} surrogates_deleted={surrogates_deleted} "
+        f"conflicts_logged={conflicts_logged} errors={errors} total={len(discos_objs)}"
     )
 
 
