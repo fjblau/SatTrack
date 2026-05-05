@@ -2,8 +2,6 @@ import apiFetch from '../utils/apiFetch'
 import { useState, useEffect, useRef } from 'react'
 import './AdminPage.css'
 
-const DEMO_CONTENTS_KEY = 'demoContentsConfig'
-
 const DEMO_TABS = [
   {
     id: 'satellite-catalog',
@@ -93,26 +91,20 @@ const getDefaultDemoConfig = () => {
   return config
 }
 
-const loadDemoConfig = () => {
-  try {
-    const stored = localStorage.getItem(DEMO_CONTENTS_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      const defaults = getDefaultDemoConfig()
-      const merged = { ...defaults }
-      Object.keys(parsed).forEach(tabId => {
-        if (merged[tabId]) {
-          merged[tabId] = {
-            ...merged[tabId],
-            ...parsed[tabId],
-            subtabs: { ...merged[tabId].subtabs, ...parsed[tabId].subtabs }
-          }
-        }
-      })
-      return merged
+const mergeDemoConfig = (stored) => {
+  const defaults = getDefaultDemoConfig()
+  if (!stored) return defaults
+  const merged = { ...defaults }
+  Object.keys(stored).forEach(tabId => {
+    if (merged[tabId]) {
+      merged[tabId] = {
+        ...merged[tabId],
+        ...stored[tabId],
+        subtabs: { ...merged[tabId].subtabs, ...(stored[tabId].subtabs || {}) }
+      }
     }
-  } catch {}
-  return getDefaultDemoConfig()
+  })
+  return merged
 }
 
 function AdminPage() {
@@ -123,13 +115,28 @@ function AdminPage() {
   const [backups, setBackups] = useState([])
   const [backupsLoading, setBackupsLoading] = useState(false)
   const [downloadingBackup, setDownloadingBackup] = useState(null)
-  const [demoConfig, setDemoConfig] = useState(loadDemoConfig)
+  const [demoConfig, setDemoConfig] = useState(getDefaultDemoConfig)
+  const [demoSaving, setDemoSaving] = useState(false)
+  const [demoSaved, setDemoSaved] = useState(false)
   const pollTimers = useRef({})
   const fileInputRefs = useRef({})
 
-  const saveDemoConfig = (newConfig) => {
-    setDemoConfig(newConfig)
-    localStorage.setItem(DEMO_CONTENTS_KEY, JSON.stringify(newConfig))
+  const persistDemoConfig = async (config) => {
+    setDemoSaving(true)
+    setDemoSaved(false)
+    try {
+      await apiFetch('/v2/admin/demo-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config }),
+      })
+      setDemoSaved(true)
+      setTimeout(() => setDemoSaved(false), 2000)
+    } catch (err) {
+      console.error('Failed to save demo config:', err)
+    } finally {
+      setDemoSaving(false)
+    }
   }
 
   const handleTabToggle = (tabId) => {
@@ -138,29 +145,42 @@ function AdminPage() {
     Object.keys(demoConfig[tabId].subtabs).forEach(subId => {
       newSubtabs[subId] = newEnabled
     })
-    saveDemoConfig({
-      ...demoConfig,
-      [tabId]: { ...demoConfig[tabId], enabled: newEnabled, subtabs: newSubtabs }
-    })
+    setDemoConfig(prev => ({
+      ...prev,
+      [tabId]: { ...prev[tabId], enabled: newEnabled, subtabs: newSubtabs }
+    }))
+    setDemoSaved(false)
   }
 
   const handleSubtabToggle = (tabId, subtabId) => {
-    saveDemoConfig({
-      ...demoConfig,
+    setDemoConfig(prev => ({
+      ...prev,
       [tabId]: {
-        ...demoConfig[tabId],
-        subtabs: { ...demoConfig[tabId].subtabs, [subtabId]: !demoConfig[tabId].subtabs[subtabId] }
+        ...prev[tabId],
+        subtabs: { ...prev[tabId].subtabs, [subtabId]: !prev[tabId].subtabs[subtabId] }
       }
-    })
+    }))
+    setDemoSaved(false)
   }
 
   useEffect(() => {
     fetchScripts()
     fetchBackups()
+    fetchDemoConfig()
     return () => {
       Object.values(pollTimers.current).forEach(clearInterval)
     }
   }, [])
+
+  const fetchDemoConfig = async () => {
+    try {
+      const res = await apiFetch('/v2/admin/demo-config')
+      const data = await res.json()
+      setDemoConfig(mergeDemoConfig(data.config))
+    } catch (err) {
+      console.error('Failed to load demo config:', err)
+    }
+  }
 
   const fetchScripts = async () => {
     setLoading(true)
@@ -357,6 +377,15 @@ function AdminPage() {
               </div>
             )
           })}
+        </div>
+        <div className="demo-save-row">
+          <button
+            className="run-button"
+            onClick={() => persistDemoConfig(demoConfig)}
+            disabled={demoSaving}
+          >
+            {demoSaving ? 'Saving...' : demoSaved ? 'Saved!' : 'Save'}
+          </button>
         </div>
       </div>
 

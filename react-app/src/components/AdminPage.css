@@ -405,3 +405,9 @@
   font-size: 0.83em;
   color: #444;
 }
+
+.demo-save-row {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}

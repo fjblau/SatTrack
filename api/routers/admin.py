@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from api.services.gmat_service import run_smoke_test, is_available as gmat_is_available, check_data_files, find_egm96
 import api.services.discos_service as _discos_svc
+import database.demo_config as _demo_config_db
 import io
 import os
 import re
@@ -463,6 +464,24 @@ def discos_status():
         "health_check": check_result,
         "status": overall_status,
     }
+
+
+@router.get("/demo-config")
+def get_demo_config():
+    config = _demo_config_db.get_demo_config()
+    return {"config": config}
+
+
+class DemoConfigBody(BaseModel):
+    config: dict
+
+
+@router.put("/demo-config")
+def save_demo_config(body: DemoConfigBody):
+    ok = _demo_config_db.save_demo_config(body.config)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to save demo config")
+    return {"ok": True}
 
 
 @router.get("/scripts")

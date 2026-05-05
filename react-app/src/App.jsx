@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import kesdynLogo from './assets/kesdyn-logo.jpeg'
 import DataTable from './components/DataTable'
@@ -45,13 +45,17 @@ function App() {
 
   const limit = PAGINATION.DEFAULT_PAGE_SIZE
 
-  const demoConfig = useMemo(() => {
-    if (!isDemo) return null
-    try {
-      const stored = localStorage.getItem('demoContentsConfig')
-      if (stored) return JSON.parse(stored)
-    } catch {}
-    return null
+  const [demoConfig, setDemoConfig] = useState(null)
+
+  useEffect(() => {
+    if (!isDemo) {
+      setDemoConfig(null)
+      return
+    }
+    apiFetch('/v2/admin/demo-config')
+      .then(r => r.json())
+      .then(data => setDemoConfig(data.config || null))
+      .catch(() => setDemoConfig(null))
   }, [isDemo])
 
   const isTabVisible = (tabId) => {
