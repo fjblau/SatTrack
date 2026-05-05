@@ -142,7 +142,7 @@ export default function FragmentationEventsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const PAGE_SIZE = 100
+  const PAGE_SIZE = 30
 
   const fetchEvents = async (pageNum = 0) => {
     setLoading(true)
