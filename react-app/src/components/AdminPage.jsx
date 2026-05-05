@@ -2,8 +2,6 @@ import apiFetch from '../utils/apiFetch'
 import { useState, useEffect, useRef } from 'react'
 import './AdminPage.css'
 
-const DEMO_CONTENTS_KEY = 'demoContentsConfig'
-
 const DEMO_TABS = [
   {
     id: 'satellite-catalog',
@@ -93,26 +91,20 @@ const getDefaultDemoConfig = () => {
   return config
 }
 
-const loadDemoConfig = () => {
-  try {
-    const stored = localStorage.getItem(DEMO_CONTENTS_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      const defaults = getDefaultDemoConfig()
-      const merged = { ...defaults }
-      Object.keys(parsed).forEach(tabId => {
-        if (merged[tabId]) {
-          merged[tabId] = {
-            ...merged[tabId],
-            ...parsed[tabId],
-            subtabs: { ...merged[tabId].subtabs, ...parsed[tabId].subtabs }
-          }
-        }
-      })
-      return merged
+const mergeDemoConfig = (stored) => {
+  const defaults = getDefaultDemoConfig()
+  if (!stored) return defaults
+  const merged = { ...defaults }
+  Object.keys(stored).forEach(tabId => {
+    if (merged[tabId]) {
+      merged[tabId] = {
+        ...merged[tabId],
+        ...stored[tabId],
+        subtabs: { ...merged[tabId].subtabs, ...(stored[tabId].subtabs || {}) }
+      }
     }
-  } catch {}
-  return getDefaultDemoConfig()
+  })
+  return merged
 }
 
 function AdminPage() {
@@ -123,13 +115,21 @@ function AdminPage() {
   const [backups, setBackups] = useState([])
   const [backupsLoading, setBackupsLoading] = useState(false)
   const [downloadingBackup, setDownloadingBackup] = useState(null)
-  const [demoConfig, setDemoConfig] = useState(loadDemoConfig)
+  const [demoConfig, setDemoConfig] = useState(getDefaultDemoConfig)
   const pollTimers = useRef({})
   const fileInputRefs = useRef({})
 
-  const saveDemoConfig = (newConfig) => {
+  const saveDemoConfig = async (newConfig) => {
     setDemoConfig(newConfig)
-    localStorage.setItem(DEMO_CONTENTS_KEY, JSON.stringify(newConfig))
+    try {
+      await apiFetch('/v2/admin/demo-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: newConfig }),
+      })
+    } catch (err) {
+      console.error('Failed to save demo config:', err)
+    }
   }
 
   const handleTabToggle = (tabId) => {
@@ -157,10 +157,21 @@ function AdminPage() {
   useEffect(() => {
     fetchScripts()
     fetchBackups()
+    fetchDemoConfig()
     return () => {
       Object.values(pollTimers.current).forEach(clearInterval)
     }
   }, [])
+
+  const fetchDemoConfig = async () => {
+    try {
+      const res = await apiFetch('/v2/admin/demo-config')
+      const data = await res.json()
+      setDemoConfig(mergeDemoConfig(data.config))
+    } catch (err) {
+      console.error('Failed to load demo config:', err)
+    }
+  }
 
   const fetchScripts = async () => {
     setLoading(true)

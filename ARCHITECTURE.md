@@ -146,7 +146,7 @@ kessler/
 │           ├── SatelliteNeighborhood.jsx/EvolutionTimelineView.jsx/PathFinderPanel.jsx
 │           ├── AqlEditorPage.jsx  # Interactive AQL query editor
 │           ├── HelpPage.jsx     # AI assistant chat interface
-│           ├── AdminPage.jsx    # Admin script runner + Demo Contents checklist (single source of truth for demo-mode tab/subtab visibility; persisted in localStorage)
+│           ├── AdminPage.jsx    # Admin script runner + Demo Contents checklist (controls demo-mode tab/subtab visibility; persisted to ArangoDB app_settings collection via GET/PUT /v2/admin/demo-config, shared across all users)
 │           └── LoginPage.jsx    # Authentication
 │
 └── mqtt_publisher.py            # MQTT publishing service

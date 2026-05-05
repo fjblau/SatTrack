@@ -38,7 +38,7 @@ Kessler provides a comprehensive satellite tracking system combining:
 - 🌐 **Ephemeris Generation**: SGP4/Skyfield and GMAT high-fidelity ephemeris with CesiumJS CZML export and 3D visualization
 - 🤖 **AI Help Assistant**: LangGraph-powered chat that answers questions using RAG + live data tools
 - 💥 **Fragmentation Events**: DISCOS breakup/fragmentation event table with Comment column, fragment count derived from graph edges, 30 rows/page, and 1600px-wide layout
-- 🔑 **Authentication**: Bearer-token login with demo mode; **Demo Contents** checklist in Admin page controls which tabs are visible per demo session
+- 🔑 **Authentication**: Bearer-token login with demo mode; **Demo Contents** checklist in Admin page controls which tabs are visible per demo session (persisted in the database and shared across all users)
 
 ### Technical Features
 
