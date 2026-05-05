@@ -356,6 +356,17 @@ SCRIPT_CATALOGUE = [
         "reversibility": "reversible (TLE re-fetched on next page load)",
     },
     {
+        "id": "promote_gcat_parent_edges",
+        "name": "Promote GCAT Parent Edges",
+        "description": "Promotes sources.gcat.parent to canonical.parent_gcat_id and creates fragmented_from edges so parent objects appear in the Object Provenance graph. Safe to re-run; supports --dry-run.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_gcat_parent_edges.py",
+        "order_hint": 27,
+        "depends_on": ["promote_gcat_attributes"],
+        "estimated_duration": "1-5 minutes",
+        "reversibility": "reversible",
+    },
+    {
         "id": "verify_discos_provenance_e2e",
         "name": "Verify DISCOS Provenance E2E",
         "description": "End-to-end verification of the DISCOS provenance graph: checks collection counts, spot-checks provenance chains, validates edge integrity.",
