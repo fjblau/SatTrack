@@ -35,9 +35,9 @@ def _make_event_doc(event: dict) -> dict:
         "canonical": {
             "epoch": event.get("epoch"),
             "altitude_km": event.get("altitude"),
+            "latitude": event.get("latitude"),
+            "longitude": event.get("longitude"),
             "event_type": event.get("type") or event.get("eventType"),
-            "fragment_count": event.get("fragmentCount"),
-            "casualty_risk": event.get("casualtyRisk"),
             "comment": event.get("comment"),
         },
         "sources": {
