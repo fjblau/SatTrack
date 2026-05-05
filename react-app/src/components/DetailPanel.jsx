@@ -195,10 +195,14 @@ export default function DetailPanel({ object, isDemo = false }) {
     }
   }, [docLink])
 
+  const fullDocNoradId = fullDocument?.canonical?.norad_cat_id
+  const fullDocObjectClass = fullDocument?.canonical?.object_class
+  const fullDocLoaded = fullDocument !== null
+
   useEffect(() => {
-    const noradId = fullDocument?.canonical?.norad_cat_id
+    const noradId = fullDocNoradId
     const intlDes = object?.['International Designator']
-    const debris = isDebrisObject(object, fullDocument)
+    const debris = isDebrisObject(object, { canonical: { object_class: fullDocObjectClass } })
 
     if (!object || (!noradId && !debris)) {
       setCurrentTle(null)
@@ -209,7 +213,7 @@ export default function DetailPanel({ object, isDemo = false }) {
     // If fullDocument is still null the NORAD is unknown — fetching by intl_des
     // would pick up the first piece of the launch (which may be the wrong object)
     // and could persist that TLE onto this object under the wrong NORAD.
-    if (fullDocument === null) {
+    if (!fullDocLoaded) {
       return
     }
 
@@ -275,7 +279,7 @@ export default function DetailPanel({ object, isDemo = false }) {
     }
 
     fetchCurrentTle()
-  }, [fullDocument, object?.['International Designator'], object?.['Object Type']])
+  }, [fullDocNoradId, fullDocObjectClass, fullDocLoaded, object?.['International Designator'], object?.['Object Type']])
 
   if (!object) {
     return (
