@@ -345,6 +345,17 @@ SCRIPT_CATALOGUE = [
         "reversibility": "reversible",
     },
     {
+        "id": "fix_tle_norad_mismatch",
+        "name": "Fix TLE NORAD Mismatch",
+        "description": "Finds objects where the stored TLE's NORAD (from line1) does not match canonical.norad_cat_id and clears the bad TLE. Safe to re-run; supports --dry-run.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/fix_tle_norad_mismatch.py",
+        "order_hint": 26,
+        "depends_on": [],
+        "estimated_duration": "< 1 minute",
+        "reversibility": "reversible (TLE re-fetched on next page load)",
+    },
+    {
         "id": "verify_discos_provenance_e2e",
         "name": "Verify DISCOS Provenance E2E",
         "description": "End-to-end verification of the DISCOS provenance graph: checks collection counts, spot-checks provenance chains, validates edge integrity.",
