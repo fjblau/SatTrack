@@ -8,13 +8,17 @@ For each object that has sources.gcat.parent set, this script:
   2. Resolves the parent object in the objects collection (by GCAT JCAT identifier).
   3. Creates a fragmented_from edge from child → parent in the provenance graph.
 
+Both operations are executed as single batch AQL queries rather than one
+document at a time.  Only records that have sources.gcat.parent set are
+affected.
+
 Usage:
     python scripts/maintenance/promote_gcat_parent_edges.py [--dry-run] [--yes]
 
 Options:
     --dry-run   Preview changes without writing to the database.
     --yes       Skip the confirmation prompt.
-    -v          Print each affected document identifier.
+    -v          Print identifiers for records whose parent could not be found.
 """
 import sys
 import argparse
@@ -38,68 +42,6 @@ logger = logging.getLogger(__name__)
 
 COL = db_conn.COLLECTION_NAME
 EDGE_COL = db_conn.EDGE_COLLECTION_FRAGMENTED_FROM
-
-
-def _find_parent_doc(db, jcat_id: str):
-    """
-    Locate a parent object by its GCAT JCAT identifier.
-
-    Tries the canonical key format "GCAT-{jcat_id}" first, then falls back to a
-    full collection scan matching sources.gcat.jcat.
-    """
-    try:
-        doc = db.collection(COL).get(f"GCAT-{jcat_id}")
-        if doc:
-            return doc
-    except Exception:
-        pass
-
-    cursor = db.aql.execute(
-        "FOR doc IN @@col FILTER doc.sources.gcat.jcat == @jcat LIMIT 1 RETURN doc",
-        bind_vars={"@col": COL, "jcat": jcat_id},
-    )
-    rows = list(cursor)
-    return rows[0] if rows else None
-
-
-def _upsert_edge(db, from_id: str, to_id: str, extra: dict, dry_run: bool) -> bool:
-    if dry_run:
-        logger.info(f"  [DRY RUN] edge {from_id} → {to_id}")
-        return True
-
-    now = datetime.now(timezone.utc).isoformat()
-    col = db.collection(EDGE_COL)
-    cursor = db.aql.execute(
-        "FOR e IN @@col FILTER e._from == @f AND e._to == @t LIMIT 1 RETURN e",
-        bind_vars={"@col": EDGE_COL, "f": from_id, "t": to_id},
-    )
-    existing = (list(cursor) or [None])[0]
-
-    edge_doc = {"_from": from_id, "_to": to_id, **extra}
-    if existing:
-        transformations = existing.get("metadata", {}).get("transformations", [])
-        transformations.append({
-            "source": "gcat",
-            "action": "update",
-            "timestamp": now,
-            "operator": "promote_gcat_parent_edges",
-        })
-        col.update({"_key": existing["_key"], **edge_doc,
-                     "metadata": {**existing.get("metadata", {}),
-                                  "transformations": transformations[-10:]}})
-    else:
-        child_key = from_id.split("/", 1)[-1]
-        parent_key = to_id.split("/", 1)[-1]
-        transformations = [{
-            "source": "gcat",
-            "action": "create",
-            "timestamp": now,
-            "operator": "promote_gcat_parent_edges",
-        }]
-        edge_doc["_key"] = f"{child_key}--{parent_key}"
-        edge_doc["metadata"] = {"transformations": transformations}
-        col.insert(edge_doc)
-    return True
 
 
 def run(dry_run: bool, yes: bool, verbose: bool):
@@ -142,8 +84,37 @@ def run(dry_run: bool, yes: bool, verbose: bool):
         print(f"  {c['id']}  →  parent JCAT: {c['parent']}")
 
     if dry_run:
-        print(f"\n[DRY-RUN] Previewing edge creation for {len(candidates):,} objects.\n")
-    elif not yes:
+        cursor = db.aql.execute(
+            """
+            FOR child IN @@col
+                FILTER child.sources.gcat.parent != null
+                   AND child.sources.gcat.parent != ""
+                LET parent_jcat = child.sources.gcat.parent
+                LET parent_by_key = DOCUMENT(@@col, CONCAT("GCAT-", parent_jcat))
+                LET parent_by_scan = FIRST(
+                    FOR p IN @@col
+                        FILTER p.sources.gcat.jcat == parent_jcat
+                        LIMIT 1
+                        RETURN p
+                )
+                LET parent = parent_by_key != null ? parent_by_key : parent_by_scan
+                FILTER parent == null
+                RETURN { id: child.identifier, parent_jcat: parent_jcat }
+            """,
+            bind_vars={"@col": COL},
+            max_runtime=600,
+        )
+        not_found = list(cursor)
+        print(f"\n[DRY-RUN] Previewing changes for {len(candidates):,} objects.")
+        print(f"  canonical.parent_gcat_id would be promoted: {len(candidates) - already_promoted:,}")
+        print(f"  fragmented_from edges would be upserted   : {len(candidates) - len(not_found):,}")
+        print(f"  Parent objects not found                  : {len(not_found):,}")
+        if verbose and not_found:
+            for nf in not_found:
+                logger.info(f"  Parent not found: {nf['id']}  (GCAT JCAT={nf['parent_jcat']})")
+        return True
+
+    if not yes:
         try:
             resp = input(f"\nProceed? (y/N): ").strip().lower()
         except EOFError:
@@ -153,81 +124,126 @@ def run(dry_run: bool, yes: bool, verbose: bool):
             return False
 
     now = datetime.now(timezone.utc).isoformat()
-    objects_col = db.collection(COL)
 
-    promoted_canonical = 0
-    edges_created = 0
-    parent_not_found = 0
-    errors = 0
+    cursor = db.aql.execute(
+        """
+        FOR doc IN @@col
+            FILTER doc.sources.gcat.parent != null
+               AND doc.sources.gcat.parent != ""
+               AND (doc.canonical.parent_gcat_id == null OR doc.canonical.parent_gcat_id == "")
+            LET parent_jcat = doc.sources.gcat.parent
+            UPDATE doc WITH {
+                canonical: MERGE(doc.canonical, { parent_gcat_id: parent_jcat }),
+                metadata: MERGE(doc.metadata, {
+                    transformations: APPEND(
+                        doc.metadata.transformations || [],
+                        [{
+                            source_field: "sources.gcat.parent",
+                            target_field: "canonical.parent_gcat_id",
+                            value: parent_jcat,
+                            timestamp: @ts,
+                            promoted_by: "promote_gcat_parent_edges"
+                        }]
+                    )
+                })
+            } IN @@col
+            COLLECT WITH COUNT INTO updated
+            RETURN updated
+        """,
+        bind_vars={"@col": COL, "ts": now},
+        max_runtime=600,
+    )
+    promoted_canonical = (list(cursor) or [0])[0]
 
-    for child in candidates:
-        child_key = child["_key"]
-        child_id = child["_id"]
-        parent_jcat = child["parent"]
+    cursor = db.aql.execute(
+        """
+        FOR child IN @@col
+            FILTER child.sources.gcat.parent != null
+               AND child.sources.gcat.parent != ""
+            LET parent_jcat = child.sources.gcat.parent
+            LET parent_by_key = DOCUMENT(@@col, CONCAT("GCAT-", parent_jcat))
+            LET parent_by_scan = FIRST(
+                FOR p IN @@col
+                    FILTER p.sources.gcat.jcat == parent_jcat
+                    LIMIT 1
+                    RETURN p
+            )
+            LET parent = parent_by_key != null ? parent_by_key : parent_by_scan
+            FILTER parent != null
+            UPSERT { _from: child._id, _to: parent._id }
+            INSERT {
+                _key: CONCAT(child._key, "--", parent._key),
+                _from: child._id,
+                _to: parent._id,
+                source: "gcat",
+                relationship_type: "parent",
+                confidence: 1.0,
+                confidence_label: "high",
+                metadata: {
+                    transformations: [{
+                        source: "gcat",
+                        action: "create",
+                        timestamp: @ts,
+                        operator: "promote_gcat_parent_edges"
+                    }]
+                }
+            }
+            UPDATE {
+                metadata: MERGE(OLD.metadata || {}, {
+                    transformations: SLICE(
+                        APPEND(
+                            OLD.metadata.transformations || [],
+                            [{
+                                source: "gcat",
+                                action: "update",
+                                timestamp: @ts,
+                                operator: "promote_gcat_parent_edges"
+                            }]
+                        ),
+                        -10
+                    )
+                })
+            }
+            IN @@edge_col
+            COLLECT WITH COUNT INTO cnt
+            RETURN cnt
+        """,
+        bind_vars={"@col": COL, "@edge_col": EDGE_COL, "ts": now},
+        max_runtime=600,
+    )
+    edges_upserted = (list(cursor) or [0])[0]
 
-        if verbose:
-            logger.info(f"Processing {child['id']}  parent={parent_jcat}")
+    cursor = db.aql.execute(
+        """
+        FOR child IN @@col
+            FILTER child.sources.gcat.parent != null
+               AND child.sources.gcat.parent != ""
+            LET parent_jcat = child.sources.gcat.parent
+            LET parent_by_key = DOCUMENT(@@col, CONCAT("GCAT-", parent_jcat))
+            LET parent_by_scan = FIRST(
+                FOR p IN @@col
+                    FILTER p.sources.gcat.jcat == parent_jcat
+                    LIMIT 1
+                    RETURN p
+            )
+            LET parent = parent_by_key != null ? parent_by_key : parent_by_scan
+            FILTER parent == null
+            RETURN { id: child.identifier, parent_jcat: parent_jcat }
+        """,
+        bind_vars={"@col": COL},
+        max_runtime=600,
+    )
+    not_found_rows = list(cursor)
+    parent_not_found = len(not_found_rows)
 
-        parent_doc = _find_parent_doc(db, parent_jcat)
-        if not parent_doc:
-            logger.warning(f"  Parent not found for {child['id']} (GCAT JCAT={parent_jcat})")
-            parent_not_found += 1
-            continue
-
-        parent_id = parent_doc["_id"]
-
-        if not dry_run:
-            try:
-                existing_doc = objects_col.get(child_key)
-                current_canonical = existing_doc.get("canonical", {})
-                if not current_canonical.get("parent_gcat_id"):
-                    transformations = existing_doc.get("metadata", {}).get("transformations", [])
-                    transformations.append({
-                        "source_field": "sources.gcat.parent",
-                        "target_field": "canonical.parent_gcat_id",
-                        "value": parent_jcat,
-                        "timestamp": now,
-                        "promoted_by": "promote_gcat_parent_edges",
-                    })
-                    objects_col.update({
-                        "_key": child_key,
-                        "canonical": {**current_canonical, "parent_gcat_id": parent_jcat},
-                        "metadata": {
-                            **existing_doc.get("metadata", {}),
-                            "transformations": transformations[-10:],
-                        },
-                    })
-                    promoted_canonical += 1
-            except Exception as exc:
-                logger.error(f"  Failed to promote canonical for {child['id']}: {exc}")
-                errors += 1
-                continue
-        else:
-            promoted_canonical += 1
-
-        ok = _upsert_edge(
-            db,
-            from_id=child_id,
-            to_id=parent_id,
-            extra={
-                "source": "gcat",
-                "relationship_type": "parent",
-                "confidence": 1.0,
-                "confidence_label": "high",
-            },
-            dry_run=dry_run,
-        )
-        if ok:
-            edges_created += 1
-        else:
-            errors += 1
+    if verbose and not_found_rows:
+        for nf in not_found_rows:
+            logger.warning(f"  Parent not found: {nf['id']}  (GCAT JCAT={nf['parent_jcat']})")
 
     print(f"\n=== Summary ===")
-    print(f"canonical.parent_gcat_id promoted : {promoted_canonical:,}")
-    print(f"fragmented_from edges created/updated: {edges_created:,}")
-    print(f"Parent objects not found           : {parent_not_found:,}")
-    if errors:
-        print(f"Errors                             : {errors:,}")
+    print(f"canonical.parent_gcat_id promoted        : {promoted_canonical:,}")
+    print(f"fragmented_from edges created/updated    : {edges_upserted:,}")
+    print(f"Parent objects not found                 : {parent_not_found:,}")
 
     return True
 
@@ -238,7 +254,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview only, no writes")
     parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Log each document")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Log each document with missing parent")
     args = parser.parse_args()
     success = run(dry_run=args.dry_run, yes=args.yes, verbose=args.verbose)
     sys.exit(0 if success else 1)
