@@ -260,7 +260,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Space Object Registry</h1>
+        <h1>Talon</h1>
         <nav className="app-nav">
           <button 
             className={activeTab === 'satellite-catalog' ? 'active' : ''}

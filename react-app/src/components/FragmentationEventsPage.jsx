@@ -142,7 +142,7 @@ export default function FragmentationEventsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const PAGE_SIZE = 50
+  const PAGE_SIZE = 100
 
   const fetchEvents = async (pageNum = 0) => {
     setLoading(true)
@@ -198,14 +198,14 @@ RETURN LENGTH(
 
   if (selectedKey) {
     return (
-      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', overflowY: 'auto', width: '100%' }}>
+      <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', overflowY: 'auto', width: '100%' }}>
         <EventDetail eventKey={selectedKey} onBack={() => setSelectedKey(null)} />
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', overflowY: 'auto', width: '100%' }}>
+    <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', overflowY: 'auto', width: '100%' }}>
       <h2 style={{ marginBottom: '1rem' }}>Fragmentation Events</h2>
 
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
