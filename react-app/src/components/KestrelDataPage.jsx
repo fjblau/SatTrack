@@ -169,8 +169,10 @@ function buildSingleSatCZML(sat, tle, observations) {
   return { czml, windowStart: windowStartIso, windowEnd: new Date(windowEndMs).toISOString(), obsWindowStart: obsStartIso, obsWindowEnd: obsEndIso }
 }
 
-export default function KestrelDataPage() {
+export default function KestrelDataPage({ allowedSubtabs }) {
   const [activeSubTab, setActiveSubTab] = useState('globe')
+
+  const isSubtabAllowed = (id) => !allowedSubtabs || allowedSubtabs.includes(id)
   const [obsLoading, setObsLoading] = useState(true)
   const [obsError, setObsError] = useState(null)
   const [satellites, setSatellites] = useState([])
@@ -280,18 +282,22 @@ export default function KestrelDataPage() {
   return (
     <div className="kdp-page">
       <nav className="kdp-subnav">
-        <button
-          className={activeSubTab === 'globe' ? 'active' : ''}
-          onClick={() => setActiveSubTab('globe')}
-        >
-          3D Globe View
-        </button>
-        <button
-          className={activeSubTab === 'observations' ? 'active' : ''}
-          onClick={() => setActiveSubTab('observations')}
-        >
-          Observation Log
-        </button>
+        {isSubtabAllowed('globe') && (
+          <button
+            className={activeSubTab === 'globe' ? 'active' : ''}
+            onClick={() => setActiveSubTab('globe')}
+          >
+            3D Globe View
+          </button>
+        )}
+        {isSubtabAllowed('observations') && (
+          <button
+            className={activeSubTab === 'observations' ? 'active' : ''}
+            onClick={() => setActiveSubTab('observations')}
+          >
+            Observation Log
+          </button>
+        )}
       </nav>
 
       <div className="kdp-body">

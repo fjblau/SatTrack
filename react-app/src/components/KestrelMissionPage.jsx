@@ -142,8 +142,10 @@ function generateSimulatedObservations(targetName, noradId, altKm) {
   })
 }
 
-export default function KestrelMissionPage() {
+export default function KestrelMissionPage({ allowedSubtabs }) {
   const [activeSubTab, setActiveSubTab] = useState('launch')
+
+  const isSubtabAllowed = (id) => !allowedSubtabs || allowedSubtabs.includes(id)
 
   const [missionType, setMissionType] = useState('observation')
 
@@ -785,49 +787,59 @@ export default function KestrelMissionPage() {
   return (
     <div className="km-page">
       <div className="km-subnav">
-        <button
-          className={activeSubTab === 'launch' ? 'active' : ''}
-          onClick={() => setActiveSubTab('launch')}
-        >
-          Intercept Setup
-        </button>
-        <button
-          className={activeSubTab === 'maneuver' ? 'active' : ''}
-          onClick={() => setActiveSubTab('maneuver')}
-          disabled={!kestrelElements}
-          title={!kestrelElements ? 'Plan a mission first' : ''}
-        >
-          Maneuver Plan
-          {maneuverResult && <span className="km-tab-badge">✓</span>}
-        </button>
-        <button
-          className={activeSubTab === 'advisor' ? 'active' : ''}
-          onClick={() => setActiveSubTab('advisor')}
-          disabled={!scenarios}
-          title={!scenarios ? 'Plan a mission first' : ''}
-        >
-          AI Mission Advisor
-          {advisorResult && <span className="km-tab-badge">✓</span>}
-        </button>
-        <button
-          className={activeSubTab === 'gmatplan' ? 'active' : ''}
-          onClick={() => setActiveSubTab('gmatplan')}
-          disabled={!selectedTarget}
-          title={!selectedTarget ? 'Select a target object first' : ''}
-        >
-          GMAT Maneuver Plan
-          {gmatPlan && <span className="km-tab-badge">✓</span>}
-        </button>
-        <button
-          className={`km-collect-tab${activeSubTab === 'collection' ? ' active' : ''}`}
-          onClick={() => setActiveSubTab('collection')}
-          disabled={!executedScenario}
-          title={!executedScenario ? 'Execute a maneuver scenario first' : ''}
-        >
-          📡 Data Collection
-          {collectDone && <span className="km-tab-badge">✓</span>}
-          {collectRunning && <span className="km-tab-pulse" />}
-        </button>
+        {isSubtabAllowed('launch') && (
+          <button
+            className={activeSubTab === 'launch' ? 'active' : ''}
+            onClick={() => setActiveSubTab('launch')}
+          >
+            Intercept Setup
+          </button>
+        )}
+        {isSubtabAllowed('maneuver') && (
+          <button
+            className={activeSubTab === 'maneuver' ? 'active' : ''}
+            onClick={() => setActiveSubTab('maneuver')}
+            disabled={!kestrelElements}
+            title={!kestrelElements ? 'Plan a mission first' : ''}
+          >
+            Maneuver Plan
+            {maneuverResult && <span className="km-tab-badge">✓</span>}
+          </button>
+        )}
+        {isSubtabAllowed('advisor') && (
+          <button
+            className={activeSubTab === 'advisor' ? 'active' : ''}
+            onClick={() => setActiveSubTab('advisor')}
+            disabled={!scenarios}
+            title={!scenarios ? 'Plan a mission first' : ''}
+          >
+            AI Mission Advisor
+            {advisorResult && <span className="km-tab-badge">✓</span>}
+          </button>
+        )}
+        {isSubtabAllowed('gmatplan') && (
+          <button
+            className={activeSubTab === 'gmatplan' ? 'active' : ''}
+            onClick={() => setActiveSubTab('gmatplan')}
+            disabled={!selectedTarget}
+            title={!selectedTarget ? 'Select a target object first' : ''}
+          >
+            GMAT Maneuver Plan
+            {gmatPlan && <span className="km-tab-badge">✓</span>}
+          </button>
+        )}
+        {isSubtabAllowed('collection') && (
+          <button
+            className={`km-collect-tab${activeSubTab === 'collection' ? ' active' : ''}`}
+            onClick={() => setActiveSubTab('collection')}
+            disabled={!executedScenario}
+            title={!executedScenario ? 'Execute a maneuver scenario first' : ''}
+          >
+            📡 Data Collection
+            {collectDone && <span className="km-tab-badge">✓</span>}
+            {collectRunning && <span className="km-tab-pulse" />}
+          </button>
+        )}
       </div>
 
       <div className="km-body">
