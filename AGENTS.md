@@ -270,6 +270,78 @@ TLE_CACHE_TTL        → TLE cache time-to-live in seconds (default: 3600)
 MAX_CACHE_SIZE       → Maximum cache entries (default: 1000)
 ```
 
+## Git Workflow Rules
+
+**CRITICAL — check before every commit or push:**
+
+1. **Never push to a merged PR's branch.** Before committing or pushing, always verify the current branch's PR is still open:
+   ```bash
+   gh pr view --json state --head $(git branch --show-current)
+   ```
+   If `state` is `"MERGED"`, **stop**. Create a new branch from `main` for any further changes.
+
+2. **One logical change = one branch = one PR.** If a task produces follow-up changes (e.g. registering a new script in the Admin page after writing the script), those follow-up changes go on their own branch and their own PR — not appended to an already-created or merged PR.
+
+3. **New branch workflow:**
+   ```bash
+   git fetch origin main
+   git checkout -b fix/descriptive-name origin/main
+   # make changes, commit
+   git push -u origin fix/descriptive-name
+   gh pr create --base main --head fix/descriptive-name ...
+   ```
+
+### Adding a New Maintenance/Migration Script
+
+Every script added under `scripts/` **must** also be registered in `SCRIPT_CATALOGUE` in `api/routers/admin.py` so it is runnable from the Admin UI. Do this in the **same PR** as the script itself — not a separate follow-up PR.
+
+Required fields per entry:
+```python
+{
+    "id":                 "<script_filename_without_.py>",
+    "name":               "<Human-readable name>",
+    "description":        "<One-sentence description of what it does and safety notes>",
+    "category":           "maintenance" | "migration" | "import" | "verification",
+    "path":               "scripts/<subdir>/<filename>.py",
+    "order_hint":         <int>,
+    "depends_on":         ["<other_script_id>", ...],
+    "estimated_duration": "<human string>",
+    "reversibility":      "reversible" | "irreversible" | "read-only",
+}
+```
+
+### Script Performance — Batch Operations Required
+
+When writing any maintenance, load, or update script that touches multiple records, **always use batch operations**. Never process records one at a time in a Python loop when the database can do the work in bulk.
+
+**ArangoDB — prefer AQL `FOR … UPDATE` over Python loops:**
+```python
+# WRONG — one round-trip per document
+for doc in docs:
+    col.update({"_key": doc["_key"], "canonical": {...}})
+
+# RIGHT — single AQL statement updates all matching documents at once
+db.aql.execute("""
+    FOR doc IN @@col
+        FILTER <condition>
+        UPDATE doc WITH { canonical: MERGE(doc.canonical, @patch) } IN @@col
+""", bind_vars={"@col": COL, "patch": {...}})
+```
+
+**Python-arango bulk inserts:**
+```python
+# WRONG — one insert per document
+for doc in docs:
+    col.insert(doc)
+
+# RIGHT — single call for the whole batch
+col.insert_many(docs, return_new=False)
+```
+
+**Edge creation:** build the full list of edge dicts in memory first, then call `col.insert_many(edges, overwrite_mode="replace")` once.
+
+**When a per-document loop is unavoidable** (e.g. logic that genuinely can't be expressed in AQL), process in chunks of 500–1000 and print progress after each chunk.
+
 ## Project Operations
 
 ### Starting Both Services
