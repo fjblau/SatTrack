@@ -40,6 +40,16 @@ const DEMO_TABS = [
     ]
   },
   {
+    id: 'observations',
+    label: 'Observations',
+    defaultEnabled: false,
+    subtabs: [
+      { id: 'observations', label: 'Observations' },
+      { id: 'observation-graphs', label: 'Observation Graphs' },
+      { id: 'observation-dashboard', label: 'Observation Dashboard' },
+    ]
+  },
+  {
     id: 'aql-editor',
     label: 'AQL Editor',
     defaultEnabled: false,
