@@ -52,7 +52,8 @@ function EventDetail({ eventKey, onBack }) {
               { label: 'Epoch', value: evCanonical.epoch },
               { label: 'Altitude (km)', value: evCanonical.altitude_km },
               { label: 'Casualty Risk', value: evCanonical.casualty_risk },
-              { label: 'Fragment Count', value: detail.fragment_count },
+              { label: 'Fragments (DISCOS)', value: detail.discos_fragment_count },
+              { label: 'Fragments (DB)', value: detail.fragment_count },
             ].filter(x => x.value != null).map((x, i) => (
               <div key={i} style={{ background: '#f8f9fa', border: '1px solid #e9ecef', borderRadius: '6px', padding: '0.75rem' }}>
                 <div style={{ fontSize: '0.72rem', color: '#6c757d', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>{x.label}</div>
@@ -165,7 +166,8 @@ FOR ev IN fragmentation_events
     identifier: ev.identifier,
     epoch: ev.canonical.epoch,
     event_type: ev.canonical.event_type,
-    fragment_count: edge_fragment_count > 0 ? edge_fragment_count : ev.canonical.fragment_count,
+    edge_fragment_count: edge_fragment_count,
+    discos_fragment_count: ev.canonical.fragment_count,
     altitude_km: ev.canonical.altitude_km,
     comment: ev.canonical.comment
   }`.trim()
@@ -275,7 +277,8 @@ RETURN LENGTH(
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Epoch</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Altitude (km)</th>
                 <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Comment</th>
-                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Fragments</th>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Fragments (DISCOS)</th>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Fragments (DB)</th>
               </tr>
             </thead>
             <tbody>
@@ -299,7 +302,10 @@ RETURN LENGTH(
                     {ev.comment ? ev.comment.slice(0, 80) + (ev.comment.length > 80 ? '…' : '') : '—'}
                   </td>
                   <td style={{ padding: '0.45rem 0.75rem', textAlign: 'right', color: '#6c757d', fontSize: '0.82rem' }}>
-                    {ev.fragment_count != null ? ev.fragment_count.toLocaleString() : '—'}
+                    {ev.discos_fragment_count != null ? ev.discos_fragment_count.toLocaleString() : '—'}
+                  </td>
+                  <td style={{ padding: '0.45rem 0.75rem', textAlign: 'right', color: '#6c757d', fontSize: '0.82rem' }}>
+                    {ev.edge_fragment_count != null ? ev.edge_fragment_count.toLocaleString() : '—'}
                   </td>
                 </tr>
               ))}
