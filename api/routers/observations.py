@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator, model_validator, ConfigDict
 from typing import Optional
@@ -469,18 +469,10 @@ def get_source_distribution():
 
 
 @router.post("/v2/observations/aql")
-def execute_custom_aql(request: AqlQueryRequest, fast_request: Request):
+def execute_custom_aql(request: AqlQueryRequest):
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-
-    # Security: restrict AQL execution to administrators
-    from api.routers.auth import _demo_token_store
-    auth_header = fast_request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[len("Bearer "):]
-        if token in _demo_token_store:
-            raise HTTPException(status_code=403, detail="AQL execution is restricted to administrators")
 
     try:
         cursor = db.aql.execute(request.query, bind_vars=request.bind_vars or {})
