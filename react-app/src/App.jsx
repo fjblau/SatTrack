@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import './App.css'
+import kesdynLogo from './assets/kesdyn-logo.jpeg'
 import DataTable from './components/DataTable'
 import DetailPanel from './components/DetailPanel'
 import Filters from './components/Filters'
@@ -289,6 +290,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
+        <img src={kesdynLogo} alt="Kesdyn logo" className="header-logo" />
         <h1>Talon</h1>
         <nav className="app-nav">
           {isTabVisible('satellite-catalog') && (
