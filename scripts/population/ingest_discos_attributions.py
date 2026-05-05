@@ -29,7 +29,7 @@ load_dotenv()
 
 import database.connection as db_conn
 import database as db_module
-from api.services import discos_service
+from api.services.discos_service import get_fragmentation_attributed_objects
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ def _process_event(event_doc: dict, dry_run: bool) -> dict:
         return {"processed": 0, "edges_created": 0, "pending": 0}
 
     now = datetime.now(timezone.utc).isoformat()
-    attributions = discos_service.get_object_attributions(str(discos_event_id))
+    attributions = get_fragmentation_attributed_objects(str(discos_event_id))
 
     if not attributions:
         return {"processed": 0, "edges_created": 0, "pending": 0}

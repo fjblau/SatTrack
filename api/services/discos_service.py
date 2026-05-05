@@ -341,6 +341,28 @@ def get_object_attributions(discos_id: str) -> List[Dict]:
     return result
 
 
+def get_fragmentation_attributed_objects(fragmentation_id: str) -> List[Dict]:
+    """
+    Fetch all objects attributed to a given DISCOS fragmentation event.
+
+    Returns list of dicts with discos_id (the object's DISCOS ID) and optional confidence.
+    """
+    cache_key = f"frag_objects:{fragmentation_id}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    data = _do_get(f"/fragmentations/{fragmentation_id}/relationships/objects")
+    if data is None:
+        return []
+    items = data.get("data", [])
+    if isinstance(items, dict):
+        items = [items]
+    result = [{"discos_id": i.get("id"), "type": i.get("type")} for i in items]
+    _cache_set(cache_key, result)
+    return result
+
+
 def health_check() -> Dict[str, Any]:
     """
     Lightweight health check — fetches a single object to verify connectivity.
