@@ -409,6 +409,92 @@ def get_fragmentation_attributed_objects_with_count(fragmentation_id: str):
     return result, total_count
 
 
+def get_objects_by_ids_batch(discos_ids: List[str]) -> List[Dict]:
+    """
+    Fetch full object attribute dicts for a list of DISCOS IDs via filter-based bulk fetch.
+
+    Uses RSQL filter syntax: filter=in(id,(id1,id2,...)) with page[size]=100.
+    Processes IDs in batches of 100 — 30 API calls instead of 3,000 for large events.
+    Returns list of full attribute dicts (same shape as get_objects()).
+    """
+    results: List[Dict] = []
+    batch_size = 100
+    for start in range(0, len(discos_ids), batch_size):
+        batch = discos_ids[start:start + batch_size]
+        id_list = ",".join(str(i) for i in batch)
+        items = _get_paginated("/objects", {
+            "filter": f"in(id,({id_list}))",
+            "page[size]": batch_size,
+        })
+        results.extend(_parse_attributes(i) for i in items)
+    return results
+
+
+def get_fragmentation_object_payloads_with_count(fragmentation_id: str):
+    """
+    Fetch full object attribute payloads for fragments attributed to a fragmentation event.
+
+    §3 verification: tries GET /fragmentations/{id}/objects (JSON:API related-resource endpoint).
+    - If items have an `attributes` block → full records returned directly (fast path).
+    - If items are identifier-only (no `attributes`) → batch-fetch via
+      GET /objects?filter=in(id,...) in groups of 100 (§4 batch optimisation).
+
+    Returns (payloads, total_count) where:
+    - payloads: list of full attribute dicts (discos_id + all object attributes)
+    - total_count: int from meta.pagination.totalCount on first page, or None
+    """
+    path = f"/fragmentations/{fragmentation_id}/objects"
+    params: Dict[str, Any] = {"page[size]": 100}
+    all_items: List[Dict] = []
+    total_count: Optional[int] = None
+    first_page = True
+
+    while path:
+        data = _do_get(path, params)
+        if data is None:
+            break
+        if first_page:
+            meta = data.get("meta", {})
+            raw_total = meta.get("pagination", {}).get("totalCount")
+            if raw_total is not None:
+                try:
+                    total_count = int(raw_total)
+                except (TypeError, ValueError):
+                    pass
+            first_page = False
+        items = data.get("data", [])
+        if isinstance(items, list):
+            all_items.extend(items)
+        elif isinstance(items, dict):
+            all_items.append(items)
+        links = data.get("links", {})
+        next_url = links.get("next")
+        if next_url:
+            if next_url.startswith(config.external.DISCOS_BASE_URL):
+                path = next_url[len(config.external.DISCOS_BASE_URL):]
+            else:
+                path = next_url
+            params = {}
+        else:
+            break
+
+    if not all_items:
+        return [], total_count
+
+    first = all_items[0]
+    if isinstance(first, dict) and first.get("attributes"):
+        payloads = [_parse_attributes(i) for i in all_items]
+        return payloads, total_count
+
+    logger.debug(
+        f"DISCOS /fragmentations/{fragmentation_id}/objects returned identifier-only entries; "
+        "falling back to batch-fetch via filter"
+    )
+    discos_ids = [str(i.get("id")) for i in all_items if i.get("id")]
+    payloads = get_objects_by_ids_batch(discos_ids)
+    return payloads, total_count
+
+
 def health_check() -> Dict[str, Any]:
     """
     Lightweight health check — fetches a single object to verify connectivity.
