@@ -102,11 +102,10 @@ def run(dry_run: bool = False, yes: bool = False) -> bool:
                 value: old_count
             }]
         )
+        LET new_metadata = MERGE(e.metadata || {}, {transformations: new_transformations})
 
-        UPDATE e WITH {
-            canonical: new_canonical,
-            metadata: MERGE(e.metadata || {}, {transformations: new_transformations})
-        } IN fragmentation_events
+        REPLACE e WITH MERGE(e, {canonical: new_canonical, metadata: new_metadata})
+        IN fragmentation_events
 
         COLLECT WITH COUNT INTO updated
         RETURN updated
