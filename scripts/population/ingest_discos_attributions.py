@@ -145,25 +145,35 @@ def _process_event(event_doc: dict, dry_run: bool, now: str) -> dict:
         current_canonical = event_doc.get("canonical", {})
         kessler_count = len(fragment_payloads)
         existing_kessler = current_canonical.get("fragment_count_kessler")
+        existing_discos = current_canonical.get("fragment_count_discos")
 
+        canonical_updates = {}
+        log_fields = {}
         if kessler_count != existing_kessler:
+            canonical_updates["fragment_count_kessler"] = kessler_count
+            log_fields["fragment_count_kessler"] = kessler_count
+        if total_count is not None and total_count != existing_discos:
+            canonical_updates["fragment_count_discos"] = total_count
+            log_fields["fragment_count_discos"] = total_count
+
+        if canonical_updates:
             transformations = event_doc.get("metadata", {}).get("transformations", [])
             transformations = transformations[-9:] + [{
                 "source": "discos",
                 "action": "update_fragment_count",
                 "timestamp": now,
                 "operator": "ingest_discos_attributions",
-                "fragment_count_kessler": kessler_count,
+                **log_fields,
             }]
             frag_events_col.update({
                 "_key": event_key,
-                "canonical": {**current_canonical, "fragment_count_kessler": kessler_count},
+                "canonical": {**current_canonical, **canonical_updates},
                 "metadata": {**event_doc.get("metadata", {}), "transformations": transformations},
             })
         else:
-            logger.debug(f"fragment_count_kessler unchanged ({kessler_count}) for {event_key}; skipping log")
+            logger.debug(f"fragment counts unchanged for {event_key}; skipping log")
     except Exception as exc:
-        logger.warning(f"Failed to update fragment_count_kessler on {event_key}: {exc}")
+        logger.warning(f"Failed to update fragment counts on {event_key}: {exc}")
 
     if total_count is not None and len(fragment_payloads) != total_count:
         logger.warning(
