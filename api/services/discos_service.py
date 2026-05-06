@@ -359,6 +359,56 @@ def get_fragmentation_attributed_objects(fragmentation_id: str) -> List[Dict]:
     return result
 
 
+def get_fragmentation_attributed_objects_with_count(fragmentation_id: str):
+    """
+    Fetch all objects attributed to a given DISCOS fragmentation event.
+
+    Returns (items, total_count) where:
+    - items: list of dicts with discos_id and type
+    - total_count: int from meta.pagination.totalCount on the first page, or None if unavailable
+
+    Does not use the shared cache so that totalCount is always fresh.
+    """
+    path = f"/fragmentations/{fragmentation_id}/relationships/objects"
+    params: Dict[str, Any] = {"page[size]": 100}
+    all_items: List[Dict] = []
+    total_count: Optional[int] = None
+    first_page = True
+
+    while path:
+        data = _do_get(path, params)
+        if data is None:
+            break
+        if first_page:
+            meta = data.get("meta", {})
+            pagination = meta.get("pagination", {})
+            raw_total = pagination.get("totalCount")
+            if raw_total is not None:
+                try:
+                    total_count = int(raw_total)
+                except (TypeError, ValueError):
+                    pass
+            first_page = False
+        items = data.get("data", [])
+        if isinstance(items, list):
+            all_items.extend(items)
+        elif isinstance(items, dict):
+            all_items.append(items)
+        links = data.get("links", {})
+        next_url = links.get("next")
+        if next_url:
+            if next_url.startswith(config.external.DISCOS_BASE_URL):
+                path = next_url[len(config.external.DISCOS_BASE_URL):]
+            else:
+                path = next_url
+            params = {}
+        else:
+            break
+
+    result = [{"discos_id": i.get("id"), "type": i.get("type")} for i in all_items]
+    return result, total_count
+
+
 def health_check() -> Dict[str, Any]:
     """
     Lightweight health check — fetches a single object to verify connectivity.

@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-Promote fragmentation event metadata (epoch, altitude, casualty risk) to canonical fields.
+Promote fragmentation event metadata to canonical fields.
+
+Promotes epoch, altitude_km, latitude, longitude from sources.discos.raw to canonical
+when those canonical fields are not yet set.
+
+Also promotes fragment_count_discos from sources.discos.raw.objectsCount (with fallbacks
+to cataloguedFragments and nFragments for API version compatibility). The promotion is
+idempotent: if canonical.fragment_count_discos already equals the source value, no
+transformation is logged.
 
 Usage:
     python scripts/maintenance/promote_discos_fragmentations.py [--dry-run]
@@ -22,7 +30,18 @@ import database as db_module
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-CANONICAL_FIELDS = ["epoch", "altitude_km", "latitude", "longitude", "event_type", "comment"]
+_DISCOS_COUNT_FIELD_CANDIDATES = ("objectsCount", "cataloguedFragments", "nFragments")
+
+
+def _extract_discos_count(raw: dict):
+    for field in _DISCOS_COUNT_FIELD_CANDIDATES:
+        val = raw.get(field)
+        if val is not None:
+            try:
+                return int(val), field
+            except (TypeError, ValueError):
+                pass
+    return None, None
 
 
 def run(dry_run: bool = False):
@@ -48,6 +67,7 @@ def run(dry_run: bool = False):
             continue
 
         updates = {}
+        promotion_log_entries = []
         current_canonical = event.get("canonical", {})
 
         raw_epoch = raw.get("epoch") or raw.get("date")
@@ -66,6 +86,21 @@ def run(dry_run: bool = False):
         if raw_lon is not None and current_canonical.get("longitude") is None:
             updates["longitude"] = raw_lon
 
+        discos_count, count_field = _extract_discos_count(raw)
+        if discos_count is not None:
+            existing_discos_count = current_canonical.get("fragment_count_discos")
+            if discos_count != existing_discos_count:
+                updates["fragment_count_discos"] = discos_count
+                promotion_log_entries.append({
+                    "source": "discos",
+                    "action": "promote",
+                    "timestamp": now,
+                    "operator": "promote_discos_fragmentations",
+                    "source_field": f"sources.discos.raw.{count_field}",
+                    "target_field": "canonical.fragment_count_discos",
+                    "value": discos_count,
+                })
+
         if not updates:
             skipped += 1
             continue
@@ -76,13 +111,16 @@ def run(dry_run: bool = False):
             continue
 
         transformations = event.get("metadata", {}).get("transformations", [])
-        transformations.append({
-            "source": "discos",
-            "action": "promote_fragmentation_metadata",
-            "timestamp": now,
-            "operator": "promote_discos_fragmentations",
-            "fields": list(updates.keys()),
-        })
+        if promotion_log_entries:
+            transformations.extend(promotion_log_entries)
+        else:
+            transformations.append({
+                "source": "discos",
+                "action": "promote",
+                "timestamp": now,
+                "operator": "promote_discos_fragmentations",
+                "fields": list(updates.keys()),
+            })
         transformations = transformations[-10:]
 
         col.update({

@@ -202,6 +202,18 @@ SCRIPT_CATALOGUE = [
         "reversibility": "read-only",
     },
     {
+        "id": "migrate_split_fragment_counts",
+        "name": "Migrate: Split fragment count fields",
+        "description": "Renames canonical.fragment_count → canonical.fragment_count_kessler on all fragmentation_events documents. Adds fragment_count_discos and fragment_count_estimated (null). Idempotent — safe to re-run.",
+        "category": "migration",
+        "path": "scripts/migration/migrate_split_fragment_counts.py",
+        "args": ["--yes"],
+        "order_hint": 8,
+        "depends_on": ["ingest_discos_fragmentations"],
+        "estimated_duration": "< 1 minute",
+        "reversibility": "irreversible (backup recommended)",
+    },
+    {
         "id": "ingest_discos_entities",
         "name": "Ingest DISCOS Entities",
         "description": "Ingests ESA DISCOS entity records (operators, countries) into the entities vertex collection. Run first in the DISCOS ingestion sequence.",

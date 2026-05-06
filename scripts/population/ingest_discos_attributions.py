@@ -10,6 +10,12 @@ Architecture: Per-event sub-jobs with master coordinator pattern.
   Their metadata.attribution_status remains "pending".
 - Edge transformation logs are capped at 10 entries per edge.
 
+Idempotency:
+- fragment_count_kessler is only updated when the value changes; no transformation is logged
+  when the count is unchanged.
+- A warning is logged when the number of caused_by edges created does not match
+  meta.pagination.totalCount reported by DISCOS.
+
 Performance:
 - A discos_id → object_id lookup map is built once before processing begins, eliminating
   per-fragment AQL queries.
@@ -36,7 +42,7 @@ load_dotenv()
 
 import database.connection as db_conn
 import database as db_module
-from api.services.discos_service import get_fragmentation_attributed_objects
+from api.services.discos_service import get_fragmentation_attributed_objects_with_count
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -134,7 +140,7 @@ def _process_event(event_doc: dict, lookup: dict, dry_run: bool, now: str) -> di
     Process a single fragmentation event: fetch attributions and create edges.
 
     Uses the pre-built lookup map for O(1) object resolution per fragment.
-    Returns counts dict.
+    Returns counts dict with keys: processed, edges_created, pending.
     """
     event_key = event_doc.get("_key", "")
     event_id = event_doc.get("_id", "")
@@ -142,27 +148,38 @@ def _process_event(event_doc: dict, lookup: dict, dry_run: bool, now: str) -> di
     if not discos_event_id:
         return {"processed": 0, "edges_created": 0, "pending": 0}
 
-    attributions = get_fragmentation_attributed_objects(str(discos_event_id))
+    attributions, total_count = get_fragmentation_attributed_objects_with_count(str(discos_event_id))
 
     frag_events_col = db_module.db.collection("fragmentation_events")
     try:
         current_canonical = event_doc.get("canonical", {})
-        fragment_count = len(attributions)
-        transformations = event_doc.get("metadata", {}).get("transformations", [])
-        transformations = transformations[-9:] + [{
-            "source": "discos",
-            "action": "update_fragment_count",
-            "timestamp": now,
-            "operator": "ingest_discos_attributions",
-            "fragment_count": fragment_count,
-        }]
-        frag_events_col.update({
-            "_key": event_key,
-            "canonical": {**current_canonical, "fragment_count": fragment_count},
-            "metadata": {**event_doc.get("metadata", {}), "transformations": transformations},
-        })
+        kessler_count = len(attributions)
+        existing_kessler = current_canonical.get("fragment_count_kessler")
+
+        if kessler_count != existing_kessler:
+            transformations = event_doc.get("metadata", {}).get("transformations", [])
+            transformations = transformations[-9:] + [{
+                "source": "discos",
+                "action": "update_fragment_count",
+                "timestamp": now,
+                "operator": "ingest_discos_attributions",
+                "fragment_count_kessler": kessler_count,
+            }]
+            frag_events_col.update({
+                "_key": event_key,
+                "canonical": {**current_canonical, "fragment_count_kessler": kessler_count},
+                "metadata": {**event_doc.get("metadata", {}), "transformations": transformations},
+            })
+        else:
+            logger.debug(f"fragment_count_kessler unchanged ({kessler_count}) for {event_key}; skipping log")
     except Exception as exc:
-        logger.warning(f"Failed to update fragment_count on {event_key}: {exc}")
+        logger.warning(f"Failed to update fragment_count_kessler on {event_key}: {exc}")
+
+    if total_count is not None and len(attributions) != total_count:
+        logger.warning(
+            f"Pagination mismatch for {event_key}: DISCOS totalCount={total_count}, "
+            f"local edges to create={len(attributions)}"
+        )
 
     if not attributions:
         return {"processed": 0, "edges_created": 0, "pending": 0}
@@ -203,6 +220,12 @@ def _process_event(event_doc: dict, lookup: dict, dry_run: bool, now: str) -> di
 
     edges_created = _batch_upsert_caused_by(db_module.db, edges_to_insert, now)
     _batch_set_attributed(db_module.db, attributed_keys)
+
+    if total_count is not None and edges_created != total_count:
+        logger.warning(
+            f"Edge count mismatch after upsert for {event_key}: "
+            f"DISCOS totalCount={total_count}, edges_created={edges_created}"
+        )
 
     return {"processed": len(attributions), "edges_created": edges_created, "pending": pending_count}
 
