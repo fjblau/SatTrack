@@ -2,6 +2,16 @@
 """
 Ingest ESA DISCOS fragmentation event records into the fragmentation_events vertex collection.
 
+Captures all DISCOS attributes verbatim under sources.discos.raw.
+Canonical fragment count fields (fragment_count_kessler, fragment_count_discos,
+fragment_count_estimated) are initialised to null here; they are populated by
+ingest_discos_attributions and promote_discos_fragmentations respectively.
+
+Transformation log:
+  - New records: action="ingest"
+  - Re-run with no change: action="verify"
+  - Re-run with changes: action="ingest" with changed_fields list
+
 Run order: 6th in the DISCOS ingestion sequence (after objects).
 
 Usage:
@@ -26,8 +36,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
-def _make_event_doc(event: dict) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
+def _raw_changed_fields(old_raw: dict, new_raw: dict) -> list:
+    all_keys = set(old_raw.keys()) | set(new_raw.keys())
+    return [k for k in sorted(all_keys) if old_raw.get(k) != new_raw.get(k)]
+
+
+def _make_event_doc(event: dict, now: str) -> dict:
     discos_id = event.get("discos_id")
     return {
         "_key": f"DISCOS-FRAG-{discos_id}",
@@ -39,6 +53,9 @@ def _make_event_doc(event: dict) -> dict:
             "longitude": event.get("longitude"),
             "event_type": event.get("type") or event.get("eventType"),
             "comment": event.get("comment"),
+            "fragment_count_kessler": None,
+            "fragment_count_discos": None,
+            "fragment_count_estimated": None,
         },
         "sources": {
             "discos": {
@@ -77,9 +94,12 @@ def run(dry_run: bool = False):
     col = db_module.db.collection("fragmentation_events")
     inserted = 0
     updated = 0
+    verified = 0
+
+    now = datetime.now(timezone.utc).isoformat()
 
     for event in events:
-        doc = _make_event_doc(event)
+        doc = _make_event_doc(event, now)
         if dry_run:
             logger.info(f"[DRY RUN] Would upsert event: {doc['_key']}")
             continue
@@ -91,19 +111,50 @@ def run(dry_run: bool = False):
                 pass
 
             if existing:
+                existing_raw = existing.get("sources", {}).get("discos", {}).get("raw", {})
+                new_raw = event
+                changed = _raw_changed_fields(existing_raw, new_raw)
+
                 transformations = existing.get("metadata", {}).get("transformations", [])
-                transformations.append(doc["metadata"]["transformations"][0])
-                transformations = transformations[-10:]
-                doc["metadata"]["transformations"] = transformations
-                col.update(doc)
-                updated += 1
+                if changed:
+                    transformations.append({
+                        "source": "discos",
+                        "action": "ingest",
+                        "timestamp": now,
+                        "operator": "ingest_discos_fragmentations",
+                        "changed_fields": changed,
+                    })
+                    transformations = transformations[-10:]
+                    doc["metadata"]["transformations"] = transformations
+                    existing_canonical = existing.get("canonical", {})
+                    for fk in ("fragment_count_kessler", "fragment_count_discos", "fragment_count_estimated"):
+                        if existing_canonical.get(fk) is not None:
+                            doc["canonical"][fk] = existing_canonical[fk]
+                    col.update(doc)
+                    updated += 1
+                else:
+                    transformations.append({
+                        "source": "discos",
+                        "action": "verify",
+                        "timestamp": now,
+                        "operator": "ingest_discos_fragmentations",
+                    })
+                    transformations = transformations[-10:]
+                    col.update({
+                        "_key": doc["_key"],
+                        "metadata": {
+                            **existing.get("metadata", {}),
+                            "transformations": transformations,
+                        },
+                    })
+                    verified += 1
             else:
                 col.insert(doc)
                 inserted += 1
         except Exception as exc:
             logger.error(f"Failed to upsert event {doc.get('_key')}: {exc}")
 
-    logger.info(f"Done — inserted={inserted} updated={updated} total={len(events)}")
+    logger.info(f"Done — inserted={inserted} updated={updated} verified={verified} total={len(events)}")
 
 
 if __name__ == "__main__":
