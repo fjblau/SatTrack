@@ -259,8 +259,8 @@ SCRIPT_CATALOGUE = [
     },
     {
         "id": "ingest_discos_objects",
-        "name": "Ingest DISCOS Objects",
-        "description": "Ingests ESA DISCOS space object records, joining to existing objects via cosparId. Objects with no cospar match receive a surrogate key DISCOS-<discosId>.",
+        "name": "Ingest DISCOS Objects (bulk sampling)",
+        "description": "Bulk-ingests a sample of ESA DISCOS space object records for development and general catalog presence. Joins to existing objects via cosparId/satno; unmatched entries receive a surrogate key DISCOS-<discosId>. This script is NOT the primary mechanism for fragment ingestion — fragments are ingested lazily by ingest_discos_attributions. For comprehensive operational payload ingestion a separate active-payload-tuned script is planned for a future spec.",
         "category": "population",
         "path": "scripts/population/ingest_discos_objects.py",
         "order_hint": 14,
@@ -282,13 +282,13 @@ SCRIPT_CATALOGUE = [
     {
         "id": "ingest_discos_attributions",
         "name": "Ingest DISCOS Attributions",
-        "description": "Creates fragmented_from and caused_by edges by fetching per-event attribution data from DISCOS. Runs as per-event sub-jobs with a master coordinator. May run for several hours depending on rate budget.",
+        "description": "Self-completing fragment ingestion: for each fragmentation event, fetches full fragment object payloads from DISCOS, ensures every fragment exists in the objects collection (creating surrogate records as needed), then creates caused_by edges. Running this script for an event guarantees complete fragment provenance in the graph. ingest_discos_objects is no longer a hard prerequisite — fragments are ingested lazily here. May run for several hours on a full catalog depending on rate budget.",
         "category": "population",
         "path": "scripts/population/ingest_discos_attributions.py",
         "order_hint": 16,
-        "depends_on": ["ingest_discos_fragmentations", "ingest_discos_objects"],
+        "depends_on": ["ingest_discos_fragmentations"],
         "estimated_duration": "2-8 hours",
-        "reversibility": "reversible (truncate fragmented_from, caused_by edge collections)",
+        "reversibility": "reversible (truncate caused_by edge collection; fragment object records can be removed if created as surrogates)",
     },
     {
         "id": "promote_discos_event_types",

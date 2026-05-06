@@ -1,30 +1,49 @@
 #!/usr/bin/env python3
 """
-Ingest DISCOS fragmentation attributions: create fragmented_from and caused_by edges.
+Ingest DISCOS fragmentation attributions: create caused_by edges.
+
+Self-completing: when the script processes an event and DISCOS reports fragments
+attributed to it, those fragments are ingested into the objects collection as needed
+(using ensure_discos_object_exists) before the edges are created. Running this script
+for an event guarantees that every fragment DISCOS attributes to that event exists in
+the objects collection with proper aliases, source envelopes, and edges.
 
 Architecture: Per-event sub-jobs with master coordinator pattern.
 - The master coordinator fetches all fragmentation events.
-- For each event, fetches attribution data (which objects were fragmented from it).
-- Creates fragmented_from edges (fragment → parent object) and caused_by edges (fragment → event).
-- Objects with no explicit DISCOS attribution do NOT get a fragmented_from edge (per spec decision).
-  Their metadata.attribution_status remains "pending".
-- Edge transformation logs are capped at 10 entries per edge.
+- For each event, fetches full fragment object payloads from DISCOS.
+- Ensures each fragment exists in objects (match-or-create via shared helper).
+- Creates caused_by edges (fragment → event).
+- Objects with no explicit DISCOS attribution do NOT get a caused_by edge.
 
 Idempotency:
 - fragment_count_kessler is only updated when the value changes; no transformation is logged
   when the count is unchanged.
-- A warning is logged when the number of caused_by edges created does not match
-  meta.pagination.totalCount reported by DISCOS.
+- ensure_discos_object_exists returns verified_unchanged for already-processed fragments,
+  writing a verify transformation without re-ingesting data.
+- caused_by edges are upserted — re-running produces no duplicate edges.
+
+Resumability:
+- If processing fails partway through an event, the next run picks up where it left off.
+  Fragments already processed have sources.discos envelopes; ensure_discos_object_exists
+  returns verified_unchanged for them and the edge upsert is idempotent.
+
+Failure isolation:
+- A single fragment failure (404, malformed payload, etc.) does not abort the event.
+  The failure is logged with the fragment's DISCOS ID and reason.
+  A summary of failed fragments is surfaced at the end of each event.
 
 Performance:
-- A discos_id → object_id lookup map is built once before processing begins, eliminating
-  per-fragment AQL queries.
+- get_fragmentation_object_payloads_with_count tries the JSON:API related-resource endpoint
+  (/fragmentations/{id}/objects) first. If DISCOS returns full records, no extra API calls
+  are needed. If it returns identifier-only entries, a batch-fetch optimisation fetches full
+  objects in groups of 100 via filter=in(id,...).
 - caused_by edges are upserted in a single AQL batch per event.
 - attribution_status updates are batched per event using AQL with mergeObjects.
-- The fixed request_delay between DISCOS API calls is removed; the service layer already
-  handles 429 rate-limit responses with exponential backoff.
 
-Run order: 7th in the DISCOS ingestion sequence (after fragmentations and objects).
+Run order: 7th in the DISCOS ingestion sequence (after fragmentations).
+Note: ingest_discos_objects is no longer a hard prerequisite; fragments are ingested
+lazily by this script. Running ingest_discos_objects first is still useful for bulk
+catalog presence but is not required for fragment provenance completeness.
 
 Usage:
     python scripts/population/ingest_discos_attributions.py [--dry-run] [--max-events N]
@@ -42,40 +61,11 @@ load_dotenv()
 
 import database.connection as db_conn
 import database as db_module
-from api.services.discos_service import get_fragmentation_attributed_objects_with_count
+from api.services.discos_service import get_fragmentation_object_payloads_with_count
+from database.discos_object_operations import ensure_discos_object_exists
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
-
-
-def _build_discos_lookup(db) -> dict:
-    """
-    Build a discos_id (str) → {_id, _key} map for every object that has a DISCOS ID.
-
-    Covers three cases:
-      1. obj.identifier_aliases.discos is set
-      2. obj.sources.discos.discos_id is set
-      3. obj._key starts with "DISCOS-" (surrogate objects)
-    """
-    cursor = db.aql.execute("""
-        FOR obj IN objects
-            LET did = (
-                obj.identifier_aliases.discos != null
-                    ? TO_STRING(obj.identifier_aliases.discos)
-                    : obj.sources.discos.discos_id != null
-                        ? TO_STRING(obj.sources.discos.discos_id)
-                        : STARTS_WITH(obj._key, "DISCOS-")
-                            ? SUBSTRING(obj._key, 7)
-                            : null
-            )
-            FILTER did != null
-            RETURN {did: did, _id: obj._id, _key: obj._key}
-    """)
-    lookup = {}
-    for row in cursor:
-        lookup[str(row["did"])] = {"_id": row["_id"], "_key": row["_key"]}
-    logger.info(f"Lookup map built: {len(lookup)} objects with DISCOS IDs")
-    return lookup
 
 
 def _batch_upsert_caused_by(db, edges: list, now: str) -> int:
@@ -135,25 +125,25 @@ def _batch_set_attributed(db, object_keys: list) -> None:
     )
 
 
-def _process_event(event_doc: dict, lookup: dict, dry_run: bool, now: str) -> dict:
+def _process_event(event_doc: dict, dry_run: bool, now: str) -> dict:
     """
-    Process a single fragmentation event: fetch attributions and create edges.
+    Process a single fragmentation event: fetch full fragment payloads, ensure each fragment
+    exists in the objects collection, then create caused_by edges.
 
-    Uses the pre-built lookup map for O(1) object resolution per fragment.
-    Returns counts dict with keys: processed, edges_created, pending.
+    Returns counts dict with keys: processed, edges_created, pending, failed.
     """
     event_key = event_doc.get("_key", "")
     event_id = event_doc.get("_id", "")
     discos_event_id = event_doc.get("sources", {}).get("discos", {}).get("discos_id")
     if not discos_event_id:
-        return {"processed": 0, "edges_created": 0, "pending": 0}
+        return {"processed": 0, "edges_created": 0, "pending": 0, "failed": 0}
 
-    attributions, total_count = get_fragmentation_attributed_objects_with_count(str(discos_event_id))
+    fragment_payloads, total_count = get_fragmentation_object_payloads_with_count(str(discos_event_id))
 
     frag_events_col = db_module.db.collection("fragmentation_events")
     try:
         current_canonical = event_doc.get("canonical", {})
-        kessler_count = len(attributions)
+        kessler_count = len(fragment_payloads)
         existing_kessler = current_canonical.get("fragment_count_kessler")
 
         if kessler_count != existing_kessler:
@@ -175,51 +165,62 @@ def _process_event(event_doc: dict, lookup: dict, dry_run: bool, now: str) -> di
     except Exception as exc:
         logger.warning(f"Failed to update fragment_count_kessler on {event_key}: {exc}")
 
-    if total_count is not None and len(attributions) != total_count:
+    if total_count is not None and len(fragment_payloads) != total_count:
         logger.warning(
             f"Pagination mismatch for {event_key}: DISCOS totalCount={total_count}, "
-            f"local edges to create={len(attributions)}"
+            f"local payloads fetched={len(fragment_payloads)}"
         )
 
-    if not attributions:
-        return {"processed": 0, "edges_created": 0, "pending": 0}
+    if not fragment_payloads:
+        return {"processed": 0, "edges_created": 0, "pending": 0, "failed": 0}
 
     edges_to_insert = []
     attributed_keys = []
-    pending_count = 0
+    failed_fragments = []
 
-    for attr in attributions:
-        attr_discos_id = attr.get("discos_id")
-        if not attr_discos_id:
-            pending_count += 1
-            continue
-
-        obj = lookup.get(str(attr_discos_id))
-        if not obj:
-            logger.debug(
-                f"Fragment not found for discos_id={attr_discos_id} in event {event_key}"
-            )
-            pending_count += 1
-            continue
+    for payload in fragment_payloads:
+        frag_discos_id = payload.get("discos_id")
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would create caused_by: {obj['_id']} → {event_id}")
-            edges_to_insert.append({"_from": obj["_id"], "_to": event_id})
-            attributed_keys.append(obj["_key"])
+            logger.info(f"[DRY RUN] Would ensure fragment discos_id={frag_discos_id} and create caused_by edge → {event_id}")
+            edges_to_insert.append({"_from": f"objects/DISCOS-{frag_discos_id}", "_to": event_id})
+            attributed_keys.append(f"DISCOS-{frag_discos_id}")
             continue
 
-        edges_to_insert.append({
-            "_from": obj["_id"],
-            "_to": event_id,
-            "confidence": attr.get("confidence"),
-        })
-        attributed_keys.append(obj["_key"])
+        try:
+            fragment_key, status = ensure_discos_object_exists(
+                payload,
+                db_module.db,
+                operator="ingest_discos_attributions",
+            )
+            edges_to_insert.append({
+                "_from": f"objects/{fragment_key}",
+                "_to": event_id,
+                "confidence": payload.get("confidence"),
+            })
+            attributed_keys.append(fragment_key)
+        except Exception as exc:
+            logger.warning(
+                f"Failed to ensure fragment discos_id={frag_discos_id} for event {event_key}: {exc}"
+            )
+            failed_fragments.append({"discos_id": frag_discos_id, "reason": str(exc)})
 
     if dry_run:
-        return {"processed": len(attributions), "edges_created": len(edges_to_insert), "pending": pending_count}
+        return {
+            "processed": len(fragment_payloads),
+            "edges_created": len(edges_to_insert),
+            "pending": 0,
+            "failed": len(failed_fragments),
+        }
 
     edges_created = _batch_upsert_caused_by(db_module.db, edges_to_insert, now)
     _batch_set_attributed(db_module.db, attributed_keys)
+
+    if failed_fragments:
+        logger.warning(
+            f"Event {event_key}: {len(failed_fragments)} fragment(s) failed — "
+            + ", ".join(f"discos_id={f['discos_id']} ({f['reason']})" for f in failed_fragments)
+        )
 
     if total_count is not None and edges_created != total_count:
         logger.warning(
@@ -227,15 +228,18 @@ def _process_event(event_doc: dict, lookup: dict, dry_run: bool, now: str) -> di
             f"DISCOS totalCount={total_count}, edges_created={edges_created}"
         )
 
-    return {"processed": len(attributions), "edges_created": edges_created, "pending": pending_count}
+    return {
+        "processed": len(fragment_payloads),
+        "edges_created": edges_created,
+        "pending": 0,
+        "failed": len(failed_fragments),
+    }
 
 
 def run(dry_run: bool = False, max_events: int = 0):
     if not db_conn.connect_arangodb():
         logger.error("Failed to connect to ArangoDB")
         sys.exit(1)
-
-    lookup = _build_discos_lookup(db_module.db)
 
     logger.info("Fetching fragmentation events from database for attribution processing...")
     cursor = db_module.db.aql.execute(
@@ -247,7 +251,7 @@ def run(dry_run: bool = False, max_events: int = 0):
 
     total_processed = 0
     total_edges = 0
-    total_pending = 0
+    total_failed = 0
     now = datetime.now(timezone.utc).isoformat()
 
     for i, event_doc in enumerate(events):
@@ -255,21 +259,21 @@ def run(dry_run: bool = False, max_events: int = 0):
         logger.info(f"[{i+1}/{len(events)}] Processing event {event_key}")
 
         try:
-            counts = _process_event(event_doc, lookup=lookup, dry_run=dry_run, now=now)
+            counts = _process_event(event_doc, dry_run=dry_run, now=now)
             total_processed += counts["processed"]
             total_edges += counts["edges_created"]
-            total_pending += counts["pending"]
+            total_failed += counts["failed"]
         except Exception as exc:
             logger.error(f"Failed processing event {event_key}: {exc}")
 
     logger.info(
-        f"Done — events={len(events)} attributions_processed={total_processed} "
-        f"edges_created={total_edges} pending={total_pending}"
+        f"Done — events={len(events)} fragments_processed={total_processed} "
+        f"edges_created={total_edges} fragment_failures={total_failed}"
     )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Ingest DISCOS attributions (caused_by edges)")
+    parser = argparse.ArgumentParser(description="Ingest DISCOS attributions (self-completing fragment ingestion)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-events", type=int, default=0, help="Limit number of events to process (0 = all)")
     args = parser.parse_args()

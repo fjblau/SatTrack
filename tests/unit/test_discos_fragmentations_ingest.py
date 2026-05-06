@@ -20,6 +20,7 @@ for _mod_name in [
     "arango", "requests",
     "database", "database.connection", "database.utils",
     "database.utils.normalization", "database.utils.field_utils",
+    "database.discos_object_operations",
 ]:
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = MagicMock()
@@ -257,27 +258,33 @@ class TestIngestDiscosAttributionsIdempotency(unittest.TestCase):
 
     def test_no_transformation_logged_when_count_unchanged(self):
         event_doc = self._make_event_doc(kessler_count=5)
-        attributions = [{"discos_id": str(i)} for i in range(5)]
+        payloads = [{"discos_id": str(i)} for i in range(5)]
 
         mock_frag_col = MagicMock()
         with patch.object(self.mod, "db_module") as mock_db, \
-             patch.object(self.mod, "get_fragmentation_attributed_objects_with_count") as mock_get:
-            mock_get.return_value = (attributions, 5)
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, 5)
+            mock_ensure.side_effect = [(f"OBJ-{i}", "matched_existing") for i in range(5)]
             mock_db.db.collection.return_value = mock_frag_col
-            self.mod._process_event(event_doc, lookup={}, dry_run=False, now="2026-01-01T00:00:00+00:00")
+            mock_db.db.aql.execute.return_value = iter([1] * 5)
+            self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
 
         mock_frag_col.update.assert_not_called()
 
     def test_transformation_logged_when_count_changes(self):
         event_doc = self._make_event_doc(kessler_count=3)
-        attributions = [{"discos_id": str(i)} for i in range(5)]
+        payloads = [{"discos_id": str(i)} for i in range(5)]
 
         mock_frag_col = MagicMock()
         with patch.object(self.mod, "db_module") as mock_db, \
-             patch.object(self.mod, "get_fragmentation_attributed_objects_with_count") as mock_get:
-            mock_get.return_value = (attributions, 5)
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, 5)
+            mock_ensure.side_effect = [(f"OBJ-{i}", "matched_existing") for i in range(5)]
             mock_db.db.collection.return_value = mock_frag_col
-            self.mod._process_event(event_doc, lookup={}, dry_run=False, now="2026-01-01T00:00:00+00:00")
+            mock_db.db.aql.execute.return_value = iter([1] * 5)
+            self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
 
         mock_frag_col.update.assert_called_once()
         update_arg = mock_frag_col.update.call_args[0][0]
@@ -311,29 +318,35 @@ class TestIngestDiscosAttributionsPaginationWarning(unittest.TestCase):
 
     def test_warning_logged_when_total_count_mismatches(self):
         event_doc = self._make_event_doc()
-        attributions = [{"discos_id": str(i)} for i in range(3)]
+        payloads = [{"discos_id": str(i)} for i in range(3)]
 
         with patch.object(self.mod, "db_module") as mock_db, \
-             patch.object(self.mod, "get_fragmentation_attributed_objects_with_count") as mock_get:
-            mock_get.return_value = (attributions, 250)
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, 250)
+            mock_ensure.side_effect = [(f"OBJ-{i}", "matched_existing") for i in range(3)]
             mock_db.db.collection.return_value = MagicMock()
+            mock_db.db.aql.execute.return_value = iter([1, 1, 1])
             logger_name = self.mod.__name__
             with self.assertLogs(logger_name, level="WARNING") as cm:
-                self.mod._process_event(event_doc, lookup={}, dry_run=False, now="2026-01-01T00:00:00+00:00")
+                self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
         self.assertTrue(any("mismatch" in msg.lower() or "Pagination mismatch" in msg for msg in cm.output))
 
     def test_no_warning_when_total_count_none(self):
         event_doc = self._make_event_doc()
-        attributions = [{"discos_id": "1"}]
+        payloads = [{"discos_id": "1"}]
 
         with patch.object(self.mod, "db_module") as mock_db, \
-             patch.object(self.mod, "get_fragmentation_attributed_objects_with_count") as mock_get:
-            mock_get.return_value = (attributions, None)
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, None)
+            mock_ensure.return_value = ("OBJ-1", "matched_existing")
             mock_db.db.collection.return_value = MagicMock()
+            mock_db.db.aql.execute.return_value = iter([1])
             import logging
             with self.assertLogs(self.mod.__name__, level="DEBUG") as cm:
                 logging.getLogger(self.mod.__name__).debug("ping")
-                self.mod._process_event(event_doc, lookup={}, dry_run=False, now="2026-01-01T00:00:00+00:00")
+                self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
         self.assertFalse(any("mismatch" in msg.lower() for msg in cm.output))
 
 
@@ -589,6 +602,229 @@ class TestGetFragmentationAttributedObjectsWithCount(unittest.TestCase):
         items, total = self.svc.get_fragmentation_attributed_objects_with_count("53")
         self.assertEqual(items, [])
         self.assertIsNone(total)
+
+
+# ---------------------------------------------------------------------------
+# ingest_discos_attributions — self-completing fragment ingestion
+# ---------------------------------------------------------------------------
+
+class TestIngestDiscosAttributionsSelfCompleting(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import importlib
+        mod_name = "scripts.population.ingest_discos_attributions"
+        if mod_name in sys.modules:
+            del sys.modules[mod_name]
+
+        for dep in [
+            "database.discos_object_operations",
+        ]:
+            if dep not in sys.modules:
+                sys.modules[dep] = MagicMock()
+
+        cls.mod = importlib.import_module(mod_name)
+
+    def _make_event_doc(self, discos_id="53", kessler_count=None):
+        return {
+            "_key": f"DISCOS-FRAG-{discos_id}",
+            "_id": f"fragmentation_events/DISCOS-FRAG-{discos_id}",
+            "sources": {"discos": {"discos_id": discos_id}},
+            "canonical": {"fragment_count_kessler": kessler_count},
+            "metadata": {"transformations": []},
+        }
+
+    def _make_payload(self, discos_id):
+        return {"discos_id": str(discos_id), "cosparId": f"2020-00{discos_id}A", "satno": None}
+
+    def test_event_a_all_pre_existing_fragments(self):
+        event_doc = self._make_event_doc(kessler_count=5)
+        payloads = [self._make_payload(i) for i in range(1, 6)]
+
+        mock_frag_col = MagicMock()
+        with patch.object(self.mod, "db_module") as mock_db, \
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, 5)
+            mock_ensure.side_effect = [(f"OBJ-{i}", "matched_existing") for i in range(1, 6)]
+            mock_db.db.collection.return_value = mock_frag_col
+            mock_db.db.aql.execute.return_value = iter([1, 1, 1, 1, 1])
+
+            counts = self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
+
+        self.assertEqual(counts["processed"], 5)
+        self.assertEqual(counts["failed"], 0)
+        self.assertEqual(mock_ensure.call_count, 5)
+
+    def test_event_b_all_new_fragments(self):
+        event_doc = self._make_event_doc(kessler_count=None)
+        payloads = [self._make_payload(i) for i in range(10, 15)]
+
+        mock_frag_col = MagicMock()
+        with patch.object(self.mod, "db_module") as mock_db, \
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, 5)
+            mock_ensure.side_effect = [(f"DISCOS-{i}", "created_new") for i in range(10, 15)]
+            mock_db.db.collection.return_value = mock_frag_col
+            mock_db.db.aql.execute.return_value = iter([1, 1, 1, 1, 1])
+
+            counts = self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
+
+        self.assertEqual(counts["processed"], 5)
+        self.assertEqual(counts["failed"], 0)
+        self.assertEqual(mock_ensure.call_count, 5)
+        for c in mock_ensure.call_args_list:
+            self.assertEqual(c.kwargs["operator"], "ingest_discos_attributions")
+
+    def test_event_c_mixed_fragments(self):
+        event_doc = self._make_event_doc(kessler_count=5)
+        payloads = [self._make_payload(i) for i in range(1, 6)]
+
+        side_effects = [
+            ("OBJ-1", "matched_existing"),
+            ("OBJ-2", "verified_unchanged"),
+            ("OBJ-3", "matched_existing"),
+            ("DISCOS-4", "created_new"),
+            ("DISCOS-5", "created_new"),
+        ]
+
+        mock_frag_col = MagicMock()
+        with patch.object(self.mod, "db_module") as mock_db, \
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, 5)
+            mock_ensure.side_effect = side_effects
+            mock_db.db.collection.return_value = mock_frag_col
+            mock_db.db.aql.execute.return_value = iter([1, 1, 1, 1, 1])
+
+            counts = self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
+
+        self.assertEqual(counts["processed"], 5)
+        self.assertEqual(counts["failed"], 0)
+        self.assertEqual(mock_ensure.call_count, 5)
+
+    def test_failure_isolation_one_bad_fragment(self):
+        event_doc = self._make_event_doc(kessler_count=10)
+        payloads = [self._make_payload(i) for i in range(1, 11)]
+
+        def ensure_side_effect(payload, db, *, operator):
+            if payload["discos_id"] == "5":
+                raise RuntimeError("DISCOS 404")
+            return (f"OBJ-{payload['discos_id']}", "matched_existing")
+
+        mock_frag_col = MagicMock()
+        with patch.object(self.mod, "db_module") as mock_db, \
+             patch.object(self.mod, "get_fragmentation_object_payloads_with_count") as mock_get, \
+             patch.object(self.mod, "ensure_discos_object_exists") as mock_ensure:
+            mock_get.return_value = (payloads, 10)
+            mock_ensure.side_effect = ensure_side_effect
+            mock_db.db.collection.return_value = mock_frag_col
+            mock_db.db.aql.execute.return_value = iter([1] * 9)
+
+            counts = self.mod._process_event(event_doc, dry_run=False, now="2026-01-01T00:00:00+00:00")
+
+        self.assertEqual(counts["processed"], 10)
+        self.assertEqual(counts["failed"], 1)
+        self.assertEqual(mock_ensure.call_count, 10)
+
+
+# ---------------------------------------------------------------------------
+# discos_service.get_fragmentation_object_payloads_with_count — full records path
+# ---------------------------------------------------------------------------
+
+class TestGetFragmentationObjectPayloadsFullRecords(unittest.TestCase):
+    def setUp(self):
+        import api.services.discos_service as svc
+        svc.clear_cache()
+        self.svc = svc
+
+    @patch("api.services.discos_service._do_get")
+    @patch("api.services.discos_service.config")
+    def test_full_records_returned_directly(self, mock_config, mock_do_get):
+        mock_config.external.DISCOS_BASE_URL = "https://discosweb.esoc.esa.int/api"
+        mock_config.external.DISCOS_API_TOKEN = "tok"
+        mock_config.external.DISCOS_REQUEST_TIMEOUT = 30
+        mock_do_get.return_value = {
+            "data": [
+                {"id": "10", "type": "object", "attributes": {"cosparId": "2020-001A", "satno": 111}},
+                {"id": "11", "type": "object", "attributes": {"cosparId": "2020-001B", "satno": 222}},
+            ],
+            "meta": {"pagination": {"totalCount": 2}},
+            "links": {},
+        }
+        payloads, total = self.svc.get_fragmentation_object_payloads_with_count("53")
+        self.assertEqual(len(payloads), 2)
+        self.assertEqual(total, 2)
+        self.assertEqual(payloads[0]["discos_id"], "10")
+        self.assertEqual(payloads[0]["cosparId"], "2020-001A")
+
+    @patch("api.services.discos_service.get_objects_by_ids_batch")
+    @patch("api.services.discos_service._do_get")
+    @patch("api.services.discos_service.config")
+    def test_identifier_only_falls_back_to_batch_fetch(self, mock_config, mock_do_get, mock_batch):
+        mock_config.external.DISCOS_BASE_URL = "https://discosweb.esoc.esa.int/api"
+        mock_config.external.DISCOS_API_TOKEN = "tok"
+        mock_config.external.DISCOS_REQUEST_TIMEOUT = 30
+        mock_do_get.return_value = {
+            "data": [
+                {"id": "10", "type": "object"},
+                {"id": "11", "type": "object"},
+            ],
+            "meta": {"pagination": {"totalCount": 2}},
+            "links": {},
+        }
+        mock_batch.return_value = [
+            {"discos_id": "10", "cosparId": "2020-001A"},
+            {"discos_id": "11", "cosparId": "2020-001B"},
+        ]
+        payloads, total = self.svc.get_fragmentation_object_payloads_with_count("53")
+        mock_batch.assert_called_once_with(["10", "11"])
+        self.assertEqual(len(payloads), 2)
+        self.assertEqual(total, 2)
+
+    @patch("api.services.discos_service._do_get")
+    @patch("api.services.discos_service.config")
+    def test_returns_empty_on_api_failure(self, mock_config, mock_do_get):
+        mock_config.external.DISCOS_BASE_URL = "https://discosweb.esoc.esa.int/api"
+        mock_config.external.DISCOS_API_TOKEN = "tok"
+        mock_config.external.DISCOS_REQUEST_TIMEOUT = 30
+        mock_do_get.return_value = None
+        payloads, total = self.svc.get_fragmentation_object_payloads_with_count("53")
+        self.assertEqual(payloads, [])
+        self.assertIsNone(total)
+
+
+# ---------------------------------------------------------------------------
+# discos_service.get_objects_by_ids_batch — §4 batch optimisation
+# ---------------------------------------------------------------------------
+
+class TestGetObjectsByIdsBatch(unittest.TestCase):
+    def setUp(self):
+        import api.services.discos_service as svc
+        svc.clear_cache()
+        self.svc = svc
+
+    @patch("api.services.discos_service._get_paginated")
+    @patch("api.services.discos_service.config")
+    def test_250_ids_makes_3_batch_calls(self, mock_config, mock_paged):
+        mock_config.external.DISCOS_BASE_URL = "https://discosweb.esoc.esa.int/api"
+        mock_config.external.DISCOS_API_TOKEN = "tok"
+        mock_config.external.DISCOS_CACHE_TTL = 86400
+        mock_config.external.DISCOS_REQUEST_TIMEOUT = 30
+
+        def fake_paginated(path, params=None):
+            n = len((params or {}).get("filter", "").split(","))
+            return [{"id": str(i), "type": "object", "attributes": {"cosparId": f"2020-{i:04d}A"}} for i in range(n)]
+
+        mock_paged.side_effect = fake_paginated
+
+        ids = [str(i) for i in range(250)]
+        result = self.svc.get_objects_by_ids_batch(ids)
+
+        self.assertEqual(mock_paged.call_count, 3)
+        calls = mock_paged.call_args_list
+        first_filter = calls[0][0][1]["filter"]
+        self.assertIn("in(id,(", first_filter)
 
 
 if __name__ == "__main__":
