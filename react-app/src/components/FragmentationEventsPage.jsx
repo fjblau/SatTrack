@@ -167,7 +167,7 @@ FOR ev IN fragmentation_events
     epoch: ev.canonical.epoch,
     event_type: ev.canonical.event_type,
     edge_fragment_count: edge_fragment_count,
-    discos_fragment_count: ev.canonical.fragment_count,
+    discos_fragment_count: ev.canonical.fragment_count_discos,
     altitude_km: ev.canonical.altitude_km,
     comment: ev.canonical.comment
   }`.trim()

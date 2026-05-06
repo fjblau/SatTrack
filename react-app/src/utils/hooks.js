@@ -92,7 +92,7 @@ FOR ev IN fragmentation_events
     identifier: ev.identifier,
     epoch: ev.canonical.epoch,
     event_type: ev.canonical.event_type,
-    fragment_count: ev.canonical.fragment_count,
+    fragment_count: ev.canonical.fragment_count_kessler,
     altitude_km: ev.canonical.altitude_km,
     casualty_risk: ev.canonical.casualty_risk
   }
