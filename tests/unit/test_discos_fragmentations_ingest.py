@@ -247,17 +247,20 @@ class TestIngestDiscosAttributionsIdempotency(unittest.TestCase):
             del sys.modules[mod_name]
         cls.mod = importlib.import_module(mod_name)
 
-    def _make_event_doc(self, kessler_count=None, discos_id="100"):
+    def _make_event_doc(self, kessler_count=None, discos_count=None, discos_id="100"):
         return {
             "_key": f"DISCOS-FRAG-{discos_id}",
             "_id": f"fragmentation_events/DISCOS-FRAG-{discos_id}",
             "sources": {"discos": {"discos_id": discos_id}},
-            "canonical": {"fragment_count_kessler": kessler_count},
+            "canonical": {
+                "fragment_count_kessler": kessler_count,
+                "fragment_count_discos": discos_count,
+            },
             "metadata": {"transformations": []},
         }
 
     def test_no_transformation_logged_when_count_unchanged(self):
-        event_doc = self._make_event_doc(kessler_count=5)
+        event_doc = self._make_event_doc(kessler_count=5, discos_count=5)
         payloads = [{"discos_id": str(i)} for i in range(5)]
 
         mock_frag_col = MagicMock()
@@ -273,7 +276,7 @@ class TestIngestDiscosAttributionsIdempotency(unittest.TestCase):
         mock_frag_col.update.assert_not_called()
 
     def test_transformation_logged_when_count_changes(self):
-        event_doc = self._make_event_doc(kessler_count=3)
+        event_doc = self._make_event_doc(kessler_count=3, discos_count=None)
         payloads = [{"discos_id": str(i)} for i in range(5)]
 
         mock_frag_col = MagicMock()
@@ -289,9 +292,11 @@ class TestIngestDiscosAttributionsIdempotency(unittest.TestCase):
         mock_frag_col.update.assert_called_once()
         update_arg = mock_frag_col.update.call_args[0][0]
         self.assertEqual(update_arg["canonical"]["fragment_count_kessler"], 5)
+        self.assertEqual(update_arg["canonical"]["fragment_count_discos"], 5)
         last_tx = update_arg["metadata"]["transformations"][-1]
         self.assertEqual(last_tx["action"], "update_fragment_count")
         self.assertEqual(last_tx["fragment_count_kessler"], 5)
+        self.assertEqual(last_tx["fragment_count_discos"], 5)
 
 
 # ---------------------------------------------------------------------------
