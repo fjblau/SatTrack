@@ -225,7 +225,7 @@ def get_fragmentation_event(event_key: str):
     RETURN {
         event: ev,
         fragment_count: LENGTH(fragments),
-        discos_fragment_count: ev.canonical.fragment_count,
+        discos_fragment_count: ev.canonical.fragment_count_discos,
         fragments: fragments
     }
     """
