@@ -13,7 +13,7 @@ def _build_tools(retriever) -> list:
 
     @tool
     def search_knowledge_base(query: str) -> str:
-        """Search the Kessler codebase documentation and architecture guides.
+        """Search the Talon codebase documentation and architecture guides.
         Use this to answer questions about the system design, API structure,
         data models, deployment, or any developer-facing documentation."""
         if retriever is None:
@@ -121,7 +121,7 @@ def _build_graph(llm, tools):
         messages: Annotated[list, add_messages]
 
     SYSTEM_PROMPT = (
-        "You are a knowledgeable assistant for the Kessler satellite tracking application. "
+        "You are a knowledgeable assistant for the Talon satellite tracking application. "
         "You help users understand the application, satellite data, orbital mechanics, and the API.\n\n"
         "You have access to four tools — use them in this order of preference:\n"
         "1. search_knowledge_base — ALWAYS try this first for any conceptual, architectural, "

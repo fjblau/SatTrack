@@ -20,7 +20,7 @@ class AskResponse(BaseModel):
 
 @router.post("/ask", response_model=AskResponse)
 def ask(body: AskRequest):
-    """Ask a question about the Kessler codebase, satellite data, or system architecture.
+    """Ask a question about the Talon codebase, satellite data, or system architecture.
 
     The agent uses RAG over project documentation and has access to live satellite
     search and read-only AQL queries against the graph database.

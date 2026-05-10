@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Startup validation tests for Kessler application.
+Startup validation tests for Talon application.
 Checks for basic startup requirements and dependencies.
 """
 

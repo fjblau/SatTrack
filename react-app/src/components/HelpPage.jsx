@@ -11,7 +11,7 @@ const DOC_LINKS = [
 ]
 
 const SAMPLE_QUESTIONS = [
-  'What is the Kessler application?',
+  'What is the Talon application?',
   'How is satellite data structured?',
   'What orbital bands are tracked?',
   'How do I interpret collision risk data?',

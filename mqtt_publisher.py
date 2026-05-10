@@ -135,7 +135,7 @@ def convert_tle_to_json(satellite_data: Dict[str, Any], tle_data: Dict[str, Any]
         "metadata": {
             "published_at": datetime.now(timezone.utc).isoformat(),
             "data_source": tle_data.get('source', 'tle-api'),
-            "publisher": "Kessler MQTT Feed"
+            "publisher": "Talon MQTT Feed"
         }
     }
     

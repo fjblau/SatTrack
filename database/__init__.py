@@ -1,5 +1,5 @@
 """
-Database module for Kessler satellite tracking application.
+Database module for Talon satellite tracking application.
 
 This module provides a unified interface for all database operations,
 organized into focused submodules:
