@@ -49,28 +49,6 @@ def _clean_doc(doc):
     }
 
 
-@router.get("/{identifier}")
-def get_object(identifier: str):
-    """Get a space object by identifier (COSPAR, NORAD, document key)."""
-    doc = (
-        find_satellite(identifier=identifier)
-        or find_satellite(international_designator=identifier)
-        or find_satellite(registration_number=identifier)
-    )
-    if not doc:
-        doc = lookup_by_norad(identifier)
-    if not doc:
-        doc = lookup_by_cospar(identifier)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Object not found")
-
-    object_class = doc.get("canonical", {}).get("object_class", "")
-    if object_class and object_class != "Payload":
-        raise HTTPException(status_code=404, detail="Object not found")
-
-    return {"data": _clean_doc(doc)}
-
-
 @router.get("")
 @router.get("/search")
 def search_objects(
@@ -120,6 +98,28 @@ def search_objects(
         })
 
     return {"count": total_count, "skip": skip, "limit": limit, "data": data}
+
+
+@router.get("/stats")
+def get_object_stats():
+    """Get statistics about all space objects."""
+    aql = """
+    LET total = LENGTH(@@collection)
+    LET by_class = (
+        FOR doc IN @@collection
+            COLLECT cls = doc.canonical.object_class WITH COUNT INTO cnt
+            RETURN {class: cls, count: cnt}
+    )
+    LET by_status = (
+        FOR doc IN @@collection
+            COLLECT st = doc.canonical.status WITH COUNT INTO cnt
+            RETURN {status: st, count: cnt}
+    )
+    RETURN {total: total, by_class: by_class, by_status: by_status}
+    """
+    cursor = db_conn.db.aql.execute(aql, bind_vars={"@collection": COLLECTION_NAME})
+    result = list(cursor)
+    return result[0] if result else {"total": 0, "by_class": [], "by_status": []}
 
 
 @router.get("/by-class/{object_class}")
@@ -182,23 +182,23 @@ def get_object_by_alias(alias_type: str, value: str):
     return {"data": _clean_doc(doc)}
 
 
-@router.get("/stats")
-def get_object_stats():
-    """Get statistics about all space objects."""
-    aql = """
-    LET total = LENGTH(@@collection)
-    LET by_class = (
-        FOR doc IN @@collection
-            COLLECT cls = doc.canonical.object_class WITH COUNT INTO cnt
-            RETURN {class: cls, count: cnt}
+@router.get("/{identifier}")
+def get_object(identifier: str):
+    """Get a space object by identifier (COSPAR, NORAD, document key)."""
+    doc = (
+        find_satellite(identifier=identifier)
+        or find_satellite(international_designator=identifier)
+        or find_satellite(registration_number=identifier)
     )
-    LET by_status = (
-        FOR doc IN @@collection
-            COLLECT st = doc.canonical.status WITH COUNT INTO cnt
-            RETURN {status: st, count: cnt}
-    )
-    RETURN {total: total, by_class: by_class, by_status: by_status}
-    """
-    cursor = db_conn.db.aql.execute(aql, bind_vars={"@collection": COLLECTION_NAME})
-    result = list(cursor)
-    return result[0] if result else {"total": 0, "by_class": [], "by_status": []}
+    if not doc:
+        doc = lookup_by_norad(identifier)
+    if not doc:
+        doc = lookup_by_cospar(identifier)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Object not found")
+
+    object_class = doc.get("canonical", {}).get("object_class", "")
+    if object_class and object_class != "Payload":
+        raise HTTPException(status_code=404, detail="Object not found")
+
+    return {"data": _clean_doc(doc)}
