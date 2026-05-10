@@ -11,7 +11,7 @@ import database as db_module
 from database.connection import COLLECTION_OBSERVATIONS
 from database.observation_graph_ops import create_edges_for_observation
 
-router = APIRouter(tags=["observations"])
+router = APIRouter(prefix="/v2/observations", tags=["observations"])
 
 ALLOWED_SORT_FIELDS = {
     'norad_id', 'observation_epoch', 'pass_id', 'frame_index', 'observation_mode',
@@ -111,7 +111,7 @@ class ObservationImportRequest(BaseModel):
         return self
 
 
-@router.post("/v2/observations/import")
+@router.post("/import")
 def import_observations(body: ObservationImportRequest):
     db = db_module.db
     if db is None:
@@ -209,7 +209,7 @@ def import_observations(body: ObservationImportRequest):
     }
 
 
-@router.get("/v2/observations/allowed-objects")
+@router.get("/allowed-objects")
 def get_allowed_objects():
     db = db_module.db
     if db is None:
@@ -229,7 +229,7 @@ def get_allowed_objects():
     return {"data": results, "total": len(results)}
 
 
-@router.put("/v2/observations/allowed-objects/{norad_id}")
+@router.put("/allowed-objects/{norad_id}")
 def enable_observations_for_object(norad_id: int):
     db = db_module.db
     if db is None:
@@ -259,7 +259,7 @@ def enable_observations_for_object(norad_id: int):
     return {"norad_id": norad_id, "observations_enabled": True}
 
 
-@router.delete("/v2/observations/allowed-objects/{norad_id}")
+@router.delete("/allowed-objects/{norad_id}")
 def disable_observations_for_object(norad_id: int):
     db = db_module.db
     if db is None:
@@ -289,7 +289,7 @@ def disable_observations_for_object(norad_id: int):
     return {"norad_id": norad_id, "observations_enabled": False}
 
 
-@router.get("/v2/observations/filter-options")
+@router.get("/filter-options")
 def get_observation_filter_options():
     db = db_module.db
     if db is None:
@@ -306,7 +306,7 @@ def get_observation_filter_options():
     return result
 
 
-@router.get("/v2/observations")
+@router.get("")
 def get_all_observations(
     source: Optional[str] = None,
     object_type: Optional[str] = None,
@@ -398,7 +398,7 @@ class AqlQueryRequest(BaseModel):
     format: Optional[str] = None  # "json", "csv", or None (default JSON response)
 
 
-@router.get("/v2/observations/analytics/health-over-time")
+@router.get("/analytics/health-over-time")
 def get_health_over_time(granularity: Optional[str] = "daily"):
     db = db_module.db
     if db is None:
@@ -424,7 +424,7 @@ def get_health_over_time(granularity: Optional[str] = "daily"):
     return list(cursor)
 
 
-@router.get("/v2/observations/analytics/anomaly-distribution")
+@router.get("/analytics/anomaly-distribution")
 def get_anomaly_distribution(by: Optional[str] = None):
     db = db_module.db
     if db is None:
@@ -450,7 +450,7 @@ def get_anomaly_distribution(by: Optional[str] = None):
     return list(cursor)
 
 
-@router.get("/v2/observations/analytics/source-distribution")
+@router.get("/analytics/source-distribution")
 def get_source_distribution():
     db = db_module.db
     if db is None:
@@ -468,7 +468,7 @@ def get_source_distribution():
     return list(cursor)
 
 
-@router.post("/v2/observations/aql")
+@router.post("/aql")
 def execute_custom_aql(request: AqlQueryRequest):
     db = db_module.db
     if db is None:
@@ -499,7 +499,7 @@ def execute_custom_aql(request: AqlQueryRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/v2/observations/{norad_id}")
+@router.get("/{norad_id}")
 def get_observations(norad_id: int, limit: Optional[int] = 100, offset: Optional[int] = 0):
     db = db_module.db
     if db is None:

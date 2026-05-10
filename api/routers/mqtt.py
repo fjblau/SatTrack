@@ -19,7 +19,8 @@ from api.services.tle_service import fetch_tle_by_norad_id
 import mqtt_publisher
 import mqtt_scheduler
 
-router = APIRouter(tags=["mqtt"])
+router = APIRouter(prefix="/v2/mqtt", tags=["mqtt"])
+cron_router = APIRouter(prefix="/api/cron", tags=["mqtt"])
 
 class MqttBrokerConfig(BaseModel):
     host: str = Field(..., min_length=1, description="MQTT broker hostname or IP")
@@ -53,7 +54,7 @@ def redact_password(config: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-@router.get("/v2/mqtt/config/{satellite_id:path}")
+@router.get("/config/{satellite_id:path}")
 def get_mqtt_config(satellite_id: str):
     config = get_mqtt_configuration(satellite_id)
     if not config:
@@ -62,7 +63,7 @@ def get_mqtt_config(satellite_id: str):
 
 
 
-@router.post("/v2/mqtt/config")
+@router.post("/config")
 def create_or_update_mqtt_config(config: MqttConfiguration):
     logging.info(f"Saving MQTT config for satellite_id: {config.satellite_id}, norad_id: {config.norad_id}")
     
@@ -142,7 +143,7 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
 
 
 
-@router.delete("/v2/mqtt/config/{satellite_id:path}")
+@router.delete("/config/{satellite_id:path}")
 def delete_mqtt_config(satellite_id: str):
     success = delete_mqtt_configuration(satellite_id)
     if not success:
@@ -154,7 +155,7 @@ def delete_mqtt_config(satellite_id: str):
 
 
 
-@router.post("/v2/mqtt/test-connection")
+@router.post("/test-connection")
 def test_mqtt_connection(request: MqttTestConnectionRequest):
     if not request.host:
         raise HTTPException(status_code=400, detail="Host is required")
@@ -182,7 +183,7 @@ def test_mqtt_connection(request: MqttTestConnectionRequest):
 
 
 
-@router.get("/v2/mqtt/debug/{satellite_id:path}")
+@router.get("/debug/{satellite_id:path}")
 def debug_mqtt_config(satellite_id: str):
     """Debug endpoint to check MQTT configuration and satellite data."""
     config = get_mqtt_configuration(satellite_id)
@@ -202,7 +203,7 @@ def debug_mqtt_config(satellite_id: str):
 
 
 
-@router.post("/v2/mqtt/publish-now/{satellite_id:path}")
+@router.post("/publish-now/{satellite_id:path}")
 def publish_now(satellite_id: str):
     logging.info(f"=== PUBLISH NOW START === satellite_id: {satellite_id}")
     
@@ -270,7 +271,7 @@ def publish_now(satellite_id: str):
 
 
 
-@router.get("/api/cron/mqtt-publish")
+@cron_router.get("/mqtt-publish")
 def cron_mqtt_publish():
     """
     Vercel Cron Job endpoint - publishes TLE data for all enabled MQTT configurations.

@@ -8,7 +8,7 @@ import threading
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, inference
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 from api.services.tle_service import warm_tle_cache
@@ -102,10 +102,6 @@ _OPENAPI_TAGS = [
         "description": "Administrative operations: data import scripts, DISCOS enrichment, database backups, and GMAT smoke tests.",
     },
     {
-        "name": "inference",
-        "description": "ML inference stubs for provenance attribution (fragmentation event linking).",
-    },
-    {
         "name": "docs",
         "description": "Human-readable HTML documentation pages served from project Markdown files.",
     },
@@ -145,6 +141,7 @@ app.include_router(graphs.router)
 app.include_router(documents.router)
 app.include_router(tle.router)
 app.include_router(mqtt.router)
+app.include_router(mqtt.cron_router)
 app.include_router(admin.router)
 app.include_router(observations.router)
 app.include_router(agent.router)
@@ -153,7 +150,6 @@ app.include_router(ephemeris.router)
 app.include_router(kestrel.router)
 app.include_router(objects.router)
 app.include_router(provenance.router)
-app.include_router(inference.router)
 
 
 def custom_openapi():

@@ -2,22 +2,13 @@ from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 import math
 
-from database import find_satellite, search_satellites, count_satellites, get_all_object_classes
+from database import find_satellite, search_satellites, count_satellites
 import database.connection as db_conn
 from database.identifier_operations import lookup_by_alias, lookup_by_norad, lookup_by_cospar, ALIAS_TYPES
 from database.connection import COLLECTION_NAME
 from api.utils.converters import filter_nan_values
 
 router = APIRouter(prefix="/v2/objects", tags=["objects"])
-
-_OBJECT_CLASSES = [
-    "Payload",
-    "Rocket Body",
-    "Mission-Related Object",
-    "Rocket Fragmentation Debris",
-    "Payload Fragmentation Debris",
-    "Unknown",
-]
 
 
 def _clean_doc(doc):
