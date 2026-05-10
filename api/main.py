@@ -43,7 +43,88 @@ async def lifespan(app: FastAPI):
     disconnect_mongodb()
 
 
-app = FastAPI(lifespan=lifespan)
+_OPENAPI_TAGS = [
+    {
+        "name": "auth",
+        "description": "Authentication endpoints. Obtain and revoke session tokens.",
+    },
+    {
+        "name": "satellites",
+        "description": "Search and retrieve satellite records with canonical orbital data and source provenance.",
+    },
+    {
+        "name": "objects",
+        "description": "Space-object lookup by NORAD ID, COSPAR/international designator, or alias.",
+    },
+    {
+        "name": "metadata",
+        "description": "Enumerate filter values (countries, statuses, orbital bands, object types, etc.).",
+    },
+    {
+        "name": "tle",
+        "description": "Two-Line Element (TLE) retrieval, persistence, and SGP4 orbit propagation.",
+    },
+    {
+        "name": "ephemeris",
+        "description": "High-fidelity ephemeris generation, storage, and retrieval (SGP4 and GMAT).",
+    },
+    {
+        "name": "graphs",
+        "description": "Graph analytics: shortest paths, centrality, collision clusters, constellation networks, observation graphs, and temporal snapshots.",
+    },
+    {
+        "name": "observations",
+        "description": "Ingest, query, and export satellite observation records.",
+    },
+    {
+        "name": "provenance",
+        "description": "Provenance graph: data-source lineage, confidence scores, and DISCOS-derived object genealogy.",
+    },
+    {
+        "name": "kestrel",
+        "description": "Rendezvous and proximity-operations (RPO) scenario planning powered by GMAT maneuver execution.",
+    },
+    {
+        "name": "agent",
+        "description": "LLM-powered assistants: RAG Q&A over project docs, natural-language AQL query generation, and Kestrel mission advisor.",
+    },
+    {
+        "name": "mqtt",
+        "description": "Manage MQTT broker configurations and scheduled satellite telemetry publishing.",
+    },
+    {
+        "name": "documents",
+        "description": "Resolve and parse UNOOSA registration document links and PDF metadata.",
+    },
+    {
+        "name": "admin",
+        "description": "Administrative operations: data import scripts, DISCOS enrichment, database backups, and GMAT smoke tests.",
+    },
+    {
+        "name": "inference",
+        "description": "ML inference stubs for provenance attribution (fragmentation event linking).",
+    },
+    {
+        "name": "docs",
+        "description": "Human-readable HTML documentation pages served from project Markdown files.",
+    },
+]
+
+app = FastAPI(
+    lifespan=lifespan,
+    title="Kessler API",
+    description=(
+        "REST API for the Kessler space-object registry and analytics platform. "
+        "Provides satellite search, orbital propagation, graph analytics, observation ingestion, "
+        "provenance tracking, rendezvous planning, and AI-assisted query capabilities.\n\n"
+        "**Authentication**: Most endpoints require a Bearer token obtained via `POST /v2/auth/login`. "
+        "Pass the token in the `Authorization: Bearer <token>` header."
+    ),
+    version="2.0.0",
+    openapi_tags=_OPENAPI_TAGS,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 

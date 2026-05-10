@@ -6,7 +6,7 @@ from starlette.responses import Response
 from api.routers.auth import _token_store
 
 _LOGIN_PATH = "/v2/auth/login"
-_PUBLIC_PREFIXES = ("/v2/docs",)
+_PUBLIC_PREFIXES = ("/v2/docs", "/docs", "/redoc", "/openapi.json")
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
