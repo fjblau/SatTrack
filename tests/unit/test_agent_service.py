@@ -67,7 +67,7 @@ class TestRunAgentNotReady(unittest.TestCase):
         original = svc._compiled_graph
         try:
             svc._compiled_graph = None
-            result = svc.run_agent("What is Kessler?")
+            result = svc.run_agent("What is Talon?")
             self.assertIn("not available", result["answer"].lower())
             self.assertEqual(result["sources"], [])
             self.assertIsNotNone(result["session_id"])
@@ -107,14 +107,14 @@ class TestRunAgentWithGraph(unittest.TestCase):
         original_graph = svc._compiled_graph
         original_history = svc._session_histories.copy()
         try:
-            ai_msg = self._make_ai_msg("Kessler tracks satellites.")
+            ai_msg = self._make_ai_msg("Talon tracks satellites.")
             mock_graph = MagicMock()
             mock_graph.invoke.return_value = {"messages": [ai_msg]}
             svc._compiled_graph = mock_graph
             svc._session_histories.clear()
 
-            result = svc.run_agent("What does Kessler do?")
-            self.assertEqual(result["answer"], "Kessler tracks satellites.")
+            result = svc.run_agent("What does Talon do?")
+            self.assertEqual(result["answer"], "Talon tracks satellites.")
             self.assertIsInstance(result["sources"], list)
         finally:
             svc._compiled_graph = original_graph

@@ -53,7 +53,7 @@ class TestAskEndpoint(unittest.TestCase):
 
     def test_ask_returns_answer(self):
         mock_result = {
-            "answer": "Kessler is a satellite tracking application.",
+            "answer": "Talon is a satellite tracking application.",
             "sources": ["ARCHITECTURE.md"],
             "session_id": "test-session-123",
         }
@@ -61,10 +61,10 @@ class TestAskEndpoint(unittest.TestCase):
             patch("api.routers.agent.agent_service.is_ready", return_value=True),
             patch("api.routers.agent.agent_service.run_agent", return_value=mock_result),
         ):
-            resp = self.client.post("/v2/ask", json={"question": "What is Kessler?"})
+            resp = self.client.post("/v2/ask", json={"question": "What is Talon?"})
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertEqual(data["answer"], "Kessler is a satellite tracking application.")
+        self.assertEqual(data["answer"], "Talon is a satellite tracking application.")
         self.assertEqual(data["sources"], ["ARCHITECTURE.md"])
         self.assertEqual(data["session_id"], "test-session-123")
 

@@ -36,7 +36,7 @@ _DOCS = {
     "api": {
         "title": "API Documentation",
         "file": "API_DOCUMENTATION.md",
-        "description": "Complete REST API reference for all Kessler endpoints.",
+        "description": "Complete REST API reference for all Talon endpoints.",
     },
     "architecture": {
         "title": "Architecture",
@@ -46,7 +46,7 @@ _DOCS = {
     "deployment-vercel": {
         "title": "Vercel Deployment",
         "file": "README.vercel.md",
-        "description": "Step-by-step guide to deploying Kessler on Vercel.",
+        "description": "Step-by-step guide to deploying Talon on Vercel.",
     },
     "deployment-fly": {
         "title": "Fly.io / ArangoDB Setup",
@@ -249,7 +249,7 @@ def _build_html(name: str, title: str, body_html: str) -> str:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{title} — Kessler</title>
+  <title>{title} — Talon</title>
   <style>{_CSS}</style>
 </head>
 <body>
@@ -293,7 +293,7 @@ def list_docs():
         f'<li><a href="/v2/docs/{name}">{meta["title"]}</a> — {meta["description"]}</li>'
         for name, meta in _DOCS.items()
     )
-    body = f"<h1>Kessler Documentation</h1><ul>{items}</ul>"
+    body = f"<h1>Talon Documentation</h1><ul>{items}</ul>"
     return HTMLResponse(_build_html("index", "Documentation", body))
 
 

@@ -112,9 +112,9 @@ _OPENAPI_TAGS = [
 
 app = FastAPI(
     lifespan=lifespan,
-    title="Kessler API",
+    title="Talon API",
     description=(
-        "REST API for the Kessler space-object registry and analytics platform. "
+        "REST API for the Talon space-object registry and analytics platform. "
         "Provides satellite search, orbital propagation, graph analytics, observation ingestion, "
         "provenance tracking, rendezvous planning, and AI-assisted query capabilities.\n\n"
         "**Authentication**: Most endpoints require a Bearer token obtained via `POST /v2/auth/login`. "

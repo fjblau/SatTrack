@@ -364,7 +364,7 @@ When a user refers to a country by a common name, adjective, or abbreviation (e.
 """
 
     return (
-        "You are an AQL (ArangoDB Query Language) expert for the Kessler satellite tracking database.\n\n"
+        "You are an AQL (ArangoDB Query Language) expert for the Talon satellite tracking database.\n\n"
         "Translate the user's natural language question into a correct, read-only AQL query.\n\n"
         + _SCHEMA_CONTEXT_BASE
         + enum_section
@@ -390,7 +390,7 @@ Respond with a JSON object and no other text:
 
 _CLARIFY_SYSTEM_PROMPT = """You are an assistant that detects when a natural language database query is ambiguous.
 
-The Kessler space object database (collection: 'objects') has these potentially ambiguous concepts:
+The Talon space object database (collection: 'objects') has these potentially ambiguous concepts:
 - "country" could mean `canonical.country_of_origin` (where the object was built/registered by) OR a launch registration nation — always prefer `country_of_origin` unless the user explicitly asks about registration.
 - "active" or "operational" objects → `canonical.status == 'in orbit'`
 - "inactive" / "dead" / "decommissioned" → `canonical.status == 'decayed'`
