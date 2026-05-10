@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Query
 from typing import Optional
-import math
 import logging
 from datetime import datetime, timezone
 
@@ -131,28 +130,15 @@ def get_satellite_v2(identifier: str):
                     except Exception as e:
                         logger.error(f"Failed to persist lazy decay update for {sat.get('identifier')}: {e}")
 
-        safe_canonical = {}
-        for k, v in canonical.items():
-            if k != '_id':
-                if isinstance(v, dict):
-                    safe_v = {}
-                    for kk, vv in v.items():
-                        if not (isinstance(vv, float) and (math.isnan(vv) or math.isinf(vv))):
-                            safe_v[kk] = vv
-                    safe_canonical[k] = safe_v
-                elif not (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
-                    safe_canonical[k] = v
+        safe_canonical = filter_nan_values(canonical, recursive=True)
 
         sources = sat.get("sources", {})
-        safe_sources = {}
-        for k, v in sources.items():
-            if k != '_id' and isinstance(v, dict):
-                safe_v = {}
-                for kk, vv in v.items():
-                    if kk != '_id' and not (isinstance(vv, float) and (math.isnan(vv) or math.isinf(vv))):
-                        safe_v[kk] = vv
-                safe_sources[k] = safe_v
-        
+        safe_sources = {
+            k: filter_nan_values(v, recursive=True)
+            for k, v in sources.items()
+            if k != "_id" and isinstance(v, dict)
+        }
+
         return {
             "data": {
                 "identifier": sat.get("identifier"),

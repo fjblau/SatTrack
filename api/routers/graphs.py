@@ -2694,6 +2694,99 @@ def get_collision_risks(
         )
 
 
+@router.get("/collision-risks/statistics")
+def get_collision_risk_statistics(
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band"
+    )
+):
+    """
+    Get statistics about collision risks in the database.
+    
+    Args:
+        orbital_band: Optional filter by orbital band
+    
+    Returns:
+        Statistics including edge counts, risk levels, and orbital band distribution
+    """
+    try:
+        stats = collision_service.get_collision_risk_statistics(
+            orbital_band=orbital_band
+        )
+        
+        return {
+            "data": stats,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calculating collision risk statistics: {str(e)}"
+        )
+
+
+@router.get("/collision-risks/clusters")
+def get_collision_clusters(
+    orbital_band: Optional[str] = Query(
+        default=None,
+        description="Filter by orbital band"
+    ),
+    risk_threshold: float = Query(
+        default=0.7,
+        description="Minimum risk score for cluster membership (0-1)",
+        ge=0.0,
+        le=1.0
+    ),
+    min_cluster_size: int = Query(
+        default=3,
+        description="Minimum number of satellites in a cluster",
+        ge=2,
+        le=50
+    )
+):
+    """
+    Identify clusters of satellites with high collision risk.
+    
+    Clusters represent groups of satellites that have multiple high-risk
+    collision relationships with each other.
+    
+    Args:
+        orbital_band: Optional filter by orbital band
+        risk_threshold: Minimum risk score for cluster edges (0-1)
+        min_cluster_size: Minimum satellites per cluster (2-50)
+    
+    Returns:
+        List of collision risk clusters with member satellites
+    """
+    try:
+        results = analyze_collision_clusters(
+            orbital_band=orbital_band,
+            risk_threshold=risk_threshold,
+            min_cluster_size=min_cluster_size
+        )
+        
+        return {
+            "data": {
+                "clusters": results,
+                "count": len(results),
+                "parameters": {
+                    "orbital_band": orbital_band,
+                    "risk_threshold": risk_threshold,
+                    "min_cluster_size": min_cluster_size
+                }
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing collision clusters: {str(e)}"
+        )
+
+
 @router.get("/collision-risks/{satellite_id}")
 def get_collision_risks_for_satellite(
     satellite_id: str,
@@ -2794,99 +2887,6 @@ def get_collision_risk_network(
         raise HTTPException(
             status_code=500,
             detail=f"Error building collision risk network: {str(e)}"
-        )
-
-
-@router.get("/collision-risks/statistics")
-def get_collision_risk_statistics(
-    orbital_band: Optional[str] = Query(
-        default=None,
-        description="Filter by orbital band"
-    )
-):
-    """
-    Get statistics about collision risks in the database.
-    
-    Args:
-        orbital_band: Optional filter by orbital band
-    
-    Returns:
-        Statistics including edge counts, risk levels, and orbital band distribution
-    """
-    try:
-        stats = collision_service.get_collision_risk_statistics(
-            orbital_band=orbital_band
-        )
-        
-        return {
-            "data": stats,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error calculating collision risk statistics: {str(e)}"
-        )
-
-
-@router.get("/collision-risks/clusters")
-def get_collision_clusters(
-    orbital_band: Optional[str] = Query(
-        default=None,
-        description="Filter by orbital band"
-    ),
-    risk_threshold: float = Query(
-        default=0.7,
-        description="Minimum risk score for cluster membership (0-1)",
-        ge=0.0,
-        le=1.0
-    ),
-    min_cluster_size: int = Query(
-        default=3,
-        description="Minimum number of satellites in a cluster",
-        ge=2,
-        le=50
-    )
-):
-    """
-    Identify clusters of satellites with high collision risk.
-    
-    Clusters represent groups of satellites that have multiple high-risk
-    collision relationships with each other.
-    
-    Args:
-        orbital_band: Optional filter by orbital band
-        risk_threshold: Minimum risk score for cluster edges (0-1)
-        min_cluster_size: Minimum satellites per cluster (2-50)
-    
-    Returns:
-        List of collision risk clusters with member satellites
-    """
-    try:
-        results = analyze_collision_clusters(
-            orbital_band=orbital_band,
-            risk_threshold=risk_threshold,
-            min_cluster_size=min_cluster_size
-        )
-        
-        return {
-            "data": {
-                "clusters": results,
-                "count": len(results),
-                "parameters": {
-                    "orbital_band": orbital_band,
-                    "risk_threshold": risk_threshold,
-                    "min_cluster_size": min_cluster_size
-                }
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error analyzing collision clusters: {str(e)}"
         )
 
 
