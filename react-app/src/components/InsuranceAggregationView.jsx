@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import cytoscape from 'cytoscape'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
 import './InsuranceAggregationView.css'
@@ -447,12 +448,296 @@ function ScenarioForm({ shells, onResult, onShellSelect }) {
   )
 }
 
+// ── ScenarioGraph ─────────────────────────────────────────────────────────────
+
+function ScenarioGraph({ result }) {
+  const containerRef = useRef(null)
+  const cyRef = useRef(null)
+
+  useEffect(() => {
+    if (!containerRef.current || !result) return
+
+    const assets = result.affected_assets || []
+    const kestrals = result.kestrel_coverage_impact || []
+
+    const positions = {}
+    positions['event'] = { x: 450, y: 0 }
+    positions['shell'] = { x: 450, y: 190 }
+
+    const N = assets.length
+    if (N > 0) {
+      const xMin = 30, xMax = 420
+      assets.forEach((a, i) => {
+        const x = N === 1 ? 230 : xMin + i * (xMax - xMin) / (N - 1)
+        positions[`asset_${a.satellite_id}`] = { x, y: 390 + (i % 2) * 70 }
+      })
+    }
+
+    const M = kestrals.length
+    if (M > 0) {
+      const xMin = 480, xMax = 870
+      kestrals.forEach((k, j) => {
+        const x = M === 1 ? 675 : xMin + j * (xMax - xMin) / (M - 1)
+        positions[`kestrel_${k.kestrel_id}`] = { x, y: 390 + (j % 2) * 70 }
+      })
+    }
+
+    const elements = []
+
+    elements.push({
+      data: { id: 'event', label: 'Fragmentation\nEvent', nodeType: 'event' },
+      position: positions['event'],
+    })
+
+    elements.push({
+      data: { id: 'shell', label: result.shell_label, nodeType: 'shell' },
+      position: positions['shell'],
+    })
+
+    elements.push({
+      data: {
+        id: 'e-event-shell',
+        source: 'event',
+        target: 'shell',
+        edgeLabel: `${result.debris_count?.toLocaleString()} fragments\n${Math.round((result.confidence || 0) * 100)}% confidence`,
+        edgeType: 'fragmentation',
+      },
+    })
+
+    assets.forEach((a) => {
+      const displayName = a.name ||
+        (a.norad_id ? `NORAD ${a.norad_id}` : `Sat \u2026${(a.satellite_id || '').slice(-6)}`)
+      const hitPct = a.hit_probability != null
+        ? `${(a.hit_probability * 100).toFixed(0)}%`
+        : '\u2014'
+      elements.push({
+        data: {
+          id: `asset_${a.satellite_id}`,
+          label: displayName,
+          nodeType: 'asset',
+          riskBand: a.risk_band || 'moderate',
+        },
+        position: positions[`asset_${a.satellite_id}`],
+      })
+      elements.push({
+        data: {
+          id: `e-shell-${a.satellite_id}`,
+          source: 'shell',
+          target: `asset_${a.satellite_id}`,
+          edgeLabel: `${a.exposure_pct}% exposure\n${hitPct} hit prob`,
+          edgeType: 'exposure',
+          riskBand: a.risk_band || 'moderate',
+        },
+      })
+    })
+
+    kestrals.forEach((k) => {
+      const obsPct = k.observation_probability != null
+        ? `${(k.observation_probability * 100).toFixed(0)}%`
+        : '\u2014'
+      elements.push({
+        data: {
+          id: `kestrel_${k.kestrel_id}`,
+          label: k.kestrel_name || k.kestrel_id,
+          nodeType: 'kestrel',
+          kestrelStatus: k.status,
+        },
+        position: positions[`kestrel_${k.kestrel_id}`],
+      })
+      elements.push({
+        data: {
+          id: `e-kestrel-${k.kestrel_id}`,
+          source: `kestrel_${k.kestrel_id}`,
+          target: 'shell',
+          edgeLabel: `${obsPct} obs prob\n\u0394alt ${k.alt_diff_km}km`,
+          edgeType: 'observation',
+        },
+      })
+    })
+
+    if (cyRef.current) {
+      cyRef.current.destroy()
+      cyRef.current = null
+    }
+
+    const cy = cytoscape({
+      container: containerRef.current,
+      elements,
+      layout: { name: 'preset' },
+      style: [
+        {
+          selector: 'node',
+          style: {
+            label: 'data(label)',
+            'text-wrap': 'wrap',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'font-size': '11px',
+            'font-weight': 'bold',
+            color: '#fff',
+            'text-outline-width': 2,
+            'text-outline-color': 'rgba(0,0,0,0.65)',
+            width: 82,
+            height: 82,
+          },
+        },
+        {
+          selector: 'node[nodeType="event"]',
+          style: {
+            'background-color': '#b91c1c',
+            width: 100,
+            height: 100,
+            shape: 'star',
+          },
+        },
+        {
+          selector: 'node[nodeType="shell"]',
+          style: {
+            'background-color': '#1e40af',
+            width: 98,
+            height: 98,
+            shape: 'ellipse',
+          },
+        },
+        {
+          selector: 'node[nodeType="asset"]',
+          style: {
+            'background-color': '#94a3b8',
+            width: 76,
+            height: 76,
+            shape: 'hexagon',
+          },
+        },
+        ...['low', 'moderate', 'elevated', 'high', 'critical'].map(band => ({
+          selector: `node[nodeType="asset"][riskBand="${band}"]`,
+          style: { 'background-color': BAND_COLORS_HEX[band] },
+        })),
+        {
+          selector: 'node[nodeType="kestrel"]',
+          style: {
+            'background-color': '#059669',
+            width: 70,
+            height: 70,
+            shape: 'diamond',
+          },
+        },
+        {
+          selector: 'node[nodeType="kestrel"][kestrelStatus="degraded"]',
+          style: { 'background-color': '#78716c' },
+        },
+        {
+          selector: 'edge',
+          style: {
+            width: 2,
+            'line-color': '#94a3b8',
+            'target-arrow-color': '#94a3b8',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            label: 'data(edgeLabel)',
+            'font-size': '10px',
+            'font-weight': '600',
+            color: '#1e293b',
+            'text-background-color': '#f8fafc',
+            'text-background-opacity': 0.95,
+            'text-background-padding': '4px',
+            'text-background-shape': 'roundrectangle',
+            'text-wrap': 'wrap',
+            'text-max-width': '130px',
+          },
+        },
+        {
+          selector: 'edge[edgeType="fragmentation"]',
+          style: {
+            'line-color': '#dc2626',
+            'target-arrow-color': '#dc2626',
+            width: 3,
+          },
+        },
+        {
+          selector: 'edge[edgeType="exposure"][riskBand="elevated"]',
+          style: { 'line-color': '#d97706', 'target-arrow-color': '#d97706', width: 2.5 },
+        },
+        {
+          selector: 'edge[edgeType="exposure"][riskBand="high"]',
+          style: { 'line-color': '#dc2626', 'target-arrow-color': '#dc2626', width: 3 },
+        },
+        {
+          selector: 'edge[edgeType="exposure"][riskBand="critical"]',
+          style: { 'line-color': '#7f1d1d', 'target-arrow-color': '#7f1d1d', width: 3.5 },
+        },
+        {
+          selector: 'edge[edgeType="observation"]',
+          style: {
+            'line-color': '#059669',
+            'target-arrow-color': '#059669',
+            'line-style': 'dashed',
+          },
+        },
+        {
+          selector: ':selected',
+          style: {
+            'border-width': 4,
+            'border-color': '#f59e0b',
+            'border-style': 'solid',
+          },
+        },
+      ],
+      userZoomingEnabled: true,
+      userPanningEnabled: true,
+      boxSelectionEnabled: false,
+    })
+
+    cy.fit(undefined, 40)
+    cyRef.current = cy
+
+    return () => {
+      if (cyRef.current) {
+        cyRef.current.destroy()
+        cyRef.current = null
+      }
+    }
+  }, [result])
+
+  return (
+    <div className="iagg-sg-wrap">
+      <div ref={containerRef} className="iagg-sg-canvas" />
+      <div className="iagg-sg-legend">
+        <span className="iagg-sg-legend-item">
+          <span className="iagg-sg-dot" style={{ background: '#b91c1c' }} />
+          Fragmentation Event
+        </span>
+        <span className="iagg-sg-legend-item">
+          <span className="iagg-sg-dot" style={{ background: '#1e40af' }} />
+          Orbital Shell
+        </span>
+        <span className="iagg-sg-legend-item">
+          <span className="iagg-sg-dot" style={{ background: '#dc2626' }} />
+          Asset (color = risk band)
+        </span>
+        <span className="iagg-sg-legend-item">
+          <span className="iagg-sg-dot" style={{ background: '#059669' }} />
+          Kestrel Observer
+        </span>
+        <span className="iagg-sg-legend-item iagg-sg-legend-solid">
+          <span className="iagg-sg-line" />
+          impacts asset
+        </span>
+        <span className="iagg-sg-legend-item iagg-sg-legend-dashed">
+          <span className="iagg-sg-line iagg-sg-line-dashed" style={{ borderColor: '#059669' }} />
+          observes shell
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ── ScenarioResult ────────────────────────────────────────────────────────────
 
 function ScenarioResult({ result }) {
   if (!result) return null
 
   const { affected_assets = [], kestrel_coverage_impact = [] } = result
+  const [view, setView] = useState('graph')
 
   return (
     <div className="iagg-result">
@@ -481,75 +766,95 @@ function ScenarioResult({ result }) {
         </div>
       </div>
 
-      {affected_assets.length > 0 && (
+      {(affected_assets.length > 0 || kestrel_coverage_impact.length > 0) && (
         <div className="iagg-result-section">
-          <h4 className="iagg-result-subtitle">Affected Insured Assets</h4>
-          <div className="iagg-result-table-wrap">
-            <table className="iagg-table">
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Operator</th>
-                  <th>Sum Insured</th>
-                  <th>Sum at Risk</th>
-                  <th>Exposure</th>
-                  <th>Risk Band</th>
-                  <th>Hit Prob</th>
-                </tr>
-              </thead>
-              <tbody>
-                {affected_assets.map(a => (
-                  <tr key={a.satellite_id}>
-                    <td className="iagg-bold">{a.name || a.satellite_id}</td>
-                    <td className="iagg-muted">{a.operator || '—'}</td>
-                    <td>{fmtSI(a.sum_insured)}</td>
-                    <td className="iagg-bold iagg-danger">{fmtSI(a.sum_at_risk)}</td>
-                    <td className="iagg-center">{a.exposure_pct}%</td>
-                    <td>
-                      <Badge color={BAND_COLORS[a.risk_band] || '#6b7280'}>
-                        {a.risk_band || '—'}
-                      </Badge>
-                    </td>
-                    <td className="iagg-center iagg-muted">
-                      {a.hit_probability != null ? `${(a.hit_probability * 100).toFixed(1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="iagg-result-section-header">
+            <h4 className="iagg-result-subtitle">Impact Analysis</h4>
+            <div className="iagg-view-toggle">
+              <button
+                className={`iagg-view-btn${view === 'graph' ? ' iagg-view-btn-active' : ''}`}
+                onClick={() => setView('graph')}
+              >Graph</button>
+              <button
+                className={`iagg-view-btn${view === 'table' ? ' iagg-view-btn-active' : ''}`}
+                onClick={() => setView('table')}
+              >Table</button>
+            </div>
           </div>
-        </div>
-      )}
 
-      {kestrel_coverage_impact.length > 0 && (
-        <div className="iagg-result-section">
-          <h4 className="iagg-result-subtitle">Kestrel Coverage Impact</h4>
-          <table className="iagg-table">
-            <thead>
-              <tr>
-                <th>Kestrel</th>
-                <th>Status</th>
-                <th>Coverage Type</th>
-                <th>Obs Probability</th>
-                <th>Alt Diff (km)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kestrel_coverage_impact.map(k => (
-                <tr key={k.kestrel_id}>
-                  <td className="iagg-bold">{k.kestrel_name || k.kestrel_id}</td>
-                  <td>{k.status || '—'}</td>
-                  <td><CoverageTypeBadge type={k.coverage_type} /></td>
-                  <td className="iagg-center">
-                    {k.observation_probability != null
-                      ? `${(k.observation_probability * 100).toFixed(1)}%`
-                      : '—'}
-                  </td>
-                  <td className="iagg-center iagg-muted">{k.alt_diff_km?.toLocaleString() || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {view === 'graph' && <ScenarioGraph result={result} />}
+
+          {view === 'table' && affected_assets.length > 0 && (
+            <>
+              <h4 className="iagg-result-subtitle" style={{ marginTop: '1rem' }}>Affected Insured Assets</h4>
+              <div className="iagg-result-table-wrap">
+                <table className="iagg-table">
+                  <thead>
+                    <tr>
+                      <th>Asset</th>
+                      <th>Operator</th>
+                      <th>Sum Insured</th>
+                      <th>Sum at Risk</th>
+                      <th>Exposure</th>
+                      <th>Risk Band</th>
+                      <th>Hit Prob</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {affected_assets.map(a => (
+                      <tr key={a.satellite_id}>
+                        <td className="iagg-bold">{a.name || a.satellite_id}</td>
+                        <td className="iagg-muted">{a.operator || '—'}</td>
+                        <td>{fmtSI(a.sum_insured)}</td>
+                        <td className="iagg-bold iagg-danger">{fmtSI(a.sum_at_risk)}</td>
+                        <td className="iagg-center">{a.exposure_pct}%</td>
+                        <td>
+                          <Badge color={BAND_COLORS[a.risk_band] || '#6b7280'}>
+                            {a.risk_band || '—'}
+                          </Badge>
+                        </td>
+                        <td className="iagg-center iagg-muted">
+                          {a.hit_probability != null ? `${(a.hit_probability * 100).toFixed(1)}%` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {view === 'table' && kestrel_coverage_impact.length > 0 && (
+            <>
+              <h4 className="iagg-result-subtitle" style={{ marginTop: '1.25rem' }}>Kestrel Coverage Impact</h4>
+              <table className="iagg-table">
+                <thead>
+                  <tr>
+                    <th>Kestrel</th>
+                    <th>Status</th>
+                    <th>Coverage Type</th>
+                    <th>Obs Probability</th>
+                    <th>Alt Diff (km)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kestrel_coverage_impact.map(k => (
+                    <tr key={k.kestrel_id}>
+                      <td className="iagg-bold">{k.kestrel_name || k.kestrel_id}</td>
+                      <td>{k.status || '—'}</td>
+                      <td><CoverageTypeBadge type={k.coverage_type} /></td>
+                      <td className="iagg-center">
+                        {k.observation_probability != null
+                          ? `${(k.observation_probability * 100).toFixed(1)}%`
+                          : '—'}
+                      </td>
+                      <td className="iagg-center iagg-muted">{k.alt_diff_km?.toLocaleString() || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </div>
       )}
     </div>
