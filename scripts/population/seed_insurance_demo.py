@@ -177,7 +177,9 @@ def resolve_satellite_key(norad_id: int) -> str | None:
     """Return the objects collection _key for a given NORAD ID, or None."""
     aql = """
     FOR doc IN @@col
-        FILTER doc.canonical.norad_id == @norad_id
+        FILTER doc._insurance_mock != true
+        FILTER doc.canonical.norad_cat_id == @norad_id
+           OR TO_STRING(doc.canonical.norad_cat_id) == @norad_str
            OR doc.canonical.registration_number == @norad_str
         LIMIT 1
         RETURN doc._key
