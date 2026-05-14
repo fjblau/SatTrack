@@ -302,6 +302,8 @@ Named graph: **provenance_relationships**
 - Latest anomaly prediction: filter `prediction_for` edges where `is_latest == true`, or sort by `computed_at DESC LIMIT 1`
 - "Claims" status values are "reserved", "paid", "closed" — NOT "open" or "settled"
 - When querying `ephemeris_envelopes`, always use `UNSET(doc, "ephemeris_points")` unless the user explicitly asks for trajectory point data
+- **CRITICAL — satellite lookup per policy**: When filtering policies by satellite name or constellation, always resolve the satellite INSIDE the policy loop using `p.satellite_id`. NEVER put a global `LET sat = FIRST(FOR s IN objects ...)` before the policy loop — that finds only one satellite globally and breaks the join. Correct pattern: `FOR p IN policies ... LET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s) FILTER <condition on sat>`
+- **CRITICAL — satellite name matching**: Individual satellites have specific names like "STARLINK-1007", "IRIDIUM NEXT-101". Never use exact equality (`==`) when filtering by constellation or operator name — always use `CONTAINS(LOWER(sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier || ""), LOWER("<term>"))`
 
 ### Insurance Few-Shot Examples
 
@@ -311,6 +313,17 @@ FOR p IN policies
     FILTER p.status == "bound"
     LET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)
     FILTER sat.canonical.country_of_origin == "Austria"
+    LIMIT 20
+    RETURN {policy_id: p._key, policy_number: p.policy_number, sum_insured: p.sum_insured, expiry: p.expiry, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}
+```
+
+**Q: Show insurance bookings for Starlink satellites**
+```aql
+FOR p IN policies
+    FILTER p.status == "bound"
+    LET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)
+    FILTER sat != null
+    FILTER CONTAINS(LOWER(sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier || ""), "starlink")
     LIMIT 20
     RETURN {policy_id: p._key, policy_number: p.policy_number, sum_insured: p.sum_insured, expiry: p.expiry, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}
 ```
