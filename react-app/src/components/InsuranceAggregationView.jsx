@@ -29,6 +29,24 @@ function loadCesium() {
 
 const EARTH_RADIUS_KM = 6371
 
+function seededRng(seed) {
+  let s = seed >>> 0
+  return () => {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0
+    return s / 0xffffffff
+  }
+}
+
+function hashStr(str) {
+  let h = 5381
+  for (let i = 0; i < str.length; i++) h = (Math.imul(33, h) ^ str.charCodeAt(i)) >>> 0
+  return h
+}
+
+const BAND_COLORS_HEX = {
+  low: '#15803d', moderate: '#0369a1', elevated: '#d97706', high: '#dc2626', critical: '#7f1d1d',
+}
+
 const SHELLS_ORDERED = [
   'LEO_500_520', 'LEO_520_540', 'LEO_540_560', 'LEO_560_580',
   'MEO_19000_21000', 'GEO_W', 'GEO_E',
@@ -79,7 +97,7 @@ function CoverageTypeBadge({ type }) {
 
 // ── OrbitalShellGlobe ─────────────────────────────────────────────────────────
 
-function OrbitalShellGlobe({ shells, highlightShellId }) {
+function OrbitalShellGlobe({ shells, highlightShellId, scenarioResult }) {
   const containerRef = useRef(null)
   const viewerRef = useRef(null)
   const [status, setStatus] = useState('loading')
@@ -166,6 +184,53 @@ function OrbitalShellGlobe({ shells, highlightShellId }) {
         leoBands.forEach(drawShell)
         otherBands.forEach(drawShell)
 
+        if (scenarioResult && highlightShellId) {
+          const shellMeta = shells.find(s => s.shell_id === highlightShellId) || {}
+          const altKm = shellMeta.alt_km || 550
+
+          const debrisToDraw = Math.min(scenarioResult.debris_count || 0, 800)
+          const shellSeed = (highlightShellId || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+          const rng = seededRng(debrisToDraw * 7 + shellSeed)
+          for (let i = 0; i < debrisToDraw; i++) {
+            const lon = rng() * 360 - 180
+            const lat = rng() * 160 - 80
+            const alt = (altKm + rng() * 20 - 10) * 1000
+            viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(lon, lat, alt),
+              point: {
+                pixelSize: 2,
+                color: Cesium.Color.ORANGE.withAlpha(0.75),
+              },
+            })
+          }
+
+          for (const asset of scenarioResult.affected_assets || []) {
+            const h = hashStr(asset.satellite_id || asset.name || String(Math.random()))
+            const lon = ((h % 36000) / 36000) * 360 - 180
+            const lat = (((h >>> 8) % 16000) / 16000) * 160 - 80
+            const col = Cesium.Color.fromCssColorString(BAND_COLORS_HEX[asset.risk_band] || '#dc2626')
+            viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(lon, lat, altKm * 1000),
+              point: {
+                pixelSize: 10,
+                color: col,
+                outlineColor: Cesium.Color.WHITE,
+                outlineWidth: 1.5,
+              },
+              label: {
+                text: asset.name || asset.satellite_id,
+                font: '9pt sans-serif',
+                fillColor: Cesium.Color.WHITE,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 2,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                pixelOffset: new Cesium.Cartesian2(0, -16),
+                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 18000000),
+              },
+            })
+          }
+        }
+
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(0, 0, 45000000),
           orientation: {
@@ -194,7 +259,7 @@ function OrbitalShellGlobe({ shells, highlightShellId }) {
         viewerRef.current = null
       }
     }
-  }, [shells, highlightShellId])
+  }, [shells, highlightShellId, scenarioResult])
 
   return (
     <div className="iagg-globe-wrapper">
@@ -485,7 +550,7 @@ export default function InsuranceAggregationView() {
             </div>
           )}
           {!shellsLoading && !shellsError && (
-            <OrbitalShellGlobe shells={shells} highlightShellId={highlightShellId} />
+            <OrbitalShellGlobe shells={shells} highlightShellId={highlightShellId} scenarioResult={scenarioResult} />
           )}
         </div>
 
