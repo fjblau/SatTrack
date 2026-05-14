@@ -115,21 +115,59 @@ def find_existing_obs_for_asset(norad_id: int, limit: int = 50) -> list[dict]:
     return list(cursor)
 
 
-def get_norad_ids_with_observations() -> set[int]:
-    """Return the set of NORAD IDs that have at least one real (non-synthetic) observation.
+def find_objects_with_observations(limit: int = 40) -> list[dict]:
+    """Return catalog objects that have at least one real (non-synthetic) observation.
 
-    Uses TO_NUMBER() in AQL so that norad_id values stored as int, float, or numeric
-    string all compare correctly against the integer NORAD IDs in INSURED_NORAD_IDS.
+    Joins the objects collection against observations by norad_cat_id / norad_id,
+    using TO_NUMBER() on both sides to handle int, float, or string storage variants.
+    Returns up to `limit` objects with enough metadata to build insurance records.
     """
     cursor = db_module.db.aql.execute("""
-        FOR obs IN @@obs
-            FILTER obs._insurance_synthetic != true
-            FILTER obs.norad_id != null
-            COLLECT norad_id = TO_NUMBER(obs.norad_id)
-            FILTER norad_id > 0
-            RETURN norad_id
-    """, bind_vars={"@obs": COLLECTION_OBSERVATIONS})
-    return {int(n) for n in cursor if n is not None}
+        LET observed_norad_ids = (
+            FOR obs IN @@obs
+                FILTER obs._insurance_synthetic != true
+                FILTER obs.norad_id != null
+                COLLECT norad_id = TO_NUMBER(obs.norad_id)
+                FILTER norad_id > 0
+                RETURN norad_id
+        )
+        FOR obj IN @@objects
+            FILTER obj._insurance_mock != true
+            FILTER TO_NUMBER(obj.canonical.norad_cat_id) IN observed_norad_ids
+            LIMIT @lim
+            RETURN {
+                _key:         obj._key,
+                norad_id:     TO_NUMBER(obj.canonical.norad_cat_id),
+                name:         obj.canonical.name    OR obj.identifier OR obj._key,
+                operator:     obj.canonical.operator OR obj.canonical.owner OR "Unknown",
+                orbital_band: obj.canonical.orbital_band OR obj.canonical.regime OR "LEO"
+            }
+    """, bind_vars={
+        "@obs": COLLECTION_OBSERVATIONS,
+        "@objects": COLLECTION_NAME,
+        "lim": limit,
+    })
+    return [r for r in cursor if r.get("norad_id")]
+
+
+def _infer_shell_key(orbital_band: str) -> str:
+    """Map a canonical orbital_band value to one of the seed shell keys."""
+    band = (orbital_band or "").upper()
+    if "GEO" in band:
+        return rng.choice(["GEO_W", "GEO_E"])
+    if "MEO" in band:
+        return "MEO_19000_21000"
+    return rng.choice(["LEO_500_520", "LEO_520_540", "LEO_540_560"])
+
+
+def _infer_sum_insured_m(orbital_band: str) -> int:
+    """Assign a plausible sum-insured (in $M) based on orbital regime."""
+    band = (orbital_band or "").upper()
+    if "GEO" in band:
+        return rng.randint(200, 400)
+    if "MEO" in band:
+        return rng.randint(80, 130)
+    return rng.randint(40, 200)
 
 
 def amend_obs(obs_doc: dict, kestrel_key: str, fusion_group_id: str | None = None, geometry_quality: float | None = None):
@@ -188,42 +226,6 @@ def delete_demo_prefix(col_name: str, prefix: str):
         REMOVE doc IN @@col
     """
     db_module.db.aql.execute(aql, bind_vars={"@col": col_name, "prefix": prefix})
-
-
-def resolve_satellite_key(norad_id: int) -> str | None:
-    """Return the objects collection _key for a given NORAD ID, or None."""
-    aql = """
-    FOR doc IN @@col
-        FILTER doc._insurance_mock != true
-        FILTER doc.canonical.norad_cat_id == @norad_id
-           OR TO_STRING(doc.canonical.norad_cat_id) == @norad_str
-           OR doc.canonical.registration_number == @norad_str
-        LIMIT 1
-        RETURN doc._key
-    """
-    cursor = db_module.db.aql.execute(
-        aql,
-        bind_vars={"@col": COLLECTION_NAME, "norad_id": norad_id, "norad_str": str(norad_id)}
-    )
-    results = list(cursor)
-    return results[0] if results else None
-
-
-def find_satellites_by_regime(regime: str, limit: int) -> list[dict]:
-    """Return up to `limit` satellite keys/names from the objects collection for a regime."""
-    aql = """
-    FOR doc IN @@col
-        FILTER doc.canonical.orbital_band == @regime
-           OR doc.canonical.regime == @regime
-        FILTER doc.canonical.norad_id != null
-        LIMIT @lim
-        RETURN { _key: doc._key, norad_id: doc.canonical.norad_id, name: doc.canonical.name OR doc.identifier }
-    """
-    cursor = db_module.db.aql.execute(
-        aql,
-        bind_vars={"@col": COLLECTION_NAME, "regime": regime, "lim": limit}
-    )
-    return list(cursor)
 
 
 # ---------------------------------------------------------------------------
@@ -293,49 +295,6 @@ KESTRELS = [
     {"_key": "KSTRL-02", "name": "Kestrel-2", "norad_id": 99002, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 601, "inclination_deg": 97.8, "raan_deg": 90.0}, "tasking_latency_s": 240},
     {"_key": "KSTRL-03", "name": "Kestrel-3", "norad_id": 99003, "status": "operational", "sensor_types": ["optical_visible", "optical_ir", "rf"], "fov_deg": 5.0, "limiting_magnitude": 17.0, "orbit": {"regime": "LEO_SSO", "alt_km": 602, "inclination_deg": 97.8, "raan_deg": 180.0}, "tasking_latency_s": 300},
     {"_key": "KSTRL-04", "name": "Kestrel-4", "norad_id": 99004, "status": "degraded", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 16.0, "orbit": {"regime": "LEO_SSO", "alt_km": 603, "inclination_deg": 97.8, "raan_deg": 270.0}, "tasking_latency_s": 480},
-]
-
-INSURED_NORAD_IDS = [
-    (40882, "INMARSAT-5F2", "GEO_E", "Inmarsat", 380),
-    (40881, "INMARSAT-5F1", "GEO_W", "Inmarsat", 350),
-    (43175, "SES-14", "GEO_W", "SES", 290),
-    (43488, "SES-12", "GEO_E", "SES", 320),
-    (41866, "TELESAT TELSTAR 19V", "GEO_W", "Telesat", 260),
-    (43039, "TELESAT TELSTAR 18V", "GEO_E", "Telesat", 270),
-    (43692, "MAXAR WORLDVIEW-LEGION-1", "LEO_540_560", "Maxar", 180),
-    (40115, "WORLDVIEW-3", "LEO_500_520", "Maxar", 200),
-    (39634, "SENTINEL-1A", "LEO_520_540", "ESA", 120),
-    (40697, "SENTINEL-2A", "LEO_540_560", "ESA", 130),
-    (41456, "SENTINEL-2B", "LEO_540_560", "ESA", 135),
-    (41866+100, "ONEWEB-0001", "LEO_500_520", "OneWeb", 90),
-    (41866+101, "ONEWEB-0012", "LEO_500_520", "OneWeb", 90),
-    (41866+102, "ONEWEB-0025", "LEO_520_540", "OneWeb", 95),
-    (44713, "STARLINK-1007", "LEO_540_560", "Starlink", 50),
-    (44719, "STARLINK-1013", "LEO_540_560", "Starlink", 50),
-    (44745, "STARLINK-1039", "LEO_540_560", "Starlink", 50),
-    (44760, "STARLINK-1054", "LEO_540_560", "Starlink", 55),
-    (41917, "IRIDIUM NEXT-101", "LEO_520_540", "Iridium", 80),
-    (41918, "IRIDIUM NEXT-102", "LEO_520_540", "Iridium", 80),
-    (41919, "IRIDIUM NEXT-103", "LEO_520_540", "Iridium", 80),
-    (41920, "IRIDIUM NEXT-104", "LEO_520_540", "Iridium", 80),
-    (42803, "IRIDIUM NEXT-120", "LEO_520_540", "Iridium", 82),
-    (39084, "PLANET FLOCK-1A", "LEO_500_520", "Planet", 45),
-    (39085, "PLANET FLOCK-1B", "LEO_500_520", "Planet", 45),
-    (40012, "PLANET FLOCK-2A", "LEO_500_520", "Planet", 48),
-    (40013, "PLANET FLOCK-2B", "LEO_500_520", "Planet", 48),
-    (43947, "PLANET SKYSAT-C14", "LEO_500_520", "Planet", 60),
-    (43948, "PLANET SKYSAT-C15", "LEO_500_520", "Planet", 60),
-    (43949, "PLANET SKYSAT-C16", "LEO_500_520", "Planet", 60),
-    (19548, "NAVSTAR GPS IIA-11", "MEO_19000_21000", "USAF", 110),
-    (22877, "NAVSTAR GPS IIR-1", "MEO_19000_21000", "USAF", 115),
-    (40105, "GALILEO FOC-1", "MEO_19000_21000", "ESA", 95),
-    (40128, "GALILEO FOC-2", "MEO_19000_21000", "ESA", 95),
-    (40890, "GALILEO FOC-3", "MEO_19000_21000", "ESA", 100),
-    (43056, "INMARSAT-5F4", "GEO_E", "Inmarsat", 365),
-    (41838, "SES-10", "GEO_W", "SES", 280),
-    (42741, "SES-15", "GEO_W", "SES", 240),
-    (41032, "TELESAT ANIK-G1", "GEO_W", "Telesat", 220),
-    (40364, "DIRECTV-15", "GEO_W", "Maxar", 195),
 ]
 
 SHELL_FOR_REGIME = {
@@ -483,45 +442,31 @@ def main():
         upsert(COLLECTION_KESTRELS, kestrel)
     print(f"  Kestrels: {len(KESTRELS)}")
 
-    print("Filtering insured assets to objects with existing observations...")
-    obs_norad_ids = get_norad_ids_with_observations()
-    filtered_insured = [(n, nm, sk, op, sm) for n, nm, sk, op, sm in INSURED_NORAD_IDS if n in obs_norad_ids]
-    skipped = len(INSURED_NORAD_IDS) - len(filtered_insured)
-    print(f"  {len(filtered_insured)} of {len(INSURED_NORAD_IDS)} insured NORAD IDs have observations ({skipped} skipped)")
+    print("Discovering catalog objects that have real observations...")
+    observed_objects = find_objects_with_observations(limit=40)
+    print(f"  Found {len(observed_objects)} objects with observations")
 
-    if not filtered_insured:
+    if not observed_objects:
         print()
-        print("WARNING: No insured NORAD IDs matched objects with observations.")
+        print("WARNING: No catalog objects with real observations found.")
         print("  Import observation data first (e.g. via import_kestrel_proxy_v2.py),")
         print("  then re-run this script.")
         print("=== Seed aborted — no qualifying assets ===")
         return
 
-    print("Resolving insured satellites from objects collection...")
     insured_assets = []
-    skipped_no_object = 0
-    for norad_id, name, shell_key, operator, sum_m in filtered_insured:
-        sat_key = resolve_satellite_key(norad_id)
-        if sat_key is None:
-            print(f"  [SKIP] NORAD {norad_id} ({name}) — object not found in catalog")
-            skipped_no_object += 1
-            continue
+    for obj in observed_objects:
+        shell_key = _infer_shell_key(obj["orbital_band"])
         insured_assets.append({
-            "sat_key": sat_key,
-            "norad_id": norad_id,
-            "name": name,
+            "sat_key": obj["_key"],
+            "norad_id": int(obj["norad_id"]),
+            "name": obj["name"],
             "shell_key": shell_key,
-            "operator": operator,
-            "sum_insured_m": sum_m,
+            "operator": obj["operator"],
+            "sum_insured_m": _infer_sum_insured_m(obj["orbital_band"]),
         })
 
-    print(f"  Insured assets resolved: {len(insured_assets)} ({skipped_no_object} skipped — no catalog object)")
-
-    if not insured_assets:
-        print()
-        print("WARNING: No insured assets could be resolved from the objects catalog.")
-        print("=== Seed aborted — no qualifying assets ===")
-        return
+    print(f"  Insured assets: {len(insured_assets)}")
 
     for asset in insured_assets:
         shell_key = SHELL_FOR_REGIME.get(asset["shell_key"], "LEO_540_560")
@@ -813,12 +758,15 @@ def main():
     print(f"  Observations amended with insurance fields: {obs_amended}")
 
     print("Creating kestrel task queue...")
+    def _asset_key(idx):
+        return insured_assets[min(idx, len(insured_assets) - 1)]["sat_key"]
+
     tasks = [
-        {"_key": "TSK-2026-001", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[0]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=3), "scheduled_for": ts_past(hours=2, minutes=55), "executed_at": ts_past(hours=2, minutes=54), "status": "completed", "result_observation_ids": le_docs[0].get("evidence_refs", [])[:1], "trigger_event_id": "loss_events/LE-2026-001"},
-        {"_key": "TSK-2026-002", "kestrel_id": "kestrels/KSTRL-02", "target_id": f"objects/{insured_assets[1]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=2), "scheduled_for": ts_past(hours=1, minutes=55), "executed_at": ts_past(hours=1, minutes=54), "status": "completed", "result_observation_ids": [], "trigger_event_id": "loss_events/LE-2026-002"},
-        {"_key": "TSK-2026-003", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[2]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-002", "requested_at": ts_past(hours=1), "scheduled_for": ts_past(minutes=55), "executed_at": ts_past(minutes=50), "status": "completed", "result_observation_ids": [], "trigger_event_id": None},
-        {"_key": "TSK-2026-004", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[3]['sat_key']}", "task_type": "scheduled_pass", "requested_by": "system", "requested_at": ts_past(minutes=30), "scheduled_for": ts_future(minutes=10), "executed_at": None, "status": "scheduled", "result_observation_ids": [], "trigger_event_id": None},
-        {"_key": "TSK-2026-005", "kestrel_id": "kestrels/KSTRL-01", "target_id": f"objects/{insured_assets[4]['sat_key']}", "task_type": "renewal_survey", "requested_by": "user/underwriter-001", "requested_at": ts_past(minutes=10), "scheduled_for": ts_future(minutes=5), "executed_at": None, "status": "executing", "result_observation_ids": [], "trigger_event_id": None},
+        {"_key": "TSK-2026-001", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{_asset_key(0)}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=3), "scheduled_for": ts_past(hours=2, minutes=55), "executed_at": ts_past(hours=2, minutes=54), "status": "completed", "result_observation_ids": le_docs[0].get("evidence_refs", [])[:1] if le_docs else [], "trigger_event_id": "loss_events/LE-2026-001"},
+        {"_key": "TSK-2026-002", "kestrel_id": "kestrels/KSTRL-02", "target_id": f"objects/{_asset_key(1)}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=2), "scheduled_for": ts_past(hours=1, minutes=55), "executed_at": ts_past(hours=1, minutes=54), "status": "completed", "result_observation_ids": [], "trigger_event_id": "loss_events/LE-2026-002"},
+        {"_key": "TSK-2026-003", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{_asset_key(2)}", "task_type": "priority_observation", "requested_by": "user/underwriter-002", "requested_at": ts_past(hours=1), "scheduled_for": ts_past(minutes=55), "executed_at": ts_past(minutes=50), "status": "completed", "result_observation_ids": [], "trigger_event_id": None},
+        {"_key": "TSK-2026-004", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{_asset_key(3)}", "task_type": "scheduled_pass", "requested_by": "system", "requested_at": ts_past(minutes=30), "scheduled_for": ts_future(minutes=10), "executed_at": None, "status": "scheduled", "result_observation_ids": [], "trigger_event_id": None},
+        {"_key": "TSK-2026-005", "kestrel_id": "kestrels/KSTRL-01", "target_id": f"objects/{_asset_key(4)}", "task_type": "renewal_survey", "requested_by": "user/underwriter-001", "requested_at": ts_past(minutes=10), "scheduled_for": ts_future(minutes=5), "executed_at": None, "status": "executing", "result_observation_ids": [], "trigger_event_id": None},
     ]
     for task in tasks:
         upsert(COLLECTION_KESTREL_TASKS, task)
