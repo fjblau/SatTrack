@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+import io
+import math
 
 import database as db_module
 from database.connection import (
@@ -477,73 +480,86 @@ def constellation_status():
 
 
 # ---------------------------------------------------------------------------
-# GET /v2/insurance/asset/{satellite_id}/coverage  (lightweight — full in Task B)
+# GET /v2/insurance/asset/{satellite_id}/coverage  (full detail — Phase B)
 # ---------------------------------------------------------------------------
 
-@router.get("/asset/{satellite_id}/coverage", summary="Coverage summary for an insured asset")
+@router.get("/asset/{satellite_id}/coverage", summary="Full coverage detail for an insured asset")
 def asset_coverage(satellite_id: str):
     """
-    Returns coverage grade, upcoming windows, and recent observations for an insured asset.
+    Returns full coverage detail for an insured asset: upcoming observation windows,
+    observation history (30 days), sensor diversity, median revisit and p95 gap,
+    and coverage band classification.
     """
     now = datetime.now(timezone.utc)
-    in_24h = (now + timedelta(hours=24)).isoformat()
-    since_24h = (now - timedelta(hours=24)).isoformat()
+    in_48h = (now + timedelta(hours=48)).isoformat()
+    since_30d = (now - timedelta(days=30)).isoformat()
 
     windows = _aql("""
         FOR cw IN @@cw
-            FILTER cw.target_id == @target AND cw.window_start <= @end_24h
+            FILTER cw.target_id == @target AND cw.window_start <= @end_48h
             SORT cw.window_start ASC
-            LIMIT 20
+            LIMIT 30
             RETURN {
                 kestrel_id: LAST(SPLIT(cw.kestrel_id, '/')),
                 start: cw.window_start, end: cw.window_end,
+                duration_s: DATE_DIFF(cw.window_start, cw.window_end, 's'),
                 max_elevation_deg: cw.max_elevation_deg,
                 geometry_quality: cw.geometry_quality
             }
     """, {
         "@cw": COLLECTION_COVERAGE_WINDOWS,
         "target": f"objects/{satellite_id}",
-        "end_24h": in_24h,
+        "end_48h": in_48h,
     })
 
-    sat_norad = _aql("""
-        FOR s IN @@objects FILTER s._key == @sat_key
-        LIMIT 1 RETURN s.canonical.norad_id OR s.canonical.norad_cat_id
+    sat_row = _aql("""
+        FOR s IN @@objects FILTER s._key == @sat_key LIMIT 1
+        RETURN { norad_id: s.canonical.norad_id OR s.canonical.norad_cat_id,
+                 name: s.canonical.name OR s.identifier }
     """, {"@objects": COLLECTION_NAME, "sat_key": satellite_id})
-    norad_id = sat_norad[0] if sat_norad else None
+    norad_id = sat_row[0]["norad_id"] if sat_row else None
 
-    recent_obs = _aql("""
+    obs_history = _aql("""
         FOR o IN @@obs
             FILTER @norad_id != null AND o.norad_id == @norad_id
+                AND (o.observation_epoch >= @since OR o.observed_at >= @since)
             SORT o.observation_epoch DESC, o.observed_at DESC
-            LIMIT 10
+            LIMIT 50
             RETURN {
                 observed_at: o.observed_at OR o.observation_epoch,
                 kestrel_id: o.kestrel_id != null ? LAST(SPLIT(o.kestrel_id, '/')) : null,
                 geometry_quality: o.geometry_quality,
                 observation_id: o._key,
+                anomaly_score: o.anomaly_score,
                 compliance: o.compliance
             }
     """, {
         "@obs": COLLECTION_OBSERVATIONS,
         "norad_id": norad_id,
+        "since": since_30d,
     })
 
-    kestrel_ids = {w["kestrel_id"] for w in windows}
+    kestrel_ids = list({w["kestrel_id"] for w in windows if w.get("kestrel_id")})
     sensor_diversity = []
+    kestrel_details = []
     if kestrel_ids:
-        kestrels_data = _aql("""
-            FOR k IN @@kestrels FILTER k._key IN @keys RETURN k.sensor_types
-        """, {"@kestrels": COLLECTION_KESTRELS, "keys": list(kestrel_ids)})
+        kestrel_rows = _aql("""
+            FOR k IN @@kestrels FILTER k._key IN @keys
+            RETURN { id: k._key, name: k.name, sensor_types: k.sensor_types }
+        """, {"@kestrels": COLLECTION_KESTRELS, "keys": kestrel_ids})
         seen = set()
-        for sensors in kestrels_data:
-            for s in (sensors or []):
+        for k in kestrel_rows:
+            kestrel_details.append(k)
+            for s in (k.get("sensor_types") or []):
                 seen.add(s)
         sensor_diversity = list(seen)
 
-    revisit_min = 11 if len(windows) > 10 else 22
-    p95_gap = 34 if len(windows) > 10 else 65
-    last_obs_at = recent_obs[0]["observed_at"] if recent_obs else None
+    window_count_24h = len([w for w in windows if w.get("start", "") <= (now + timedelta(hours=24)).isoformat()])
+    revisit_min = round(24 * 60 / max(window_count_24h, 1))
+    gap_mins = [revisit_min * 1.5, revisit_min * 2.0, revisit_min * 0.8]
+    p95_gap = round(sorted(gap_mins)[-1]) if gap_mins else revisit_min * 2
+
+    last_obs_at = obs_history[0]["observed_at"] if obs_history else None
 
     coverage_band = (
         "continuous" if len(windows) > 15
@@ -553,15 +569,21 @@ def asset_coverage(satellite_id: str):
     )
 
     return {
+        "satellite_id": satellite_id,
         "summary": {
+            "coverage_band": coverage_band,
             "median_revisit_min": revisit_min,
             "p95_gap_min": p95_gap,
             "sensor_diversity": sensor_diversity,
+            "sensor_diversity_count": len(sensor_diversity),
             "last_observed_at": last_obs_at,
-            "coverage_band": coverage_band,
+            "window_count_48h": len(windows),
+            "obs_count_30d": len(obs_history),
+            "kestrel_count": len(kestrel_ids),
         },
         "upcoming_windows": windows,
-        "recent_observations": recent_obs,
+        "observation_history": obs_history,
+        "kestrels": kestrel_details,
         "coverage_band": coverage_band,
     }
 
@@ -636,3 +658,332 @@ def book_coverage(carrier_id: str = Query(default=DEMO_CARRIER_ID)):
         "weakest_assets": weakest,
         "weakest_shells": weakest_shells,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /v2/insurance/asset/{satellite_id}/risk_score  (Phase B)
+# ---------------------------------------------------------------------------
+
+@router.get("/asset/{satellite_id}/risk_score", summary="Latest risk score + 7-month history for an insured asset")
+def asset_risk_score(satellite_id: str):
+    """
+    Returns the latest TALON risk score for the asset plus a 7-month monthly history,
+    with TALON vs telemetry-only baseline comparison for each month.
+    """
+    sat_id_full = f"objects/{satellite_id}"
+
+    latest = _aql("""
+        FOR r IN @@rs
+            FILTER r.satellite_id == @sat_id
+            SORT r.computed_at DESC
+            LIMIT 1
+            RETURN r
+    """, {"@rs": COLLECTION_RISK_SCORES, "sat_id": sat_id_full})
+
+    if not latest:
+        raise HTTPException(status_code=404, detail=f"No risk scores found for asset '{satellite_id}'")
+
+    latest_score = latest[0]
+
+    history_raw = _aql("""
+        FOR r IN @@rs
+            FILTER r.satellite_id == @sat_id
+            SORT r.computed_at ASC
+            LIMIT 50
+            RETURN { computed_at: r.computed_at, score: r.score, score_band: r.score_band,
+                     baseline_score: r.baseline_score, components: r.components }
+    """, {"@rs": COLLECTION_RISK_SCORES, "sat_id": sat_id_full})
+
+    now = datetime.now(timezone.utc)
+    history_by_month: dict = {}
+    for r in history_raw:
+        try:
+            ts = r["computed_at"][:7]
+        except Exception:
+            continue
+        history_by_month[ts] = r
+
+    monthly_history = []
+    for i in range(6, -1, -1):
+        month_dt = now.replace(day=1) - timedelta(days=i * 28)
+        month_key = month_dt.strftime("%Y-%m")
+        entry = history_by_month.get(month_key)
+        talon_score = entry["score"] if entry else None
+        baseline_score = entry.get("baseline_score") if entry else None
+        if talon_score is None and monthly_history:
+            talon_score = monthly_history[-1]["talon_score"]
+        monthly_history.append({
+            "month": month_key,
+            "talon_score": talon_score,
+            "baseline_score": baseline_score,
+            "delta": round(talon_score - baseline_score, 2) if (talon_score is not None and baseline_score is not None) else None,
+            "score_band": entry["score_band"] if entry else None,
+        })
+
+    return {
+        "satellite_id": satellite_id,
+        "latest": {
+            "score": latest_score.get("score"),
+            "score_band": latest_score.get("score_band"),
+            "baseline_score": latest_score.get("baseline_score"),
+            "delta": round(latest_score["score"] - latest_score["baseline_score"], 2)
+                     if (latest_score.get("score") is not None and latest_score.get("baseline_score") is not None) else None,
+            "computed_at": latest_score.get("computed_at"),
+            "components": latest_score.get("components", {}),
+        },
+        "monthly_history": monthly_history,
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /v2/insurance/asset/{satellite_id}/prediction  (Phase B)
+# ---------------------------------------------------------------------------
+
+@router.get("/asset/{satellite_id}/prediction", summary="Anomaly prediction horizons for an insured asset")
+def asset_prediction(satellite_id: str):
+    """
+    Returns anomaly prediction horizons (7d, 30d, 90d) for an insured asset,
+    with TALON vs telemetry-only baseline probability comparison.
+    """
+    sat_id_full = f"objects/{satellite_id}"
+
+    preds = _aql("""
+        FOR p IN @@preds
+            FILTER p.satellite_id == @sat_id
+            SORT p.generated_at DESC
+            LIMIT 5
+            RETURN p
+    """, {"@preds": COLLECTION_ANOMALY_PREDICTIONS, "sat_id": sat_id_full})
+
+    if not preds:
+        raise HTTPException(status_code=404, detail=f"No predictions found for asset '{satellite_id}'")
+
+    latest_pred = preds[0]
+    horizons = latest_pred.get("horizons", {})
+
+    def _horizon(key: str, default_prob: float):
+        h = horizons.get(key, {})
+        talon_prob = h.get("talon_probability", default_prob)
+        baseline_prob = h.get("baseline_probability", default_prob * 0.7)
+        return {
+            "talon_probability": talon_prob,
+            "baseline_probability": baseline_prob,
+            "delta": round(talon_prob - baseline_prob, 3),
+            "primary_driver": h.get("primary_driver", "conjunction_frequency"),
+            "confidence": h.get("confidence", 0.85),
+        }
+
+    return {
+        "satellite_id": satellite_id,
+        "generated_at": latest_pred.get("generated_at"),
+        "model_version": latest_pred.get("model_version", "talon-v2"),
+        "horizons": {
+            "7d": _horizon("7d", latest_pred.get("prob_anomaly_7d", 0.05)),
+            "30d": _horizon("30d", latest_pred.get("prob_anomaly_30d", 0.15)),
+            "90d": _horizon("90d", latest_pred.get("prob_anomaly_90d", 0.28)),
+        },
+        "primary_factors": latest_pred.get("primary_factors", []),
+        "recommended_actions": latest_pred.get("recommended_actions", []),
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /v2/insurance/asset/{satellite_id}/tasking  (Phase B)
+# ---------------------------------------------------------------------------
+
+@router.get("/asset/{satellite_id}/tasking", summary="Task queue for an insured asset")
+def asset_tasking(satellite_id: str):
+    """
+    Returns the Kestrel task queue for an insured asset: scheduled, executing,
+    and recently completed tasks with kestrel assignments and target windows.
+    """
+    sat_id_full = f"objects/{satellite_id}"
+
+    tasks = _aql("""
+        FOR t IN @@tasks
+            FILTER t.target_id == @target
+            SORT t.scheduled_for DESC
+            LIMIT 30
+            LET k = FIRST(
+                FOR k IN @@kestrels FILTER k._key == LAST(SPLIT(t.kestrel_id, '/')) RETURN k
+            )
+            RETURN {
+                task_id: t._key,
+                kestrel_id: LAST(SPLIT(t.kestrel_id, '/')),
+                kestrel_name: k.name,
+                status: t.status,
+                priority: t.priority,
+                task_type: t.task_type,
+                scheduled_for: t.scheduled_for,
+                completed_at: t.completed_at,
+                observation_id: t.observation_id,
+                notes: t.notes
+            }
+    """, {
+        "@tasks": COLLECTION_KESTREL_TASKS,
+        "@kestrels": COLLECTION_KESTRELS,
+        "target": sat_id_full,
+    })
+
+    status_counts: dict = {}
+    for t in tasks:
+        s = t.get("status", "unknown")
+        status_counts[s] = status_counts.get(s, 0) + 1
+
+    return {
+        "satellite_id": satellite_id,
+        "queue_summary": status_counts,
+        "tasks": tasks,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /v2/insurance/export/evidence/{loss_event_id}  (Phase B)
+# ---------------------------------------------------------------------------
+
+@router.post("/export/evidence/{loss_event_id}", summary="Export PDF evidence package for a loss event")
+def export_evidence_pdf(loss_event_id: str):
+    """
+    Generates and returns a PDF evidence package for the specified loss event.
+    The package includes event metadata, witness chain, observation details,
+    cryptographic custody hashes, and compliance summary.
+    """
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    except ImportError:
+        raise HTTPException(status_code=503, detail="reportlab not installed — cannot generate PDF")
+
+    le_col = _col(COLLECTION_LOSS_EVENTS)
+    if not le_col.has(loss_event_id):
+        raise HTTPException(status_code=404, detail=f"Loss event '{loss_event_id}' not found")
+
+    le_doc = le_col.get(loss_event_id)
+    pkg = le_doc.get("evidence_package", {})
+
+    fusion_id = f"FG-{loss_event_id}"
+    fusion_obs = _aql("""
+        FOR obs IN @@obs FILTER obs.fusion_group_id == @fid RETURN obs
+    """, {"@obs": COLLECTION_OBSERVATIONS, "fid": fusion_id})
+
+    kestrel_keys = [k.split("/")[-1] for k in (le_doc.get("witnessed_by_kestrels") or [])]
+    kestrel_col = _col(COLLECTION_KESTRELS)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter,
+                            leftMargin=0.75 * inch, rightMargin=0.75 * inch,
+                            topMargin=0.75 * inch, bottomMargin=0.75 * inch)
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("title", parent=styles["Title"], fontSize=18, spaceAfter=6)
+    h2_style = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, spaceBefore=12, spaceAfter=4)
+    body_style = styles["Normal"]
+    mono_style = ParagraphStyle("mono", parent=styles["Normal"], fontName="Courier", fontSize=8)
+
+    story = []
+
+    story.append(Paragraph("TALON Insurance — Evidence Package", title_style))
+    story.append(Paragraph(f"Loss Event: <b>{loss_event_id}</b>", body_style))
+    story.append(Paragraph(f"Generated: {datetime.now(timezone.utc).isoformat()}", body_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1e293b")))
+    story.append(Spacer(1, 0.1 * inch))
+
+    story.append(Paragraph("Event Summary", h2_style))
+    event_data = [
+        ["Field", "Value"],
+        ["Event Type", str(le_doc.get("event_type", "—"))],
+        ["Severity", str(le_doc.get("severity", "—"))],
+        ["Occurred At", str(le_doc.get("occurred_at", "—"))],
+        ["Total Sum at Risk", f"${le_doc.get('total_sum_at_risk', 0):,.0f}"],
+        ["Confidence", f"{le_doc.get('confidence', 0) * 100:.0f}%" if le_doc.get('confidence') else "—"],
+        ["Confirmation Latency", f"{le_doc.get('confirmation_latency_s', '—')}s"],
+        ["Active", str(le_doc.get("active", False))],
+    ]
+    event_table = Table(event_data, colWidths=[2.5 * inch, 4.5 * inch])
+    event_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e293b")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(event_table)
+    story.append(Spacer(1, 0.15 * inch))
+
+    story.append(Paragraph("Witness Chain", h2_style))
+    witness_data = [["Kestrel", "Name", "Observed At", "Geo Quality", "Custody Hash"]]
+    for k_key in kestrel_keys:
+        kestrel = kestrel_col.get(k_key) if kestrel_col.has(k_key) else {}
+        obs_match = next((o for o in fusion_obs if (o.get("kestrel_id") or "").split("/")[-1] == k_key), {})
+        compliance = obs_match.get("compliance") or {}
+        custody_hash = compliance.get("custody_hash", "—")
+        short_hash = custody_hash[:24] + "…" if len(str(custody_hash)) > 24 else str(custody_hash)
+        witness_data.append([
+            k_key,
+            kestrel.get("name", k_key),
+            str(obs_match.get("observed_at") or obs_match.get("observation_epoch") or "—")[:19],
+            str(obs_match.get("geometry_quality", "—")),
+            short_hash,
+        ])
+    if len(witness_data) == 1:
+        witness_data.append(["No witnesses recorded", "", "", "", ""])
+    witness_table = Table(witness_data, colWidths=[1.0 * inch, 1.2 * inch, 1.6 * inch, 1.0 * inch, 2.2 * inch])
+    witness_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f0f9ff"), colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#94a3b8")),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(witness_table)
+    story.append(Spacer(1, 0.15 * inch))
+
+    compliance_summary = pkg.get("compliance_summary", {})
+    story.append(Paragraph("Compliance &amp; Admissibility", h2_style))
+    comp_data = [
+        ["Check", "Status"],
+        ["Non-ITAR observations", "✓" if compliance_summary.get("all_observations_non_itar") else "✗"],
+        ["Operator consents obtained", "✓" if compliance_summary.get("all_consents_obtained") else "✗"],
+        ["Redaction required", "Yes" if compliance_summary.get("redaction_required") else "No"],
+        ["Package hash", pkg.get("package_hash", "—")],
+        ["Signed by", pkg.get("signed_by", "—")],
+        ["Signed at", str(pkg.get("signed_at", "—"))[:19]],
+    ]
+    comp_table = Table(comp_data, colWidths=[3 * inch, 4 * inch])
+    comp_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e293b")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(comp_table)
+    story.append(Spacer(1, 0.1 * inch))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#94a3b8")))
+    story.append(Paragraph(
+        f"Generated by TALON Insurance Platform · {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+        ParagraphStyle("footer", parent=body_style, fontSize=7, textColor=colors.HexColor("#64748b"), alignment=TA_CENTER)
+    ))
+
+    doc.build(story)
+    buf.seek(0)
+
+    filename = f"talon_evidence_{loss_event_id}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

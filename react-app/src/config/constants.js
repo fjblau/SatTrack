@@ -111,6 +111,10 @@ export const API_ENDPOINTS = {
     COVERAGE: (carrierId = 'acme_re') => `/v2/insurance/book/coverage?carrier_id=${carrierId}`,
     CONSTELLATION: '/v2/insurance/constellation/status',
     ASSET_COVERAGE: (satelliteId) => `/v2/insurance/asset/${encodeURIComponent(satelliteId)}/coverage`,
+    ASSET_RISK_SCORE: (satelliteId) => `/v2/insurance/asset/${encodeURIComponent(satelliteId)}/risk_score`,
+    ASSET_PREDICTION: (satelliteId) => `/v2/insurance/asset/${encodeURIComponent(satelliteId)}/prediction`,
+    ASSET_TASKING: (satelliteId) => `/v2/insurance/asset/${encodeURIComponent(satelliteId)}/tasking`,
+    EXPORT_EVIDENCE: (lossEventId) => `/v2/insurance/export/evidence/${encodeURIComponent(lossEventId)}`,
     VERIFY: (hash) => `/v2/insurance/evidence/${encodeURIComponent(hash)}/verify`,
   },
 }

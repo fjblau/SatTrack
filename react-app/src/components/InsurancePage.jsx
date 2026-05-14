@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
+import InsuredAssetDetail from './InsuredAssetDetail'
 import './InsurancePage.css'
 
 const CARRIER_ID = 'acme_re'
@@ -173,8 +174,9 @@ function BookDashboard() {
 
       {s.aggregation_watch?.length > 0 && (
         <div className="ins-card">
-          <h3 className="ins-card-title">Aggregation Watch — Top Exposed Shells</h3>
-          <table className="ins-table">
+          <h3 className="ins-card-title">Aggregation Watch — Exposure Heatmap by Shell</h3>
+          <ExposureHeatmap shells={s.aggregation_watch} />
+          <table className="ins-table" style={{ marginTop: '0.75rem' }}>
             <thead>
               <tr>
                 <th>Shell</th>
@@ -200,13 +202,39 @@ function BookDashboard() {
   )
 }
 
+// ── ExposureHeatmap ───────────────────────────────────────────────────────────
+
+function ExposureHeatmap({ shells }) {
+  if (!shells || shells.length === 0) return null
+  const maxSI = Math.max(...shells.map(s => s.sum_insured || 0), 1)
+  return (
+    <div className="ins-heatmap">
+      {shells.map(s => (
+        <div key={s.shell_id} className="ins-heatmap-row">
+          <div className="ins-heatmap-label" title={s.shell_id}>
+            {s.label || s.shell_id?.replace(/_/g, ' ')}
+          </div>
+          <div className="ins-heatmap-track">
+            <div
+              className="ins-heatmap-fill"
+              style={{ width: `${Math.round((s.sum_insured / maxSI) * 100)}%` }}
+              title={fmtSI(s.sum_insured)}
+            />
+          </div>
+          <div className="ins-heatmap-value">{fmtSI(s.sum_insured)}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── AssetList ─────────────────────────────────────────────────────────────────
 
 const SHELLS = ['LEO_500_520', 'LEO_520_540', 'LEO_540_560', 'LEO_560_580', 'MEO_19000_21000', 'GEO_W', 'GEO_E']
 const RISK_BANDS = ['low', 'moderate', 'elevated', 'high', 'critical']
 const PAGE_SIZE = 20
 
-function AssetList() {
+function AssetList({ onSelectAsset }) {
   const [page, setPage] = useState(0)
   const [shell, setShell] = useState('')
   const [riskBand, setRiskBand] = useState('')
@@ -252,7 +280,7 @@ function AssetList() {
 
       {!loading && !error && (
         <div className="ins-card">
-          <table className="ins-table">
+          <table className="ins-table ins-table-hover">
             <thead>
               <tr>
                 <th>Asset</th>
@@ -267,8 +295,13 @@ function AssetList() {
             </thead>
             <tbody>
               {assets.map(a => (
-                <tr key={a.satellite_id}>
-                  <td className="ins-bold">{a.name || a.satellite_id}</td>
+                <tr
+                  key={a.satellite_id}
+                  className="ins-row-clickable"
+                  onClick={() => onSelectAsset && onSelectAsset(a)}
+                  title="Click to view asset detail"
+                >
+                  <td className="ins-bold ins-link-cell">{a.name || a.satellite_id}</td>
                   <td className="ins-muted">{a.norad_id}</td>
                   <td>{a.operator || '—'}</td>
                   <td className="ins-small">{a.shell_id?.replace(/_/g, ' ') || '—'}</td>
@@ -482,8 +515,29 @@ function ConstellationView() {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export default function InsurancePage({ activeSubTab }) {
+  const [selectedAsset, setSelectedAsset] = useState(null)
+
+  const handleSelectAsset = (asset) => setSelectedAsset(asset)
+  const handleBack = () => setSelectedAsset(null)
+
+  if (activeSubTab === 'asset-detail') {
+    if (selectedAsset) {
+      return (
+        <InsuredAssetDetail
+          asset={selectedAsset}
+          policy={{
+            policy_id: selectedAsset.policy_id,
+            sum_insured: selectedAsset.sum_insured,
+            policy_expiry: selectedAsset.policy_expiry,
+          }}
+          onBack={handleBack}
+        />
+      )
+    }
+    return <AssetList onSelectAsset={handleSelectAsset} />
+  }
+
   if (activeSubTab === 'book-dashboard') return <BookDashboard />
-  if (activeSubTab === 'asset-detail') return <AssetList />
   if (activeSubTab === 'aggregation') return <CoverageView />
   if (activeSubTab === 'constellation') return <ConstellationView />
   return null
