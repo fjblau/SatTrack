@@ -8,7 +8,7 @@ import threading
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 from api.services.tle_service import warm_tle_cache
@@ -98,6 +98,10 @@ _OPENAPI_TAGS = [
         "description": "Resolve and parse UNOOSA registration document links and PDF metadata.",
     },
     {
+        "name": "insurance",
+        "description": "Insurance overlay: book dashboard, insured asset detail, loss events, witness chain, evidence verification, coverage, and constellation status.",
+    },
+    {
         "name": "admin",
         "description": "Administrative operations: data import scripts, DISCOS enrichment, database backups, and GMAT smoke tests.",
     },
@@ -150,6 +154,7 @@ app.include_router(ephemeris.router)
 app.include_router(kestrel.router)
 app.include_router(objects.router)
 app.include_router(provenance.router)
+app.include_router(insurance.router)
 
 
 def custom_openapi():

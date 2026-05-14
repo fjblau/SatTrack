@@ -214,6 +214,19 @@ SCRIPT_CATALOGUE = [
         "reversibility": "irreversible (backup recommended)",
     },
     {
+        "id": "seed_insurance_demo",
+        "name": "Seed Insurance Demo Data",
+        "description": (
+            "Populates all insurance overlay collections (parties, policies, insured_interests, "
+            "loss_events, claims, risk_scores, anomaly_predictions, shells, kestrels, kestrel_tasks, "
+            "coverage_windows) and their graph edges with realistic demo data. "
+            "Idempotent — safe to re-run; clears and rebuilds the insurance demo state from scratch. "
+            "Requires the objects collection to exist. Run this before using the Insurance Overlay screens."
+        ),
+        "category": "population",
+        "path": "scripts/population/seed_insurance_demo.py",
+    },
+    {
         "id": "ingest_discos_entities",
         "name": "Ingest DISCOS Entities",
         "description": "Ingests ESA DISCOS entity records (operators, countries) into the entities vertex collection. Run first in the DISCOS ingestion sequence.",

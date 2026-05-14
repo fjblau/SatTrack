@@ -28,6 +28,32 @@ EDGE_COLLECTION_OBS_TEMPORAL = "observation_temporal_edges"
 
 PROVENANCE_GRAPH_NAME = "provenance_relationships"
 COLLECTION_FRAGMENTATION_EVENTS = "fragmentation_events"
+
+INSURANCE_GRAPH_NAME = "insurance"
+COLLECTION_PARTIES = "parties"
+COLLECTION_POLICIES = "policies"
+COLLECTION_INSURED_INTERESTS = "insured_interests"
+COLLECTION_LOSS_EVENTS = "loss_events"
+COLLECTION_CLAIMS = "claims"
+COLLECTION_RISK_SCORES = "risk_scores"
+COLLECTION_ANOMALY_PREDICTIONS = "anomaly_predictions"
+COLLECTION_SHELLS = "shells"
+COLLECTION_KESTRELS = "kestrels"
+COLLECTION_KESTREL_TASKS = "kestrel_tasks"
+COLLECTION_COVERAGE_WINDOWS = "coverage_windows"
+
+EDGE_INSURANCE_POLICY_COVERS_SAT = "policy_covers_satellite"
+EDGE_INSURANCE_POLICY_HAS_INTEREST = "policy_has_interest"
+EDGE_INSURANCE_INTEREST_HELD_BY = "interest_held_by"
+EDGE_INSURANCE_CLAIM_ARISES_FROM = "claim_arises_from"
+EDGE_INSURANCE_LOSS_EVENT_INVOLVES = "loss_event_involves"
+EDGE_INSURANCE_SAT_IN_SHELL = "satellite_in_shell"
+EDGE_INSURANCE_RISK_SCORE_FOR = "risk_score_for"
+EDGE_INSURANCE_PREDICTION_FOR = "prediction_for"
+EDGE_INSURANCE_KESTREL_OBSERVED = "kestrel_observed"
+EDGE_INSURANCE_KESTREL_CAN_SEE = "kestrel_can_see"
+EDGE_INSURANCE_TASK_TARGETS = "task_targets"
+EDGE_INSURANCE_EVENT_WITNESSED_BY = "event_witnessed_by"
 COLLECTION_LAUNCH_EVENTS = "launch_events"
 COLLECTION_LAUNCH_VEHICLES = "launch_vehicles"
 COLLECTION_LAUNCH_SITES = "launch_sites"
@@ -230,6 +256,108 @@ def connect_arangodb():
                         "edge_collection": EDGE_COLLECTION_LAUNCHED_FROM,
                         "from_vertex_collections": [COLLECTION_NAME],
                         "to_vertex_collections": [COLLECTION_LAUNCH_SITES],
+                    },
+                ],
+            )
+
+        insurance_vertex_collections = [
+            COLLECTION_PARTIES,
+            COLLECTION_POLICIES,
+            COLLECTION_INSURED_INTERESTS,
+            COLLECTION_LOSS_EVENTS,
+            COLLECTION_CLAIMS,
+            COLLECTION_RISK_SCORES,
+            COLLECTION_ANOMALY_PREDICTIONS,
+            COLLECTION_SHELLS,
+            COLLECTION_KESTRELS,
+            COLLECTION_KESTREL_TASKS,
+            COLLECTION_COVERAGE_WINDOWS,
+        ]
+        for vcol_name in insurance_vertex_collections:
+            if not db.has_collection(vcol_name):
+                db.create_collection(vcol_name)
+
+        insurance_edge_collections = [
+            EDGE_INSURANCE_POLICY_COVERS_SAT,
+            EDGE_INSURANCE_POLICY_HAS_INTEREST,
+            EDGE_INSURANCE_INTEREST_HELD_BY,
+            EDGE_INSURANCE_CLAIM_ARISES_FROM,
+            EDGE_INSURANCE_LOSS_EVENT_INVOLVES,
+            EDGE_INSURANCE_SAT_IN_SHELL,
+            EDGE_INSURANCE_RISK_SCORE_FOR,
+            EDGE_INSURANCE_PREDICTION_FOR,
+            EDGE_INSURANCE_KESTREL_OBSERVED,
+            EDGE_INSURANCE_KESTREL_CAN_SEE,
+            EDGE_INSURANCE_TASK_TARGETS,
+            EDGE_INSURANCE_EVENT_WITNESSED_BY,
+        ]
+        for ecol_name in insurance_edge_collections:
+            if not db.has_collection(ecol_name):
+                db.create_collection(ecol_name, edge=True)
+
+        if not db.has_graph(INSURANCE_GRAPH_NAME):
+            db.create_graph(
+                INSURANCE_GRAPH_NAME,
+                edge_definitions=[
+                    {
+                        "edge_collection": EDGE_INSURANCE_POLICY_COVERS_SAT,
+                        "from_vertex_collections": [COLLECTION_POLICIES],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_POLICY_HAS_INTEREST,
+                        "from_vertex_collections": [COLLECTION_POLICIES],
+                        "to_vertex_collections": [COLLECTION_INSURED_INTERESTS],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_INTEREST_HELD_BY,
+                        "from_vertex_collections": [COLLECTION_INSURED_INTERESTS],
+                        "to_vertex_collections": [COLLECTION_PARTIES],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_CLAIM_ARISES_FROM,
+                        "from_vertex_collections": [COLLECTION_CLAIMS],
+                        "to_vertex_collections": [COLLECTION_LOSS_EVENTS],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_LOSS_EVENT_INVOLVES,
+                        "from_vertex_collections": [COLLECTION_LOSS_EVENTS],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_SAT_IN_SHELL,
+                        "from_vertex_collections": [COLLECTION_NAME],
+                        "to_vertex_collections": [COLLECTION_SHELLS],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_RISK_SCORE_FOR,
+                        "from_vertex_collections": [COLLECTION_RISK_SCORES],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_PREDICTION_FOR,
+                        "from_vertex_collections": [COLLECTION_ANOMALY_PREDICTIONS],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_KESTREL_OBSERVED,
+                        "from_vertex_collections": [COLLECTION_KESTRELS],
+                        "to_vertex_collections": [COLLECTION_OBSERVATIONS],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_KESTREL_CAN_SEE,
+                        "from_vertex_collections": [COLLECTION_KESTRELS],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_TASK_TARGETS,
+                        "from_vertex_collections": [COLLECTION_KESTREL_TASKS],
+                        "to_vertex_collections": [COLLECTION_NAME],
+                    },
+                    {
+                        "edge_collection": EDGE_INSURANCE_EVENT_WITNESSED_BY,
+                        "from_vertex_collections": [COLLECTION_LOSS_EVENTS],
+                        "to_vertex_collections": [COLLECTION_KESTRELS],
                     },
                 ],
             )

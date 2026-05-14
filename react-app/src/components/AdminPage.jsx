@@ -72,6 +72,17 @@ const DEMO_TABS = [
     subtabs: []
   },
   {
+    id: 'insurance-overlay',
+    label: 'Insurance Overlay',
+    defaultEnabled: true,
+    subtabs: [
+      { id: 'book-dashboard', label: 'Book Dashboard' },
+      { id: 'asset-detail', label: 'Insured Asset Detail' },
+      { id: 'aggregation', label: 'Aggregation & Scenario' },
+      { id: 'constellation', label: 'Constellation & Coverage' },
+    ]
+  },
+  {
     id: 'help',
     label: '? Help',
     defaultEnabled: true,
