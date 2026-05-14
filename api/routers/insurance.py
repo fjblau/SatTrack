@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
 import io
 import math
+import random
 
 import database as db_module
 from database.connection import (
@@ -987,3 +989,218 @@ def export_evidence_pdf(loss_event_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /v2/insurance/aggregation/shells  (Phase C)
+# ---------------------------------------------------------------------------
+
+_SHELL_META = {
+    "LEO_500_520":    {"label": "LEO 500–520 km",      "alt_km": 510,   "color": "#dc2626"},
+    "LEO_520_540":    {"label": "LEO 520–540 km",      "alt_km": 530,   "color": "#d97706"},
+    "LEO_540_560":    {"label": "LEO 540–560 km",      "alt_km": 550,   "color": "#0369a1"},
+    "LEO_560_580":    {"label": "LEO 560–580 km",      "alt_km": 570,   "color": "#15803d"},
+    "MEO_19000_21000":{"label": "MEO 19 000–21 000 km","alt_km": 20200, "color": "#7c3aed"},
+    "GEO_W":          {"label": "GEO West",            "alt_km": 35786, "color": "#0e7490"},
+    "GEO_E":          {"label": "GEO East",            "alt_km": 35786, "color": "#be185d"},
+}
+
+
+@router.get("/aggregation/shells", summary="Full book exposure by orbital shell with heatmap data")
+def aggregation_shells(carrier_id: str = Query(default=DEMO_CARRIER_ID)):
+    """
+    Returns the full book-level aggregation breakdown by orbital shell.
+    Includes sum insured, asset count, percentage of book, heatmap intensity,
+    and risk statistics — used to drive the Cesium orbital shell visualisation.
+    """
+    policies = _aql("""
+        FOR p IN @@policies
+            FILTER p.carrier_id == @carrier AND p.status == 'bound'
+            LET sat_key = LAST(SPLIT(p.satellite_id, '/'))
+            LET sat = FIRST(FOR s IN @@objects FILTER s._key == sat_key RETURN s)
+            LET rs = FIRST(
+                FOR r IN @@rs FILTER r.satellite_id == p.satellite_id
+                SORT r.computed_at DESC LIMIT 1 RETURN r
+            )
+            LET shell_key = sat.canonical.orbital_band
+            RETURN {
+                shell_id: shell_key,
+                sum_insured: p.sum_insured,
+                risk_score: rs.score,
+                risk_band: rs.score_band
+            }
+    """, {
+        "@policies": COLLECTION_POLICIES,
+        "@objects": COLLECTION_NAME,
+        "@rs": COLLECTION_RISK_SCORES,
+        "carrier": f"parties/{carrier_id}",
+    })
+
+    shell_map: dict = {}
+    for row in policies:
+        sid = row.get("shell_id") or "unknown"
+        if sid not in shell_map:
+            shell_map[sid] = {
+                "shell_id": sid,
+                "sum_insured": 0,
+                "asset_count": 0,
+                "risk_scores": [],
+                "high_risk_count": 0,
+            }
+        shell_map[sid]["sum_insured"] += row.get("sum_insured") or 0
+        shell_map[sid]["asset_count"] += 1
+        if row.get("risk_score") is not None:
+            shell_map[sid]["risk_scores"].append(row["risk_score"])
+        if row.get("risk_band") in ("high", "critical"):
+            shell_map[sid]["high_risk_count"] += 1
+
+    total_si = sum(s["sum_insured"] for s in shell_map.values()) or 1
+    max_si = max((s["sum_insured"] for s in shell_map.values()), default=1)
+
+    shells = []
+    for sid, data in shell_map.items():
+        meta = _SHELL_META.get(sid, {"label": sid, "alt_km": 550, "color": "#64748b"})
+        scores = data["risk_scores"]
+        shells.append({
+            "shell_id": sid,
+            "label": meta["label"],
+            "alt_km": meta["alt_km"],
+            "color": meta["color"],
+            "sum_insured": data["sum_insured"],
+            "asset_count": data["asset_count"],
+            "pct_of_book": round(data["sum_insured"] / total_si * 100, 1),
+            "heatmap_intensity": round(data["sum_insured"] / max_si, 3),
+            "avg_risk_score": round(sum(scores) / len(scores), 2) if scores else None,
+            "max_risk_score": round(max(scores), 2) if scores else None,
+            "high_risk_count": data["high_risk_count"],
+        })
+
+    shells.sort(key=lambda x: -x["sum_insured"])
+    return {"shells": shells, "total_sum_insured": total_si, "carrier_id": carrier_id}
+
+
+# ---------------------------------------------------------------------------
+# POST /v2/insurance/scenarios/fragmentation  (Phase C)
+# ---------------------------------------------------------------------------
+
+class FragmentationScenarioRequest(BaseModel):
+    shell_id: str
+    debris_count: int
+    confidence: float = 0.85
+
+
+@router.post("/scenarios/fragmentation", summary="Run a fragmentation scenario against the insured book")
+def fragmentation_scenario(body: FragmentationScenarioRequest):
+    """
+    Simulates a fragmentation event in the specified orbital shell.
+    Given the shell, debris count, and confidence level, returns:
+    - affected insured assets in the shell
+    - estimated sum at risk (scaled by debris count and confidence)
+    - Kestrel coverage impact (which Kestrels can observe the shell)
+    """
+    shell_id = body.shell_id
+    debris_count = max(1, body.debris_count)
+    confidence = max(0.0, min(1.0, body.confidence))
+
+    policies = _aql("""
+        FOR p IN @@policies
+            FILTER p.carrier_id == @carrier AND p.status == 'bound'
+            LET sat_key = LAST(SPLIT(p.satellite_id, '/'))
+            LET sat = FIRST(FOR s IN @@objects FILTER s._key == sat_key RETURN s)
+            LET rs = FIRST(
+                FOR r IN @@rs FILTER r.satellite_id == p.satellite_id
+                SORT r.computed_at DESC LIMIT 1 RETURN r
+            )
+            FILTER sat.canonical.orbital_band == @shell
+            RETURN {
+                satellite_id: sat_key,
+                name: sat.canonical.name OR sat.identifier,
+                norad_id: sat.canonical.norad_id,
+                operator: sat.canonical.operator,
+                sum_insured: p.sum_insured,
+                policy_id: p._key,
+                risk_score: rs.score,
+                risk_band: rs.score_band
+            }
+    """, {
+        "@policies": COLLECTION_POLICIES,
+        "@objects": COLLECTION_NAME,
+        "@rs": COLLECTION_RISK_SCORES,
+        "carrier": f"parties/{DEMO_CARRIER_ID}",
+        "shell": shell_id,
+    })
+
+    rng = random.Random(debris_count + hash(shell_id) % 1000)
+    debris_factor = min(1.0, math.log10(max(debris_count, 10)) / 4.0)
+    base_hit_prob = 0.15 + debris_factor * 0.65
+
+    affected = []
+    total_sar = 0
+    for p in policies:
+        hit_prob = base_hit_prob * (1 + (p.get("risk_score") or 50) / 200)
+        hit_prob = min(0.99, hit_prob) * confidence
+        if rng.random() < hit_prob:
+            exposure_pct = rng.uniform(0.15, 0.95)
+            sum_at_risk = round((p.get("sum_insured") or 0) * exposure_pct)
+            total_sar += sum_at_risk
+            affected.append({
+                "satellite_id": p["satellite_id"],
+                "name": p.get("name") or p["satellite_id"],
+                "norad_id": p.get("norad_id"),
+                "operator": p.get("operator"),
+                "sum_insured": p.get("sum_insured"),
+                "sum_at_risk": sum_at_risk,
+                "exposure_pct": round(exposure_pct * 100, 1),
+                "risk_band": p.get("risk_band"),
+                "hit_probability": round(hit_prob, 3),
+            })
+
+    affected.sort(key=lambda x: -x["sum_at_risk"])
+
+    kestrels = _aql("""
+        FOR k IN @@kestrels
+            RETURN { id: k._key, name: k.name, orbit: k.orbit, status: k.status }
+    """, {"@kestrels": COLLECTION_KESTRELS})
+
+    meta = _SHELL_META.get(shell_id, {"alt_km": 550})
+    shell_alt = meta["alt_km"]
+    kestrel_impacts = []
+    for k in kestrels:
+        orbit = k.get("orbit") or {}
+        k_alt = orbit.get("alt_km") or orbit.get("altitude_km") or 550
+        alt_diff = abs(k_alt - shell_alt)
+        if alt_diff < 200:
+            coverage = "direct"
+            obs_prob = 0.92
+        elif alt_diff < 2000:
+            coverage = "adjacent"
+            obs_prob = 0.65
+        elif shell_alt > 10000:
+            coverage = "limited"
+            obs_prob = 0.30
+        else:
+            coverage = "none"
+            obs_prob = 0.05
+        kestrel_impacts.append({
+            "kestrel_id": k["id"],
+            "kestrel_name": k.get("name", k["id"]),
+            "status": k.get("status"),
+            "coverage_type": coverage,
+            "observation_probability": round(obs_prob * confidence, 3),
+            "alt_diff_km": round(alt_diff),
+        })
+
+    kestrel_impacts.sort(key=lambda x: -x["observation_probability"])
+
+    return {
+        "shell_id": shell_id,
+        "shell_label": _SHELL_META.get(shell_id, {}).get("label", shell_id),
+        "debris_count": debris_count,
+        "confidence": confidence,
+        "scenario_timestamp": datetime.now(timezone.utc).isoformat(),
+        "affected_assets": affected,
+        "affected_count": len(affected),
+        "total_assets_in_shell": len(policies),
+        "total_sum_at_risk": total_sar,
+        "kestrel_coverage_impact": kestrel_impacts,
+    }
