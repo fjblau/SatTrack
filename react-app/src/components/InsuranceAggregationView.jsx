@@ -97,7 +97,7 @@ function CoverageTypeBadge({ type }) {
 
 // ── OrbitalShellGlobe ─────────────────────────────────────────────────────────
 
-function OrbitalShellGlobe({ shells, highlightShellId, scenarioResult }) {
+function OrbitalShellGlobe({ shells, highlightShellId, scenarioResult, onAssetSelect }) {
   const containerRef = useRef(null)
   const viewerRef = useRef(null)
   const [status, setStatus] = useState('loading')
@@ -171,12 +171,16 @@ function OrbitalShellGlobe({ shells, highlightShellId, scenarioResult }) {
             },
             label: isHighlighted ? {
               text: shell.label,
-              font: '11pt sans-serif',
+              font: 'bold 14pt sans-serif',
               fillColor: Cesium.Color.WHITE,
               outlineColor: Cesium.Color.BLACK,
-              outlineWidth: 2,
+              outlineWidth: 3,
               style: Cesium.LabelStyle.FILL_AND_OUTLINE,
               pixelOffset: new Cesium.Cartesian2(0, 0),
+              showBackground: true,
+              backgroundColor: new Cesium.Color(0.05, 0.1, 0.2, 0.75),
+              backgroundPadding: new Cesium.Cartesian2(8, 5),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
             } : undefined,
           })
         }
@@ -204,42 +208,77 @@ function OrbitalShellGlobe({ shells, highlightShellId, scenarioResult }) {
             })
           }
 
+          const entityToAsset = new Map()
+
           for (const asset of scenarioResult.affected_assets || []) {
             const h = hashStr(asset.satellite_id || asset.name || String(Math.random()))
             const lon = ((h % 36000) / 36000) * 360 - 180
             const lat = (((h >>> 8) % 16000) / 16000) * 160 - 80
             const col = Cesium.Color.fromCssColorString(BAND_COLORS_HEX[asset.risk_band] || '#dc2626')
-            viewer.entities.add({
+            const displayName = asset.name ||
+              (asset.norad_id ? `NORAD ${asset.norad_id}` : `Sat …${(asset.satellite_id || '').slice(-6)}`)
+            const descHtml = `<table class="cesium-infoBox-defaultTable cesium-infoBox-defaultTable-lighter"><tbody>
+              <tr><th>Operator</th><td>${asset.operator || '—'}</td></tr>
+              <tr><th>Risk Band</th><td style="color:${BAND_COLORS_HEX[asset.risk_band] || '#dc2626'};font-weight:700">${asset.risk_band || '—'}</td></tr>
+              <tr><th>Sum Insured</th><td>${fmtSI(asset.sum_insured)}</td></tr>
+              <tr><th>Sum at Risk</th><td style="font-weight:700">${fmtSI(asset.sum_at_risk)}</td></tr>
+              <tr><th>Exposure</th><td>${asset.exposure_pct != null ? asset.exposure_pct + '%' : '—'}</td></tr>
+              <tr><th>Hit Probability</th><td>${asset.hit_probability != null ? (asset.hit_probability * 100).toFixed(1) + '%' : '—'}</td></tr>
+            </tbody></table>`
+            const ent = viewer.entities.add({
+              name: displayName,
+              description: descHtml,
               position: Cesium.Cartesian3.fromDegrees(lon, lat, altKm * 1000),
               point: {
-                pixelSize: 10,
+                pixelSize: 12,
                 color: col,
                 outlineColor: Cesium.Color.WHITE,
-                outlineWidth: 1.5,
+                outlineWidth: 2,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
               },
               label: {
-                text: asset.name || asset.satellite_id,
-                font: '9pt sans-serif',
+                text: displayName,
+                font: 'bold 13pt sans-serif',
                 fillColor: Cesium.Color.WHITE,
                 outlineColor: Cesium.Color.BLACK,
                 outlineWidth: 2,
                 style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                pixelOffset: new Cesium.Cartesian2(0, -16),
-                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 18000000),
+                pixelOffset: new Cesium.Cartesian2(16, 0),
+                horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 80000000),
+                showBackground: true,
+                backgroundColor: new Cesium.Color(0, 0, 0, 0.65),
+                backgroundPadding: new Cesium.Cartesian2(7, 4),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
               },
             })
+            entityToAsset.set(ent, asset)
           }
+
+          viewer.selectedEntityChanged.addEventListener((entity) => {
+            if (entity && entityToAsset.has(entity)) {
+              onAssetSelect?.(entityToAsset.get(entity))
+            } else if (!entity) {
+              onAssetSelect?.(null)
+            }
+          })
         }
 
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(0, 0, 45000000),
-          orientation: {
-            heading: 0,
-            pitch: -Math.PI / 2,
-            roll: 0,
-          },
-          duration: 0,
-        })
+        if (scenarioResult && highlightShellId) {
+          const shellMeta = shells.find(s => s.shell_id === highlightShellId) || {}
+          const shellAltKm = shellMeta.alt_km || 550
+          const viewAltM = Math.max((shellAltKm + 6000) * 1000, 10000000)
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(0, 25, viewAltM),
+            duration: 1.2,
+          })
+        } else {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(0, 0, 45000000),
+            orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+            duration: 0,
+          })
+        }
 
         setStatus('ready')
       } catch (err) {
@@ -525,6 +564,7 @@ export default function InsuranceAggregationView() {
   const [shellsError, setShellsError] = useState(null)
   const [scenarioResult, setScenarioResult] = useState(null)
   const [highlightShellId, setHighlightShellId] = useState(null)
+  const [selectedGlobeAsset, setSelectedGlobeAsset] = useState(null)
 
   useEffect(() => {
     setShellsLoading(true)
@@ -550,7 +590,12 @@ export default function InsuranceAggregationView() {
             </div>
           )}
           {!shellsLoading && !shellsError && (
-            <OrbitalShellGlobe shells={shells} highlightShellId={highlightShellId} scenarioResult={scenarioResult} />
+            <OrbitalShellGlobe
+              shells={shells}
+              highlightShellId={highlightShellId}
+              scenarioResult={scenarioResult}
+              onAssetSelect={setSelectedGlobeAsset}
+            />
           )}
         </div>
 
@@ -571,6 +616,56 @@ export default function InsuranceAggregationView() {
           )}
         </div>
       </div>
+
+      {selectedGlobeAsset && (
+        <div className="iagg-selected-asset-card">
+          <div className="iagg-selected-asset-header">
+            <span className="iagg-selected-asset-name">
+              {selectedGlobeAsset.name || `Sat …${(selectedGlobeAsset.satellite_id || '').slice(-6)}`}
+            </span>
+            <span className="iagg-selected-asset-hint">Selected on globe</span>
+            <button
+              className="iagg-selected-asset-close"
+              onClick={() => setSelectedGlobeAsset(null)}
+              aria-label="Dismiss"
+            >✕</button>
+          </div>
+          <div className="iagg-selected-asset-body">
+            <div className="iagg-selected-kpi">
+              <span className="iagg-selected-kpi-label">Risk Band</span>
+              <Badge color={BAND_COLORS[selectedGlobeAsset.risk_band] || '#6b7280'}>
+                {selectedGlobeAsset.risk_band || '—'}
+              </Badge>
+            </div>
+            <div className="iagg-selected-kpi">
+              <span className="iagg-selected-kpi-label">Operator</span>
+              <span className="iagg-selected-kpi-value">{selectedGlobeAsset.operator || '—'}</span>
+            </div>
+            <div className="iagg-selected-kpi">
+              <span className="iagg-selected-kpi-label">Sum Insured</span>
+              <span className="iagg-selected-kpi-value">{fmtSI(selectedGlobeAsset.sum_insured)}</span>
+            </div>
+            <div className="iagg-selected-kpi">
+              <span className="iagg-selected-kpi-label">Sum at Risk</span>
+              <span className="iagg-selected-kpi-value iagg-danger">{fmtSI(selectedGlobeAsset.sum_at_risk)}</span>
+            </div>
+            <div className="iagg-selected-kpi">
+              <span className="iagg-selected-kpi-label">Exposure</span>
+              <span className="iagg-selected-kpi-value">
+                {selectedGlobeAsset.exposure_pct != null ? `${selectedGlobeAsset.exposure_pct}%` : '—'}
+              </span>
+            </div>
+            <div className="iagg-selected-kpi">
+              <span className="iagg-selected-kpi-label">Hit Probability</span>
+              <span className="iagg-selected-kpi-value">
+                {selectedGlobeAsset.hit_probability != null
+                  ? `${(selectedGlobeAsset.hit_probability * 100).toFixed(1)}%`
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {scenarioResult && (
         <div className="iagg-result-container">
