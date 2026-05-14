@@ -90,6 +90,47 @@
   color: white;
 }
 
+.app-nav .insurance-button {
+  border-color: #0369a1;
+  color: #0369a1;
+}
+
+.app-nav .insurance-button:hover {
+  background: #0369a1;
+  border-color: #0369a1;
+  color: white;
+}
+
+.app-nav .insurance-button.active {
+  background: #0369a1;
+  border-color: #0369a1;
+  color: white;
+}
+
+.coming-soon-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  gap: 1rem;
+  color: #64748b;
+  text-align: center;
+  padding: 2rem;
+}
+
+.coming-soon-placeholder h2 {
+  font-size: 1.5rem;
+  color: #0369a1;
+  margin: 0;
+}
+
+.coming-soon-placeholder p {
+  font-size: 1rem;
+  max-width: 480px;
+  margin: 0;
+}
+
 .app-header p {
   color: #666;
   font-size: 0.9em;
