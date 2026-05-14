@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
 import InsuredAssetDetail from './InsuredAssetDetail'
+import InsuranceAggregationView from './InsuranceAggregationView'
+import InsuranceConstellationView from './InsuranceConstellationView'
 import './InsurancePage.css'
 
 const CARRIER_ID = 'acme_re'
@@ -538,7 +540,7 @@ export default function InsurancePage({ activeSubTab }) {
   }
 
   if (activeSubTab === 'book-dashboard') return <BookDashboard />
-  if (activeSubTab === 'aggregation') return <CoverageView />
-  if (activeSubTab === 'constellation') return <ConstellationView />
+  if (activeSubTab === 'aggregation') return <InsuranceAggregationView />
+  if (activeSubTab === 'constellation') return <InsuranceConstellationView />
   return null
 }

@@ -116,6 +116,9 @@ export const API_ENDPOINTS = {
     ASSET_TASKING: (satelliteId) => `/v2/insurance/asset/${encodeURIComponent(satelliteId)}/tasking`,
     EXPORT_EVIDENCE: (lossEventId) => `/v2/insurance/export/evidence/${encodeURIComponent(lossEventId)}`,
     VERIFY: (hash) => `/v2/insurance/evidence/${encodeURIComponent(hash)}/verify`,
+    AGGREGATION_SHELLS: (carrierId = 'acme_re') => `/v2/insurance/aggregation/shells?carrier_id=${carrierId}`,
+    SCENARIO_FRAGMENTATION: '/v2/insurance/scenarios/fragmentation',
+    CONSTELLATION_TASKING: '/v2/insurance/constellation/status',
   },
 }
 
