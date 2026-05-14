@@ -207,7 +207,7 @@ def book_assets(
             RETURN {
                 satellite_id: sat_key,
                 name: sat.canonical.name OR sat.identifier,
-                norad_id: sat.canonical.norad_id,
+                norad_id: sat.canonical.norad_id OR sat.canonical.norad_cat_id,
                 operator: sat.canonical.operator,
                 sum_insured: p.sum_insured,
                 currency: 'USD',
@@ -1115,7 +1115,7 @@ def fragmentation_scenario(body: FragmentationScenarioRequest):
             RETURN {
                 satellite_id: sat_key,
                 name: sat.canonical.name OR sat.identifier,
-                norad_id: sat.canonical.norad_id,
+                norad_id: sat.canonical.norad_id OR sat.canonical.norad_cat_id,
                 operator: sat.canonical.operator,
                 sum_insured: p.sum_insured,
                 policy_id: p._key,
