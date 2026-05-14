@@ -220,8 +220,8 @@ function ConstellationGlobe3D({ kestrels }) {
         })
 
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(0, 20, 30000000),
-          orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
+          destination: Cesium.Cartesian3.fromDegrees(0, 0, 25000000),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
           duration: 0,
         })
 
