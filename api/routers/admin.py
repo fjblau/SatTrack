@@ -214,6 +214,19 @@ SCRIPT_CATALOGUE = [
         "reversibility": "irreversible (backup recommended)",
     },
     {
+        "id": "remove_insurance_mock_objects",
+        "name": "Remove Insurance Mock Objects",
+        "description": (
+            "Removes stub satellite objects (INS-SAT-*) that were incorrectly inserted into the objects "
+            "catalog by an earlier version of the insurance seed script. Those stubs duplicated NORAD IDs "
+            "already present in the real catalog. Run this once to clean up, then re-run "
+            "'Seed Insurance Demo Data' to rebind insurance data to the correct catalog objects. "
+            "Supports --dry-run mode; safe to re-run."
+        ),
+        "category": "maintenance",
+        "path": "scripts/maintenance/remove_insurance_mock_objects.py",
+    },
+    {
         "id": "seed_insurance_demo",
         "name": "Seed Insurance Demo Data",
         "description": (
