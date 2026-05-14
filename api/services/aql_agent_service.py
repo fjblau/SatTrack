@@ -135,6 +135,133 @@ _SCHEMA_CONTEXT_BASE = """
 
 Named graph: **provenance_relationships**
 
+---
+
+## Insurance Overlay Collections
+
+### Insurance Vertex Collections
+
+**parties** (carriers, brokers, operators)
+- `_id`: "parties/<key>"
+- `name`: string — e.g. "Acme Re", "AXA XL", "Marsh Space Projects"
+- `type`: string — "carrier", "broker", "operator"
+- `country`: string — ISO 2-letter country code
+- `roles`: list — e.g. ["carrier", "lead_underwriter"]
+
+**policies** (insurance policies / "book of business" / "insurance bookings")
+- `_id`: "policies/<key>"  e.g. "policies/POL-2026-0001"
+- `policy_number`: string — e.g. "AR-SAT-2026-0001"
+- `carrier_id`: string — reference to parties, e.g. "parties/acme_re"
+- `broker_id`: string — reference to parties
+- `lead_underwriter_id`: string — reference to parties
+- `satellite_id`: string — reference to objects, e.g. "objects/<key>"
+- `sum_insured`: float — total insured value in USD
+- `currency`: string — "USD"
+- `premium`: float — annual premium amount
+- `deductible`: float
+- `perils`: list — e.g. ["in_orbit", "third_party_liability"]
+- `inception`: string (ISO date) — policy start date
+- `expiry`: string (ISO date) — policy end date
+- `status`: string — "bound" (active), "expired", "cancelled"
+- `policy_period_type`: string — e.g. "annual_in_orbit"
+
+**insured_interests** (syndicate participation / co-insurance shares)
+- `_id`: "insured_interests/<key>"
+- `policy_id`: string — reference to policies
+- `carrier_id`: string — reference to parties
+- `share_pct`: float — percentage share (0–100)
+- `signed_line_pct`: float
+
+**loss_events** (in-orbit loss or anomaly events)
+- `_id`: "loss_events/<key>"
+- `event_type`: string — e.g. "anomaly", "collision", "degradation"
+- `occurred_at`: string (ISO datetime)
+- `severity`: string — "low", "medium", "high", "critical"
+- `total_sum_at_risk`: float — USD value of assets at risk
+- `primary_object_id`: string — reference to objects
+- `confidence`: float 0–1
+- `active`: boolean — true if event is still ongoing
+- `witnessed_by_kestrels`: list of kestrel IDs
+
+**claims** (insurance claims arising from loss events)
+- `_id`: "claims/<key>"
+- `policy_id`: string — reference to policies
+- `loss_event_id`: string — reference to loss_events
+- `status`: string — "open", "closed", "settled"
+- `claimed_amount`: float
+- `currency`: string
+
+**risk_scores** (computed underwriting risk scores for insured satellites)
+- `_id`: "risk_scores/<key>"
+- `satellite_id`: string — reference to objects
+- `computed_at`: string (ISO datetime)
+- `score`: float 0–100 (higher = riskier)
+- `score_band`: string — "low" (<20), "moderate" (20–40), "elevated" (40–60), "high" (60–80), "critical" (≥80)
+- `factors`: object — sub-scores: shell_debris_density, operator_track_record, asset_age_factor, recent_anomaly_count, neighbor_maneuver_intensity
+
+### Insurance Edge Collections
+
+| Collection | From → To | Notable fields |
+|-----------|-----------|----------------|
+| `policy_covers_satellite` | policies → objects | `attached_at` |
+| `policy_has_interest` | policies → insured_interests | — |
+| `interest_held_by` | insured_interests → parties | — |
+| `claim_arises_from` | claims → loss_events | — |
+| `loss_event_involves` | loss_events → objects | — |
+| `risk_score_for` | risk_scores → objects | — |
+
+### Insurance AQL Tips
+- "Insurance bookings", "book of business", "insured satellites", or "policies" → use the `policies` collection
+- Active/bound policies: `FILTER p.status == "bound"`
+- To find all insured satellites: join `policies` with `objects` via `satellite_id`
+- To filter by carrier: `FILTER p.carrier_id == "parties/acme_re"`
+- Risk band filter: use `risk_scores` collection, `score_band` field
+
+### Insurance Few-Shot Examples
+
+**Q: Show insurance bookings for Austrian satellites**
+```aql
+FOR p IN policies
+    FILTER p.status == "bound"
+    LET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)
+    FILTER sat.canonical.country_of_origin == "Austria"
+    LIMIT 20
+    RETURN {policy_id: p._key, policy_number: p.policy_number, sum_insured: p.sum_insured, expiry: p.expiry, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}
+```
+
+**Q: List all bound insurance policies**
+```aql
+FOR p IN policies
+    FILTER p.status == "bound"
+    LET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)
+    SORT p.sum_insured DESC
+    LIMIT 20
+    RETURN {policy_id: p._key, sum_insured: p.sum_insured, expiry: p.expiry, satellite: sat.canonical.satellite_name || sat.identifier, carrier: p.carrier_id}
+```
+
+**Q: Find high-risk insured satellites**
+```aql
+FOR rs IN risk_scores
+    FILTER rs.score_band IN ["high", "critical"]
+    LET sat = FIRST(FOR s IN objects FILTER s._id == rs.satellite_id RETURN s)
+    LET pol = FIRST(FOR p IN policies FILTER p.satellite_id == rs.satellite_id AND p.status == "bound" RETURN p)
+    FILTER pol != null
+    SORT rs.score DESC
+    LIMIT 20
+    RETURN {satellite: sat.canonical.satellite_name || sat.identifier, risk_score: rs.score, risk_band: rs.score_band, sum_insured: pol.sum_insured}
+```
+
+**Q: Show open insurance claims**
+```aql
+FOR c IN claims
+    FILTER c.status == "open"
+    LET pol = DOCUMENT(CONCAT("policies/", c.policy_id))
+    LET sat = FIRST(FOR s IN objects FILTER s._id == pol.satellite_id RETURN s)
+    SORT c.claimed_amount DESC
+    LIMIT 20
+    RETURN {claim_id: c._key, claimed_amount: c.claimed_amount, policy_id: c.policy_id, satellite: sat.canonical.satellite_name || sat.identifier}
+```
+
 ### Provenance AQL Tips
 - Confidence thresholds: ≥0.9 = high, 0.7–0.9 = medium, <0.7 = low (require explicit filter)
 - Siblings (other fragments from same parent) require two-hop traversal:
@@ -398,6 +525,7 @@ The Talon space object database (collection: 'objects') has these potentially am
 - "size" or "largest" for objects → use `canonical.rcs` (radar cross section in m², the best physical size proxy available). If the user says "physical size", "physical dimensions", or "dimensions", use `canonical.rcs`. If the user says "mass" or "weight", use `observations.mass_kg`. Do NOT ask for clarification about size — always default to `canonical.rcs` unless mass is explicitly requested.
 - "debris" is ambiguous — ask whether the user wants `Rocket Fragmentation Debris`, `Payload Fragmentation Debris`, `Unknown`, or all debris-like classes together.
 - "satellite" in a functional sense usually means `canonical.object_class == 'Payload'`.
+- "insurance bookings", "book of business", "insured assets", "insured satellites", or "policies" → use the `policies` collection (status == "bound" for active policies). Do NOT ask for clarification — always use `policies`.
 
 If the question is clear enough to generate AQL without guessing, respond:
 {"needs_clarification": false}
