@@ -499,26 +499,13 @@ def main():
 
     print("Resolving insured satellites from objects collection...")
     insured_assets = []
+    skipped_no_object = 0
     for norad_id, name, shell_key, operator, sum_m in filtered_insured:
         sat_key = resolve_satellite_key(norad_id)
         if sat_key is None:
-            sat_key = f"INS-SAT-{norad_id}"
-            try:
-                db_module.db.collection(COLLECTION_NAME).insert({
-                    "_key": sat_key,
-                    "identifier": sat_key,
-                    "canonical": {
-                        "name": name,
-                        "norad_id": norad_id,
-                        "registration_number": str(norad_id),
-                        "operator": operator,
-                        "orbital_band": shell_key,
-                        "status": "OPERATIONAL",
-                    },
-                    "_insurance_mock": True,
-                })
-            except Exception:
-                pass
+            print(f"  [SKIP] NORAD {norad_id} ({name}) — object not found in catalog")
+            skipped_no_object += 1
+            continue
         insured_assets.append({
             "sat_key": sat_key,
             "norad_id": norad_id,
@@ -528,7 +515,13 @@ def main():
             "sum_insured_m": sum_m,
         })
 
-    print(f"  Insured assets resolved/created: {len(insured_assets)}")
+    print(f"  Insured assets resolved: {len(insured_assets)} ({skipped_no_object} skipped — no catalog object)")
+
+    if not insured_assets:
+        print()
+        print("WARNING: No insured assets could be resolved from the objects catalog.")
+        print("=== Seed aborted — no qualifying assets ===")
+        return
 
     for asset in insured_assets:
         shell_key = SHELL_FOR_REGIME.get(asset["shell_key"], "LEO_540_560")
@@ -718,24 +711,19 @@ def main():
                 "independence_score": round(rng.uniform(0.7, 1.0), 2),
             })
 
-        obs_base_time = NOW - timedelta(days=tmpl["days_ago"])
-        offsets_s = [0, rng.randint(11, 60), rng.randint(61, 130), rng.randint(131, 187)]
         witness_obs_ids = []
         witness_obs_hashes = []
+        fusion_id = f"FG-{le_key}"
         existing_for_event = find_existing_obs_near(asset["norad_id"], occurred, limit=max(len(witness_keys) * 2, 6))
         for j, k_key in enumerate(witness_keys):
-            obs_time = (obs_base_time + timedelta(seconds=offsets_s[j] if j < len(offsets_s) else offsets_s[-1])).isoformat()
+            if not existing_for_event:
+                break
             geom = round(rng.uniform(0.55, 0.92), 2)
-            fusion_id = f"FG-{le_key}"
-            if existing_for_event:
-                obs_doc = existing_for_event.pop(0)
-                obs_doc = amend_obs(obs_doc, k_key, fusion_group_id=fusion_id, geometry_quality=geom)
-            else:
-                obs_doc = create_synthetic_obs(asset["norad_id"], k_key, obs_time,
-                                               fusion_group_id=fusion_id, geometry_quality=geom)
+            obs_doc = existing_for_event.pop(0)
+            obs_doc = amend_obs(obs_doc, k_key, fusion_group_id=fusion_id, geometry_quality=geom)
             obs_id = obs_doc["_key"]
             witness_obs_ids.append(f"observations/{obs_id}")
-            epoch = obs_doc.get("observation_epoch") or obs_time
+            epoch = obs_doc.get("observation_epoch") or obs_doc.get("observed_at") or occurred
             custody = obs_doc.get("compliance", {}).get("custody_hash") or sha256_stub(f"{obs_id}:{epoch}")
             witness_obs_hashes.append(custody)
             upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
@@ -782,7 +770,6 @@ def main():
     print("Creating coverage windows (24h per insured asset) and amending existing observations...")
     cw_count = 0
     obs_amended = 0
-    obs_synthetic = 0
     kestrel_keys = [k["_key"] for k in KESTRELS if k["status"] == "operational"]
     for asset in insured_assets:
         sat_key = asset["sat_key"]
@@ -812,30 +799,18 @@ def main():
                 cw_count += 1
 
         existing_obs = find_existing_obs_for_asset(asset["norad_id"], limit=50)
-        if existing_obs:
-            for obs_doc in existing_obs:
-                k_key = rng.choice(kestrel_keys)
-                amend_obs(obs_doc, k_key)
-                upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
-                    "_key": f"KO-COV-{obs_doc['_key'][:24]}",
-                    "_from": f"kestrels/{k_key}",
-                    "_to": f"observations/{obs_doc['_key']}",
-                })
-                obs_amended += 1
-        else:
-            for obs_idx in range(10):
-                obs_time_dt = NOW - timedelta(hours=rng.randint(1, 72), minutes=rng.randint(0, 59))
-                k_key = rng.choice(kestrel_keys)
-                obs_doc = create_synthetic_obs(asset["norad_id"], k_key, obs_time_dt.isoformat())
-                upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
-                    "_key": f"KO-COV-{obs_doc['_key'][:24]}",
-                    "_from": f"kestrels/{k_key}",
-                    "_to": f"observations/{obs_doc['_key']}",
-                })
-                obs_synthetic += 1
+        for obs_doc in existing_obs:
+            k_key = rng.choice(kestrel_keys)
+            amend_obs(obs_doc, k_key)
+            upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
+                "_key": f"KO-COV-{obs_doc['_key'][:24]}",
+                "_from": f"kestrels/{k_key}",
+                "_to": f"observations/{obs_doc['_key']}",
+            })
+            obs_amended += 1
 
     print(f"  Coverage windows: {cw_count}")
-    print(f"  Observations amended with insurance fields: {obs_amended} (synthetic fallbacks: {obs_synthetic})")
+    print(f"  Observations amended with insurance fields: {obs_amended}")
 
     print("Creating kestrel task queue...")
     tasks = [
