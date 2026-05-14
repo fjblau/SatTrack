@@ -22,6 +22,7 @@ import DiscosStatusPage from './components/DiscosStatusPage'
 import FragmentationEventsPage from './components/FragmentationEventsPage'
 import ObjectProvenancePage from './components/ObjectProvenancePage'
 import CatalogByClassPage from './components/CatalogByClassPage'
+import InsurancePage from './components/InsurancePage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
@@ -678,39 +679,9 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'book-dashboard' && isSubtabVisible('insurance-overlay', 'book-dashboard') && (
+      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && (
         <div className="analytics-view-container">
-          <div className="coming-soon-placeholder">
-            <h2>Book Dashboard</h2>
-            <p>Portfolio KPIs, overnight event triage, aggregation watch, and renewal pipeline. Coming in Phase B.</p>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'asset-detail' && isSubtabVisible('insurance-overlay', 'asset-detail') && (
-        <div className="analytics-view-container">
-          <div className="coming-soon-placeholder">
-            <h2>Insured Asset Detail</h2>
-            <p>Risk score history, anomaly predictions, witness chain, evidence packages, and coverage windows per asset. Coming in Phase B.</p>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'aggregation' && isSubtabVisible('insurance-overlay', 'aggregation') && (
-        <div className="analytics-view-container">
-          <div className="coming-soon-placeholder">
-            <h2>Aggregation &amp; Scenario</h2>
-            <p>Orbital shell exposure heatmap and fragmentation scenario tool with Kestrel line-of-sight overlay. Coming in Phase C.</p>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'constellation' && isSubtabVisible('insurance-overlay', 'constellation') && (
-        <div className="analytics-view-container">
-          <div className="coming-soon-placeholder">
-            <h2>Constellation &amp; Coverage</h2>
-            <p>4-Kestrel constellation globe, asset coverage matrix, and tasking queue. Coming in Phase C.</p>
-          </div>
+          <InsurancePage activeSubTab={activeInsuranceSubTab} />
         </div>
       )}
     </div>

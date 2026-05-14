@@ -97,6 +97,22 @@ export const API_ENDPOINTS = {
     CZML: (id) => `/v2/ephemeris/${id}/czml`,
     DELETE: (id) => `/v2/ephemeris/${id}`,
   },
+
+  INSURANCE: {
+    DASHBOARD: (carrierId = 'acme_re') => `/v2/insurance/book/dashboard?carrier_id=${carrierId}`,
+    ASSETS: (carrierId = 'acme_re', page = 0, limit = 20, shell = '', riskBand = '') => {
+      let url = `/v2/insurance/book/assets?carrier_id=${carrierId}&page=${page}&limit=${limit}`
+      if (shell) url += `&shell=${encodeURIComponent(shell)}`
+      if (riskBand) url += `&risk_band=${encodeURIComponent(riskBand)}`
+      return url
+    },
+    EVENTS: (page = 0, limit = 20) => `/v2/insurance/events?page=${page}&limit=${limit}`,
+    EVENT_WITNESSES: (eventId) => `/v2/insurance/event/${encodeURIComponent(eventId)}/witnesses`,
+    COVERAGE: (carrierId = 'acme_re') => `/v2/insurance/book/coverage?carrier_id=${carrierId}`,
+    CONSTELLATION: '/v2/insurance/constellation/status',
+    ASSET_COVERAGE: (satelliteId) => `/v2/insurance/asset/${encodeURIComponent(satelliteId)}/coverage`,
+    VERIFY: (hash) => `/v2/insurance/evidence/${encodeURIComponent(hash)}/verify`,
+  },
 }
 
 export const PAGINATION = {
