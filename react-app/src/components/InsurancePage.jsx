@@ -528,7 +528,7 @@ function ConstellationView() {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function InsurancePage({ activeSubTab, onNavigateToCatalog }) {
+export default function InsurancePage({ activeSubTab, onNavigateToCatalog, onNavigateToObservations }) {
   const [selectedAsset, setSelectedAsset] = useState(null)
 
   const handleSelectAsset = (asset) => setSelectedAsset(asset)
@@ -546,6 +546,7 @@ export default function InsurancePage({ activeSubTab, onNavigateToCatalog }) {
           }}
           onBack={handleBack}
           onNavigateToCatalog={onNavigateToCatalog}
+          onNavigateToObservations={onNavigateToObservations}
         />
       )
     }

@@ -741,7 +741,7 @@ const TABS = [
   { id: 'documents', label: 'Documents' },
 ]
 
-export default function InsuredAssetDetail({ asset, policy, onBack, onNavigateToCatalog }) {
+export default function InsuredAssetDetail({ asset, policy, onBack, onNavigateToCatalog, onNavigateToObservations }) {
   const [activeTab, setActiveTab] = useState('overview')
   const satelliteId = asset?.satellite_id
 
@@ -757,6 +757,15 @@ export default function InsuredAssetDetail({ asset, policy, onBack, onNavigateTo
               title="View this object in the Object Catalog"
             >
               ↗ View in Catalog
+            </button>
+          )}
+          {onNavigateToObservations && asset?.norad_id && (
+            <button
+              className="iad-back-btn"
+              onClick={() => onNavigateToObservations(asset)}
+              title="View observations for this object in the Observation Dashboard"
+            >
+              ↗ View Observations
             </button>
           )}
         </div>

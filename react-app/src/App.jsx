@@ -34,6 +34,7 @@ function App() {
   const [activeObservationsSubTab, setActiveObservationsSubTab] = useState('observations')
   const [activeAdminSubTab, setActiveAdminSubTab] = useState('scripts')
   const [activeInsuranceSubTab, setActiveInsuranceSubTab] = useState('book-dashboard')
+  const [observationInitialNoradId, setObservationInitialNoradId] = useState(null)
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
   const [launchYears, setLaunchYears] = useState([])
   const [objects, setObjects] = useState([])
@@ -589,7 +590,7 @@ function App() {
 
       {activeTab === 'observations' && isSubtabVisible('observations', 'observation-dashboard') && activeObservationsSubTab === 'observation-dashboard' && (
         <div className="analytics-view-container">
-          <ObservationDashboard />
+          <ObservationDashboard initialNoradId={observationInitialNoradId} onInitialNoradIdConsumed={() => setObservationInitialNoradId(null)} />
         </div>
       )}
 
@@ -691,6 +692,11 @@ function App() {
               })
               setActiveCatalogSubTab('table')
               setActiveTab('satellite-catalog')
+            }}
+            onNavigateToObservations={(asset) => {
+              setObservationInitialNoradId(asset.norad_id)
+              setActiveObservationsSubTab('observation-dashboard')
+              setActiveTab('observations')
             }}
           />
         </div>
