@@ -80,6 +80,11 @@ const DEMO_TABS = [
       { id: 'asset-detail', label: 'Insured Asset Detail' },
       { id: 'aggregation', label: 'Aggregation & Scenario' },
       { id: 'constellation', label: 'Constellation & Coverage' },
+      { id: 'risk-score', label: 'Asset Risk Score' },
+      { id: 'prediction', label: 'Asset Prediction' },
+      { id: 'events', label: 'Events / Witness Chain' },
+      { id: 'tasking', label: 'Asset Tasking' },
+      { id: 'documents', label: 'Documents & Evidence' },
     ]
   },
   {
