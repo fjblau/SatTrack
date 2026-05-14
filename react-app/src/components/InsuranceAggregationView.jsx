@@ -166,10 +166,10 @@ function OrbitalShellGlobe({ shells, highlightShellId }) {
         otherBands.forEach(drawShell)
 
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(0, 20, 45000000),
+          destination: Cesium.Cartesian3.fromDegrees(0, 0, 45000000),
           orientation: {
             heading: 0,
-            pitch: -Math.PI / 2.5,
+            pitch: -Math.PI / 2,
             roll: 0,
           },
           duration: 0,
