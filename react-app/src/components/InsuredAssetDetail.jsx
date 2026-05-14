@@ -741,14 +741,25 @@ const TABS = [
   { id: 'documents', label: 'Documents' },
 ]
 
-export default function InsuredAssetDetail({ asset, policy, onBack }) {
+export default function InsuredAssetDetail({ asset, policy, onBack, onNavigateToCatalog }) {
   const [activeTab, setActiveTab] = useState('overview')
   const satelliteId = asset?.satellite_id
 
   return (
     <div className="iad-wrapper">
       <div className="iad-header">
-        <button className="iad-back-btn" onClick={onBack}>← Back to Book</button>
+        <div className="iad-header-actions">
+          <button className="iad-back-btn" onClick={onBack}>← Back to Book</button>
+          {onNavigateToCatalog && (
+            <button
+              className="iad-back-btn"
+              onClick={() => onNavigateToCatalog(asset)}
+              title="View this object in the Object Catalog"
+            >
+              ↗ View in Catalog
+            </button>
+          )}
+        </div>
         <div className="iad-title-block">
           <h2 className="iad-title">{asset?.name || satelliteId}</h2>
           <div className="iad-subtitle">

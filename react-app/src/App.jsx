@@ -681,7 +681,18 @@ function App() {
 
       {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && (
         <div className="analytics-view-container">
-          <InsurancePage activeSubTab={activeInsuranceSubTab} />
+          <InsurancePage
+            activeSubTab={activeInsuranceSubTab}
+            onNavigateToCatalog={(asset) => {
+              setSelectedObject({
+                'Object Name': asset.name || asset.satellite_id,
+                '_mongodb_id': asset.satellite_id,
+                '_norad_id': asset.norad_id,
+              })
+              setActiveCatalogSubTab('table')
+              setActiveTab('satellite-catalog')
+            }}
+          />
         </div>
       )}
     </div>
