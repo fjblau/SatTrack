@@ -116,12 +116,17 @@ def find_existing_obs_for_asset(norad_id: int, limit: int = 50) -> list[dict]:
 
 
 def get_norad_ids_with_observations() -> set[int]:
-    """Return the set of NORAD IDs that have at least one real (non-synthetic) observation."""
+    """Return the set of NORAD IDs that have at least one real (non-synthetic) observation.
+
+    Uses TO_NUMBER() in AQL so that norad_id values stored as int, float, or numeric
+    string all compare correctly against the integer NORAD IDs in INSURED_NORAD_IDS.
+    """
     cursor = db_module.db.aql.execute("""
         FOR obs IN @@obs
             FILTER obs._insurance_synthetic != true
             FILTER obs.norad_id != null
-            COLLECT norad_id = obs.norad_id
+            COLLECT norad_id = TO_NUMBER(obs.norad_id)
+            FILTER norad_id > 0
             RETURN norad_id
     """, bind_vars={"@obs": COLLECTION_OBSERVATIONS})
     return {int(n) for n in cursor if n is not None}
@@ -483,6 +488,14 @@ def main():
     filtered_insured = [(n, nm, sk, op, sm) for n, nm, sk, op, sm in INSURED_NORAD_IDS if n in obs_norad_ids]
     skipped = len(INSURED_NORAD_IDS) - len(filtered_insured)
     print(f"  {len(filtered_insured)} of {len(INSURED_NORAD_IDS)} insured NORAD IDs have observations ({skipped} skipped)")
+
+    if not filtered_insured:
+        print()
+        print("WARNING: No insured NORAD IDs matched objects with observations.")
+        print("  Import observation data first (e.g. via import_kestrel_proxy_v2.py),")
+        print("  then re-run this script.")
+        print("=== Seed aborted — no qualifying assets ===")
+        return
 
     print("Resolving insured satellites from objects collection...")
     insured_assets = []
