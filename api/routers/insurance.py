@@ -307,19 +307,30 @@ def event_witnesses(loss_event_id: str):
     le_doc = le_col.get(loss_event_id)
 
     kestrel_keys = [k.split("/")[-1] for k in (le_doc.get("witnessed_by_kestrels") or [])]
-    witnesses = []
     kestrel_col = _col(COLLECTION_KESTRELS)
-    obs_col = _col(COLLECTION_OBSERVATIONS)
 
+    fusion_id = f"FG-{loss_event_id}"
+    obs_by_kestrel: dict = {}
+    fusion_obs = _aql("""
+        FOR obs IN @@obs
+            FILTER obs.fusion_group_id == @fid
+            RETURN obs
+    """, {"@obs": COLLECTION_OBSERVATIONS, "fid": fusion_id})
+    for obs in fusion_obs:
+        k_ref = obs.get("kestrel_id", "")
+        k_key = k_ref.split("/")[-1] if k_ref else None
+        if k_key:
+            obs_by_kestrel[k_key] = obs
+
+    witnesses = []
     for k_key in kestrel_keys:
         kestrel = kestrel_col.get(k_key) if kestrel_col.has(k_key) else {}
-        obs_key = f"OBS-{loss_event_id}-{k_key}"
-        obs = obs_col.get(obs_key) if obs_col.has(obs_key) else {}
+        obs = obs_by_kestrel.get(k_key, {})
         witnesses.append({
             "kestrel_id": k_key,
             "name": kestrel.get("name", k_key),
-            "observed_at": obs.get("observed_at") or le_doc.get("first_witness_at"),
-            "observation_id": obs_key if obs else None,
+            "observed_at": obs.get("observed_at") or obs.get("observation_epoch") or le_doc.get("first_witness_at"),
+            "observation_id": obs.get("_key"),
             "geometry_quality": obs.get("geometry_quality"),
             "independence_score": round(0.85 + len(witnesses) * 0.02, 2),
             "orbit_summary": kestrel.get("orbit"),
@@ -360,23 +371,27 @@ def verify_evidence(package_hash: str):
 
     le_doc = events[0]
     pkg = le_doc.get("evidence_package", {})
-    obs_col = _col(COLLECTION_OBSERVATIONS)
-    kestrel_keys = [k.split("/")[-1] for k in (le_doc.get("witnessed_by_kestrels") or [])]
+    fusion_id = f"FG-{le_doc['_key']}"
+
+    fusion_obs = _aql("""
+        FOR obs IN @@obs
+            FILTER obs.fusion_group_id == @fid
+            RETURN obs
+    """, {"@obs": COLLECTION_OBSERVATIONS, "fid": fusion_id})
 
     constituent_obs = []
     all_verified = True
-    for k_key in kestrel_keys:
-        obs_key = f"OBS-{le_doc['_key']}-{k_key}"
-        obs = obs_col.get(obs_key) if obs_col.has(obs_key) else None
-        compliance = obs.get("compliance", {}) if obs else {}
+    for obs in fusion_obs:
+        compliance = obs.get("compliance") or {}
         custody_hash = compliance.get("custody_hash")
         verified = custody_hash is not None and custody_hash.startswith("sha256:")
         if not verified:
             all_verified = False
+        k_ref = obs.get("kestrel_id", "")
         constituent_obs.append({
-            "observation_id": obs_key,
-            "kestrel_id": k_key,
-            "captured_at": compliance.get("captured_at"),
+            "observation_id": obs["_key"],
+            "kestrel_id": k_ref.split("/")[-1] if k_ref else None,
+            "captured_at": compliance.get("captured_at") or obs.get("observation_epoch"),
             "hash": custody_hash,
             "verified": verified,
             "itar_status": compliance.get("itar_status"),
@@ -491,25 +506,27 @@ def asset_coverage(satellite_id: str):
         "end_24h": in_24h,
     })
 
+    sat_norad = _aql("""
+        FOR s IN @@objects FILTER s._key == @sat_key
+        LIMIT 1 RETURN s.canonical.norad_id OR s.canonical.norad_cat_id
+    """, {"@objects": COLLECTION_NAME, "sat_key": satellite_id})
+    norad_id = sat_norad[0] if sat_norad else None
+
     recent_obs = _aql("""
         FOR o IN @@obs
-            FILTER o.norad_id != null
-            LET sat = FIRST(FOR s IN @@objects FILTER s._key == @sat_key RETURN s)
-            FILTER o.norad_id == sat.canonical.norad_id AND o.observed_at >= @since
-            SORT o.observed_at DESC
+            FILTER @norad_id != null AND o.norad_id == @norad_id
+            SORT o.observation_epoch DESC, o.observed_at DESC
             LIMIT 10
             RETURN {
-                observed_at: o.observed_at,
-                kestrel_id: LAST(SPLIT(o.kestrel_id, '/')),
+                observed_at: o.observed_at OR o.observation_epoch,
+                kestrel_id: o.kestrel_id != null ? LAST(SPLIT(o.kestrel_id, '/')) : null,
                 geometry_quality: o.geometry_quality,
                 observation_id: o._key,
                 compliance: o.compliance
             }
     """, {
         "@obs": COLLECTION_OBSERVATIONS,
-        "@objects": COLLECTION_NAME,
-        "sat_key": satellite_id,
-        "since": since_24h,
+        "norad_id": norad_id,
     })
 
     kestrel_ids = {w["kestrel_id"] for w in windows}

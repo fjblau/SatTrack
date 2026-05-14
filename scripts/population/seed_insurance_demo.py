@@ -82,6 +82,88 @@ def upsert_edge(col_name: str, doc: dict):
         col.insert(doc)
 
 
+def find_existing_obs_near(norad_id: int, target_iso: str, limit: int = 5) -> list[dict]:
+    """Return up to `limit` existing observations for a NORAD ID, sorted nearest to target_iso."""
+    cursor = db_module.db.aql.execute("""
+        FOR obs IN @@obs
+            FILTER obs.norad_id == @norad_id
+            SORT ABS(DATE_DIFF(obs.observation_epoch, @target, 's')) ASC
+            LIMIT @lim
+            RETURN obs
+    """, bind_vars={
+        "@obs": COLLECTION_OBSERVATIONS,
+        "norad_id": norad_id,
+        "target": target_iso,
+        "lim": limit,
+    })
+    return list(cursor)
+
+
+def find_existing_obs_for_asset(norad_id: int, limit: int = 50) -> list[dict]:
+    """Return up to `limit` existing observations for a NORAD ID (any time)."""
+    cursor = db_module.db.aql.execute("""
+        FOR obs IN @@obs
+            FILTER obs.norad_id == @norad_id
+            SORT obs.observation_epoch DESC
+            LIMIT @lim
+            RETURN obs
+    """, bind_vars={
+        "@obs": COLLECTION_OBSERVATIONS,
+        "norad_id": norad_id,
+        "lim": limit,
+    })
+    return list(cursor)
+
+
+def amend_obs(obs_doc: dict, kestrel_key: str, fusion_group_id: str | None = None, geometry_quality: float | None = None):
+    """
+    Extend an existing observation with insurance fields in-place.
+    Only sets fields that are not already present, to avoid clobbering existing data.
+    """
+    epoch = obs_doc.get("observation_epoch") or obs_doc.get("observed_at") or NOW.isoformat()
+    patch: dict = {}
+    if "kestrel_id" not in obs_doc:
+        patch["kestrel_id"] = f"kestrels/{kestrel_key}"
+    if "compliance" not in obs_doc:
+        patch["compliance"] = _compliance(kestrel_key, epoch)
+    if fusion_group_id and "fusion_group_id" not in obs_doc:
+        patch["fusion_group_id"] = fusion_group_id
+    if geometry_quality is not None and "geometry_quality" not in obs_doc:
+        patch["geometry_quality"] = geometry_quality
+    if "observed_at" not in obs_doc:
+        patch["observed_at"] = epoch
+    if patch:
+        patch["_key"] = obs_doc["_key"]
+        db_module.db.collection(COLLECTION_OBSERVATIONS).update(patch)
+        obs_doc.update(patch)
+    return obs_doc
+
+
+def create_synthetic_obs(norad_id: int, kestrel_key: str, epoch_iso: str,
+                          fusion_group_id: str | None = None, geometry_quality: float | None = None) -> dict:
+    """Create a minimal synthetic observation when no real one exists for this NORAD ID."""
+    import uuid
+    obs_key = f"INS-OBS-{norad_id}-{uuid.uuid4().hex[:12]}"
+    doc = {
+        "_key": obs_key,
+        "norad_id": norad_id,
+        "observation_epoch": epoch_iso,
+        "observed_at": epoch_iso,
+        "source": "kestrel_proxy_v2",
+        "kestrel_id": f"kestrels/{kestrel_key}",
+        "geometry_quality": geometry_quality if geometry_quality is not None else round(rng.uniform(0.55, 0.92), 2),
+        "compliance": _compliance(kestrel_key, epoch_iso),
+        "_insurance_synthetic": True,
+    }
+    if fusion_group_id:
+        doc["fusion_group_id"] = fusion_group_id
+    try:
+        db_module.db.collection(COLLECTION_OBSERVATIONS).insert(doc)
+    except Exception:
+        pass
+    return doc
+
+
 def delete_demo_prefix(col_name: str, prefix: str):
     aql = """
     FOR doc IN @@col
@@ -370,6 +452,7 @@ def main():
         delete_demo_prefix(col_name, "CLM-")
         delete_demo_prefix(col_name, "LE-")
         delete_demo_prefix(col_name, "II-")
+        delete_demo_prefix(col_name, "INS-OBS-")
 
     for ecol in edge_cols:
         try:
@@ -575,15 +658,13 @@ def main():
         sat_key = asset["sat_key"]
         occurred = ts_past(days=tmpl["days_ago"], hours=rng.randint(0, 23), minutes=rng.randint(0, 59))
         witness_keys = tmpl["kestrels"]
-        obs_hashes = [sha256_stub(f"obs:{le_key}:{k}") for k in witness_keys]
-        evidence_pkg = _evidence_package(obs_hashes, occurred)
         le_doc = {
             "_key": le_key,
             "event_type": tmpl["type"],
             "occurred_at": occurred,
             "primary_object_id": f"objects/{sat_key}",
             "severity": tmpl["severity"],
-            "evidence_refs": [f"observations/OBS-{le_key}-{k}" for k in witness_keys],
+            "evidence_refs": [],
             "estimated_debris_count": rng.randint(20, 300) if tmpl["type"] == "fragmentation" else None,
             "shell_id": f"shells/{SHELL_FOR_REGIME.get(asset['shell_key'], 'LEO_540_560')}",
             "witnessed_by_kestrels": [f"kestrels/{k}" for k in witness_keys],
@@ -592,7 +673,7 @@ def main():
             "confidence": tmpl["confidence"],
             "total_sum_at_risk": int(asset["sum_insured_m"] * 1_000_000 * rng.uniform(0.3, 1.0)),
             "active": tmpl.get("active", False),
-            "evidence_package": evidence_pkg,
+            "evidence_package": {},
         }
         upsert(COLLECTION_LOSS_EVENTS, le_doc)
         le_docs.append(le_doc)
@@ -614,28 +695,34 @@ def main():
 
         obs_base_time = NOW - timedelta(days=tmpl["days_ago"])
         offsets_s = [0, rng.randint(11, 60), rng.randint(61, 130), rng.randint(131, 187)]
+        witness_obs_ids = []
+        witness_obs_hashes = []
+        existing_for_event = find_existing_obs_near(asset["norad_id"], occurred, limit=max(len(witness_keys) * 2, 6))
         for j, k_key in enumerate(witness_keys):
             obs_time = (obs_base_time + timedelta(seconds=offsets_s[j] if j < len(offsets_s) else offsets_s[-1])).isoformat()
-            obs_key = f"OBS-{le_key}-{k_key}"
-            compliance = _compliance(k_key, obs_time)
-            obs_doc = {
-                "_key": obs_key,
-                "kestrel_id": f"kestrels/{k_key}",
-                "task_id": None,
-                "fusion_group_id": f"FG-{le_key}",
-                "norad_id": asset["norad_id"],
-                "observation_epoch": obs_time,
-                "source": "kestrel",
-                "geometry_quality": round(rng.uniform(0.55, 0.92), 2),
-                "observed_at": obs_time,
-                "compliance": compliance,
-            }
-            upsert(COLLECTION_OBSERVATIONS, obs_doc)
+            geom = round(rng.uniform(0.55, 0.92), 2)
+            fusion_id = f"FG-{le_key}"
+            if existing_for_event:
+                obs_doc = existing_for_event.pop(0)
+                obs_doc = amend_obs(obs_doc, k_key, fusion_group_id=fusion_id, geometry_quality=geom)
+            else:
+                obs_doc = create_synthetic_obs(asset["norad_id"], k_key, obs_time,
+                                               fusion_group_id=fusion_id, geometry_quality=geom)
+            obs_id = obs_doc["_key"]
+            witness_obs_ids.append(f"observations/{obs_id}")
+            epoch = obs_doc.get("observation_epoch") or obs_time
+            custody = obs_doc.get("compliance", {}).get("custody_hash") or sha256_stub(f"{obs_id}:{epoch}")
+            witness_obs_hashes.append(custody)
             upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
-                "_key": f"KO-{obs_key}",
+                "_key": f"KO-{le_key}-{k_key}",
                 "_from": f"kestrels/{k_key}",
-                "_to": f"observations/{obs_key}",
+                "_to": f"observations/{obs_id}",
             })
+
+        evidence_pkg = _evidence_package(witness_obs_hashes, occurred)
+        le_doc["evidence_refs"] = witness_obs_ids
+        le_doc["evidence_package"] = evidence_pkg
+        db_module.db.collection(COLLECTION_LOSS_EVENTS).update({"_key": le_key, "evidence_refs": witness_obs_ids, "evidence_package": evidence_pkg})
 
     print(f"  Loss events: {len(le_docs)} ({sum(1 for e in le_docs if e.get('active'))} active)")
 
@@ -667,12 +754,13 @@ def main():
                     break
     print(f"  Claims: {clm_count}")
 
-    print("Creating coverage windows (24h per insured asset)...")
+    print("Creating coverage windows (24h per insured asset) and amending existing observations...")
     cw_count = 0
+    obs_amended = 0
+    obs_synthetic = 0
     kestrel_keys = [k["_key"] for k in KESTRELS if k["status"] == "operational"]
     for asset in insured_assets:
         sat_key = asset["sat_key"]
-        obs_count = 0
         for hour in range(24):
             window_start_dt = NOW + timedelta(hours=hour)
             for k_key in rng.sample(kestrel_keys, rng.randint(2, 5)):
@@ -697,34 +785,36 @@ def main():
                     "median_revisit_min": rng.randint(8, 22),
                 })
                 cw_count += 1
-                obs_count += 1
 
-        for obs_idx in range(50):
-            obs_time_dt = NOW - timedelta(hours=rng.randint(1, 72), minutes=rng.randint(0, 59))
-            k_key = rng.choice(kestrel_keys)
-            obs_key = f"OBS-COV-{sat_key[:12]}-{obs_idx:03d}"
-            compliance = _compliance(k_key, obs_time_dt.isoformat())
-            upsert(COLLECTION_OBSERVATIONS, {
-                "_key": obs_key,
-                "kestrel_id": f"kestrels/{k_key}",
-                "norad_id": asset["norad_id"],
-                "observation_epoch": obs_time_dt.isoformat(),
-                "source": "kestrel",
-                "geometry_quality": round(rng.uniform(0.45, 0.95), 2),
-                "observed_at": obs_time_dt.isoformat(),
-                "compliance": compliance,
-            })
-            upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
-                "_key": f"KO-{obs_key}",
-                "_from": f"kestrels/{k_key}",
-                "_to": f"observations/{obs_key}",
-            })
+        existing_obs = find_existing_obs_for_asset(asset["norad_id"], limit=50)
+        if existing_obs:
+            for obs_doc in existing_obs:
+                k_key = rng.choice(kestrel_keys)
+                amend_obs(obs_doc, k_key)
+                upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
+                    "_key": f"KO-COV-{obs_doc['_key'][:24]}",
+                    "_from": f"kestrels/{k_key}",
+                    "_to": f"observations/{obs_doc['_key']}",
+                })
+                obs_amended += 1
+        else:
+            for obs_idx in range(10):
+                obs_time_dt = NOW - timedelta(hours=rng.randint(1, 72), minutes=rng.randint(0, 59))
+                k_key = rng.choice(kestrel_keys)
+                obs_doc = create_synthetic_obs(asset["norad_id"], k_key, obs_time_dt.isoformat())
+                upsert_edge(EDGE_INSURANCE_KESTREL_OBSERVED, {
+                    "_key": f"KO-COV-{obs_doc['_key'][:24]}",
+                    "_from": f"kestrels/{k_key}",
+                    "_to": f"observations/{obs_doc['_key']}",
+                })
+                obs_synthetic += 1
 
     print(f"  Coverage windows: {cw_count}")
+    print(f"  Observations amended with insurance fields: {obs_amended} (synthetic fallbacks: {obs_synthetic})")
 
     print("Creating kestrel task queue...")
     tasks = [
-        {"_key": "TSK-2026-001", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[0]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=3), "scheduled_for": ts_past(hours=2, minutes=55), "executed_at": ts_past(hours=2, minutes=54), "status": "completed", "result_observation_ids": ["observations/OBS-LE-2026-001-KSTRL-03"], "trigger_event_id": "loss_events/LE-2026-001"},
+        {"_key": "TSK-2026-001", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[0]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=3), "scheduled_for": ts_past(hours=2, minutes=55), "executed_at": ts_past(hours=2, minutes=54), "status": "completed", "result_observation_ids": le_docs[0].get("evidence_refs", [])[:1], "trigger_event_id": "loss_events/LE-2026-001"},
         {"_key": "TSK-2026-002", "kestrel_id": "kestrels/KSTRL-07", "target_id": f"objects/{insured_assets[1]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=2), "scheduled_for": ts_past(hours=1, minutes=55), "executed_at": ts_past(hours=1, minutes=54), "status": "completed", "result_observation_ids": [], "trigger_event_id": "loss_events/LE-2026-002"},
         {"_key": "TSK-2026-003", "kestrel_id": "kestrels/KSTRL-09", "target_id": f"objects/{insured_assets[2]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-002", "requested_at": ts_past(hours=1), "scheduled_for": ts_past(minutes=55), "executed_at": ts_past(minutes=50), "status": "completed", "result_observation_ids": [], "trigger_event_id": None},
         {"_key": "TSK-2026-004", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[3]['sat_key']}", "task_type": "scheduled_pass", "requested_by": "system", "requested_at": ts_past(minutes=30), "scheduled_for": ts_future(minutes=10), "executed_at": None, "status": "scheduled", "result_observation_ids": [], "trigger_event_id": None},
