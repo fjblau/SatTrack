@@ -53,6 +53,22 @@ _SCHEMA_CONTEXT_BASE = """
 - `_id`: "observation_sources/<key>"
 - `name`, `type`: string
 
+**ephemeris_envelopes** (computed trajectory / orbit propagation envelopes)
+- `_id`: "ephemeris_envelopes/<key>"
+- `norad_id`: integer
+- `satellite_name`: string
+- `generated_at`: string (ISO datetime)
+- `valid_from`: string (ISO datetime) — start of propagation window
+- `valid_until`: string (ISO datetime) — end of propagation window
+- `propagator`: string — e.g. "SGP4", "HIFI"
+- `ephemeris_points`: list — array of `{timestamp, geodetic: {latitude, longitude, altitude_km}}` (large; use `UNSET(doc, "ephemeris_points")` to exclude)
+
+**kestrel_maneuver_plans** (maneuver plans computed for Kestrel observation satellites)
+- `_id`: "kestrel_maneuver_plans/<key>"
+- `kestrel_norad_id`: integer — NORAD ID of the Kestrel performing the maneuver
+- `target_norad_id`: integer — NORAD ID of the target object being observed
+- `created_at`: string (ISO datetime)
+
 ### Edge Collections
 
 | Collection | From → To | Notable fields |
@@ -134,6 +150,203 @@ _SCHEMA_CONTEXT_BASE = """
 | `launched_from` | objects → launch_sites | — |
 
 Named graph: **provenance_relationships**
+
+---
+
+## Insurance Overlay Collections
+
+### Insurance Vertex Collections
+
+**parties** (carriers, brokers, operators)
+- `_id`: "parties/<key>"
+- `name`: string — e.g. "Acme Re", "AXA XL", "Marsh Space Projects"
+- `type`: string — "carrier", "broker", "operator"
+- `country`: string — ISO 2-letter country code
+- `roles`: list — e.g. ["carrier", "lead_underwriter"]
+
+**policies** (insurance policies / "book of business" / "insurance bookings")
+- `_id`: "policies/<key>"  e.g. "policies/POL-2026-0001"
+- `policy_number`: string — e.g. "AR-SAT-2026-0001"
+- `carrier_id`: string — reference to parties, e.g. "parties/acme_re"
+- `broker_id`: string — reference to parties
+- `lead_underwriter_id`: string — reference to parties
+- `satellite_id`: string — reference to objects, e.g. "objects/<key>"
+- `sum_insured`: float — total insured value in USD
+- `currency`: string — "USD"
+- `premium`: float — annual premium amount
+- `deductible`: float
+- `perils`: list — e.g. ["in_orbit", "third_party_liability"]
+- `inception`: string (ISO date) — policy start date
+- `expiry`: string (ISO date) — policy end date
+- `status`: string — "bound" (active), "expired", "cancelled"
+- `policy_period_type`: string — e.g. "annual_in_orbit"
+
+**insured_interests** (syndicate participation / co-insurance shares)
+- `_id`: "insured_interests/<key>"
+- `policy_id`: string — reference to policies
+- `party_id`: string — reference to parties (carrier)
+- `participation_pct`: float — percentage share (0–100)
+- `line_size`: float — USD line size
+- `layer`: string — e.g. "primary"
+- `role`: string — "lead" or "follow"
+
+**loss_events** (in-orbit loss or anomaly events)
+- `_id`: "loss_events/<key>"
+- `event_type`: string — e.g. "anomaly", "collision", "degradation"
+- `occurred_at`: string (ISO datetime)
+- `severity`: string — "low", "medium", "high", "critical"
+- `total_sum_at_risk`: float — USD value of assets at risk
+- `primary_object_id`: string — reference to objects
+- `confidence`: float 0–1
+- `active`: boolean — true if event is still ongoing
+- `witnessed_by_kestrels`: list of kestrel IDs
+
+**claims** (insurance claims arising from loss events)
+- `_id`: "claims/<key>"
+- `claim_number`: string — e.g. "AR-CLM-LE-2026-001"
+- `policy_id`: string — reference to policies
+- `loss_event_id`: string — reference to loss_events
+- `status`: string — "reserved" (active reserve), "paid" (settlement paid), "closed"
+- `notified_date`: string (ISO date)
+- `reserve`: float — current reserve amount in USD
+- `paid`: float — amount paid to date
+- `currency`: string
+
+**risk_scores** (computed underwriting risk scores for insured satellites)
+- `_id`: "risk_scores/<key>"
+- `satellite_id`: string — reference to objects
+- `computed_at`: string (ISO datetime)
+- `score`: float 0–100 (higher = riskier)
+- `score_band`: string — "low" (<20), "moderate" (20–40), "elevated" (40–60), "high" (60–80), "critical" (≥80)
+- `factors`: object — sub-scores: shell_debris_density, operator_track_record, asset_age_factor, recent_anomaly_count, neighbor_maneuver_intensity
+- `confidence`: float 0–1
+
+**anomaly_predictions** (ML-based anomaly probability forecasts for insured satellites)
+- `_id`: "anomaly_predictions/<key>"
+- `satellite_id`: string — reference to objects
+- `computed_at`: string (ISO datetime)
+- `horizons.p_anomaly_7d`: object — `{value, ci_lower, ci_upper}` probability over next 7 days
+- `horizons.p_anomaly_30d`: object — probability over next 30 days
+- `horizons.p_anomaly_90d`: object — probability over next 90 days
+- `telemetry_only_baseline.p_anomaly_30d`: float — baseline without Kestrel data
+- `model_version`: string
+- `confidence`: float 0–1
+
+**shells** (orbital shell bands used for insurance aggregation)
+- `_id`: "shells/<key>"  e.g. "shells/LEO_500_520"
+- `regime`: string — "LEO", "MEO", "GEO"
+- `alt_min_km`: float
+- `alt_max_km`: float
+- `inclination_band`: string — e.g. "all"
+- `label`: string — human-readable label, e.g. "LEO 500–520 km"
+
+**kestrels** (Kestrel observation sensor satellites)
+- `_id`: "kestrels/<key>"  e.g. "kestrels/KSTRL-01"
+- `name`: string — e.g. "Kestrel-1"
+- `norad_id`: integer
+- `status`: string — "operational", "degraded", "offline"
+- `sensor_types`: list — e.g. ["optical_visible", "optical_ir", "rf"]
+- `fov_deg`: float — field of view in degrees
+- `limiting_magnitude`: float
+- `orbit.regime`: string — e.g. "LEO_SSO"
+- `orbit.alt_km`: float
+- `orbit.inclination_deg`: float
+- `tasking_latency_s`: integer — seconds from task request to execution
+
+**kestrel_tasks** (sensor tasking queue — observation requests assigned to Kestrels)
+- `_id`: "kestrel_tasks/<key>"
+- `kestrel_id`: string — reference to kestrels
+- `target_id`: string — reference to objects
+- `task_type`: string — "priority_observation", "scheduled_pass", "renewal_survey"
+- `requested_by`: string — user or "system"
+- `requested_at`: string (ISO datetime)
+- `scheduled_for`: string (ISO datetime)
+- `executed_at`: string (ISO datetime) or null
+- `status`: string — "scheduled", "executing", "completed", "failed"
+- `trigger_event_id`: string — reference to loss_events (if triggered by an event)
+
+**coverage_windows** (upcoming observation pass windows for insured satellites)
+- `_id`: "coverage_windows/<key>"
+- `kestrel_id`: string — reference to kestrels
+- `target_id`: string — reference to objects
+- `window_start`: string (ISO datetime)
+- `window_end`: string (ISO datetime)
+- `max_elevation_deg`: float
+- `geometry_quality`: float 0–1
+- `computed_at`: string (ISO datetime)
+
+### Insurance Edge Collections
+
+| Collection | From → To | Notable fields |
+|-----------|-----------|----------------|
+| `policy_covers_satellite` | policies → objects | `attached_at` |
+| `policy_has_interest` | policies → insured_interests | — |
+| `interest_held_by` | insured_interests → parties | — |
+| `claim_arises_from` | claims → loss_events | — |
+| `loss_event_involves` | loss_events → objects | `role` ("primary"/"secondary") |
+| `satellite_in_shell` | objects → shells | — |
+| `risk_score_for` | risk_scores → objects | `is_latest` (boolean) |
+| `prediction_for` | anomaly_predictions → objects | `is_latest` (boolean) |
+| `kestrel_observed` | kestrels → observations | — |
+| `kestrel_can_see` | kestrels → objects | `next_window`, `median_revisit_min` |
+| `task_targets` | kestrel_tasks → objects | — |
+| `event_witnessed_by` | loss_events → kestrels | `witnessed_at`, `independence_score` |
+
+### Insurance AQL Tips
+- "Insurance bookings", "book of business", "insured satellites", or "policies" → use the `policies` collection
+- Active/bound policies: `FILTER p.status == "bound"`
+- To find all insured satellites: join `policies` with `objects` via `satellite_id`
+- To filter by carrier: `FILTER p.carrier_id == "parties/acme_re"`
+- Risk band filter: use `risk_scores` collection, `score_band` field
+- Latest risk score per satellite: `SORT rs.computed_at DESC LIMIT 1`
+- Latest anomaly prediction: filter `prediction_for` edges where `is_latest == true`, or sort by `computed_at DESC LIMIT 1`
+- "Claims" status values are "reserved", "paid", "closed" — NOT "open" or "settled"
+- When querying `ephemeris_envelopes`, always use `UNSET(doc, "ephemeris_points")` unless the user explicitly asks for trajectory point data
+
+### Insurance Few-Shot Examples
+
+**Q: Show insurance bookings for Austrian satellites**
+```aql
+FOR p IN policies
+    FILTER p.status == "bound"
+    LET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)
+    FILTER sat.canonical.country_of_origin == "Austria"
+    LIMIT 20
+    RETURN {policy_id: p._key, policy_number: p.policy_number, sum_insured: p.sum_insured, expiry: p.expiry, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}
+```
+
+**Q: List all bound insurance policies**
+```aql
+FOR p IN policies
+    FILTER p.status == "bound"
+    LET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)
+    SORT p.sum_insured DESC
+    LIMIT 20
+    RETURN {policy_id: p._key, sum_insured: p.sum_insured, expiry: p.expiry, satellite: sat.canonical.satellite_name || sat.identifier, carrier: p.carrier_id}
+```
+
+**Q: Find high-risk insured satellites**
+```aql
+FOR rs IN risk_scores
+    FILTER rs.score_band IN ["high", "critical"]
+    LET sat = FIRST(FOR s IN objects FILTER s._id == rs.satellite_id RETURN s)
+    LET pol = FIRST(FOR p IN policies FILTER p.satellite_id == rs.satellite_id AND p.status == "bound" RETURN p)
+    FILTER pol != null
+    SORT rs.score DESC
+    LIMIT 20
+    RETURN {satellite: sat.canonical.satellite_name || sat.identifier, risk_score: rs.score, risk_band: rs.score_band, sum_insured: pol.sum_insured}
+```
+
+**Q: Show open insurance claims**
+```aql
+FOR c IN claims
+    FILTER c.status == "open"
+    LET pol = DOCUMENT(CONCAT("policies/", c.policy_id))
+    LET sat = FIRST(FOR s IN objects FILTER s._id == pol.satellite_id RETURN s)
+    SORT c.claimed_amount DESC
+    LIMIT 20
+    RETURN {claim_id: c._key, claimed_amount: c.claimed_amount, policy_id: c.policy_id, satellite: sat.canonical.satellite_name || sat.identifier}
+```
 
 ### Provenance AQL Tips
 - Confidence thresholds: ≥0.9 = high, 0.7–0.9 = medium, <0.7 = low (require explicit filter)
@@ -398,6 +611,12 @@ The Talon space object database (collection: 'objects') has these potentially am
 - "size" or "largest" for objects → use `canonical.rcs` (radar cross section in m², the best physical size proxy available). If the user says "physical size", "physical dimensions", or "dimensions", use `canonical.rcs`. If the user says "mass" or "weight", use `observations.mass_kg`. Do NOT ask for clarification about size — always default to `canonical.rcs` unless mass is explicitly requested.
 - "debris" is ambiguous — ask whether the user wants `Rocket Fragmentation Debris`, `Payload Fragmentation Debris`, `Unknown`, or all debris-like classes together.
 - "satellite" in a functional sense usually means `canonical.object_class == 'Payload'`.
+- "insurance bookings", "book of business", "insured assets", "insured satellites", or "policies" → use the `policies` collection (status == "bound" for active policies). Do NOT ask for clarification — always use `policies`.
+- "claims" → use the `claims` collection; status values are "reserved", "paid", "closed".
+- "Kestrel" or "observation sensor" → use the `kestrels` collection; "Kestrel task" or "tasking" → use `kestrel_tasks`.
+- "ephemeris", "trajectory", "propagation" → use `ephemeris_envelopes`. Always exclude `ephemeris_points` with UNSET unless the user explicitly asks for trajectory points.
+- "anomaly probability" or "anomaly prediction" → use `anomaly_predictions`, field `horizons.p_anomaly_30d.value` for 30-day probability.
+- "shell" or "orbital shell" in the insurance context → use the `shells` collection; `satellite_in_shell` edge connects objects to shells.
 
 If the question is clear enough to generate AQL without guessing, respond:
 {"needs_clarification": false}
