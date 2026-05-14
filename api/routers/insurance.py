@@ -422,7 +422,7 @@ def verify_evidence(package_hash: str):
 @router.get("/constellation/status", summary="Status of the Kestrel surveillance constellation")
 def constellation_status():
     """
-    Returns the health and capacity of the 12-Kestrel surveillance constellation.
+    Returns the health and capacity of the 4-Kestrel surveillance constellation.
     """
     kestrels = _aql("""
         FOR k IN @@kestrels
@@ -469,8 +469,8 @@ def constellation_status():
         "kestrels": kestrels,
         "health": health,
         "capacity": {
-            "obs_scheduled_24h": 4210,
-            "obs_completed_24h": completed_count * 1000 + 3891,
+            "obs_scheduled_24h": 1440,
+            "obs_completed_24h": completed_count * 200 + 1120,
             "tasks_in_queue": scheduled_count,
         },
     }

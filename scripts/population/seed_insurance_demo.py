@@ -271,17 +271,9 @@ SHELLS = [
 
 KESTRELS = [
     {"_key": "KSTRL-01", "name": "Kestrel-1", "norad_id": 99001, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 600, "inclination_deg": 97.8, "raan_deg": 0.0}, "tasking_latency_s": 240},
-    {"_key": "KSTRL-02", "name": "Kestrel-2", "norad_id": 99002, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 601, "inclination_deg": 97.8, "raan_deg": 45.0}, "tasking_latency_s": 240},
-    {"_key": "KSTRL-03", "name": "Kestrel-3", "norad_id": 99003, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 602, "inclination_deg": 97.8, "raan_deg": 90.0}, "tasking_latency_s": 240},
-    {"_key": "KSTRL-04", "name": "Kestrel-4", "norad_id": 99004, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 603, "inclination_deg": 97.8, "raan_deg": 135.0}, "tasking_latency_s": 240},
-    {"_key": "KSTRL-05", "name": "Kestrel-5", "norad_id": 99005, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 604, "inclination_deg": 97.8, "raan_deg": 180.0}, "tasking_latency_s": 240},
-    {"_key": "KSTRL-06", "name": "Kestrel-6", "norad_id": 99006, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 605, "inclination_deg": 97.8, "raan_deg": 225.0}, "tasking_latency_s": 240},
-    {"_key": "KSTRL-07", "name": "Kestrel-7", "norad_id": 99007, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 606, "inclination_deg": 97.8, "raan_deg": 270.0}, "tasking_latency_s": 240},
-    {"_key": "KSTRL-08", "name": "Kestrel-8", "norad_id": 99008, "status": "degraded", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 16.0, "orbit": {"regime": "LEO_SSO", "alt_km": 607, "inclination_deg": 97.8, "raan_deg": 315.0}, "tasking_latency_s": 480},
-    {"_key": "KSTRL-09", "name": "Kestrel-9", "norad_id": 99009, "status": "operational", "sensor_types": ["optical_visible", "optical_ir", "rf"], "fov_deg": 5.0, "limiting_magnitude": 17.0, "orbit": {"regime": "LEO", "alt_km": 1200, "inclination_deg": 50.0, "raan_deg": 60.0}, "tasking_latency_s": 300},
-    {"_key": "KSTRL-10", "name": "Kestrel-10", "norad_id": 99010, "status": "operational", "sensor_types": ["optical_visible", "optical_ir", "rf"], "fov_deg": 5.0, "limiting_magnitude": 17.0, "orbit": {"regime": "LEO", "alt_km": 1200, "inclination_deg": 50.0, "raan_deg": 240.0}, "tasking_latency_s": 300},
-    {"_key": "KSTRL-11", "name": "Kestrel-11", "norad_id": 99011, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 6.0, "limiting_magnitude": 16.5, "orbit": {"regime": "HEO", "alt_km": 39000, "inclination_deg": 63.4, "raan_deg": 90.0}, "tasking_latency_s": 180},
-    {"_key": "KSTRL-12", "name": "Kestrel-12", "norad_id": 99012, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 6.0, "limiting_magnitude": 16.5, "orbit": {"regime": "HEO", "alt_km": 39000, "inclination_deg": 63.4, "raan_deg": 270.0}, "tasking_latency_s": 180},
+    {"_key": "KSTRL-02", "name": "Kestrel-2", "norad_id": 99002, "status": "operational", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 17.5, "orbit": {"regime": "LEO_SSO", "alt_km": 601, "inclination_deg": 97.8, "raan_deg": 90.0}, "tasking_latency_s": 240},
+    {"_key": "KSTRL-03", "name": "Kestrel-3", "norad_id": 99003, "status": "operational", "sensor_types": ["optical_visible", "optical_ir", "rf"], "fov_deg": 5.0, "limiting_magnitude": 17.0, "orbit": {"regime": "LEO_SSO", "alt_km": 602, "inclination_deg": 97.8, "raan_deg": 180.0}, "tasking_latency_s": 300},
+    {"_key": "KSTRL-04", "name": "Kestrel-4", "norad_id": 99004, "status": "degraded", "sensor_types": ["optical_visible", "optical_ir"], "fov_deg": 4.5, "limiting_magnitude": 16.0, "orbit": {"regime": "LEO_SSO", "alt_km": 603, "inclination_deg": 97.8, "raan_deg": 270.0}, "tasking_latency_s": 480},
 ]
 
 INSURED_NORAD_IDS = [
@@ -626,29 +618,29 @@ def main():
     le_docs = []
 
     event_templates = [
-        {"type": "fragmentation", "severity": "high", "days_ago": 1, "confidence": 0.94, "kestrels": ["KSTRL-03", "KSTRL-07", "KSTRL-09", "KSTRL-11"], "latency_s": 187, "asset_idx": 0, "active": True},
-        {"type": "conjunction", "severity": "medium", "days_ago": 1, "confidence": 0.87, "kestrels": ["KSTRL-03", "KSTRL-07"], "latency_s": 320, "asset_idx": 1, "active": True},
-        {"type": "anomaly", "severity": "low", "days_ago": 0, "confidence": 0.72, "kestrels": ["KSTRL-05"], "latency_s": None, "asset_idx": 3, "active": True},
+        {"type": "fragmentation", "severity": "high", "days_ago": 1, "confidence": 0.94, "kestrels": ["KSTRL-01", "KSTRL-02", "KSTRL-03"], "latency_s": 187, "asset_idx": 0, "active": True},
+        {"type": "conjunction", "severity": "medium", "days_ago": 1, "confidence": 0.87, "kestrels": ["KSTRL-01", "KSTRL-03"], "latency_s": 320, "asset_idx": 1, "active": True},
+        {"type": "anomaly", "severity": "low", "days_ago": 0, "confidence": 0.72, "kestrels": ["KSTRL-02"], "latency_s": None, "asset_idx": 3, "active": True},
         {"type": "fragmentation", "severity": "medium", "days_ago": 45, "confidence": 0.91, "kestrels": ["KSTRL-01", "KSTRL-03"], "latency_s": 244, "asset_idx": 5},
-        {"type": "conjunction", "severity": "low", "days_ago": 60, "confidence": 0.80, "kestrels": ["KSTRL-07"], "latency_s": 410, "asset_idx": 6},
-        {"type": "anomaly", "severity": "medium", "days_ago": 90, "confidence": 0.75, "kestrels": ["KSTRL-02", "KSTRL-06"], "latency_s": 280, "asset_idx": 7},
-        {"type": "launch_failure", "severity": "high", "days_ago": 180, "confidence": 0.99, "kestrels": ["KSTRL-09", "KSTRL-11"], "latency_s": 95, "asset_idx": 8},
-        {"type": "fragmentation", "severity": "high", "days_ago": 200, "confidence": 0.96, "kestrels": ["KSTRL-03", "KSTRL-07", "KSTRL-11"], "latency_s": 165, "asset_idx": 9},
-        {"type": "conjunction", "severity": "medium", "days_ago": 250, "confidence": 0.82, "kestrels": ["KSTRL-04", "KSTRL-08"], "latency_s": 380, "asset_idx": 10},
-        {"type": "anomaly", "severity": "low", "days_ago": 300, "confidence": 0.68, "kestrels": ["KSTRL-06"], "latency_s": None, "asset_idx": 11},
-        {"type": "conjunction", "severity": "high", "days_ago": 365, "confidence": 0.89, "kestrels": ["KSTRL-03", "KSTRL-07", "KSTRL-09"], "latency_s": 210, "asset_idx": 12},
-        {"type": "anomaly", "severity": "medium", "days_ago": 400, "confidence": 0.76, "kestrels": ["KSTRL-01", "KSTRL-05"], "latency_s": 330, "asset_idx": 13},
-        {"type": "fragmentation", "severity": "medium", "days_ago": 450, "confidence": 0.88, "kestrels": ["KSTRL-09", "KSTRL-10"], "latency_s": 290, "asset_idx": 14},
+        {"type": "conjunction", "severity": "low", "days_ago": 60, "confidence": 0.80, "kestrels": ["KSTRL-03"], "latency_s": 410, "asset_idx": 6},
+        {"type": "anomaly", "severity": "medium", "days_ago": 90, "confidence": 0.75, "kestrels": ["KSTRL-02", "KSTRL-04"], "latency_s": 280, "asset_idx": 7},
+        {"type": "launch_failure", "severity": "high", "days_ago": 180, "confidence": 0.99, "kestrels": ["KSTRL-03", "KSTRL-01"], "latency_s": 95, "asset_idx": 8},
+        {"type": "fragmentation", "severity": "high", "days_ago": 200, "confidence": 0.96, "kestrels": ["KSTRL-01", "KSTRL-03", "KSTRL-02"], "latency_s": 165, "asset_idx": 9},
+        {"type": "conjunction", "severity": "medium", "days_ago": 250, "confidence": 0.82, "kestrels": ["KSTRL-02", "KSTRL-04"], "latency_s": 380, "asset_idx": 10},
+        {"type": "anomaly", "severity": "low", "days_ago": 300, "confidence": 0.68, "kestrels": ["KSTRL-04"], "latency_s": None, "asset_idx": 11},
+        {"type": "conjunction", "severity": "high", "days_ago": 365, "confidence": 0.89, "kestrels": ["KSTRL-01", "KSTRL-03", "KSTRL-02"], "latency_s": 210, "asset_idx": 12},
+        {"type": "anomaly", "severity": "medium", "days_ago": 400, "confidence": 0.76, "kestrels": ["KSTRL-01", "KSTRL-02"], "latency_s": 330, "asset_idx": 13},
+        {"type": "fragmentation", "severity": "medium", "days_ago": 450, "confidence": 0.88, "kestrels": ["KSTRL-03", "KSTRL-04"], "latency_s": 290, "asset_idx": 14},
         {"type": "conjunction", "severity": "low", "days_ago": 500, "confidence": 0.71, "kestrels": ["KSTRL-02"], "latency_s": 520, "asset_idx": 15},
         {"type": "anomaly", "severity": "low", "days_ago": 550, "confidence": 0.64, "kestrels": ["KSTRL-04"], "latency_s": None, "asset_idx": 16},
-        {"type": "fragmentation", "severity": "high", "days_ago": 600, "confidence": 0.97, "kestrels": ["KSTRL-03", "KSTRL-07", "KSTRL-09", "KSTRL-11"], "latency_s": 142, "asset_idx": 17},
+        {"type": "fragmentation", "severity": "high", "days_ago": 600, "confidence": 0.97, "kestrels": ["KSTRL-01", "KSTRL-02", "KSTRL-03", "KSTRL-04"], "latency_s": 142, "asset_idx": 17},
         {"type": "conjunction", "severity": "medium", "days_ago": 700, "confidence": 0.85, "kestrels": ["KSTRL-01", "KSTRL-02"], "latency_s": 395, "asset_idx": 18},
-        {"type": "anomaly", "severity": "medium", "days_ago": 800, "confidence": 0.78, "kestrels": ["KSTRL-05", "KSTRL-06"], "latency_s": 270, "asset_idx": 19},
-        {"type": "fragmentation", "severity": "low", "days_ago": 900, "confidence": 0.82, "kestrels": ["KSTRL-03"], "latency_s": 480, "asset_idx": 20},
-        {"type": "conjunction", "severity": "low", "days_ago": 1000, "confidence": 0.69, "kestrels": ["KSTRL-07"], "latency_s": 610, "asset_idx": 21},
-        {"type": "anomaly", "severity": "high", "days_ago": 1100, "confidence": 0.93, "kestrels": ["KSTRL-09", "KSTRL-10", "KSTRL-11"], "latency_s": 188, "asset_idx": 22},
-        {"type": "fragmentation", "severity": "medium", "days_ago": 1200, "confidence": 0.86, "kestrels": ["KSTRL-03", "KSTRL-07"], "latency_s": 222, "asset_idx": 23},
-        {"type": "conjunction", "severity": "high", "days_ago": 1500, "confidence": 0.90, "kestrels": ["KSTRL-01", "KSTRL-09", "KSTRL-11"], "latency_s": 198, "asset_idx": 24},
+        {"type": "anomaly", "severity": "medium", "days_ago": 800, "confidence": 0.78, "kestrels": ["KSTRL-02", "KSTRL-04"], "latency_s": 270, "asset_idx": 19},
+        {"type": "fragmentation", "severity": "low", "days_ago": 900, "confidence": 0.82, "kestrels": ["KSTRL-01"], "latency_s": 480, "asset_idx": 20},
+        {"type": "conjunction", "severity": "low", "days_ago": 1000, "confidence": 0.69, "kestrels": ["KSTRL-03"], "latency_s": 610, "asset_idx": 21},
+        {"type": "anomaly", "severity": "high", "days_ago": 1100, "confidence": 0.93, "kestrels": ["KSTRL-03", "KSTRL-04", "KSTRL-01"], "latency_s": 188, "asset_idx": 22},
+        {"type": "fragmentation", "severity": "medium", "days_ago": 1200, "confidence": 0.86, "kestrels": ["KSTRL-01", "KSTRL-03"], "latency_s": 222, "asset_idx": 23},
+        {"type": "conjunction", "severity": "high", "days_ago": 1500, "confidence": 0.90, "kestrels": ["KSTRL-01", "KSTRL-03", "KSTRL-02"], "latency_s": 198, "asset_idx": 24},
     ]
 
     for i, tmpl in enumerate(event_templates):
@@ -763,7 +755,7 @@ def main():
         sat_key = asset["sat_key"]
         for hour in range(24):
             window_start_dt = NOW + timedelta(hours=hour)
-            for k_key in rng.sample(kestrel_keys, rng.randint(2, 5)):
+            for k_key in rng.sample(kestrel_keys, min(rng.randint(1, 3), len(kestrel_keys))):
                 window_start = window_start_dt.isoformat()
                 window_end = (window_start_dt + timedelta(minutes=rng.randint(8, 18))).isoformat()
                 cw_key = f"CW-{k_key}-{sat_key[:12]}-{hour:02d}"
@@ -815,10 +807,10 @@ def main():
     print("Creating kestrel task queue...")
     tasks = [
         {"_key": "TSK-2026-001", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[0]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=3), "scheduled_for": ts_past(hours=2, minutes=55), "executed_at": ts_past(hours=2, minutes=54), "status": "completed", "result_observation_ids": le_docs[0].get("evidence_refs", [])[:1], "trigger_event_id": "loss_events/LE-2026-001"},
-        {"_key": "TSK-2026-002", "kestrel_id": "kestrels/KSTRL-07", "target_id": f"objects/{insured_assets[1]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=2), "scheduled_for": ts_past(hours=1, minutes=55), "executed_at": ts_past(hours=1, minutes=54), "status": "completed", "result_observation_ids": [], "trigger_event_id": "loss_events/LE-2026-002"},
-        {"_key": "TSK-2026-003", "kestrel_id": "kestrels/KSTRL-09", "target_id": f"objects/{insured_assets[2]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-002", "requested_at": ts_past(hours=1), "scheduled_for": ts_past(minutes=55), "executed_at": ts_past(minutes=50), "status": "completed", "result_observation_ids": [], "trigger_event_id": None},
+        {"_key": "TSK-2026-002", "kestrel_id": "kestrels/KSTRL-02", "target_id": f"objects/{insured_assets[1]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-001", "requested_at": ts_past(hours=2), "scheduled_for": ts_past(hours=1, minutes=55), "executed_at": ts_past(hours=1, minutes=54), "status": "completed", "result_observation_ids": [], "trigger_event_id": "loss_events/LE-2026-002"},
+        {"_key": "TSK-2026-003", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[2]['sat_key']}", "task_type": "priority_observation", "requested_by": "user/underwriter-002", "requested_at": ts_past(hours=1), "scheduled_for": ts_past(minutes=55), "executed_at": ts_past(minutes=50), "status": "completed", "result_observation_ids": [], "trigger_event_id": None},
         {"_key": "TSK-2026-004", "kestrel_id": "kestrels/KSTRL-03", "target_id": f"objects/{insured_assets[3]['sat_key']}", "task_type": "scheduled_pass", "requested_by": "system", "requested_at": ts_past(minutes=30), "scheduled_for": ts_future(minutes=10), "executed_at": None, "status": "scheduled", "result_observation_ids": [], "trigger_event_id": None},
-        {"_key": "TSK-2026-005", "kestrel_id": "kestrels/KSTRL-11", "target_id": f"objects/{insured_assets[4]['sat_key']}", "task_type": "renewal_survey", "requested_by": "user/underwriter-001", "requested_at": ts_past(minutes=10), "scheduled_for": ts_future(minutes=5), "executed_at": None, "status": "executing", "result_observation_ids": [], "trigger_event_id": None},
+        {"_key": "TSK-2026-005", "kestrel_id": "kestrels/KSTRL-01", "target_id": f"objects/{insured_assets[4]['sat_key']}", "task_type": "renewal_survey", "requested_by": "user/underwriter-001", "requested_at": ts_past(minutes=10), "scheduled_for": ts_future(minutes=5), "executed_at": None, "status": "executing", "result_observation_ids": [], "trigger_event_id": None},
     ]
     for task in tasks:
         upsert(COLLECTION_KESTREL_TASKS, task)
@@ -832,7 +824,7 @@ def main():
     print()
     print("=== Seed complete ===")
     print(f"  {len(insured_assets)} insured assets across {len(SHELLS)} shells")
-    print(f"  {len(KESTRELS)} Kestrels (11 operational, 1 degraded)")
+    print(f"  {len(KESTRELS)} Kestrels (3 operational, 1 degraded)")
     print(f"  {len(le_docs)} loss events ({sum(1 for e in le_docs if e.get('active'))} active overnight)")
     print("  Risk scores + anomaly predictions: 7 months history per asset")
     print("  Coverage windows: 24h forward-looking per asset")
