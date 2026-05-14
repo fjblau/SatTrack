@@ -140,6 +140,7 @@ function OrbitalShellGlobe({ shells, highlightShellId }) {
 
           viewer.entities.add({
             id: `shell-${shell.shell_id}`,
+            position: Cesium.Cartesian3.ZERO,
             ellipsoid: {
               radii: new Cesium.Cartesian3(radiiM, radiiM, radiiM),
               material: color.withAlpha(alpha),
