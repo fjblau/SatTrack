@@ -236,7 +236,7 @@ const SHELLS = ['LEO_500_520', 'LEO_520_540', 'LEO_540_560', 'LEO_560_580', 'MEO
 const RISK_BANDS = ['low', 'moderate', 'elevated', 'high', 'critical']
 const PAGE_SIZE = 20
 
-function AssetList({ onSelectAsset, onNavigateToCatalog }) {
+function AssetList({ onSelectAsset, onNavigateToCatalog, onNavigateToObservations }) {
   const [page, setPage] = useState(0)
   const [shell, setShell] = useState('')
   const [riskBand, setRiskBand] = useState('')
@@ -294,6 +294,7 @@ function AssetList({ onSelectAsset, onNavigateToCatalog }) {
                 <th>Risk Score</th>
                 <th>Policy Expiry</th>
                 {onNavigateToCatalog && <th></th>}
+                {onNavigateToObservations && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -324,6 +325,17 @@ function AssetList({ onSelectAsset, onNavigateToCatalog }) {
                         onClick={(e) => { e.stopPropagation(); onNavigateToCatalog(a) }}
                       >
                         ↗ Catalog
+                      </button>
+                    </td>
+                  )}
+                  {onNavigateToObservations && (
+                    <td>
+                      <button
+                        className="ins-btn ins-btn-link"
+                        title="View observations for this object"
+                        onClick={(e) => { e.stopPropagation(); onNavigateToObservations(a) }}
+                      >
+                        ↗ Observations
                       </button>
                     </td>
                   )}
@@ -550,7 +562,7 @@ export default function InsurancePage({ activeSubTab, onNavigateToCatalog, onNav
         />
       )
     }
-    return <AssetList onSelectAsset={handleSelectAsset} onNavigateToCatalog={onNavigateToCatalog} />
+    return <AssetList onSelectAsset={handleSelectAsset} onNavigateToCatalog={onNavigateToCatalog} onNavigateToObservations={onNavigateToObservations} />
   }
 
   if (activeSubTab === 'book-dashboard') return <BookDashboard />
