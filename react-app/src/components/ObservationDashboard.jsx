@@ -503,7 +503,7 @@ function HealthScoreChart({ data }) {
   )
 }
 
-export default function ObservationDashboard() {
+export default function ObservationDashboard({ initialNoradId, onInitialNoradIdConsumed }) {
   const [allowedSatellites, setAllowedSatellites] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
@@ -522,6 +522,18 @@ export default function ObservationDashboard() {
       .then(d => setAllowedSatellites(d.data || []))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!initialNoradId || allowedSatellites.length === 0) return
+    const id = parseInt(initialNoradId, 10)
+    if (isNaN(id) || id <= 0) return
+    const match = allowedSatellites.find(s => s.norad_id === id)
+    setSelectedSat(match || { norad_id: id, name: null })
+    setNoradInput(String(id))
+    setSearchTerm(match?.name ? `${id} — ${match.name}` : String(id))
+    loadObservations(id)
+    if (onInitialNoradIdConsumed) onInitialNoradIdConsumed()
+  }, [initialNoradId, allowedSatellites])
 
   useEffect(() => {
     function onClickOutside(e) {

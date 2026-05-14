@@ -115,6 +115,18 @@ def find_existing_obs_for_asset(norad_id: int, limit: int = 50) -> list[dict]:
     return list(cursor)
 
 
+def get_norad_ids_with_observations() -> set[int]:
+    """Return the set of NORAD IDs that have at least one real (non-synthetic) observation."""
+    cursor = db_module.db.aql.execute("""
+        FOR obs IN @@obs
+            FILTER obs._insurance_synthetic != true
+            FILTER obs.norad_id != null
+            COLLECT norad_id = obs.norad_id
+            RETURN norad_id
+    """, bind_vars={"@obs": COLLECTION_OBSERVATIONS})
+    return {int(n) for n in cursor if n is not None}
+
+
 def amend_obs(obs_doc: dict, kestrel_key: str, fusion_group_id: str | None = None, geometry_quality: float | None = None):
     """
     Extend an existing observation with insurance fields in-place.
@@ -466,9 +478,15 @@ def main():
         upsert(COLLECTION_KESTRELS, kestrel)
     print(f"  Kestrels: {len(KESTRELS)}")
 
+    print("Filtering insured assets to objects with existing observations...")
+    obs_norad_ids = get_norad_ids_with_observations()
+    filtered_insured = [(n, nm, sk, op, sm) for n, nm, sk, op, sm in INSURED_NORAD_IDS if n in obs_norad_ids]
+    skipped = len(INSURED_NORAD_IDS) - len(filtered_insured)
+    print(f"  {len(filtered_insured)} of {len(INSURED_NORAD_IDS)} insured NORAD IDs have observations ({skipped} skipped)")
+
     print("Resolving insured satellites from objects collection...")
     insured_assets = []
-    for norad_id, name, shell_key, operator, sum_m in INSURED_NORAD_IDS:
+    for norad_id, name, shell_key, operator, sum_m in filtered_insured:
         sat_key = resolve_satellite_key(norad_id)
         if sat_key is None:
             sat_key = f"INS-SAT-{norad_id}"
