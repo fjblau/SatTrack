@@ -32,6 +32,7 @@ function App() {
   const [activeCatalogSubTab, setActiveCatalogSubTab] = useState('table')
   const [activeObservationsSubTab, setActiveObservationsSubTab] = useState('observations')
   const [activeAdminSubTab, setActiveAdminSubTab] = useState('scripts')
+  const [activeInsuranceSubTab, setActiveInsuranceSubTab] = useState('book-dashboard')
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('')
   const [launchYears, setLaunchYears] = useState([])
   const [objects, setObjects] = useState([])
@@ -369,6 +370,14 @@ function App() {
               Provenance
             </button>
           )}
+          {isTabVisible('insurance-overlay') && (
+            <button
+              className={`insurance-button${activeTab === 'insurance-overlay' ? ' active' : ''}`}
+              onClick={() => setActiveTab('insurance-overlay')}
+            >
+              Insurance
+            </button>
+          )}
           {isTabVisible('help') && (
             <button
               className={`help-button${activeTab === 'help' ? ' active' : ''}`}
@@ -450,6 +459,43 @@ function App() {
           >
             DISCOS Status
           </button>
+        </nav>
+      )}
+
+      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && (
+        <nav className="app-subnav">
+          {isSubtabVisible('insurance-overlay', 'book-dashboard') && (
+            <button
+              className={activeInsuranceSubTab === 'book-dashboard' ? 'active' : ''}
+              onClick={() => setActiveInsuranceSubTab('book-dashboard')}
+            >
+              Book Dashboard
+            </button>
+          )}
+          {isSubtabVisible('insurance-overlay', 'asset-detail') && (
+            <button
+              className={activeInsuranceSubTab === 'asset-detail' ? 'active' : ''}
+              onClick={() => setActiveInsuranceSubTab('asset-detail')}
+            >
+              Insured Asset Detail
+            </button>
+          )}
+          {isSubtabVisible('insurance-overlay', 'aggregation') && (
+            <button
+              className={activeInsuranceSubTab === 'aggregation' ? 'active' : ''}
+              onClick={() => setActiveInsuranceSubTab('aggregation')}
+            >
+              Aggregation &amp; Scenario
+            </button>
+          )}
+          {isSubtabVisible('insurance-overlay', 'constellation') && (
+            <button
+              className={activeInsuranceSubTab === 'constellation' ? 'active' : ''}
+              onClick={() => setActiveInsuranceSubTab('constellation')}
+            >
+              Constellation &amp; Coverage
+            </button>
+          )}
         </nav>
       )}
 
@@ -629,6 +675,42 @@ function App() {
       {activeTab === 'satellite-catalog' && activeCatalogSubTab === 'by-class' && (
         <div className="analytics-view-container">
           <CatalogByClassPage />
+        </div>
+      )}
+
+      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'book-dashboard' && isSubtabVisible('insurance-overlay', 'book-dashboard') && (
+        <div className="analytics-view-container">
+          <div className="coming-soon-placeholder">
+            <h2>Book Dashboard</h2>
+            <p>Portfolio KPIs, overnight event triage, aggregation watch, and renewal pipeline. Coming in Phase B.</p>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'asset-detail' && isSubtabVisible('insurance-overlay', 'asset-detail') && (
+        <div className="analytics-view-container">
+          <div className="coming-soon-placeholder">
+            <h2>Insured Asset Detail</h2>
+            <p>Risk score history, anomaly predictions, witness chain, evidence packages, and coverage windows per asset. Coming in Phase B.</p>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'aggregation' && isSubtabVisible('insurance-overlay', 'aggregation') && (
+        <div className="analytics-view-container">
+          <div className="coming-soon-placeholder">
+            <h2>Aggregation &amp; Scenario</h2>
+            <p>Orbital shell exposure heatmap and fragmentation scenario tool with Kestrel line-of-sight overlay. Coming in Phase C.</p>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'insurance-overlay' && isTabVisible('insurance-overlay') && activeInsuranceSubTab === 'constellation' && isSubtabVisible('insurance-overlay', 'constellation') && (
+        <div className="analytics-view-container">
+          <div className="coming-soon-placeholder">
+            <h2>Constellation &amp; Coverage</h2>
+            <p>4-Kestrel constellation globe, asset coverage matrix, and tasking queue. Coming in Phase C.</p>
+          </div>
         </div>
       )}
     </div>
