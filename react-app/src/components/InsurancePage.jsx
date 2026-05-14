@@ -236,7 +236,7 @@ const SHELLS = ['LEO_500_520', 'LEO_520_540', 'LEO_540_560', 'LEO_560_580', 'MEO
 const RISK_BANDS = ['low', 'moderate', 'elevated', 'high', 'critical']
 const PAGE_SIZE = 20
 
-function AssetList({ onSelectAsset }) {
+function AssetList({ onSelectAsset, onNavigateToCatalog }) {
   const [page, setPage] = useState(0)
   const [shell, setShell] = useState('')
   const [riskBand, setRiskBand] = useState('')
@@ -293,6 +293,7 @@ function AssetList({ onSelectAsset }) {
                 <th>Risk Band</th>
                 <th>Risk Score</th>
                 <th>Policy Expiry</th>
+                {onNavigateToCatalog && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -315,6 +316,17 @@ function AssetList({ onSelectAsset }) {
                   </td>
                   <td className="ins-center">{a.risk_score ?? '—'}</td>
                   <td className="ins-small">{fmtDate(a.policy_expiry)}</td>
+                  {onNavigateToCatalog && (
+                    <td>
+                      <button
+                        className="ins-btn ins-btn-link"
+                        title="View in Object Catalog"
+                        onClick={(e) => { e.stopPropagation(); onNavigateToCatalog(a) }}
+                      >
+                        ↗ Catalog
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {assets.length === 0 && (
@@ -516,7 +528,7 @@ function ConstellationView() {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function InsurancePage({ activeSubTab }) {
+export default function InsurancePage({ activeSubTab, onNavigateToCatalog }) {
   const [selectedAsset, setSelectedAsset] = useState(null)
 
   const handleSelectAsset = (asset) => setSelectedAsset(asset)
@@ -533,10 +545,11 @@ export default function InsurancePage({ activeSubTab }) {
             policy_expiry: selectedAsset.policy_expiry,
           }}
           onBack={handleBack}
+          onNavigateToCatalog={onNavigateToCatalog}
         />
       )
     }
-    return <AssetList onSelectAsset={handleSelectAsset} />
+    return <AssetList onSelectAsset={handleSelectAsset} onNavigateToCatalog={onNavigateToCatalog} />
   }
 
   if (activeSubTab === 'book-dashboard') return <BookDashboard />

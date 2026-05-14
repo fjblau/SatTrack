@@ -186,6 +186,20 @@
   cursor: not-allowed;
 }
 
+.ins-btn-link {
+  color: #0369a1;
+  border-color: #0369a140;
+  background: #0369a108;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
+  white-space: nowrap;
+}
+
+.ins-btn-link:hover:not(:disabled) {
+  background: #0369a118;
+  color: #024f85;
+}
+
 .ins-coverage-bar {
   display: flex;
   height: 32px;
