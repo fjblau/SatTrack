@@ -584,7 +584,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     setError(null)
     setObservations([])
     try {
-      const res = await apiFetch(`${API_ENDPOINTS.OBSERVATIONS}/${noradId}?limit=500`)
+      const res = await apiFetch(`${API_ENDPOINTS.OBSERVATIONS}/${noradId}?limit=5000`)
       if (!res.ok) throw new Error(res.statusText)
       const d = await res.json()
       setObservations(d.data || [])
