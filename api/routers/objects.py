@@ -60,20 +60,20 @@ def search_objects(
         country=country,
         status=status,
         orbital_band=orbital_band,
+        object_class=object_class,
         object_type=object_type,
         limit=limit,
         skip=skip,
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    if object_class:
-        results = [r for r in results if r.get("canonical", {}).get("object_class") == object_class]
 
     total_count = count_satellites(
         query=q or "",
         country=country,
         status=status,
         orbital_band=orbital_band,
+        object_class=object_class,
         object_type=object_type,
     )
 

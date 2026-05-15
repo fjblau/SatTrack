@@ -135,6 +135,7 @@ def search_satellites(
     status: Optional[str] = None,
     orbital_band: Optional[str] = None,
     congestion_risk: Optional[str] = None,
+    object_class: Optional[str] = None,
     object_type: Optional[str] = None,
     limit: int = 100,
     skip: int = 0,
@@ -188,7 +189,11 @@ def search_satellites(
     if congestion_risk:
         filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
         bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
-    
+
+    if object_class:
+        filters.append("doc.canonical.object_class == @object_class")
+        bind_vars['object_class'] = object_class
+
     if object_type:
         filters.append("LIKE(doc.canonical.object_type, @object_type_pattern, true)")
         bind_vars['object_type_pattern'] = f'%{object_type}%'
@@ -221,6 +226,7 @@ def count_satellites(
     status: Optional[str] = None,
     orbital_band: Optional[str] = None,
     congestion_risk: Optional[str] = None,
+    object_class: Optional[str] = None,
     object_type: Optional[str] = None
 ) -> int:
     """Count satellites with optional filters"""
@@ -253,7 +259,11 @@ def count_satellites(
     if congestion_risk:
         filters.append("LIKE(doc.canonical.congestion_risk, @congestion_risk_pattern, true)")
         bind_vars['congestion_risk_pattern'] = f'%{congestion_risk}%'
-    
+
+    if object_class:
+        filters.append("doc.canonical.object_class == @object_class")
+        bind_vars['object_class'] = object_class
+
     if object_type:
         filters.append("LIKE(doc.canonical.object_type, @object_type_pattern, true)")
         bind_vars['object_type_pattern'] = f'%{object_type}%'
