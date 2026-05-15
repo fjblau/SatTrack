@@ -236,29 +236,17 @@ function TimeSeriesChart({
           )
         })}
 
-        {/* Flag dots at bottom — false (green) rendered first, true (orange) on top */}
-        {flags && <>
-          {data.map((d, i) => {
-            if (d[flags.key] !== false) return null
-            return (
-              <circle
-                key={i}
-                cx={xPx(i, n)} cy={P.top + innerH + 32}
-                r={4} fill={flags.falseColor || '#2ecc71'} opacity={0.8}
-              />
-            )
-          })}
-          {data.map((d, i) => {
-            if (d[flags.key] !== true) return null
-            return (
-              <circle
-                key={i}
-                cx={xPx(i, n)} cy={P.top + innerH + 32}
-                r={4} fill={flags.trueColor || '#e74c3c'} opacity={0.8}
-              />
-            )
-          })}
-        </>}
+        {/* Flag dots at bottom — only render when true */}
+        {flags && data.map((d, i) => {
+          if (d[flags.key] !== true) return null
+          return (
+            <circle
+              key={i}
+              cx={xPx(i, n)} cy={P.top + innerH + 32}
+              r={4} fill={flags.trueColor || '#e74c3c'} opacity={0.9}
+            />
+          )
+        })}
 
         {/* Axes */}
         <line x1={P.left} y1={P.top} x2={P.left} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
@@ -369,7 +357,6 @@ function TimeSeriesChart({
       {flags && (
         <div className="obs-flag-legend">
           <span><span className="obs-flag-dot" style={{ background: flags.trueColor || '#e74c3c' }} /> {flags.trueLabel || 'Flag: true'}</span>
-          <span><span className="obs-flag-dot" style={{ background: flags.falseColor || '#2ecc71' }} /> {flags.falseLabel || 'Flag: false'}</span>
         </div>
       )}
     </div>
