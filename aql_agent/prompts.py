@@ -3,8 +3,8 @@ from __future__ import annotations
 CLARIFY_SYSTEM_PROMPT = """You are an assistant that detects when a natural language database query is ambiguous.
 
 The Talon space object database has these potentially ambiguous concepts:
-- "country" could mean canonical.country_of_origin (where the object was built/registered). Prefer country_of_origin.
-- "[country] built", "built in [country]", "[country] manufactured", "made in [country]" → canonical.country_of_origin. Do NOT ask for clarification.
+- "country" → use canonical.country (normalized ISO 3-letter code, e.g. 'AUT' for Austria, 'FRA' for France). The agent has a built-in lookup table — do NOT ask for clarification.
+- "[country] built", "built in [country]", "[country] manufactured", "made in [country]" → canonical.country. Do NOT ask for clarification.
 - "active" or "operational" objects → canonical.status == 'in orbit'
 - "inactive" / "dead" / "decommissioned" → canonical.status == 'decayed'
 - "name" could mean canonical.name, canonical.object_name, or canonical.satellite_name
@@ -84,14 +84,12 @@ When calling `submit_answer`, set:
 
 **Q: How many Austrian satellites are there?**
 ```
-distinct_values("objects", "canonical.country_of_origin", contains="austria")
-# → returns {{"values": ["AT"]}}  — take the first returned value as the bind variable
 submit_answer(
-  aql="FOR s IN objects FILTER s.canonical.country_of_origin == @country COLLECT WITH COUNT INTO n RETURN n",
-  bind_vars={{"country": "AT"}},
-  explanation="Counts all objects with country_of_origin AT (Austria).",
+  aql="FOR s IN objects FILTER s.canonical.country == @country COLLECT WITH COUNT INTO n RETURN n",
+  bind_vars={{"country": "AUT"}},
+  explanation="Counts all objects where canonical.country is 'AUT' (Austria, ISO 3-letter).",
   confidence="high",
-  assumptions=["Used 'AT' — the stored ISO code for Austria found via distinct_values."]
+  assumptions=[]
 )
 ```
 
@@ -106,16 +104,14 @@ submit_answer(
 )
 ```
 
-**Q: Show austrian satellite insurance** (also applies to "austrian built satellite insurance", "show french satellite insurance", etc.)
+**Q: Show austrian satellite insurance** (also applies to "austrian built satellite insurance", "show policies for austrian satellites", "show french satellite insurance", etc.)
 ```
-distinct_values("objects", "canonical.country_of_origin", contains="austria")
-# → returns {{"values": ["AT"]}}  — take the first returned value as the bind variable
 submit_answer(
-  aql="FOR p IN policies\\nFILTER p.status == \\"bound\\"\\nLET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)\\nFILTER sat != null\\nFILTER sat.canonical.country_of_origin == @country\\nSORT p.sum_insured DESC\\nLIMIT 20\\nRETURN {{policy: p._key, sum_insured: p.sum_insured, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}}",
-  bind_vars={{"country": "AT"}},
-  explanation="Returns bound policies for satellites built/registered in Austria.",
+  aql="FOR p IN policies\\nFILTER p.status == \\"bound\\"\\nLET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)\\nFILTER sat != null\\nFILTER sat.canonical.country == @country\\nSORT p.sum_insured DESC\\nLIMIT 20\\nRETURN {{policy: p._key, sum_insured: p.sum_insured, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}}",
+  bind_vars={{"country": "AUT"}},
+  explanation="Returns bound policies for satellites built/registered in Austria (canonical.country ISO 3-letter = 'AUT').",
   confidence="high",
-  assumptions=["Used 'AT' — the stored ISO code for Austria found via distinct_values."]
+  assumptions=[]
 )
 ```
 

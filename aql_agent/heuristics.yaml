@@ -1,6 +1,26 @@
 shorthand:
-  - term: ["built in", "manufactured in", "made by", "built by", "country built", "built satellite"]
-    mapping: "canonical.country_of_origin — call distinct_values to find the exact stored code (e.g. 'AT' for Austria, 'US' for United States)"
+  - term: ["austria", "austrian", "austrian built", "built in austria", "austrian satellite"]
+    mapping: "canonical.country == 'AUT'"
+  - term: ["france", "french", "french built", "built in france"]
+    mapping: "canonical.country == 'FRA'"
+  - term: ["germany", "german", "german built", "built in germany"]
+    mapping: "canonical.country == 'DEU'"
+  - term: ["united states", "usa", "american", "us-built", "built in usa", "built in us"]
+    mapping: "canonical.country == 'USA'"
+  - term: ["russia", "russian", "soviet", "built in russia"]
+    mapping: "canonical.country == 'RUS'"
+  - term: ["china", "chinese", "built in china"]
+    mapping: "canonical.country == 'CHN'"
+  - term: ["united kingdom", "uk", "british", "built in uk"]
+    mapping: "canonical.country == 'GBR'"
+  - term: ["japan", "japanese", "built in japan"]
+    mapping: "canonical.country == 'JPN'"
+  - term: ["india", "indian", "built in india"]
+    mapping: "canonical.country == 'IND'"
+  - term: ["canada", "canadian", "built in canada"]
+    mapping: "canonical.country == 'CAN'"
+  - term: ["israel", "israeli", "built in israel"]
+    mapping: "canonical.country == 'ISR'"
   - term: ["ASAT", "anti-satellite test"]
     mapping: "fragmentation_events with canonical.event_type == 'ASAT Test'"
   - term: ["witness chain", "witnessed by"]
@@ -33,4 +53,4 @@ never_do:
   - "Never use status == 'active' — the canonical value is 'in orbit'"
   - "Never use status == 'open' for claims — the canonical value is 'reserved'"
   - "Never inline user-supplied entity names — always parameterize via bind variables"
-  - "Never hardcode country names like 'Austria', 'France', 'Germany' in a filter — stored values vary by source (e.g. 'AT', 'F', 'D'). Always call distinct_values(objects, 'canonical.country_of_origin', contains=<partial>) first to find the exact stored value, then use it as a bind variable"
+  - "For country filters, ALWAYS use canonical.country (normalized ISO 3-letter field) with the ISO codes from the shorthand table above. NEVER call distinct_values for country lookups — the raw country_of_origin field stores inconsistent codes (e.g. 'AT', 'AUT', 'AUSTRIA') that do NOT match a partial-name substring, so distinct_values(contains='austria') returns empty. Use canonical.country == 'AUT' directly."
