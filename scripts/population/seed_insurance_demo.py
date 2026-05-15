@@ -133,6 +133,8 @@ def find_objects_with_observations(limit: int = 40) -> list[dict]:
         )
         FOR obj IN @@objects
             FILTER obj._insurance_mock != true
+            FILTER obj.canonical.object_class == "Payload"
+            FILTER obj.canonical.status == "in orbit"
             FILTER TO_NUMBER(obj.canonical.norad_cat_id) IN observed_norad_ids
             LIMIT @lim
             RETURN {
