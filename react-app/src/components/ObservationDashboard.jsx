@@ -612,7 +612,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
         velocity: obs.proximity_state?.relative_velocity_ms,
         deltaV: obs.maneuver_indicator?.delta_v_residual_ms,
         manConf: obs.maneuver_indicator?.maneuver_confidence,
-        manFlag: obs.maneuver_indicator?.maneuver_flag ?? null,
+        manFlag: (() => { const v = obs.maneuver_indicator?.maneuver_flag; if (v == null) return null; return v !== false && v !== 'false'; })(),
         drift: obs.orbital_decay_indicator?.perigee_drift_km_per_day,
         estimatedPerigee: obs.orbital_decay_indicator?.estimated_perigee_km,
         mass: obs.estimated_mass_kg,
@@ -649,7 +649,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     if (!chartData.length) return null
     const healthVals = chartData.map(d => d.health).filter(v => v != null && isFinite(v))
     const anomalyCount = chartData.filter(d => d.thermalAnomaly === true).length
-    const maneuverCount = chartData.filter(d => d.manFlag === true).length
+    const maneuverCount = chartData.filter(d => d.manFlag === true || d.manFlag === 'true').length
     const first = chartData[0]?.epoch
     const last = chartData[chartData.length - 1]?.epoch
     return {
