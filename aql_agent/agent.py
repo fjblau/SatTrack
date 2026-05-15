@@ -62,6 +62,8 @@ def _has_tool_calls(message: Any) -> bool:
 
 
 def _route_agent(state: dict) -> str:
+    from langchain_core.messages import AIMessage
+
     messages = state.get("messages", [])
     if not messages:
         return "end_error"
