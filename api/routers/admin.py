@@ -116,6 +116,23 @@ SCRIPT_CATALOGUE = [
         "accepted_extensions": [".xlsx"],
     },
     {
+        "id": "migrate_nest_observation_fields",
+        "name": "Migrate: Nest flat observation fields",
+        "description": (
+            "Fixes observations imported by earlier versions of the Kestrel Proxy v2 importer "
+            "that stored sensor-group fields (attitude, material_signature, proximity_state, "
+            "maneuver_indicator, orbital_decay_indicator) as flat top-level keys instead of "
+            "nested sub-objects. Run this once on any database that was populated before the "
+            "import script was corrected. Idempotent — already-migrated documents are skipped."
+        ),
+        "category": "migration",
+        "path": "scripts/migration/migrate_nest_observation_fields.py",
+        "args": ["--yes"],
+        "depends_on": ["import_kestrel_proxy_v2"],
+        "estimated_duration": "< 1 minute",
+        "reversibility": "irreversible (run export_observations first to back up)",
+    },
+    {
         "id": "populate_observation_edges",
         "name": "Populate Observation Edges",
         "description": "Rebuilds all four observation graph edge collections (satellite, source, temporal, anomaly-correlation) from the current observation documents. Run this after importing new observation data.",
