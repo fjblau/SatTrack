@@ -612,7 +612,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
         velocity: obs.proximity_state?.relative_velocity_ms,
         deltaV: obs.maneuver_indicator?.delta_v_residual_ms,
         manConf: obs.maneuver_indicator?.maneuver_confidence,
-        manFlag: (() => { const v = obs.maneuver_indicator?.maneuver_flag; if (v == null) return null; return v !== false && v !== 'false'; })(),
+        manFlag: (() => { const raw = obs.maneuver_indicator?.maneuver_flag; const v = (obs.maneuver_flag != null) ? obs.maneuver_flag : raw; if (v == null) return null; return v !== false && v !== 'false'; })(),
         drift: obs.orbital_decay_indicator?.perigee_drift_km_per_day,
         estimatedPerigee: obs.orbital_decay_indicator?.estimated_perigee_km,
         mass: obs.estimated_mass_kg,
