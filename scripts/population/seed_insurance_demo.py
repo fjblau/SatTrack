@@ -115,6 +115,22 @@ def find_existing_obs_for_asset(norad_id: int, limit: int = 50) -> list[dict]:
     return list(cursor)
 
 
+def _health_score_for_asset(norad_id: int) -> float | None:
+    """Return average derived_health_score (0–1) from observations for a NORAD ID, or None."""
+    obs_list = find_existing_obs_for_asset(norad_id, limit=20)
+    scores = [
+        o.get("derived_health_score")
+        for o in obs_list
+        if o.get("derived_health_score") is not None
+    ]
+    if not scores:
+        return None
+    avg = sum(scores) / len(scores)
+    if avg > 1.0:
+        avg = avg / 100.0
+    return max(0.0, min(1.0, avg))
+
+
 def find_objects_with_observations(limit: int = 40) -> list[dict]:
     """Return catalog objects that have at least one real (non-synthetic) observation.
 
@@ -546,7 +562,11 @@ def main():
     rs_count = 0
     for asset in insured_assets:
         sat_key = asset["sat_key"]
-        base_score = rng.randint(30, 80)
+        health = _health_score_for_asset(asset["norad_id"])
+        if health is not None:
+            base_score = max(10, min(90, round((1.0 - health) * 100)))
+        else:
+            base_score = rng.randint(30, 80)
         for months_ago in range(6, -1, -1):
             date_dt = NOW - timedelta(days=months_ago * 30)
             date_str = date_dt.strftime("%Y-%m-%d")
