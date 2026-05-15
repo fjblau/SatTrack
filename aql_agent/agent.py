@@ -61,6 +61,11 @@ def _has_tool_calls(message: Any) -> bool:
     return bool(message.tool_calls)
 
 
+def _accumulate_tool_messages(existing_messages: list, tool_node_result: dict) -> list:
+    tool_msgs = tool_node_result.get("messages", [])
+    return existing_messages + tool_msgs
+
+
 def _route_agent(state: dict) -> str:
     from langchain_core.messages import AIMessage
 
@@ -221,7 +226,7 @@ def _build_graph():
     def tools_node(state: dict) -> dict:
         messages = state.get("messages", [])
         result = tool_node.invoke({"messages": messages})
-        new_msgs = result.get("messages", messages)
+        new_msgs = _accumulate_tool_messages(messages, result)
 
         trace = state.get("trace", [])
         return {

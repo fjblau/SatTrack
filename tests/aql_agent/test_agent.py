@@ -40,11 +40,18 @@ def _stub_langchain():
 
 _stub_langchain()
 
-from aql_agent.agent import _route_agent, _route_clarify, _route_validate  # noqa: E402
+from aql_agent.agent import _route_agent, _route_clarify, _route_validate, _accumulate_tool_messages  # noqa: E402
 
 
 AIMessage = sys.modules["langchain_core.messages"].AIMessage
 HumanMessage = sys.modules["langchain_core.messages"].HumanMessage
+SystemMessage = sys.modules["langchain_core.messages"].SystemMessage
+
+
+class ToolMessage:
+    def __init__(self, content, tool_call_id="call_1"):
+        self.content = content
+        self.tool_call_id = tool_call_id
 
 
 class TestRouteAgent(unittest.TestCase):
@@ -118,6 +125,86 @@ class TestRouteValidate(unittest.TestCase):
         with patch("aql_agent.agent.config") as mock_cfg:
             mock_cfg.agent.MAX_AGENT_ITERATIONS = 5
             self.assertEqual(_route_validate(state), "execute")
+
+
+class TestAccumulateToolMessages(unittest.TestCase):
+    """Regression tests for the tools_node message-accumulation bug.
+
+    ToolNode.invoke returns only the *new* ToolMessage objects, not the full
+    conversation history.  The old code did:
+
+        new_msgs = result.get("messages", messages)   # replaces history!
+
+    which set state["messages"] to just [ToolMessage(...)].  On the next
+    agent_node call the LLM received a messages list whose first element had
+    role='tool', causing OpenAI to reject it with:
+
+        400 – messages with role 'tool' must be a response to a preceeding
+               message with 'tool_calls' (messages.[0].role)
+    """
+
+    def _existing(self):
+        return [
+            SystemMessage("You are an AQL agent."),
+            HumanMessage("show austrian satellite insurance"),
+            AIMessage("", tool_calls=[{"name": "list_collections", "args": {}}]),
+        ]
+
+    def test_tool_messages_are_appended_not_replaced(self):
+        tool_response = ToolMessage('{"collections": ["satellites"]}')
+        existing = self._existing()
+
+        result = _accumulate_tool_messages(existing, {"messages": [tool_response]})
+
+        self.assertEqual(len(result), 4)
+        self.assertIs(result[-1], tool_response)
+
+    def test_first_message_is_never_a_tool_message(self):
+        tool_response = ToolMessage('{"collections": []}')
+        existing = self._existing()
+
+        result = _accumulate_tool_messages(existing, {"messages": [tool_response]})
+
+        self.assertNotIsInstance(
+            result[0],
+            ToolMessage,
+            "First message must never be a ToolMessage — OpenAI rejects such requests with 400",
+        )
+
+    def test_original_messages_are_preserved_in_order(self):
+        tool_response = ToolMessage("ok")
+        existing = self._existing()
+
+        result = _accumulate_tool_messages(existing, {"messages": [tool_response]})
+
+        self.assertIs(result[0], existing[0])
+        self.assertIs(result[1], existing[1])
+        self.assertIs(result[2], existing[2])
+
+    def test_multiple_tool_responses_are_all_appended(self):
+        t1 = ToolMessage("first")
+        t2 = ToolMessage("second")
+        existing = self._existing()
+
+        result = _accumulate_tool_messages(existing, {"messages": [t1, t2]})
+
+        self.assertEqual(len(result), 5)
+        self.assertIs(result[3], t1)
+        self.assertIs(result[4], t2)
+
+    def test_empty_tool_result_leaves_history_intact(self):
+        existing = self._existing()
+
+        result = _accumulate_tool_messages(existing, {"messages": []})
+
+        self.assertEqual(result, existing)
+
+    def test_missing_messages_key_leaves_history_intact(self):
+        existing = self._existing()
+
+        result = _accumulate_tool_messages(existing, {})
+
+        self.assertEqual(result, existing)
 
 
 if __name__ == "__main__":
