@@ -596,30 +596,22 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
       .map(obs => ({
         epoch: obs.observation_epoch,
         health: obs.derived_health_score,
-        roll: obs.roll_deg ?? obs.attitude?.roll_deg,
-        pitch: obs.pitch_deg ?? obs.attitude?.pitch_deg,
-        yaw: obs.yaw_deg ?? obs.attitude?.yaw_deg,
-        stability: obs.stability_flag ?? obs.attitude?.stability_flag,
-        temp: obs.surface_temp_K ?? obs.thermal?.surface_temp_K,
-        tempVariance: obs.temp_variance_30d ?? obs.thermal?.temp_variance_30d,
+        roll: obs.attitude?.roll_deg,
+        pitch: obs.attitude?.pitch_deg,
+        yaw: obs.attitude?.yaw_deg,
+        stability: obs.attitude?.stability_flag,
+        temp: obs.thermal?.surface_temp_K,
+        tempVariance: obs.thermal?.temp_variance_30d,
         thermalAnomaly: obs.thermal?.anomaly_flag,
-        reflectivity: obs.reflectivity_index ?? obs.material_signature?.reflectivity_index,
-        materialConfidence: obs.material_confidence ?? obs.material_signature?.material_confidence,
-        range: obs.range_km ?? obs.proximity_state?.range_km,
-        velocity: obs.relative_velocity_ms ?? obs.proximity_state?.relative_velocity_ms,
-        deltaV: obs.delta_v_residual_ms ?? obs.maneuver_indicator?.delta_v_residual_ms,
-        manConf: obs.maneuver_confidence ?? obs.maneuver_indicator?.maneuver_confidence,
-        manFlag: (() => {
-          const f = obs.maneuver_flag ?? obs.maneuver_indicator?.maneuver_flag
-          if (f == null) return null
-          if (typeof f === 'boolean') return f
-          const s = String(f).toLowerCase()
-          if (s === 'suspected_maneuver' || s === 'maneuver_detected' || s === 'detected') return true
-          if (s === 'no_maneuver' || s === 'nominal') return false
-          return null
-        })(),
-        drift: obs.perigee_drift_km_per_day ?? obs.orbital_decay_indicator?.perigee_drift_km_per_day,
-        estimatedPerigee: obs.estimated_perigee_km ?? obs.orbital_decay_indicator?.estimated_perigee_km,
+        reflectivity: obs.material_signature?.reflectivity_index,
+        materialConfidence: obs.material_signature?.material_confidence,
+        range: obs.proximity_state?.range_km,
+        velocity: obs.proximity_state?.relative_velocity_ms,
+        deltaV: obs.maneuver_indicator?.delta_v_residual_ms,
+        manConf: obs.maneuver_indicator?.maneuver_confidence,
+        manFlag: obs.maneuver_indicator?.maneuver_flag ?? null,
+        drift: obs.orbital_decay_indicator?.perigee_drift_km_per_day,
+        estimatedPerigee: obs.orbital_decay_indicator?.estimated_perigee_km,
         mass: obs.estimated_mass_kg,
         spin: obs.spin_rate_rpm,
         passId: obs.pass_id,
