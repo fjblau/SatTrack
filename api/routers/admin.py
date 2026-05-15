@@ -405,6 +405,24 @@ SCRIPT_CATALOGUE = [
         "reversibility": "reversible",
     },
     {
+        "id": "promote_debris_class",
+        "name": "Promote Debris Object Class",
+        "description": (
+            "Promotes 'Unknown' debris objects to specific fragmentation classes "
+            "('Rocket Fragmentation Debris' or 'Payload Fragmentation Debris') using two passes: "
+            "(1) DISCOS source envelope — objects whose sources.discos.object_class identifies them as rocket or payload debris; "
+            "(2) fragmented_from graph edges — objects whose parent object is a Rocket Body or Payload. "
+            "Only touches objects still classified as 'Unknown'. Idempotent — safe to re-run."
+        ),
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_debris_class.py",
+        "args": ["--yes"],
+        "order_hint": 28,
+        "depends_on": ["migrate_classify_objects", "promote_discos_object_class"],
+        "estimated_duration": "5-20 minutes",
+        "reversibility": "reversible",
+    },
+    {
         "id": "verify_discos_provenance_e2e",
         "name": "Verify DISCOS Provenance E2E",
         "description": "End-to-end verification of the DISCOS provenance graph: checks collection counts, spot-checks provenance chains, validates edge integrity.",
