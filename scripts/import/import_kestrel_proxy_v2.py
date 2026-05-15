@@ -93,6 +93,23 @@ def _parse_bool(value):
     return None
 
 
+_MANEUVER_FLAG_TRUE = {"suspected_maneuver", "maneuver_detected", "detected"}
+_MANEUVER_FLAG_FALSE = {"no_maneuver", "nominal"}
+
+
+def _parse_maneuver_flag(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    s = str(value).strip().lower()
+    if s in _MANEUVER_FLAG_TRUE:
+        return True
+    if s in _MANEUVER_FLAG_FALSE:
+        return False
+    return _parse_bool(value)
+
+
 def read_sheets(xlsx_path: str) -> list[dict]:
     """
     Read all non-Summary sheets from the Excel file and return a flat list of
@@ -139,7 +156,7 @@ def read_sheets(xlsx_path: str) -> list[dict]:
                 doc["proximity_state"] = proximity_state
 
             maneuver_indicator = {f: _cast_value(raw.get(f)) for f in MANEUVER_FIELDS if _cast_value(raw.get(f)) is not None}
-            maneuver_flag = _parse_bool(raw.get("maneuver_flag"))
+            maneuver_flag = _parse_maneuver_flag(raw.get("maneuver_flag"))
             if maneuver_flag is None:
                 dv = maneuver_indicator.get("delta_v_residual_ms")
                 if dv is not None:
