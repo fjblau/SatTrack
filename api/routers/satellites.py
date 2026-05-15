@@ -20,6 +20,7 @@ def search_satellites_v2(
     status: Optional[str] = Query(None, description="Filter by status"),
     orbital_band: Optional[str] = Query(None, description="Filter by orbital band"),
     congestion_risk: Optional[str] = Query(None, description="Filter by congestion risk"),
+    object_class: Optional[str] = Query(None, description="Filter by object class"),
     object_type: Optional[str] = Query(None, description="Filter by object type"),
     limit: int = Query(100, ge=1, le=1000),
     skip: int = Query(0, ge=0),
@@ -37,6 +38,7 @@ def search_satellites_v2(
         status=status,
         orbital_band=orbital_band,
         congestion_risk=congestion_risk,
+        object_class=object_class,
         object_type=object_type,
         limit=limit,
         skip=skip,
@@ -50,6 +52,7 @@ def search_satellites_v2(
         status=status,
         orbital_band=orbital_band,
         congestion_risk=congestion_risk,
+        object_class=object_class,
         object_type=object_type
     )
     
