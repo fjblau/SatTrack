@@ -6,12 +6,14 @@ Reads all per-satellite sheets from the XLSX attachment, transforms the flat
 thermal_anomaly_flag to the nested thermal.anomaly_flag format used by the existing
 observation schema, and bulk-inserts records directly into the observations collection.
 
-New fields introduced by this dataset (stored at top-level on each observation doc):
-  pass_id, frame_index, observation_mode, sensors_active, illumination,
-  roll_deg, pitch_deg, yaw_deg, stability_flag, surface_temp_K,
-  reflectivity_index, inferred_material, material_confidence,
-  range_km, relative_velocity_ms, delta_v_residual_ms,
-  maneuver_confidence, maneuver_flag, perigee_drift_km_per_day, estimated_perigee_km
+New fields introduced by this dataset (stored in their schema sub-objects):
+  pass_id, frame_index, observation_mode, sensors_active, illumination (top-level)
+  attitude: roll_deg, pitch_deg, yaw_deg, stability_flag
+  thermal: surface_temp_K, anomaly_flag
+  material_signature: reflectivity_index, inferred_material, material_confidence
+  proximity_state: range_km, relative_velocity_ms
+  maneuver_indicator: delta_v_residual_ms, maneuver_confidence, maneuver_flag
+  orbital_decay_indicator: perigee_drift_km_per_day, estimated_perigee_km
 
 Source identifier: kestrel_proxy_v2
 """
@@ -58,23 +60,14 @@ FLAT_FIELD_MAP = {
     "illumination": "illumination",
     "estimated_mass_kg": "estimated_mass_kg",
     "spin_rate_rpm": "spin_rate_rpm",
-    "roll_deg": "roll_deg",
-    "pitch_deg": "pitch_deg",
-    "yaw_deg": "yaw_deg",
-    "stability_flag": "stability_flag",
-    "surface_temp_K": "surface_temp_K",
-    "reflectivity_index": "reflectivity_index",
-    "inferred_material": "inferred_material",
-    "material_confidence": "material_confidence",
-    "range_km": "range_km",
-    "relative_velocity_ms": "relative_velocity_ms",
     "derived_health_score": "derived_health_score",
-    "delta_v_residual_ms": "delta_v_residual_ms",
-    "maneuver_confidence": "maneuver_confidence",
-    "maneuver_flag": "maneuver_flag",
-    "perigee_drift_km_per_day": "perigee_drift_km_per_day",
-    "estimated_perigee_km": "estimated_perigee_km",
 }
+
+ATTITUDE_FIELDS = ["roll_deg", "pitch_deg", "yaw_deg", "stability_flag"]
+MATERIAL_FIELDS = ["reflectivity_index", "inferred_material", "material_confidence"]
+PROXIMITY_FIELDS = ["range_km", "relative_velocity_ms"]
+MANEUVER_FIELDS = ["delta_v_residual_ms", "maneuver_confidence"]
+ORBITAL_DECAY_FIELDS = ["perigee_drift_km_per_day", "estimated_perigee_km"]
 
 
 def _cast_value(value):
@@ -130,6 +123,33 @@ def read_sheets(xlsx_path: str) -> list[dict]:
             thermal_flag = _parse_bool(raw.get("thermal_anomaly_flag"))
             if thermal_flag is not None:
                 doc["thermal"] = {"anomaly_flag": thermal_flag}
+
+            attitude = {f: _cast_value(raw.get(f)) for f in ATTITUDE_FIELDS if _cast_value(raw.get(f)) is not None}
+            if attitude:
+                doc["attitude"] = attitude
+
+            material_signature = {f: _cast_value(raw.get(f)) for f in MATERIAL_FIELDS if _cast_value(raw.get(f)) is not None}
+            if material_signature:
+                doc["material_signature"] = material_signature
+
+            proximity_state = {f: _cast_value(raw.get(f)) for f in PROXIMITY_FIELDS if _cast_value(raw.get(f)) is not None}
+            if proximity_state:
+                doc["proximity_state"] = proximity_state
+
+            maneuver_indicator = {f: _cast_value(raw.get(f)) for f in MANEUVER_FIELDS if _cast_value(raw.get(f)) is not None}
+            maneuver_flag = _parse_bool(raw.get("maneuver_flag"))
+            if maneuver_flag is not None:
+                maneuver_indicator["maneuver_flag"] = maneuver_flag
+            if maneuver_indicator:
+                doc["maneuver_indicator"] = maneuver_indicator
+
+            orbital_decay_indicator = {f: _cast_value(raw.get(f)) for f in ORBITAL_DECAY_FIELDS if _cast_value(raw.get(f)) is not None}
+            if orbital_decay_indicator:
+                doc["orbital_decay_indicator"] = orbital_decay_indicator
+
+            surface_temp = _cast_value(raw.get("surface_temp_K"))
+            if surface_temp is not None:
+                doc.setdefault("thermal", {})["surface_temp_K"] = surface_temp
 
             if "norad_id" not in doc or "observation_epoch" not in doc:
                 continue
