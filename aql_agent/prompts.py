@@ -4,6 +4,7 @@ CLARIFY_SYSTEM_PROMPT = """You are an assistant that detects when a natural lang
 
 The Talon space object database has these potentially ambiguous concepts:
 - "country" could mean canonical.country_of_origin (where the object was built/registered). Prefer country_of_origin.
+- "[country] built", "built in [country]", "[country] manufactured", "made in [country]" → canonical.country_of_origin. Do NOT ask for clarification.
 - "active" or "operational" objects → canonical.status == 'in orbit'
 - "inactive" / "dead" / "decommissioned" → canonical.status == 'decayed'
 - "name" could mean canonical.name, canonical.object_name, or canonical.satellite_name
@@ -84,13 +85,13 @@ When calling `submit_answer`, set:
 **Q: How many Austrian satellites are there?**
 ```
 distinct_values("objects", "canonical.country_of_origin", contains="austria")
-# inspect result to find exact stored value, e.g. "AT" or "Austria"
+# → returns {{"values": ["AT"]}}  — take the first returned value as the bind variable
 submit_answer(
   aql="FOR s IN objects FILTER s.canonical.country_of_origin == @country COLLECT WITH COUNT INTO n RETURN n",
-  bind_vars={{"country": "<exact value from distinct_values>"}},
-  explanation="Counts all objects with country_of_origin matching Austria.",
+  bind_vars={{"country": "AT"}},
+  explanation="Counts all objects with country_of_origin AT (Austria).",
   confidence="high",
-  assumptions=[]
+  assumptions=["Used 'AT' — the stored ISO code for Austria found via distinct_values."]
 )
 ```
 
@@ -105,16 +106,16 @@ submit_answer(
 )
 ```
 
-**Q: Show austrian satellite insurance**
+**Q: Show austrian satellite insurance** (also applies to "austrian built satellite insurance", "show french satellite insurance", etc.)
 ```
 distinct_values("objects", "canonical.country_of_origin", contains="austria")
-# inspect result to find exact stored value, e.g. "AT" or "Austria"
+# → returns {{"values": ["AT"]}}  — take the first returned value as the bind variable
 submit_answer(
   aql="FOR p IN policies\\nFILTER p.status == \\"bound\\"\\nLET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)\\nFILTER sat != null\\nFILTER sat.canonical.country_of_origin == @country\\nSORT p.sum_insured DESC\\nLIMIT 20\\nRETURN {{policy: p._key, sum_insured: p.sum_insured, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}}",
-  bind_vars={{"country": "<exact value from distinct_values>"}},
-  explanation="Returns bound policies for satellites with country_of_origin matching Austria.",
+  bind_vars={{"country": "AT"}},
+  explanation="Returns bound policies for satellites built/registered in Austria.",
   confidence="high",
-  assumptions=[]
+  assumptions=["Used 'AT' — the stored ISO code for Austria found via distinct_values."]
 )
 ```
 

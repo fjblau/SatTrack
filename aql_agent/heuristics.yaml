@@ -1,4 +1,6 @@
 shorthand:
+  - term: ["built in", "manufactured in", "made by", "built by", "country built", "built satellite"]
+    mapping: "canonical.country_of_origin — call distinct_values to find the exact stored code (e.g. 'AT' for Austria, 'US' for United States)"
   - term: ["ASAT", "anti-satellite test"]
     mapping: "fragmentation_events with canonical.event_type == 'ASAT Test'"
   - term: ["witness chain", "witnessed by"]
