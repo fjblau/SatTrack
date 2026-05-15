@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Any, Optional
 
 from api.services import agent_service, aql_agent_service, index_service, kestrel_agent_service
+from api.middleware.auth import get_current_user
 
 router = APIRouter(prefix="/v2", tags=["agent"])
 
@@ -67,28 +68,100 @@ class AQLResponse(BaseModel):
     explanation: str
     error: str
     clarifying_question: str
+    log_id: str = ""
+    trace: list[Any] = []
+    confidence: str = "high"
+    assumptions: list[str] = []
+    alternative: Optional[dict[str, Any]] = None
 
 
 @router.post("/aql", response_model=AQLResponse)
-def aql_query(body: AQLRequest):
+async def aql_query(body: AQLRequest, request: Request):
     """Translate a natural language question into an AQL query and execute it.
 
     If the question is ambiguous, the response will contain a `clarifying_question`
     and empty `aql`/`result` fields. Re-submit with `clarification` set to the user's
     answer to proceed with query generation.
 
-    The agent automatically retries (up to 3 times) if ArangoDB returns a syntax error.
+    The agent automatically retries if ArangoDB returns a syntax error.
     """
     if not aql_agent_service.is_ready():
         raise HTTPException(
             status_code=503,
             detail="AQL agent is not available. Ensure OPENAI_API_KEY is set and the server restarted.",
         )
+
+    from api.middleware.auth import get_current_user as _get_user
+    user_id = await _get_user(request)
+
     result = aql_agent_service.run_aql_agent(
         question=body.question,
         clarification=body.clarification or "",
+        user_id=user_id,
     )
     return AQLResponse(**result)
+
+
+class HistoryItem(BaseModel):
+    key: str
+    ts: str
+    question: str
+    aql: str
+    row_count: int
+    outcome: str
+    confidence: str
+    starred: bool
+
+
+class HistoryResponse(BaseModel):
+    items: list[HistoryItem]
+
+
+@router.get("/aql/history", response_model=HistoryResponse)
+async def get_aql_history(
+    request: Request,
+    limit: int = 20,
+    starred_only: bool = False,
+):
+    """Return query history for the authenticated user."""
+    from api.middleware.auth import get_current_user as _get_user
+    user_id = await _get_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    from aql_agent import history as _history
+    items = _history.get_history(user_id=user_id, limit=min(limit, 100), starred_only=starred_only)
+    return HistoryResponse(items=[HistoryItem(**item) for item in items])
+
+
+@router.post("/aql/history/{key}/star", response_model=HistoryItem)
+async def star_history_item(key: str, request: Request):
+    """Star a history item."""
+    from api.middleware.auth import get_current_user as _get_user
+    user_id = await _get_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    from aql_agent import history as _history
+    updated = _history.toggle_star(key=key, user_id=user_id, starred=True)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Item not found or access denied")
+    return HistoryItem(**updated)
+
+
+@router.delete("/aql/history/{key}/star", response_model=HistoryItem)
+async def unstar_history_item(key: str, request: Request):
+    """Unstar a history item."""
+    from api.middleware.auth import get_current_user as _get_user
+    user_id = await _get_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    from aql_agent import history as _history
+    updated = _history.toggle_star(key=key, user_id=user_id, starred=False)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Item not found or access denied")
+    return HistoryItem(**updated)
 
 
 class KestrelMissionRequest(BaseModel):
