@@ -122,8 +122,10 @@ SCRIPT_CATALOGUE = [
             "Fixes observations imported by earlier versions of the Kestrel Proxy v2 importer "
             "that stored sensor-group fields (attitude, material_signature, proximity_state, "
             "maneuver_indicator, orbital_decay_indicator) as flat top-level keys instead of "
-            "nested sub-objects. Run this once on any database that was populated before the "
-            "import script was corrected. Idempotent — already-migrated documents are skipped."
+            "nested sub-objects. Also backfills maneuver_indicator.maneuver_flag (derived from "
+            "delta_v_residual_ms >= 0.5 m/s) for any documents where the flag was never set. "
+            "Run this once on any database populated before the import script was corrected. "
+            "Idempotent — already-migrated documents are skipped."
         ),
         "category": "migration",
         "path": "scripts/migration/migrate_nest_observation_fields.py",

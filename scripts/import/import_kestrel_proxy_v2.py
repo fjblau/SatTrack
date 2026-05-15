@@ -69,6 +69,8 @@ PROXIMITY_FIELDS = ["range_km", "relative_velocity_ms"]
 MANEUVER_FIELDS = ["delta_v_residual_ms", "maneuver_confidence"]
 ORBITAL_DECAY_FIELDS = ["perigee_drift_km_per_day", "estimated_perigee_km"]
 
+MANEUVER_FLAG_THRESHOLD_MS = 0.5
+
 
 def _cast_value(value):
     if value is None:
@@ -138,6 +140,13 @@ def read_sheets(xlsx_path: str) -> list[dict]:
 
             maneuver_indicator = {f: _cast_value(raw.get(f)) for f in MANEUVER_FIELDS if _cast_value(raw.get(f)) is not None}
             maneuver_flag = _parse_bool(raw.get("maneuver_flag"))
+            if maneuver_flag is None:
+                dv = maneuver_indicator.get("delta_v_residual_ms")
+                if dv is not None:
+                    try:
+                        maneuver_flag = float(dv) >= MANEUVER_FLAG_THRESHOLD_MS
+                    except (TypeError, ValueError):
+                        pass
             if maneuver_flag is not None:
                 maneuver_indicator["maneuver_flag"] = maneuver_flag
             if maneuver_indicator:
