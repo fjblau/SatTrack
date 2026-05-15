@@ -660,6 +660,12 @@ _known_countries: list[str] = []
 
 def initialize_aql_agent() -> None:
     global _llm, _system_prompt, _known_countries
+
+    if config.agent.VERSION != "v1":
+        from aql_agent.agent import initialize_aql_agent as _v2_init
+        _v2_init()
+        return
+
     if not config.agent.OPENAI_API_KEY:
         logger.warning("OPENAI_API_KEY not set — /v2/aql endpoint will be unavailable.")
         return
@@ -686,6 +692,9 @@ def initialize_aql_agent() -> None:
 
 
 def is_ready() -> bool:
+    if config.agent.VERSION != "v1":
+        from aql_agent.agent import is_ready as _v2_ready
+        return _v2_ready()
     return _llm is not None
 
 
@@ -791,7 +800,13 @@ def _get_graph():
     return _graph
 
 
-def run_aql_agent(question: str, clarification: str = "") -> dict[str, Any]:
+def run_aql_agent(question: str, clarification: str = "", user_id: str | None = None) -> dict[str, Any]:
+    if config.agent.VERSION != "v1":
+        from aql_agent.agent import run_aql_agent as _v2_run
+        from aql_agent.agent import is_ready as _v2_ready
+        if _v2_ready():
+            return _v2_run(question=question, clarification=clarification, user_id=user_id)
+
     if _llm is None:
         return {
             "aql": "",
@@ -800,6 +815,11 @@ def run_aql_agent(question: str, clarification: str = "") -> dict[str, Any]:
             "explanation": "",
             "error": "AQL agent unavailable. Ensure OPENAI_API_KEY is set.",
             "clarifying_question": "",
+            "log_id": "",
+            "trace": [],
+            "confidence": "high",
+            "assumptions": [],
+            "alternative": None,
         }
     initial: _State = {
         "question": question,
@@ -820,4 +840,9 @@ def run_aql_agent(question: str, clarification: str = "") -> dict[str, Any]:
         "explanation": final.get("explanation", ""),
         "error": final.get("error", ""),
         "clarifying_question": final.get("clarifying_question", ""),
+        "log_id": "",
+        "trace": [],
+        "confidence": "high",
+        "assumptions": [],
+        "alternative": None,
     }

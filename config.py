@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Literal
 
 try:
     from dotenv import load_dotenv
@@ -139,6 +139,23 @@ class AgentConfig:
         "docs/CELESTRAK_IMPORT.md",
         "docs/OBSERVATIONS_IMPORT_API.md",
     ]
+
+    VERSION: str = os.getenv("AQL_AGENT_VERSION", "v2")
+    LOG_PATH: str = os.getenv("AQL_AGENT_LOG_PATH", "/var/log/talon/aql_agent.jsonl")
+    LOG_TO_FILE: bool = os.getenv("AQL_AGENT_LOG_TO_FILE", "true").lower() == "true"
+    LOG_TO_STDOUT: bool = os.getenv("AQL_AGENT_LOG_TO_STDOUT", "true").lower() == "true"
+    MAX_AGENT_ITERATIONS: int = int(os.getenv("AQL_AGENT_MAX_ITERATIONS", "8"))
+    MAX_EXECUTION_RETRIES: int = int(os.getenv("AQL_AGENT_MAX_EXEC_RETRIES", "2"))
+    DEFAULT_MAX_RUNTIME_S: int = int(os.getenv("AQL_AGENT_DEFAULT_RUNTIME_S", "15"))
+    GRAPH_MAX_RUNTIME_S: int = int(os.getenv("AQL_AGENT_GRAPH_RUNTIME_S", "30"))
+    SCHEMA_CACHE_TTL_S: int = int(os.getenv("AQL_AGENT_SCHEMA_CACHE_TTL_S", "300"))
+    DESCRIBE_INCLUDE_INDEXES: bool = os.getenv("AQL_AGENT_DESCRIBE_INCLUDE_INDEXES", "false").lower() == "true"
+    RESULT_REFLECTION_ENABLED: bool = os.getenv("AQL_AGENT_RESULT_REFLECTION_ENABLED", "true").lower() == "true"
+    EMPTY_RESULT_REPAIR_ENABLED: bool = os.getenv("AQL_AGENT_EMPTY_RESULT_REPAIR_ENABLED", "true").lower() == "true"
+    HEURISTICS_PATH: str = os.getenv("AQL_AGENT_HEURISTICS_PATH", "aql_agent/heuristics.yaml")
+    HISTORY_ENABLED: bool = os.getenv("AQL_AGENT_HISTORY_ENABLED", "true").lower() == "true"
+    HISTORY_RETAIN_COUNT: int = int(os.getenv("AQL_AGENT_HISTORY_RETAIN_COUNT", "200"))
+    HISTORY_RETAIN_DAYS: int = int(os.getenv("AQL_AGENT_HISTORY_RETAIN_DAYS", "30"))
 
 
 class Config:

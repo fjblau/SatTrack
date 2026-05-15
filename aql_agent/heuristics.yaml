@@ -1,0 +1,33 @@
+shorthand:
+  - term: ["ASAT", "anti-satellite test"]
+    mapping: "fragmentation_events with canonical.event_type == 'ASAT Test'"
+  - term: ["witness chain", "witnessed by"]
+    mapping: "event_witnessed_by edges; for independence, require >= 2 distinct kestrels each with independence_score >= 0.7"
+  - term: ["constellation"]
+    mapping: "use constellation_membership edge with constellation_name field; NOT CONTAINS on satellite_name"
+  - term: ["Kessler", "Kessler syndrome", "cascade"]
+    mapping: "high collision_risk_edges density per object in same shell; orbital_band == 'LEO' and shell altitudes 500-1000km"
+  - term: ["active", "alive", "operational"]
+    mapping: "canonical.status == 'in orbit'"
+  - term: ["dead", "decommissioned", "decayed"]
+    mapping: "canonical.status == 'decayed'"
+  - term: ["book of business", "insurance bookings", "policies"]
+    mapping: "policies collection, status == 'bound' for active book"
+  - term: ["open claims", "outstanding claims"]
+    mapping: "claims collection with status == 'reserved' (NOT 'open' — that value does not exist in this schema)"
+
+defaults:
+  - user_phrase: ["physical size", "dimensions", "how big"]
+    use_field: "canonical.rcs"
+    notes: "radar cross section in m²; the best proxy we have for physical size"
+  - user_phrase: ["mass", "weight", "how heavy"]
+    use_field: "observations.mass_kg"
+  - user_phrase: ["age", "how old"]
+    use_expression: "DATE_DIFF(s.canonical.launch_date, DATE_NOW(), 'y')"
+
+never_do:
+  - "Never CONTAINS on operator names — use entities collection via launched_by edge for canonical names"
+  - "Never query ephemeris_envelopes without UNSET(doc, 'ephemeris_points') in RETURN"
+  - "Never use status == 'active' — the canonical value is 'in orbit'"
+  - "Never use status == 'open' for claims — the canonical value is 'reserved'"
+  - "Never inline user-supplied entity names — always parameterize via bind variables"
