@@ -948,7 +948,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   data={chartData}
                   left={{ key: 'deltaV', label: 'ΔV Residual (m/s)', color: COLORS.deltaV }}
                   right={{ key: 'manConf', label: 'Confidence', color: COLORS.manConf }}
-                  flags={{ key: 'manFlag', trueColor: '#e67e22', trueLabel: 'Maneuver detected', trueOnly: true, style: 'line' }}
+                  flags={{ key: 'manFlag', trueColor: '#ff6b6b', trueLabel: 'Maneuver detected', trueOnly: true, style: 'line' }}
                 />
               )}
 
