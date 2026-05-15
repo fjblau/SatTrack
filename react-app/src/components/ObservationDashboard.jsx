@@ -97,7 +97,7 @@ function TimeSeriesChart({
   left,   // { key, label, color, format? }
   right,  // { key, label, color, format? } | null
   extra,  // [{ key, label, color }] additional left-axis lines
-  flags,  // { key, trueColor, falseColor, trueOnly? } | null  — dots on x-axis; trueOnly skips false dots
+  flags,  // { key, trueColor, falseColor, trueOnly?, style? } | null  — style: 'dot' (default) or 'line'
   height = SVG_H,
 }) {
   const [hovered, setHovered] = useState(null)
@@ -236,8 +236,8 @@ function TimeSeriesChart({
           )
         })}
 
-        {/* Flag dots at bottom */}
-        {flags && data.map((d, i) => {
+        {/* Flag dots at bottom (dot mode only) */}
+        {flags && flags.style !== 'line' && data.map((d, i) => {
           const v = d[flags.key]
           if (v == null) return null
           if (flags.trueOnly && v !== true) return null
@@ -256,6 +256,22 @@ function TimeSeriesChart({
         <line x1={P.left} y1={P.top + innerH} x2={P.left + IW} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
 
         <g clipPath={`url(#clip-${id})`}>
+          {/* Flag vertical lines (line mode) — rendered first so they appear behind data */}
+          {flags && flags.style === 'line' && data.map((d, i) => {
+            const v = d[flags.key]
+            if (v == null) return null
+            if (flags.trueOnly && v !== true) return null
+            const col = v ? (flags.trueColor || '#e74c3c') : (flags.falseColor || '#2ecc71')
+            return (
+              <line
+                key={`fl-${i}`}
+                x1={xPx(i, n).toFixed(1)} y1={P.top}
+                x2={xPx(i, n).toFixed(1)} y2={P.top + innerH}
+                stroke={col} strokeWidth="2" opacity="0.5"
+              />
+            )
+          })}
+
           {/* Area fill for primary series */}
           {hasLeftData && (() => {
             const linePts = data
@@ -359,7 +375,10 @@ function TimeSeriesChart({
 
       {flags && (
         <div className="obs-flag-legend">
-          <span><span className="obs-flag-dot" style={{ background: flags.trueColor || '#e74c3c' }} /> {flags.trueLabel || 'Flag: true'}</span>
+          {flags.style === 'line'
+            ? <span><span className="obs-flag-line" style={{ background: flags.trueColor || '#e74c3c' }} /> {flags.trueLabel || 'Flag: true'}</span>
+            : <span><span className="obs-flag-dot" style={{ background: flags.trueColor || '#e74c3c' }} /> {flags.trueLabel || 'Flag: true'}</span>
+          }
           {!flags.trueOnly && (
             <span><span className="obs-flag-dot" style={{ background: flags.falseColor || '#2ecc71' }} /> {flags.falseLabel || 'Flag: false'}</span>
           )}
@@ -928,7 +947,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   data={chartData}
                   left={{ key: 'deltaV', label: 'ΔV Residual (m/s)', color: COLORS.deltaV }}
                   right={{ key: 'manConf', label: 'Confidence', color: COLORS.manConf }}
-                  flags={{ key: 'manFlag', trueColor: '#e67e22', trueLabel: 'Maneuver detected', trueOnly: true }}
+                  flags={{ key: 'manFlag', trueColor: '#e67e22', trueLabel: 'Maneuver detected', trueOnly: true, style: 'line' }}
                 />
               )}
 
