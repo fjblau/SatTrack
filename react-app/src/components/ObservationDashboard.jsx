@@ -97,7 +97,7 @@ function TimeSeriesChart({
   left,   // { key, label, color, format? }
   right,  // { key, label, color, format? } | null
   extra,  // [{ key, label, color }] additional left-axis lines
-  flags,  // { key, trueColor, falseColor } | null  — dots on x-axis
+  flags,  // { key, trueColor, falseColor, trueOnly? } | null  — dots on x-axis; trueOnly skips false dots
   height = SVG_H,
 }) {
   const [hovered, setHovered] = useState(null)
@@ -236,14 +236,17 @@ function TimeSeriesChart({
           )
         })}
 
-        {/* Flag dots at bottom — only render when true */}
+        {/* Flag dots at bottom */}
         {flags && data.map((d, i) => {
-          if (d[flags.key] !== true) return null
+          const v = d[flags.key]
+          if (v == null) return null
+          if (flags.trueOnly && v !== true) return null
+          const col = v ? (flags.trueColor || '#e74c3c') : (flags.falseColor || '#2ecc71')
           return (
             <circle
               key={i}
               cx={xPx(i, n)} cy={P.top + innerH + 32}
-              r={4} fill={flags.trueColor || '#e74c3c'} opacity={0.9}
+              r={4} fill={col} opacity={0.9}
             />
           )
         })}
@@ -357,6 +360,9 @@ function TimeSeriesChart({
       {flags && (
         <div className="obs-flag-legend">
           <span><span className="obs-flag-dot" style={{ background: flags.trueColor || '#e74c3c' }} /> {flags.trueLabel || 'Flag: true'}</span>
+          {!flags.trueOnly && (
+            <span><span className="obs-flag-dot" style={{ background: flags.falseColor || '#2ecc71' }} /> {flags.falseLabel || 'Flag: false'}</span>
+          )}
         </div>
       )}
     </div>
@@ -597,8 +603,8 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
         pitch: obs.attitude?.pitch_deg,
         yaw: obs.attitude?.yaw_deg,
         stability: obs.attitude?.stability_flag,
-        temp: obs.thermal?.surface_temp_K,
-        tempVariance: obs.thermal?.temp_variance_30d,
+        temp: obs.surface_temp_K ?? obs.thermal?.surface_temp_K,
+        tempVariance: obs.surface_temp_variance_30d ?? obs.thermal?.temp_variance_30d,
         thermalAnomaly: obs.thermal?.anomaly_flag,
         reflectivity: obs.material_signature?.reflectivity_index,
         materialConfidence: obs.material_signature?.material_confidence,
@@ -922,7 +928,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   data={chartData}
                   left={{ key: 'deltaV', label: 'ΔV Residual (m/s)', color: COLORS.deltaV }}
                   right={{ key: 'manConf', label: 'Confidence', color: COLORS.manConf }}
-                  flags={{ key: 'manFlag', trueColor: '#e67e22', falseColor: '#2ecc71', trueLabel: 'Maneuver detected', falseLabel: 'No maneuver' }}
+                  flags={{ key: 'manFlag', trueColor: '#e67e22', trueLabel: 'Maneuver detected', trueOnly: true }}
                 />
               )}
 
