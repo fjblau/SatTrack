@@ -236,7 +236,7 @@ def _build_graph():
         }
 
     def validate_node(state: dict) -> dict:
-        from langchain_core.messages import AIMessage as _AIMsg
+        from langchain_core.messages import AIMessage as _AIMsg, ToolMessage as _ToolMsg
         messages = state.get("messages", [])
         if not messages:
             return state
@@ -279,6 +279,16 @@ def _build_graph():
                 "valid": val_alt.ok,
             }
 
+        submit_tool_call_id = ""
+        for tc in (last_ai.tool_calls or []):
+            name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "")
+            if name == "submit_answer":
+                submit_tool_call_id = (tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)) or ""
+                break
+
+        ack_msg = _ToolMsg(content="Answer received.", tool_call_id=submit_tool_call_id)
+        messages_acked = messages + [ack_msg]
+
         updated = {
             **state,
             "aql": formatted_aql,
@@ -289,6 +299,7 @@ def _build_graph():
             "alternative": alternative,
             "validator_errors": val_result.errors,
             "validator_warnings": val_result.warnings,
+            "messages": messages_acked,
         }
 
         if val_result.errors:
@@ -296,7 +307,7 @@ def _build_graph():
             fix_msg = HumanMessage(
                 content=f"Validator found errors in your AQL — please fix them and submit again.\n\nErrors: {error_summary}\n\nYour AQL was:\n{formatted_aql}"
             )
-            updated["messages"] = messages + [fix_msg]
+            updated["messages"] = messages_acked + [fix_msg]
 
         return updated
 
