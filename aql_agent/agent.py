@@ -221,7 +221,8 @@ def _build_graph():
     def tools_node(state: dict) -> dict:
         messages = state.get("messages", [])
         result = tool_node.invoke({"messages": messages})
-        new_msgs = result.get("messages", messages)
+        tool_msgs = result.get("messages", [])
+        new_msgs = messages + tool_msgs
 
         trace = state.get("trace", [])
         return {
