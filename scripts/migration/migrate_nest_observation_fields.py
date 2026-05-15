@@ -62,6 +62,32 @@ _FLAT_FIELDS = [
     "perigee_drift_km_per_day", "estimated_perigee_km",
 ]
 
+MANEUVER_FLAG_THRESHOLD_MS = 0.5
+
+_BACKFILL_FLAG_COUNT_QUERY = """
+RETURN COUNT(
+    FOR obs IN @@col
+        FILTER obs.maneuver_indicator != null
+            AND obs.maneuver_indicator.maneuver_flag == null
+            AND obs.maneuver_indicator.delta_v_residual_ms != null
+        RETURN 1
+)
+"""
+
+_BACKFILL_FLAG_QUERY = """
+FOR obs IN @@col
+    FILTER obs.maneuver_indicator != null
+        AND obs.maneuver_indicator.maneuver_flag == null
+        AND obs.maneuver_indicator.delta_v_residual_ms != null
+    UPDATE obs WITH {
+        maneuver_indicator: MERGE(obs.maneuver_indicator, {
+            maneuver_flag: obs.maneuver_indicator.delta_v_residual_ms >= @threshold
+        })
+    } IN @@col
+    COLLECT WITH COUNT INTO updated
+    RETURN updated
+"""
+
 _FILTER_CLAUSE = " OR ".join(f"obs.{f} != null" for f in _FLAT_FIELDS)
 
 _COUNT_QUERY = f"""
@@ -147,12 +173,24 @@ def run(dry_run: bool = False, yes: bool = False) -> bool:
 
     logger.info(f"Observation documents with flat (un-nested) sensor fields: {affected}")
 
-    if affected == 0:
-        logger.info("Nothing to migrate — all documents already use nested sub-objects.")
+    if dry_run:
+        flag_count_cursor = db.aql.execute(_BACKFILL_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
+        needs_flag = list(flag_count_cursor)[0] or 0
+        logger.info(f"[DRY RUN] Would nest fields in {affected} documents and backfill maneuver_flag on {needs_flag} documents. No changes made.")
         return True
 
-    if dry_run:
-        logger.info(f"[DRY RUN] Would migrate {affected} documents. No changes made.")
+    if affected == 0:
+        logger.info("No flat fields to migrate — checking maneuver_flag backfill only.")
+        flag_bind = {"@col": COLLECTION_OBSERVATIONS, "threshold": MANEUVER_FLAG_THRESHOLD_MS}
+        flag_count_cursor = db.aql.execute(_BACKFILL_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
+        needs_flag = list(flag_count_cursor)[0] or 0
+        if needs_flag > 0:
+            logger.info(f"Backfilling maneuver_flag for {needs_flag} documents (threshold: {MANEUVER_FLAG_THRESHOLD_MS} m/s)...")
+            flag_cursor = db.aql.execute(_BACKFILL_FLAG_QUERY, bind_vars=flag_bind)
+            backfilled = list(flag_cursor)[0] or 0
+            logger.info(f"Backfilled maneuver_flag on {backfilled} documents.")
+        else:
+            logger.info("maneuver_flag already present on all maneuver_indicator documents. Nothing to do.")
         return True
 
     if yes:
@@ -181,6 +219,18 @@ def run(dry_run: bool = False, yes: bool = False) -> bool:
         return False
 
     logger.info("Migration complete. All observations use nested sensor sub-objects.")
+
+    flag_bind = {"@col": COLLECTION_OBSERVATIONS, "threshold": MANEUVER_FLAG_THRESHOLD_MS}
+    flag_count_cursor = db.aql.execute(_BACKFILL_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
+    needs_flag = list(flag_count_cursor)[0] or 0
+    if needs_flag > 0:
+        logger.info(f"Backfilling maneuver_flag for {needs_flag} documents missing it (threshold: {MANEUVER_FLAG_THRESHOLD_MS} m/s)...")
+        flag_cursor = db.aql.execute(_BACKFILL_FLAG_QUERY, bind_vars=flag_bind)
+        backfilled = list(flag_cursor)[0] or 0
+        logger.info(f"Backfilled maneuver_flag on {backfilled} documents.")
+    else:
+        logger.info("maneuver_flag already present on all maneuver_indicator documents.")
+
     return True
 
 
