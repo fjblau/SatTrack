@@ -622,6 +622,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
         pitch: obs.attitude?.pitch_deg,
         yaw: obs.attitude?.yaw_deg,
         stability: obs.attitude?.stability_flag,
+        isUnstable: obs.attitude?.stability_flag != null ? obs.attitude.stability_flag !== 'nominal' : null,
         temp: obs.surface_temp_K ?? obs.thermal?.surface_temp_K,
         tempVariance: obs.surface_temp_variance_30d ?? obs.thermal?.temp_variance_30d,
         thermalAnomaly: obs.thermal?.anomaly_flag,
@@ -897,7 +898,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                     { key: 'yaw', label: 'Yaw (°)', color: COLORS.yaw },
                   ]}
                   right={null}
-                  flags={{ key: 'stability', trueColor: '#27ae60', falseColor: '#e74c3c', trueLabel: 'Stable', falseLabel: 'Unstable' }}
+                  flags={{ key: 'isUnstable', trueColor: '#e74c3c', trueLabel: 'Unstable', trueOnly: true, style: 'line' }}
                 />
               )}
 
@@ -910,7 +911,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   data={chartData}
                   left={{ key: 'temp', label: 'Surface Temp (K)', color: COLORS.temp }}
                   right={{ key: 'tempVariance', label: 'Variance 30d', color: COLORS.tempVariance }}
-                  flags={{ key: 'thermalAnomaly', trueColor: '#e74c3c', falseColor: '#2ecc71', trueLabel: 'Anomaly', falseLabel: 'Normal' }}
+                  flags={{ key: 'thermalAnomaly', trueColor: '#e74c3c', trueLabel: 'Anomaly', trueOnly: true, style: 'line' }}
                 />
               )}
 
