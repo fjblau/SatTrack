@@ -236,19 +236,29 @@ function TimeSeriesChart({
           )
         })}
 
-        {/* Flag dots at bottom */}
-        {flags && data.map((d, i) => {
-          const v = d[flags.key]
-          if (v == null) return null
-          const col = v ? (flags.trueColor || '#e74c3c') : (flags.falseColor || '#2ecc71')
-          return (
-            <circle
-              key={i}
-              cx={xPx(i, n)} cy={P.top + innerH + 32}
-              r={4} fill={col} opacity={0.8}
-            />
-          )
-        })}
+        {/* Flag dots at bottom — false (green) rendered first, true (orange) on top */}
+        {flags && <>
+          {data.map((d, i) => {
+            if (d[flags.key] !== false) return null
+            return (
+              <circle
+                key={i}
+                cx={xPx(i, n)} cy={P.top + innerH + 32}
+                r={4} fill={flags.falseColor || '#2ecc71'} opacity={0.8}
+              />
+            )
+          })}
+          {data.map((d, i) => {
+            if (d[flags.key] !== true) return null
+            return (
+              <circle
+                key={i}
+                cx={xPx(i, n)} cy={P.top + innerH + 32}
+                r={4} fill={flags.trueColor || '#e74c3c'} opacity={0.8}
+              />
+            )
+          })}
+        </>}
 
         {/* Axes */}
         <line x1={P.left} y1={P.top} x2={P.left} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
