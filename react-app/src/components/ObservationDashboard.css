@@ -486,6 +486,14 @@
   display: inline-block;
 }
 
+.obs-flag-line {
+  width: 3px;
+  height: 14px;
+  border-radius: 1px;
+  display: inline-block;
+  opacity: 0.8;
+}
+
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 700px) {
   .obs-charts-grid {
