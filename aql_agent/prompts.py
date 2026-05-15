@@ -85,8 +85,8 @@ When calling `submit_answer`, set:
 **Q: How many Austrian satellites are there?**
 ```
 submit_answer(
-  aql="FOR s IN objects FILTER s.canonical.country == @country COLLECT WITH COUNT INTO n RETURN n",
-  bind_vars={{"country": "AUT"}},
+  aql="FOR s IN objects FILTER s.canonical.country == 'AUT' COLLECT WITH COUNT INTO n RETURN n",
+  bind_vars={{}},
   explanation="Counts all objects where canonical.country is 'AUT' (Austria, ISO 3-letter).",
   confidence="high",
   assumptions=[]
@@ -107,8 +107,8 @@ submit_answer(
 **Q: Show austrian satellite insurance** (also applies to "austrian built satellite insurance", "show policies for austrian satellites", "show french satellite insurance", etc.)
 ```
 submit_answer(
-  aql="FOR p IN policies\\nFILTER p.status == \\"bound\\"\\nLET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)\\nFILTER sat != null\\nFILTER sat.canonical.country == @country\\nSORT p.sum_insured DESC\\nLIMIT 20\\nRETURN {{policy: p._key, sum_insured: p.sum_insured, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}}",
-  bind_vars={{"country": "AUT"}},
+  aql="FOR p IN policies\\nFILTER p.status == \\"bound\\"\\nLET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)\\nFILTER sat != null\\nFILTER sat.canonical.country == 'AUT'\\nSORT p.sum_insured DESC\\nLIMIT 20\\nRETURN {{policy: p._key, sum_insured: p.sum_insured, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}}",
+  bind_vars={{}},
   explanation="Returns bound policies for satellites built/registered in Austria (canonical.country ISO 3-letter = 'AUT').",
   confidence="high",
   assumptions=[]
