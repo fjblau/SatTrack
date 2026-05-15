@@ -185,3 +185,130 @@ def test_adversarial_injection():
             db=db_mock,
         )
     assert any(e["code"] == "WRITE_OPERATION" for e in result.errors)
+
+
+def test_r1_write_update():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate("FOR s IN objects UPDATE s WITH {x: 1} IN objects", {}, db=db_mock)
+    assert not result.ok
+    assert any(e["code"] == "WRITE_OPERATION" for e in result.errors)
+
+
+def test_r1_write_replace():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate("FOR s IN objects REPLACE s WITH {x: 1} IN objects", {}, db=db_mock)
+    assert not result.ok
+    assert any(e["code"] == "WRITE_OPERATION" for e in result.errors)
+
+
+def test_r2_syntax_error_from_db():
+    db_mock, names = _mock_db()
+    db_mock.aql.validate.side_effect = Exception("parse error near token X")
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate("FOR s IN objects LIMIT 10 RETURN s", {}, db=db_mock)
+    assert not result.ok
+    assert any(e["code"] == "SYNTAX_ERROR" for e in result.errors)
+
+
+def test_r4_unknown_id_prefix():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate(
+            "RETURN DOCUMENT('phantom_collection/12345')",
+            {},
+            db=db_mock,
+        )
+    assert any(e["code"] == "UNKNOWN_ID_PREFIX" for e in result.errors)
+
+
+def test_r4_known_id_prefix_passes():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate(
+            "RETURN DOCUMENT('objects/12345')",
+            {},
+            db=db_mock,
+        )
+    assert not any(e["code"] == "UNKNOWN_ID_PREFIX" for e in result.errors)
+
+
+def test_r7_collection_bind_var_with_at_prefix():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate(
+            "FOR s IN @@coll LIMIT 10 RETURN s",
+            {"@coll": "objects"},
+            db=db_mock,
+        )
+    assert not any(e["code"] == "MISSING_BIND_VAR" for e in result.errors)
+
+
+def test_r7_collection_bind_var_missing():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate(
+            "FOR s IN @@coll LIMIT 10 RETURN s",
+            {},
+            db=db_mock,
+        )
+    assert any(e["code"] == "MISSING_BIND_VAR" for e in result.errors)
+
+
+def test_r5_no_missing_limit_warning_with_aggregate():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate(
+            "FOR s IN objects RETURN COUNT(s.field)",
+            {},
+            db=db_mock,
+        )
+    assert not any(w["code"] == "MISSING_LIMIT" for w in result.warnings)
+
+
+def test_no_db_skips_collection_validation():
+    result = validate("FOR s IN ghost_collection LIMIT 10 RETURN s", {}, db=None)
+    assert not any(e["code"] == "UNKNOWN_COLLECTION" for e in result.errors)
+
+
+def test_no_db_skips_syntax_validation():
+    result = validate("totally invalid @@@@", {}, db=None)
+    assert not any(e["code"] == "SYNTAX_ERROR" for e in result.errors)
+
+
+def test_validation_result_ok_true_for_clean_query():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate(
+            "FOR s IN objects FILTER s.name == @name LIMIT 10 RETURN s",
+            {"name": "ISS"},
+            db=db_mock,
+        )
+    assert result.ok
+    assert result.errors == []
+
+
+def test_multiple_errors_accumulated():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names):
+        result = validate(
+            "INSERT {x: 1} INTO objects RETURN objects LIMIT 10",
+            {},
+            db=db_mock,
+        )
+    error_codes = [e["code"] for e in result.errors]
+    assert "WRITE_OPERATION" in error_codes
+    assert len(result.errors) >= 1
+
+
+def test_traversal_collection_extracted_and_validated():
+    db_mock, names = _mock_db()
+    with patch("aql_agent.validator.get_all_collection_names", return_value=names), \
+         patch("aql_agent.validator.did_you_mean", return_value=[]):
+        result = validate(
+            "FOR v IN OUTBOUND 'objects/1' ghost_edges LIMIT 10 RETURN v",
+            {},
+            db=db_mock,
+        )
+    assert any(e["code"] == "UNKNOWN_COLLECTION" for e in result.errors)

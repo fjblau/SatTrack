@@ -114,3 +114,88 @@ def test_17_4_heuristics_loaded():
         assert "ASAT" in text or "anti-satellite" in text.lower()
     finally:
         os.unlink(tmp_path)
+
+
+def test_find_close_match_exact():
+    from aql_agent.smartness import _find_close_match
+    result = _find_close_match("Starlink", ["Starlink", "OneWeb", "Kuiper"])
+    assert result == "Starlink"
+
+
+def test_find_close_match_case_insensitive():
+    from aql_agent.smartness import _find_close_match
+    result = _find_close_match("starlink", ["Starlink", "OneWeb"])
+    assert result == "Starlink"
+
+
+def test_find_close_match_close_typo():
+    from aql_agent.smartness import _find_close_match
+    result = _find_close_match("Starlnk", ["Starlink", "OneWeb", "Kuiper"])
+    assert result == "Starlink"
+
+
+def test_find_close_match_substring():
+    from aql_agent.smartness import _find_close_match
+    result = _find_close_match("star", ["Starlink", "OneWeb"])
+    assert result == "Starlink"
+
+
+def test_find_close_match_no_match():
+    from aql_agent.smartness import _find_close_match
+    result = _find_close_match("xyzzy", ["Starlink", "OneWeb", "Kuiper"])
+    assert result is None
+
+
+def test_aggregate_zero_scalar_row():
+    trigger = check_reflection_trigger(
+        rows=[0],
+        row_count=1,
+        aql="FOR s IN objects COLLECT WITH COUNT INTO n RETURN n",
+    )
+    assert trigger == "AGGREGATE_ZERO"
+
+
+def test_null_heavy_boundary_50_percent_is_not_triggered():
+    rows = [{"a": None, "b": None} for _ in range(5)] + [{"a": 1, "b": 2} for _ in range(5)]
+    trigger = check_reflection_trigger(rows=rows, row_count=10, aql="FOR s IN objects LIMIT 20 RETURN s")
+    assert trigger != "NULL_HEAVY"
+
+
+def test_empty_result_for_aggregate_is_not_empty_trigger():
+    trigger = check_reflection_trigger(
+        rows=[{"count": 0}],
+        row_count=1,
+        aql="FOR s IN objects COLLECT WITH COUNT INTO n RETURN {count: n}",
+    )
+    assert trigger != "EMPTY_RESULT"
+
+
+def test_limit_brushed_at_exactly_80_percent():
+    rows = [{"x": i} for i in range(16)]
+    trigger = check_reflection_trigger(rows=rows, row_count=16, aql="FOR s IN objects LIMIT 20 RETURN s")
+    assert trigger == "LIMIT_BRUSHED"
+
+
+def test_limit_brushed_at_79_percent_not_triggered():
+    rows = [{"x": i} for i in range(15)]
+    trigger = check_reflection_trigger(rows=rows, row_count=15, aql="FOR s IN objects LIMIT 20 RETURN s")
+    assert trigger != "LIMIT_BRUSHED"
+
+
+def test_try_empty_result_repair_no_db_returns_none():
+    import sys
+    state = {
+        "aql": "FOR s IN objects FILTER s.canonical.country_of_origin == @country LIMIT 10 RETURN s",
+        "bind_vars": {"country": "America"},
+        "question": "show American satellites",
+    }
+    original = sys.modules.get("database.connection")
+    sys.modules["database.connection"] = None
+    try:
+        result = try_empty_result_repair(state=state, result_count=0)
+    finally:
+        if original is None:
+            sys.modules.pop("database.connection", None)
+        else:
+            sys.modules["database.connection"] = original
+    assert result is None

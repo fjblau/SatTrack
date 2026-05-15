@@ -145,3 +145,117 @@ def test_toggle_star_not_found():
         result = history.toggle_star("missing-key", user_id="alice", starred=True)
 
     assert result is None
+
+
+def test_toggle_star_no_db_returns_none():
+    with patch("aql_agent.history._get_db", return_value=None):
+        result = history.toggle_star("k1", user_id="alice", starred=True)
+    assert result is None
+
+
+def test_get_history_starred_only():
+    mock_db = MagicMock()
+    mock_db.has_collection.return_value = True
+    mock_cursor = MagicMock()
+    items = [
+        {"key": "k1", "ts": "2026-05-14T10:00:00Z", "question": "starred Q", "aql": "", "row_count": 1, "outcome": "success", "confidence": "high", "starred": True},
+    ]
+    mock_cursor.__iter__ = MagicMock(return_value=iter(items))
+    mock_db.aql.execute.return_value = mock_cursor
+
+    with patch("aql_agent.history._get_db", return_value=mock_db):
+        result = history.get_history(user_id="alice", limit=5, starred_only=True)
+
+    assert len(result) == 1
+    assert result[0]["starred"] is True
+
+    called_aql = mock_db.aql.execute.call_args[0][0]
+    assert "starred" in called_aql
+
+
+def test_get_history_no_db_returns_empty():
+    with patch("aql_agent.history._get_db", return_value=None):
+        result = history.get_history(user_id="alice")
+    assert result == []
+
+
+def test_record_history_outcome_clarification_requested():
+    mock_db = MagicMock()
+    mock_db.has_collection.return_value = True
+    mock_coll = MagicMock()
+    mock_db.collection.return_value = mock_coll
+
+    state = _make_state(clarifying_question="Which satellite?", clarification="")
+    with patch("aql_agent.history._get_db", return_value=mock_db):
+        history.record_history(state, user_id="alice")
+
+    inserted = mock_coll.insert.call_args[0][0]
+    assert inserted["outcome"] == "clarification_requested"
+
+
+def test_record_history_outcome_execution_failed():
+    mock_db = MagicMock()
+    mock_db.has_collection.return_value = True
+    mock_coll = MagicMock()
+    mock_db.collection.return_value = mock_coll
+
+    state = _make_state(error="ArangoDB connection refused", clarifying_question="")
+    with patch("aql_agent.history._get_db", return_value=mock_db):
+        history.record_history(state, user_id="alice")
+
+    inserted = mock_coll.insert.call_args[0][0]
+    assert inserted["outcome"] == "execution_failed"
+
+
+def test_record_history_outcome_validator_failed():
+    mock_db = MagicMock()
+    mock_db.has_collection.return_value = True
+    mock_coll = MagicMock()
+    mock_db.collection.return_value = mock_coll
+
+    state = _make_state(error="", clarifying_question="", validator_errors=[{"code": "WRITE_OPERATION", "message": "not allowed"}])
+    with patch("aql_agent.history._get_db", return_value=mock_db):
+        history.record_history(state, user_id="alice")
+
+    inserted = mock_coll.insert.call_args[0][0]
+    assert inserted["outcome"] == "validator_failed"
+
+
+def test_record_history_duration_ms_is_non_negative():
+    mock_db = MagicMock()
+    mock_db.has_collection.return_value = True
+    mock_coll = MagicMock()
+    mock_db.collection.return_value = mock_coll
+
+    state = _make_state(started_at=datetime.utcnow())
+    with patch("aql_agent.history._get_db", return_value=mock_db):
+        history.record_history(state, user_id="alice")
+
+    inserted = mock_coll.insert.call_args[0][0]
+    assert inserted["duration_ms"] >= 0
+
+
+def test_record_history_key_is_uuid():
+    import re
+    mock_db = MagicMock()
+    mock_db.has_collection.return_value = True
+    mock_coll = MagicMock()
+    mock_db.collection.return_value = mock_coll
+
+    with patch("aql_agent.history._get_db", return_value=mock_db):
+        key = history.record_history(_make_state(), user_id="alice")
+
+    assert re.match(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", key)
+
+
+def test_ensure_collection_creates_if_missing():
+    mock_db = MagicMock()
+    mock_db.has_collection.return_value = False
+    mock_coll = MagicMock()
+    mock_db.collection.return_value = mock_coll
+
+    state = _make_state()
+    with patch("aql_agent.history._get_db", return_value=mock_db):
+        history.record_history(state, user_id="alice")
+
+    mock_db.create_collection.assert_called_once_with(history.COLLECTION_NAME)
