@@ -141,7 +141,7 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
   const relative_velocity_ms = latest.relative_velocity_ms ?? prox.relative_velocity_ms ?? null
   const delta_v_residual_ms = latest.delta_v_residual_ms ?? man.delta_v_residual_ms ?? null
   const maneuver_confidence = latest.maneuver_confidence ?? man.maneuver_confidence ?? man.confidence ?? null
-  const maneuver_flag = latest.maneuver_flag ?? man.flag ?? null
+  const maneuver_flag = latest.maneuver_flag ?? man.maneuver_flag ?? null
   const perigee_drift_km_per_day = latest.perigee_drift_km_per_day ?? decay.perigee_drift_km_per_day ?? null
   const estimated_perigee_km = latest.estimated_perigee_km ?? decay.estimated_perigee_km ?? null
 
