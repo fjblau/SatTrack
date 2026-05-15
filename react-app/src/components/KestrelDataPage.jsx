@@ -438,9 +438,9 @@ function ObservationCard({ obs }) {
   const sections = [
     { label: 'Attitude', data: obs.attitude, fields: ['roll_deg', 'pitch_deg', 'yaw_deg', 'stability_flag'] },
     { label: 'Thermal', data: obs.thermal, fields: ['surface_temp_K', 'temp_variance_30d', 'anomaly_flag'] },
-    { label: 'Material', data: obs.material_signature, fields: ['reflectivity_index', 'inferred_material', 'confidence'] },
+    { label: 'Material', data: obs.material_signature, fields: ['reflectivity_index', 'inferred_material', 'material_confidence'] },
     { label: 'Proximity', data: obs.proximity_state, fields: ['range_km', 'relative_velocity_ms'] },
-    { label: 'Maneuver', data: obs.maneuver_indicator, fields: ['delta_v_residual_ms', 'confidence', 'flag'] },
+    { label: 'Maneuver', data: obs.maneuver_indicator, fields: ['delta_v_residual_ms', 'maneuver_confidence', 'maneuver_flag'] },
     { label: 'Orbital Decay', data: obs.orbital_decay_indicator, fields: ['perigee_drift_km_per_day', 'estimated_perigee_km'] },
   ]
 
