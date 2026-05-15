@@ -83,11 +83,12 @@ When calling `submit_answer`, set:
 
 **Q: How many Austrian satellites are there?**
 ```
-list_collections()  # if schema not known
+distinct_values("objects", "canonical.country_of_origin", contains="austria")
+# inspect result to find exact stored value, e.g. "AT" or "Austria"
 submit_answer(
-  aql="FOR s IN objects FILTER s.canonical.country_of_origin == 'Austria' COLLECT WITH COUNT INTO n RETURN n",
-  bind_vars={{}},
-  explanation="Counts all objects with country_of_origin Austria.",
+  aql="FOR s IN objects FILTER s.canonical.country_of_origin == @country COLLECT WITH COUNT INTO n RETURN n",
+  bind_vars={{"country": "<exact value from distinct_values>"}},
+  explanation="Counts all objects with country_of_origin matching Austria.",
   confidence="high",
   assumptions=[]
 )
@@ -99,6 +100,19 @@ submit_answer(
   aql="FOR p IN policies\\nFILTER p.status == \\"bound\\"\\nLET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)\\nFILTER sat != null\\nFILTER CONTAINS(LOWER(sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier || \\"\\"), @name_part)\\nSORT p.sum_insured DESC\\nLIMIT 20\\nRETURN {{policy: p._key, sum_insured: p.sum_insured, satellite: sat.canonical.satellite_name || sat.identifier}}",
   bind_vars={{"name_part": "starlink"}},
   explanation="Returns bound policies for satellites whose name contains 'starlink'.",
+  confidence="high",
+  assumptions=[]
+)
+```
+
+**Q: Show austrian satellite insurance**
+```
+distinct_values("objects", "canonical.country_of_origin", contains="austria")
+# inspect result to find exact stored value, e.g. "AT" or "Austria"
+submit_answer(
+  aql="FOR p IN policies\\nFILTER p.status == \\"bound\\"\\nLET sat = FIRST(FOR s IN objects FILTER s._id == p.satellite_id RETURN s)\\nFILTER sat != null\\nFILTER sat.canonical.country_of_origin == @country\\nSORT p.sum_insured DESC\\nLIMIT 20\\nRETURN {{policy: p._key, sum_insured: p.sum_insured, satellite: sat.canonical.satellite_name || sat.canonical.object_name || sat.identifier}}",
+  bind_vars={{"country": "<exact value from distinct_values>"}},
+  explanation="Returns bound policies for satellites with country_of_origin matching Austria.",
   confidence="high",
   assumptions=[]
 )

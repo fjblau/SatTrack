@@ -475,13 +475,22 @@ def run_aql_agent(
         logger.error("AQL agent graph error: %s", exc, exc_info=True)
         final = {**initial, "error": str(exc)}
 
+    aql_out = final.get("aql", "")
+    error_out = final.get("error", "")
+    clarifying_out = final.get("clarifying_question", "")
+    if not aql_out and not error_out and not clarifying_out:
+        error_out = (
+            "The agent could not produce an AQL query. "
+            "Try rephrasing, or check that the OPENAI_API_KEY is set and the model quota is not exhausted."
+        )
+
     response = {
-        "aql": final.get("aql", ""),
+        "aql": aql_out,
         "bind_vars": final.get("bind_vars", {}),
         "result": final.get("result", []),
         "explanation": final.get("explanation", ""),
-        "error": final.get("error", ""),
-        "clarifying_question": final.get("clarifying_question", ""),
+        "error": error_out,
+        "clarifying_question": clarifying_out,
         "log_id": log_id,
         "trace": [
             {"name": tc.get("name", ""), "ok": True}

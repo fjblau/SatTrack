@@ -31,3 +31,4 @@ never_do:
   - "Never use status == 'active' — the canonical value is 'in orbit'"
   - "Never use status == 'open' for claims — the canonical value is 'reserved'"
   - "Never inline user-supplied entity names — always parameterize via bind variables"
+  - "Never hardcode country names like 'Austria', 'France', 'Germany' in a filter — stored values vary by source (e.g. 'AT', 'F', 'D'). Always call distinct_values(objects, 'canonical.country_of_origin', contains=<partial>) first to find the exact stored value, then use it as a bind variable"
