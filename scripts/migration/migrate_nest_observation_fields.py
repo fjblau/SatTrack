@@ -64,6 +64,37 @@ _FLAT_FIELDS = [
 
 MANEUVER_FLAG_THRESHOLD_MS = 0.5
 
+_MANEUVER_FLAG_TRUE_VALUES = ["suspected_maneuver", "maneuver_detected", "detected"]
+_MANEUVER_FLAG_FALSE_VALUES = ["no_maneuver", "nominal"]
+
+_COERCE_STRING_FLAG_COUNT_QUERY = """
+RETURN COUNT(
+    FOR obs IN @@col
+        FILTER obs.maneuver_indicator != null
+            AND IS_STRING(obs.maneuver_indicator.maneuver_flag)
+        RETURN 1
+)
+"""
+
+_COERCE_STRING_FLAG_QUERY = """
+FOR obs IN @@col
+    FILTER obs.maneuver_indicator != null
+        AND IS_STRING(obs.maneuver_indicator.maneuver_flag)
+    LET flag_str = LOWER(obs.maneuver_indicator.maneuver_flag)
+    LET flag_bool = flag_str IN @true_vals ? true
+                  : flag_str IN @false_vals ? false
+                  : (obs.maneuver_indicator.delta_v_residual_ms != null
+                     ? obs.maneuver_indicator.delta_v_residual_ms >= @threshold
+                     : false)
+    UPDATE obs WITH {
+        maneuver_indicator: MERGE(obs.maneuver_indicator, {
+            maneuver_flag: flag_bool
+        })
+    } IN @@col
+    COLLECT WITH COUNT INTO updated
+    RETURN updated
+"""
+
 _BACKFILL_FLAG_COUNT_QUERY = """
 RETURN COUNT(
     FOR obs IN @@col
@@ -173,15 +204,39 @@ def run(dry_run: bool = False, yes: bool = False) -> bool:
 
     logger.info(f"Observation documents with flat (un-nested) sensor fields: {affected}")
 
+    coerce_bind = {
+        "@col": COLLECTION_OBSERVATIONS,
+        "true_vals": _MANEUVER_FLAG_TRUE_VALUES,
+        "false_vals": _MANEUVER_FLAG_FALSE_VALUES,
+        "threshold": MANEUVER_FLAG_THRESHOLD_MS,
+    }
+    flag_bind = {"@col": COLLECTION_OBSERVATIONS, "threshold": MANEUVER_FLAG_THRESHOLD_MS}
+
     if dry_run:
         flag_count_cursor = db.aql.execute(_BACKFILL_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
         needs_flag = list(flag_count_cursor)[0] or 0
-        logger.info(f"[DRY RUN] Would nest fields in {affected} documents and backfill maneuver_flag on {needs_flag} documents. No changes made.")
+        coerce_count_cursor = db.aql.execute(_COERCE_STRING_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
+        needs_coerce = list(coerce_count_cursor)[0] or 0
+        logger.info(
+            f"[DRY RUN] Would nest fields in {affected} documents, "
+            f"backfill maneuver_flag on {needs_flag} documents, "
+            f"coerce string maneuver_flag on {needs_coerce} documents. No changes made."
+        )
         return True
 
     if affected == 0:
-        logger.info("No flat fields to migrate — checking maneuver_flag backfill only.")
-        flag_bind = {"@col": COLLECTION_OBSERVATIONS, "threshold": MANEUVER_FLAG_THRESHOLD_MS}
+        logger.info("No flat fields to migrate — checking maneuver_flag passes only.")
+
+        coerce_count_cursor = db.aql.execute(_COERCE_STRING_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
+        needs_coerce = list(coerce_count_cursor)[0] or 0
+        if needs_coerce > 0:
+            logger.info(f"Coercing string maneuver_flag to boolean on {needs_coerce} documents...")
+            coerce_cursor = db.aql.execute(_COERCE_STRING_FLAG_QUERY, bind_vars=coerce_bind)
+            coerced = list(coerce_cursor)[0] or 0
+            logger.info(f"Coerced maneuver_flag on {coerced} documents.")
+        else:
+            logger.info("No string maneuver_flag values found.")
+
         flag_count_cursor = db.aql.execute(_BACKFILL_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
         needs_flag = list(flag_count_cursor)[0] or 0
         if needs_flag > 0:
@@ -189,8 +244,8 @@ def run(dry_run: bool = False, yes: bool = False) -> bool:
             flag_cursor = db.aql.execute(_BACKFILL_FLAG_QUERY, bind_vars=flag_bind)
             backfilled = list(flag_cursor)[0] or 0
             logger.info(f"Backfilled maneuver_flag on {backfilled} documents.")
-        else:
-            logger.info("maneuver_flag already present on all maneuver_indicator documents. Nothing to do.")
+        elif needs_coerce == 0:
+            logger.info("maneuver_flag already correct on all maneuver_indicator documents. Nothing to do.")
         return True
 
     if yes:
@@ -220,7 +275,16 @@ def run(dry_run: bool = False, yes: bool = False) -> bool:
 
     logger.info("Migration complete. All observations use nested sensor sub-objects.")
 
-    flag_bind = {"@col": COLLECTION_OBSERVATIONS, "threshold": MANEUVER_FLAG_THRESHOLD_MS}
+    coerce_count_cursor = db.aql.execute(_COERCE_STRING_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
+    needs_coerce = list(coerce_count_cursor)[0] or 0
+    if needs_coerce > 0:
+        logger.info(f"Coercing string maneuver_flag to boolean on {needs_coerce} documents...")
+        coerce_cursor = db.aql.execute(_COERCE_STRING_FLAG_QUERY, bind_vars=coerce_bind)
+        coerced = list(coerce_cursor)[0] or 0
+        logger.info(f"Coerced maneuver_flag on {coerced} documents.")
+    else:
+        logger.info("No string maneuver_flag values to coerce.")
+
     flag_count_cursor = db.aql.execute(_BACKFILL_FLAG_COUNT_QUERY, bind_vars={"@col": COLLECTION_OBSERVATIONS})
     needs_flag = list(flag_count_cursor)[0] or 0
     if needs_flag > 0:
