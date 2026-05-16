@@ -81,7 +81,8 @@
 
 .iagg-globe-wrapper {
   position: relative;
-  width: 100%;
+  width: 50%;
+  margin: 0 auto;
   aspect-ratio: 1 / 1;
   min-height: 0;
 }
@@ -461,7 +462,8 @@
 }
 
 .iagg-sg-canvas {
-  width: 100%;
+  width: 50%;
+  margin: 0 auto;
   aspect-ratio: 1 / 1;
   background: #0f172a;
   overflow: hidden;
