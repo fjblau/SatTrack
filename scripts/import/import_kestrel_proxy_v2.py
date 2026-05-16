@@ -43,6 +43,15 @@ from database.connection import COLLECTION_NAME, COLLECTION_OBSERVATIONS
 from database.observation_graph_ops import create_edges_for_observation
 
 
+def _import_compute_locations():
+    import importlib.util
+    _path = Path(__file__).parent.parent / "maintenance" / "compute_observation_locations.py"
+    _spec = importlib.util.spec_from_file_location("compute_observation_locations", _path)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    return _mod.compute_locations_for_norad_ids
+
+
 SUMMARY_SHEET = "Summary"
 SOURCE_VALUE = "kestrel_proxy_v2"
 
@@ -110,6 +119,23 @@ def _parse_maneuver_flag(value):
     return _parse_bool(value)
 
 
+_STABILITY_FLAG_TRUE = {"anomalous", "unstable", "degraded"}
+_STABILITY_FLAG_FALSE = {"nominal", "stable"}
+
+
+def _parse_stability_flag(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    s = str(value).strip().lower()
+    if s in _STABILITY_FLAG_TRUE:
+        return True
+    if s in _STABILITY_FLAG_FALSE:
+        return False
+    return _parse_bool(value)
+
+
 def read_sheets(xlsx_path: str) -> list[dict]:
     """
     Read all non-Summary sheets from the Excel file and return a flat list of
@@ -143,7 +169,10 @@ def read_sheets(xlsx_path: str) -> list[dict]:
             if thermal_flag is not None:
                 doc["thermal"] = {"anomaly_flag": thermal_flag}
 
-            attitude = {f: _cast_value(raw.get(f)) for f in ATTITUDE_FIELDS if _cast_value(raw.get(f)) is not None}
+            attitude = {f: _cast_value(raw.get(f)) for f in ATTITUDE_FIELDS if f != "stability_flag" and _cast_value(raw.get(f)) is not None}
+            stability_flag = _parse_stability_flag(raw.get("stability_flag"))
+            if stability_flag is not None:
+                attitude["stability_flag"] = stability_flag
             if attitude:
                 doc["attitude"] = attitude
 
@@ -313,7 +342,7 @@ def _flush_batch(obs_col, batch: list[dict], create_edges: bool):
                 pass
 
 
-def run(xlsx_path: str, batch_size: int = 500, dry_run: bool = False, skip_edges: bool = False):
+def run(xlsx_path: str, batch_size: int = 500, dry_run: bool = False, skip_edges: bool = False, skip_location: bool = False):
     print(f"Kestrel Proxy v2 Import — {'DRY RUN' if dry_run else 'LIVE'}", flush=True)
     print(f"Source file: {xlsx_path}", flush=True)
     print(flush=True)
@@ -347,6 +376,20 @@ def run(xlsx_path: str, batch_size: int = 500, dry_run: bool = False, skip_edges
     print(f"  Errors:             {stats['errors']}", flush=True)
     print(f"  Total submitted:    {len(records)}", flush=True)
 
+    if not skip_location and not dry_run and stats['inserted'] > 0:
+        print(flush=True)
+        print("Computing observation locations...", flush=True)
+        compute_locations_for_norad_ids = _import_compute_locations()
+        loc_stats = compute_locations_for_norad_ids(
+            db_conn.db,
+            norad_ids,
+            dry_run=dry_run,
+            batch_size=batch_size,
+        )
+        print(f"  Locations written:  {loc_stats['written']}", flush=True)
+        print(f"  No TLE:             {loc_stats['skipped_no_tle']}", flush=True)
+        print(f"  No propagation:     {loc_stats['skipped_no_propagation']}", flush=True)
+
 
 def main():
     default_xlsx = str(
@@ -377,6 +420,11 @@ def main():
         action="store_true",
         help="Skip graph edge creation after insert (faster, run populate_all_observation_edges separately)",
     )
+    parser.add_argument(
+        "--skip-location",
+        action="store_true",
+        help="Skip SGP4 location inference after insert (faster, run compute_observation_locations separately)",
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(args.file):
@@ -388,6 +436,7 @@ def main():
         batch_size=args.batch_size,
         dry_run=args.dry_run,
         skip_edges=args.skip_edges,
+        skip_location=args.skip_location,
     )
 
 

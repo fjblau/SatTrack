@@ -323,5 +323,64 @@ def run(args):
         print(f"Done. Written: {total_written:,}  no_tle: {total_no_tle:,}  no_propagation: {total_no_prop:,}")
 
 
+def compute_locations_for_norad_ids(
+    db,
+    norad_ids,
+    dry_run: bool = False,
+    batch_size: int = 200,
+) -> dict:
+    """Compute location for observations of specific NORAD IDs that lack a location.
+
+    Intended for use by import scripts after inserting new observations.
+    Returns totals: written, skipped_no_tle, skipped_no_propagation.
+    """
+    norad_ids_list = [str(n) for n in norad_ids]
+    if not norad_ids_list:
+        return {"written": 0, "skipped_no_tle": 0, "skipped_no_propagation": 0}
+
+    total_written = 0
+    total_no_tle = 0
+    total_no_prop = 0
+    offset = 0
+
+    while True:
+        obs_cursor = db.aql.execute(
+            """
+            FOR obs IN @@col
+                FILTER obs.location == null AND obs.norad_id IN @norad_ids
+                LIMIT @offset, @batch
+                RETURN { _key: obs._key, norad_id: obs.norad_id,
+                         observation_epoch: obs.observation_epoch }
+            """,
+            bind_vars={
+                "@col": COLLECTION_OBSERVATIONS,
+                "norad_ids": norad_ids_list,
+                "offset": offset,
+                "batch": batch_size,
+            },
+        )
+        obs_batch = list(obs_cursor)
+        if not obs_batch:
+            break
+
+        tle_norad_ids = list({str(obs["norad_id"]) for obs in obs_batch})
+        tle_map = fetch_tle_map(db, tle_norad_ids)
+
+        result = process_batch(db, obs_batch, tle_map, dry_run)
+        total_written += result["written"]
+        total_no_tle += result["skipped_no_tle"]
+        total_no_prop += result["skipped_no_propagation"]
+
+        skipped_this_batch = result["skipped_no_tle"] + result["skipped_no_propagation"]
+        if skipped_this_batch == len(obs_batch):
+            offset += batch_size
+
+    return {
+        "written": total_written,
+        "skipped_no_tle": total_no_tle,
+        "skipped_no_propagation": total_no_prop,
+    }
+
+
 if __name__ == "__main__":
     run(parse_args())
