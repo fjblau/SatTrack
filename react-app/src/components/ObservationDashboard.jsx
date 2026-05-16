@@ -197,7 +197,7 @@ const ANALYTICS_CONFIG = [
     id: 'orbital-decay',
     title: 'Orbital Decay',
     subtitle: 'Perigee drift rate and estimated perigee altitude',
-    hasData: (d) => d.drift != null,
+    hasData: (d) => d.drift != null || d.estimatedPerigee != null,
     left: {
       metrics: [{ key: 'drift', label: 'Perigee Drift (km/d)', color: COLORS.drift }],
     },
@@ -209,7 +209,7 @@ const ANALYTICS_CONFIG = [
     id: 'physical',
     title: 'Physical Properties',
     subtitle: 'Estimated mass and spin rate',
-    hasData: (d) => d.mass != null,
+    hasData: (d) => d.mass != null || d.spin != null,
     left: {
       metrics: [{ key: 'mass', label: 'Mass (kg)', color: COLORS.mass }],
     },
