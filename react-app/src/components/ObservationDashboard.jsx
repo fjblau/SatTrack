@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
+import { buildChartData } from '../utils/observationTransforms'
 import './ObservationDashboard.css'
 
 const SVG_W = 820
@@ -11,7 +12,6 @@ const IH = SVG_H - P.top - P.bottom
 
 const COLORS = {
   health:       '#27ae60',
-  healthLow:    '#e74c3c',
   roll:         '#9b59b6',
   pitch:        '#3498db',
   yaw:          '#1abc9c',
@@ -54,19 +54,14 @@ function xPx(i, n) {
   return P.left + (i / (n - 1)) * IW
 }
 
-function yPx(val, min, max) {
-  if (max === min) return P.top + IH / 2
-  return P.top + IH - ((val - min) / (max - min)) * IH
-}
-
-function buildLinePath(data, keyFn, xFn, yFn, minV, maxV) {
+function buildLinePath(data, keyFn, xFn, yFn) {
   let path = ''
   let started = false
   data.forEach((d, i) => {
     const v = keyFn(d)
     if (v == null || !isFinite(v)) { started = false; return }
     const x = xFn(i, data.length).toFixed(1)
-    const y = yFn(v, minV, maxV).toFixed(1)
+    const y = yFn(v).toFixed(1)
     path += started ? ` L${x},${y}` : `M${x},${y}`
     started = true
   })
@@ -92,23 +87,169 @@ function formatEpochFull(epoch) {
   return epoch.substring(0, 16).replace('T', ' ')
 }
 
+function healthScoreColor(v) {
+  if (v == null) return '#7f8c8d'
+  if (v >= 80) return '#27ae60'
+  if (v >= 60) return '#f39c12'
+  if (v >= 40) return '#e67e22'
+  return '#e74c3c'
+}
+
+function flagColor(flag, v) {
+  if (v == null) return null
+  if (flag.trueOnly && v !== true) return null
+  return v ? flag.trueColor : (flag.falseColor || '#2ecc71')
+}
+
+// DRAW ORDER: metrics render in array order — first under, last on top.
+// Last item wins at overlaps. Reorder for data reasons only, not aesthetics.
+// SCALE NOTE: all metrics on the same axis share one auto-computed scale.
+// If magnitudes differ wildly, override with: left: { metrics: [...], fixedRange: { min, max } }
+// CARD ORDER: array order determines card order in the dashboard grid.
+//   Reordering entries here reorders cards. Do not rearrange JSX to move cards.
+// hasData CONVENTION: test whether the primary left metric has any data.
+//   A chart with only tbd or right-side metrics and no left data renders a blank card.
+const ANALYTICS_CONFIG = [
+  {
+    id: 'health',
+    title: 'Health Score',
+    subtitle: 'Derived health score over time (0–100)',
+    hasData: (d) => d.health != null,
+    left: {
+      metrics: [{ key: 'health', label: 'Health Score', color: COLORS.health }],
+      fillUnder: true,
+      fixedRange: { min: 0, max: 100 },
+    },
+    right: { metrics: [] },
+    thresholdBands: [
+      { min: 80, max: 100, color: 'rgba(39,174,96,0.06)' },
+      { min: 60, max: 80,  color: 'rgba(243,156,18,0.06)' },
+      { min: 40, max: 60,  color: 'rgba(230,126,34,0.06)' },
+      { min: 0,  max: 40,  color: 'rgba(231,76,60,0.06)' },
+    ],
+  },
+  {
+    id: 'attitude',
+    title: 'Attitude',
+    subtitle: 'Roll, Pitch, Yaw over time',
+    hasData: (d) => d.roll != null || d.pitch != null || d.yaw != null,
+    left: {
+      metrics: [
+        { key: 'roll',  label: 'Roll (°)',  color: COLORS.roll },
+        { key: 'pitch', label: 'Pitch (°)', color: COLORS.pitch },
+        { key: 'yaw',   label: 'Yaw (°)',   color: COLORS.yaw },
+      ],
+      fillUnder: false,
+    },
+    right: { metrics: [] },
+    flags: [
+      { key: 'isUnstable', trueColor: '#e74c3c', trueLabel: 'Unstable', trueOnly: true, style: 'line' },
+    ],
+  },
+  {
+    id: 'thermal',
+    title: 'Thermal',
+    subtitle: 'Surface temperature and variance',
+    hasData: (d) => d.temp != null,
+    left: {
+      metrics: [{ key: 'temp', label: 'Surface Temp (K)', color: COLORS.temp }],
+      fillUnder: true,
+    },
+    right: {
+      metrics: [{ key: 'tempVariance', label: 'Variance 30d', color: COLORS.tempVariance }],
+    },
+    flags: [
+      { key: 'thermalAnomaly', trueColor: '#e74c3c', trueLabel: 'Anomaly', trueOnly: true, style: 'line' },
+    ],
+  },
+  {
+    id: 'material',
+    title: 'Material Signature',
+    subtitle: 'Reflectivity index and confidence',
+    hasData: (d) => d.reflectivity != null,
+    left: {
+      metrics: [{ key: 'reflectivity', label: 'Reflectivity Index', color: COLORS.reflectivity }],
+    },
+    right: {
+      metrics: [{ key: 'materialConfidence', label: 'Confidence', color: COLORS.confidence }],
+    },
+  },
+  {
+    id: 'proximity',
+    title: 'Proximity State',
+    subtitle: 'Range and relative velocity',
+    hasData: (d) => d.range != null,
+    left: {
+      metrics: [{ key: 'range', label: 'Range (km)', color: COLORS.range }],
+    },
+    right: {
+      metrics: [{ key: 'velocity', label: 'Rel. Velocity (m/s)', color: COLORS.velocity }],
+    },
+  },
+  {
+    id: 'maneuver',
+    title: 'Maneuver Indicator',
+    subtitle: 'ΔV residual and confidence',
+    hasData: (d) => d.deltaV != null,
+    left: {
+      metrics: [{ key: 'deltaV', label: 'ΔV Residual (m/s)', color: COLORS.deltaV }],
+    },
+    right: {
+      metrics: [{ key: 'manConf', label: 'Confidence', color: COLORS.manConf }],
+    },
+    flags: [
+      { key: 'manFlag', trueColor: '#ff6b6b', trueLabel: 'Maneuver detected', trueOnly: true, style: 'line' },
+    ],
+  },
+  {
+    id: 'orbital-decay',
+    title: 'Orbital Decay',
+    subtitle: 'Perigee drift rate and estimated perigee altitude',
+    hasData: (d) => d.drift != null || d.estimatedPerigee != null,
+    left: {
+      metrics: [{ key: 'drift', label: 'Perigee Drift (km/d)', color: COLORS.drift }],
+    },
+    right: {
+      metrics: [{ key: 'estimatedPerigee', label: 'Est. Perigee (km)', color: COLORS.perigee }],
+    },
+  },
+  {
+    id: 'physical',
+    title: 'Physical Properties',
+    subtitle: 'Estimated mass and spin rate',
+    hasData: (d) => d.mass != null || d.spin != null,
+    left: {
+      metrics: [{ key: 'mass', label: 'Mass (kg)', color: COLORS.mass }],
+    },
+    right: {
+      metrics: [{ key: 'spin', label: 'Spin Rate (rpm)', color: COLORS.spin }],
+    },
+  },
+]
+
 function TimeSeriesChart({
   title, subtitle, data, id,
-  left,   // { key, label, color, format? }
-  right,  // { key, label, color, format? } | null
-  extra,  // [{ key, label, color }] additional left-axis lines
-  flags,  // { key, trueColor, falseColor, trueOnly?, style? } | null  — style: 'dot' (default) or 'line'
+  left,           // { metrics: [{key, label, color, tbd?, format?}], fillUnder?: bool, fixedRange?: {min, max} }
+  right,          // { metrics: [{key, label, color, tbd?, format?}] } | null/undefined
+  flags,          // [{key, trueColor, trueLabel, trueOnly?, style?, tbd?}] | undefined
+  thresholdBands, // [{min, max, color}] | undefined
   height = SVG_H,
 }) {
   const [hovered, setHovered] = useState(null)
   const n = data.length
 
-  const leftVals  = data.map(d => d[left.key])
-  const rightVals = right ? data.map(d => d[right.key]) : []
-  const extraVals = (extra || []).map(e => data.map(d => d[e.key]))
+  const leftMetrics  = left.metrics || []
+  const rightMetrics = right?.metrics || []
 
-  const lRange = niceRange(leftVals)
-  const rRange = right ? niceRange(rightVals) : null
+  const activeLeftMetrics  = leftMetrics.filter(m => !m.tbd)
+  const activeRightMetrics = rightMetrics.filter(m => !m.tbd)
+  const hasRightAxis = activeRightMetrics.length > 0
+
+  const lVals = activeLeftMetrics.flatMap(m => data.map(d => d[m.key]))
+  const lRange = left.fixedRange || niceRange(lVals)
+
+  const rVals = hasRightAxis ? activeRightMetrics.flatMap(m => data.map(d => d[m.key])) : []
+  const rRange = hasRightAxis ? niceRange(rVals) : null
 
   const lTicks = niceTicks(lRange.min, lRange.max)
   const rTicks = rRange ? niceTicks(rRange.min, rRange.max) : []
@@ -118,12 +259,12 @@ function TimeSeriesChart({
   function yR(v) { return P.top + innerH - ((v - rRange.min) / (rRange.max - rRange.min)) * innerH }
 
   const gradId = `grad-${id}`
-  const hasLeftData = leftVals.some(v => v != null && isFinite(v))
-  const hasRightData = rightVals.some(v => v != null && isFinite(v))
+  const primaryLeft = activeLeftMetrics[0]
+  const hasLeftData = primaryLeft != null && data.some(d => d[primaryLeft.key] != null && isFinite(d[primaryLeft.key]))
 
   const labelStep = n > 20 ? Math.ceil(n / 12) : n > 10 ? 2 : 1
-
   const hovD = hovered != null ? data[hovered] : null
+  const activeFlags = (flags || []).filter(f => !f.tbd)
 
   return (
     <div className="obs-chart-card">
@@ -132,22 +273,18 @@ function TimeSeriesChart({
         {subtitle && <span className="obs-chart-subtitle">{subtitle}</span>}
       </div>
       <div className="obs-chart-legend">
-        <span className="obs-legend-item" style={{ color: left.color }}>
-          <span className="obs-legend-dot" style={{ background: left.color }} />
-          {left.label}
-        </span>
-        {(extra || []).map(e => (
-          <span key={e.key} className="obs-legend-item" style={{ color: e.color }}>
-            <span className="obs-legend-dot" style={{ background: e.color }} />
-            {e.label}
+        {leftMetrics.map(m => (
+          <span key={m.key} className="obs-legend-item" style={{ color: m.tbd ? '#bdc3c7' : m.color }}>
+            <span className="obs-legend-dot" style={{ background: m.tbd ? '#bdc3c7' : m.color }} />
+            {m.label}{m.tbd ? ' (tbd)' : ''}
           </span>
         ))}
-        {right && (
-          <span className="obs-legend-item obs-legend-right" style={{ color: right.color }}>
-            <span className="obs-legend-dot obs-legend-dot-dashed" style={{ background: right.color }} />
-            {right.label} (→)
+        {rightMetrics.map(m => (
+          <span key={m.key} className="obs-legend-item obs-legend-right" style={{ color: m.tbd ? '#bdc3c7' : m.color }}>
+            <span className="obs-legend-dot obs-legend-dot-dashed" style={{ background: m.tbd ? '#bdc3c7' : m.color }} />
+            {m.label}{m.tbd ? ' (tbd)' : ' (→)'}
           </span>
-        )}
+        ))}
       </div>
 
       <svg
@@ -156,14 +293,27 @@ function TimeSeriesChart({
         onMouseLeave={() => setHovered(null)}
       >
         <defs>
-          <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={left.color} stopOpacity="0.25" />
-            <stop offset="100%" stopColor={left.color} stopOpacity="0.02" />
-          </linearGradient>
+          {primaryLeft && (
+            <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={primaryLeft.color} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={primaryLeft.color} stopOpacity="0.02" />
+            </linearGradient>
+          )}
           <clipPath id={`clip-${id}`}>
             <rect x={P.left} y={P.top} width={IW} height={innerH} />
           </clipPath>
         </defs>
+
+        {/* Threshold bands */}
+        {(thresholdBands || []).map((band, bi) => (
+          <rect
+            key={bi}
+            x={P.left} y={yL(band.max)}
+            width={IW} height={yL(band.min) - yL(band.max)}
+            fill={band.color}
+            clipPath={`url(#clip-${id})`}
+          />
+        ))}
 
         {/* Grid lines */}
         {lTicks.map((t, ti) => (
@@ -180,29 +330,31 @@ function TimeSeriesChart({
           <text
             key={ti}
             x={P.left - 8} y={yL(t) + 4}
-            textAnchor="end" fontSize="11" fill={left.color}
+            textAnchor="end" fontSize="11" fill={primaryLeft?.color || '#888'}
           >
             {formatLabel(t)}
           </text>
         ))}
 
         {/* Left axis label */}
-        <text
-          x={20} y={P.top + innerH / 2}
-          textAnchor="middle" fontSize="12" fontWeight="600"
-          fill={left.color}
-          transform={`rotate(-90, 20, ${P.top + innerH / 2})`}
-        >
-          {left.label}
-        </text>
+        {primaryLeft && (
+          <text
+            x={20} y={P.top + innerH / 2}
+            textAnchor="middle" fontSize="12" fontWeight="600"
+            fill={primaryLeft.color}
+            transform={`rotate(-90, 20, ${P.top + innerH / 2})`}
+          >
+            {primaryLeft.label}
+          </text>
+        )}
 
         {/* Right Y axis */}
-        {right && hasRightData && <>
+        {hasRightAxis && <>
           {rTicks.map((t, ti) => (
             <text
               key={ti}
               x={P.left + IW + 8} y={yR(t) + 4}
-              textAnchor="start" fontSize="11" fill={right.color}
+              textAnchor="start" fontSize="11" fill={activeRightMetrics[0].color}
             >
               {formatLabel(t)}
             </text>
@@ -215,10 +367,10 @@ function TimeSeriesChart({
           <text
             x={SVG_W - 14} y={P.top + innerH / 2}
             textAnchor="middle" fontSize="12" fontWeight="600"
-            fill={right.color}
+            fill={activeRightMetrics[0].color}
             transform={`rotate(90, ${SVG_W - 14}, ${P.top + innerH / 2})`}
           >
-            {right.label}
+            {activeRightMetrics[0].label}
           </text>
         </>}
 
@@ -237,19 +389,19 @@ function TimeSeriesChart({
         })}
 
         {/* Flag dots at bottom (dot mode only) */}
-        {flags && flags.style !== 'line' && data.map((d, i) => {
-          const v = d[flags.key]
-          if (v == null) return null
-          if (flags.trueOnly && v !== true) return null
-          const col = v ? (flags.trueColor || '#e74c3c') : (flags.falseColor || '#2ecc71')
-          return (
-            <circle
-              key={i}
-              cx={xPx(i, n)} cy={P.top + innerH + 32}
-              r={4} fill={col} opacity={0.9}
-            />
-          )
-        })}
+        {activeFlags.filter(f => f.style !== 'line').map((flag, fi) =>
+          data.map((d, i) => {
+            const col = flagColor(flag, d[flag.key])
+            if (!col) return null
+            return (
+              <circle
+                key={`${fi}-${i}`}
+                cx={xPx(i, n)} cy={P.top + innerH + 32}
+                r={4} fill={col} opacity={0.9}
+              />
+            )
+          })
+        )}
 
         {/* Axes */}
         <line x1={P.left} y1={P.top} x2={P.left} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
@@ -257,53 +409,69 @@ function TimeSeriesChart({
 
         <g clipPath={`url(#clip-${id})`}>
           {/* Flag vertical lines (line mode) — rendered first so they appear behind data */}
-          {flags && flags.style === 'line' && data.map((d, i) => {
-            const v = d[flags.key]
-            if (v == null) return null
-            if (flags.trueOnly && v !== true) return null
-            const col = v ? (flags.trueColor || '#e74c3c') : (flags.falseColor || '#2ecc71')
-            return (
-              <line
-                key={`fl-${i}`}
-                x1={xPx(i, n).toFixed(1)} y1={P.top}
-                x2={xPx(i, n).toFixed(1)} y2={P.top + innerH}
-                stroke={col} strokeWidth="2" opacity="0.5"
-              />
-            )
-          })}
+          {activeFlags.filter(f => f.style === 'line').map((flag, fi) =>
+            data.map((d, i) => {
+              const col = flagColor(flag, d[flag.key])
+              if (!col) return null
+              const offset = fi * 1.5
+              return (
+                <line
+                  key={`fl-${fi}-${i}`}
+                  x1={(xPx(i, n) + offset).toFixed(1)} y1={P.top}
+                  x2={(xPx(i, n) + offset).toFixed(1)} y2={P.top + innerH}
+                  stroke={col} strokeWidth="2" opacity="0.5"
+                />
+              )
+            })
+          )}
 
-          {/* Area fill for primary series */}
-          {hasLeftData && (() => {
+          {/* Area fill under primary left metric */}
+          {left.fillUnder && hasLeftData && (() => {
             const linePts = data
               .map((d, i) => {
-                const v = d[left.key]
+                const v = d[primaryLeft.key]
                 if (v == null || !isFinite(v)) return null
                 return { x: xPx(i, n), y: yL(v) }
               })
               .filter(Boolean)
             if (!linePts.length) return null
-            const linePath2 = linePts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+            const linePath2 = linePts.map((p, pi) => `${pi === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
             const areaPath = `${linePath2} L${linePts[linePts.length - 1].x.toFixed(1)},${P.top + innerH} L${linePts[0].x.toFixed(1)},${P.top + innerH} Z`
             return <path d={areaPath} fill={`url(#${gradId})`} />
           })()}
 
-          {/* Primary left series line */}
-          {hasLeftData && (() => {
-            const path = buildLinePath(data, d => d[left.key], xPx, yL, lRange.min, lRange.max)
-            return <path d={path} fill="none" stroke={left.color} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
-          })()}
-
-          {/* Extra left-axis lines */}
-          {(extra || []).map((e, ei) => {
-            const path = buildLinePath(data, d => d[e.key], xPx, yL, lRange.min, lRange.max)
-            return <path key={ei} d={path} fill="none" stroke={e.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          {/* Left metrics lines */}
+          {activeLeftMetrics.map((m, mi) => {
+            const path = buildLinePath(data, d => d[m.key], xPx, yL)
+            return (
+              <path
+                key={mi}
+                d={path}
+                fill="none"
+                stroke={m.color}
+                strokeWidth={mi === 0 ? 2.2 : 2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            )
           })}
 
-          {/* Right axis line (dashed) */}
-          {right && hasRightData && (() => {
-            const path = buildLinePath(data, d => d[right.key], xPx, yR, rRange.min, rRange.max)
-            return <path d={path} fill="none" stroke={right.color} strokeWidth="2" strokeDasharray="5,3" strokeLinejoin="round" strokeLinecap="round" />
-          })()}
+          {/* Right metrics lines (dashed) */}
+          {activeRightMetrics.map((m, mi) => {
+            const path = buildLinePath(data, d => d[m.key], xPx, yR)
+            return (
+              <path
+                key={mi}
+                d={path}
+                fill="none"
+                stroke={m.color}
+                strokeWidth="2"
+                strokeDasharray="5,3"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            )
+          })}
 
           {/* Hover interaction overlay */}
           {data.map((d, i) => (
@@ -319,22 +487,19 @@ function TimeSeriesChart({
           {/* Hover dot + vertical line */}
           {hovered != null && (() => {
             const d = data[hovered]
-            const lv = d[left.key]
-            const rv = right ? d[right.key] : null
             const x = xPx(hovered, n)
             return (
               <g>
                 <line x1={x} y1={P.top} x2={x} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1" strokeDasharray="4,2" />
-                {lv != null && isFinite(lv) && (
-                  <circle cx={x} cy={yL(lv)} r={5} fill={left.color} stroke="white" strokeWidth="2" />
-                )}
-                {rv != null && isFinite(rv) && (
-                  <circle cx={x} cy={yR(rv)} r={5} fill={right.color} stroke="white" strokeWidth="2" />
-                )}
-                {(extra || []).map((e, ei) => {
-                  const ev = d[e.key]
-                  if (ev == null || !isFinite(ev)) return null
-                  return <circle key={ei} cx={x} cy={yL(ev)} r={4} fill={e.color} stroke="white" strokeWidth="2" />
+                {activeLeftMetrics.map((m, mi) => {
+                  const v = d[m.key]
+                  if (v == null || !isFinite(v)) return null
+                  return <circle key={mi} cx={x} cy={yL(v)} r={mi === 0 ? 5 : 4} fill={m.color} stroke="white" strokeWidth="2" />
+                })}
+                {activeRightMetrics.map((m, mi) => {
+                  const v = d[m.key]
+                  if (v == null || !isFinite(v)) return null
+                  return <circle key={mi} cx={x} cy={yR(v)} r={mi === 0 ? 5 : 4} fill={m.color} stroke="white" strokeWidth="2" />
                 })}
               </g>
             )
@@ -343,23 +508,23 @@ function TimeSeriesChart({
 
         {/* Tooltip */}
         {hovD && (() => {
-          const lv = hovD[left.key]
-          const rv = right ? hovD[right.key] : null
           const x = xPx(hovered, n)
           const tooltipX = x > P.left + IW - 180 ? x - 170 : x + 10
-          const lFmt = left.format || formatLabel
-          const rFmt = right?.format || formatLabel
           const lines = [
             { label: formatEpochFull(hovD.epoch), val: '', color: '#555', bold: true },
-            ...(lv != null ? [{ label: left.label, val: lFmt(lv), color: left.color }] : []),
-            ...((extra || []).map(e => {
-              const ev = hovD[e.key]
-              return ev != null ? { label: e.label, val: formatLabel(ev), color: e.color } : null
-            }).filter(Boolean)),
-            ...(rv != null ? [{ label: right.label, val: rFmt(rv), color: right.color }] : []),
+            ...[...activeLeftMetrics, ...activeRightMetrics].map(m => {
+              const v = hovD[m.key]
+              return v != null ? { label: m.label, val: (m.format || formatLabel)(v), color: m.color } : null
+            }).filter(Boolean),
+            ...activeFlags.filter(f => f.style === 'line').map(f => {
+              const v = hovD[f.key]
+              if (!v || (f.trueOnly && v !== true)) return null
+              return { label: f.trueLabel, val: '', color: f.trueColor, bold: false }
+            }).filter(Boolean),
           ]
           const tw = 160, th = lines.length * 18 + 14
-          const ty = Math.max(P.top, Math.min(P.top + innerH - th, yPx(lv ?? 0, lRange.min, lRange.max) - th / 2))
+          const firstLv = primaryLeft != null ? (hovD[primaryLeft.key] ?? lRange.min) : lRange.min
+          const ty = Math.max(P.top, Math.min(P.top + innerH - th, yL(isFinite(firstLv) ? firstLv : lRange.min) - th / 2))
           return (
             <g>
               <rect x={tooltipX} y={ty} width={tw} height={th} fill="rgba(33,37,41,0.92)" rx="5" />
@@ -373,154 +538,19 @@ function TimeSeriesChart({
         })()}
       </svg>
 
-      {flags && (
+      {(flags || []).length > 0 && (
         <div className="obs-flag-legend">
-          {flags.style === 'line'
-            ? <span><span className="obs-flag-line" style={{ background: flags.trueColor || '#e74c3c' }} /> {flags.trueLabel || 'Flag: true'}</span>
-            : <span><span className="obs-flag-dot" style={{ background: flags.trueColor || '#e74c3c' }} /> {flags.trueLabel || 'Flag: true'}</span>
-          }
-          {!flags.trueOnly && (
-            <span><span className="obs-flag-dot" style={{ background: flags.falseColor || '#2ecc71' }} /> {flags.falseLabel || 'Flag: false'}</span>
-          )}
+          {(flags || []).map((f, fi) => (
+            <span key={fi} style={f.tbd ? { color: '#bdc3c7' } : {}}>
+              {f.style === 'line'
+                ? <span className="obs-flag-line" style={{ background: f.tbd ? '#bdc3c7' : f.trueColor }} />
+                : <span className="obs-flag-dot" style={{ background: f.tbd ? '#bdc3c7' : f.trueColor }} />
+              }
+              {' '}{f.trueLabel || 'Flag: true'}{f.tbd ? ' (tbd)' : ''}
+            </span>
+          ))}
         </div>
       )}
-    </div>
-  )
-}
-
-function HealthScoreChart({ data }) {
-  const [hovered, setHovered] = useState(null)
-  const n = data.length
-  const vals = data.map(d => d.health).filter(v => v != null && isFinite(v))
-  if (!vals.length) return <div className="obs-no-data">No health score data</div>
-
-  const height = SVG_H
-
-  function yH(v) {
-    return P.top + (height - P.top - P.bottom) - ((v - 0) / 100) * (height - P.top - P.bottom)
-  }
-
-  const ticks = [0, 20, 40, 60, 80, 100]
-  const gradId = 'health-grad'
-  const labelStep = n > 20 ? Math.ceil(n / 12) : n > 10 ? 2 : 1
-  const innerH = height - P.top - P.bottom
-
-  function healthColor(v) {
-    if (v == null) return '#bdc3c7'
-    if (v >= 80) return '#27ae60'
-    if (v >= 60) return '#f39c12'
-    if (v >= 40) return '#e67e22'
-    return '#e74c3c'
-  }
-
-  const linePts = data.map((d, i) => d.health != null && isFinite(d.health) ? { x: xPx(i, n), y: yH(d.health), v: d.health } : null)
-
-  const linePath2 = linePts
-    .filter(Boolean)
-    .map((p, pi, arr) => `${pi === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-    .join(' ')
-
-  const firstValid = linePts.find(Boolean)
-  const lastValid = [...linePts].reverse().find(Boolean)
-  const areaPath = firstValid && lastValid
-    ? `${linePath2} L${lastValid.x.toFixed(1)},${P.top + innerH} L${firstValid.x.toFixed(1)},${P.top + innerH} Z`
-    : ''
-
-  const avg = vals.reduce((a, b) => a + b, 0) / vals.length
-
-  return (
-    <div className="obs-chart-card obs-chart-card--health">
-      <div className="obs-chart-header">
-        <h3>Health Score</h3>
-        <span className="obs-chart-subtitle">Derived health score over time (0–100)</span>
-        <span className="obs-health-avg" style={{ color: healthColor(avg) }}>
-          Avg: {avg.toFixed(1)}
-        </span>
-      </div>
-
-      <svg viewBox={`0 0 ${SVG_W} ${height}`} className="obs-svg" onMouseLeave={() => setHovered(null)}>
-        <defs>
-          <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#27ae60" stopOpacity="0.35" />
-            <stop offset="60%" stopColor="#f39c12" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#e74c3c" stopOpacity="0.05" />
-          </linearGradient>
-          <clipPath id="clip-health">
-            <rect x={P.left} y={P.top} width={IW} height={innerH} />
-          </clipPath>
-        </defs>
-
-        {/* Threshold bands */}
-        <rect x={P.left} y={yH(100)} width={IW} height={yH(80) - yH(100)} fill="rgba(39,174,96,0.06)" clipPath="url(#clip-health)" />
-        <rect x={P.left} y={yH(80)} width={IW} height={yH(60) - yH(80)} fill="rgba(243,156,18,0.06)" clipPath="url(#clip-health)" />
-        <rect x={P.left} y={yH(60)} width={IW} height={yH(40) - yH(60)} fill="rgba(230,126,34,0.06)" clipPath="url(#clip-health)" />
-        <rect x={P.left} y={yH(40)} width={IW} height={yH(0) - yH(40)} fill="rgba(231,76,60,0.06)" clipPath="url(#clip-health)" />
-
-        {ticks.map(t => (
-          <g key={t}>
-            <line x1={P.left} y1={yH(t)} x2={P.left + IW} y2={yH(t)} stroke="#eef0f3" strokeWidth="1" />
-            <text x={P.left - 8} y={yH(t) + 4} textAnchor="end" fontSize="11" fill="#888">{t}</text>
-          </g>
-        ))}
-
-        {data.map((d, i) => {
-          if (i % labelStep !== 0 && i !== n - 1) return null
-          return (
-            <text key={i} x={xPx(i, n).toFixed(1)} y={P.top + innerH + 18} textAnchor="middle" fontSize="10" fill="#888">
-              {formatEpoch(d.epoch)}
-            </text>
-          )
-        })}
-
-        <line x1={P.left} y1={P.top} x2={P.left} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
-        <line x1={P.left} y1={P.top + innerH} x2={P.left + IW} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
-
-        <text x={20} y={P.top + innerH / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill="#27ae60"
-          transform={`rotate(-90, 20, ${P.top + innerH / 2})`}>Health Score</text>
-
-        <g clipPath="url(#clip-health)">
-          {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
-          <path d={linePath2} fill="none" stroke="url(#health-line-grad)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-
-          {data.map((d, i) => {
-            if (d.health == null || !isFinite(d.health)) return null
-            return (
-              <rect
-                key={i}
-                x={xPx(i, n) - (n > 1 ? IW / n / 2 : IW / 2)}
-                y={P.top} width={n > 1 ? IW / n : IW} height={innerH}
-                fill="transparent"
-                onMouseEnter={() => setHovered(i)}
-              />
-            )
-          })}
-
-          {hovered != null && data[hovered]?.health != null && (
-            <g>
-              <line x1={xPx(hovered, n)} y1={P.top} x2={xPx(hovered, n)} y2={P.top + innerH}
-                stroke="#bdc3c7" strokeWidth="1" strokeDasharray="4,2" />
-              <circle cx={xPx(hovered, n)} cy={yH(data[hovered].health)} r={6}
-                fill={healthColor(data[hovered].health)} stroke="white" strokeWidth="2" />
-            </g>
-          )}
-        </g>
-
-        {hovered != null && data[hovered]?.health != null && (() => {
-          const d = data[hovered]
-          const x = xPx(hovered, n)
-          const tooltipX = x > P.left + IW - 160 ? x - 150 : x + 10
-          const ty = Math.max(P.top + 5, yH(d.health) - 40)
-          return (
-            <g>
-              <rect x={tooltipX} y={ty} width={145} height={46} fill="rgba(33,37,41,0.92)" rx="5" />
-              <text x={tooltipX + 10} y={ty + 16} fontSize="11" fill="#ccc" fontWeight="700">{formatEpochFull(d.epoch)}</text>
-              <text x={tooltipX + 10} y={ty + 34} fontSize="12" fill={healthColor(d.health)} fontWeight="700">
-                Score: {d.health.toFixed(2)}
-              </text>
-            </g>
-          )
-        })()}
-      </svg>
     </div>
   )
 }
@@ -607,6 +637,28 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     }
   }
 
+  const allChartData = useMemo(() => buildChartData(observations), [observations])
+
+  useEffect(() => {
+    if (allChartData.length) {
+      setDateFrom(allChartData[0].epoch?.substring(0, 16) || '')
+      setDateTo(allChartData[allChartData.length - 1].epoch?.substring(0, 16) || '')
+    } else {
+      setDateFrom('')
+      setDateTo('')
+    }
+  }, [allChartData])
+
+  const chartData = useMemo(() => {
+    return allChartData.filter(d => {
+      if (!d.epoch) return true
+      const ep = d.epoch.substring(0, 16)
+      if (dateFrom && ep < dateFrom) return false
+      if (dateTo && ep > dateTo) return false
+      return true
+    })
+  }, [allChartData, dateFrom, dateTo])
+
   const handleDeltaTime = (delta) => {
     setDeltaTime(delta)
     if (!allChartData.length) return
@@ -648,64 +700,11 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     }
   }
 
-  const allChartData = useMemo(() => {
-    return [...observations]
-      .sort((a, b) => (a.observation_epoch || '').localeCompare(b.observation_epoch || ''))
-      .map(obs => ({
-        epoch: obs.observation_epoch,
-        health: obs.derived_health_score,
-        roll: obs.attitude?.roll_deg,
-        pitch: obs.attitude?.pitch_deg,
-        yaw: obs.attitude?.yaw_deg,
-        stability: obs.attitude?.stability_flag,
-        isUnstable: obs.attitude?.stability_flag != null ? obs.attitude.stability_flag !== 'nominal' : null,
-        temp: obs.surface_temp_K ?? obs.thermal?.surface_temp_K,
-        tempVariance: obs.surface_temp_variance_30d ?? obs.thermal?.temp_variance_30d,
-        thermalAnomaly: obs.thermal?.anomaly_flag,
-        reflectivity: obs.material_signature?.reflectivity_index,
-        materialConfidence: obs.material_signature?.material_confidence,
-        range: obs.proximity_state?.range_km,
-        velocity: obs.proximity_state?.relative_velocity_ms,
-        deltaV: obs.maneuver_indicator?.delta_v_residual_ms,
-        manConf: obs.maneuver_indicator?.maneuver_confidence,
-        manFlag: (() => { const raw = obs.maneuver_indicator?.maneuver_flag; const v = (obs.maneuver_flag != null) ? obs.maneuver_flag : raw; if (v == null) return null; return v !== false && v !== 'false'; })(),
-        drift: obs.orbital_decay_indicator?.perigee_drift_km_per_day,
-        estimatedPerigee: obs.orbital_decay_indicator?.estimated_perigee_km,
-        mass: obs.estimated_mass_kg,
-        spin: obs.spin_rate_rpm,
-        passId: obs.pass_id,
-        frameIndex: obs.frame_index,
-        observationMode: obs.observation_mode,
-        sensorsActive: obs.sensors_active,
-        illumination: obs.illumination,
-      }))
-  }, [observations])
-
-  useEffect(() => {
-    if (allChartData.length) {
-      setDateFrom(allChartData[0].epoch?.substring(0, 16) || '')
-      setDateTo(allChartData[allChartData.length - 1].epoch?.substring(0, 16) || '')
-    } else {
-      setDateFrom('')
-      setDateTo('')
-    }
-  }, [allChartData])
-
-  const chartData = useMemo(() => {
-    return allChartData.filter(d => {
-      if (!d.epoch) return true
-      const ep = d.epoch.substring(0, 16)
-      if (dateFrom && ep < dateFrom) return false
-      if (dateTo && ep > dateTo) return false
-      return true
-    })
-  }, [allChartData, dateFrom, dateTo])
-
   const summaryStats = useMemo(() => {
     if (!chartData.length) return null
     const healthVals = chartData.map(d => d.health).filter(v => v != null && isFinite(v))
     const anomalyCount = chartData.filter(d => d.thermalAnomaly === true).length
-    const maneuverCount = chartData.filter(d => d.manFlag === true || d.manFlag === 'true').length
+    const maneuverCount = chartData.filter(d => d.manFlag === true).length
     const first = chartData[0]?.epoch
     const last = chartData[chartData.length - 1]?.epoch
     return {
@@ -718,21 +717,6 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
       last,
     }
   }, [chartData])
-
-  const hasAttitude = chartData.some(d => d.roll != null || d.pitch != null || d.yaw != null)
-  const hasThermal = chartData.some(d => d.temp != null)
-  const hasMaterial = chartData.some(d => d.reflectivity != null)
-  const hasProximity = chartData.some(d => d.range != null)
-  const hasManeuver = chartData.some(d => d.deltaV != null)
-  const hasDecay = chartData.some(d => d.drift != null || d.estimatedPerigee != null)
-
-  function healthScoreColor(v) {
-    if (v == null) return '#7f8c8d'
-    if (v >= 80) return '#27ae60'
-    if (v >= 60) return '#f39c12'
-    if (v >= 40) return '#e67e22'
-    return '#e74c3c'
-  }
 
   return (
     <div className="obs-dashboard">
@@ -957,99 +941,10 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
 
             {/* Charts grid */}
             <div className="obs-charts-grid">
-              {/* Health score */}
-              <HealthScoreChart data={chartData} />
-
-              {/* Attitude */}
-              {hasAttitude && (
-                <TimeSeriesChart
-                  id="attitude"
-                  title="Attitude"
-                  subtitle="Roll, Pitch, Yaw over time"
-                  data={chartData}
-                  left={{ key: 'roll', label: 'Roll (°)', color: COLORS.roll }}
-                  extra={[
-                    { key: 'pitch', label: 'Pitch (°)', color: COLORS.pitch },
-                    { key: 'yaw', label: 'Yaw (°)', color: COLORS.yaw },
-                  ]}
-                  right={null}
-                  flags={{ key: 'isUnstable', trueColor: '#e74c3c', trueLabel: 'Unstable', trueOnly: true, style: 'line' }}
-                />
-              )}
-
-              {/* Thermal */}
-              {hasThermal && (
-                <TimeSeriesChart
-                  id="thermal"
-                  title="Thermal"
-                  subtitle="Surface temperature and variance"
-                  data={chartData}
-                  left={{ key: 'temp', label: 'Surface Temp (K)', color: COLORS.temp }}
-                  right={{ key: 'tempVariance', label: 'Variance 30d', color: COLORS.tempVariance }}
-                  flags={{ key: 'thermalAnomaly', trueColor: '#e74c3c', trueLabel: 'Anomaly', trueOnly: true, style: 'line' }}
-                />
-              )}
-
-              {/* Material Signature */}
-              {hasMaterial && (
-                <TimeSeriesChart
-                  id="material"
-                  title="Material Signature"
-                  subtitle="Reflectivity index and confidence"
-                  data={chartData}
-                  left={{ key: 'reflectivity', label: 'Reflectivity Index', color: COLORS.reflectivity }}
-                  right={{ key: 'materialConfidence', label: 'Confidence', color: COLORS.confidence }}
-                />
-              )}
-
-              {/* Proximity State */}
-              {hasProximity && (
-                <TimeSeriesChart
-                  id="proximity"
-                  title="Proximity State"
-                  subtitle="Range and relative velocity"
-                  data={chartData}
-                  left={{ key: 'range', label: 'Range (km)', color: COLORS.range }}
-                  right={{ key: 'velocity', label: 'Rel. Velocity (m/s)', color: COLORS.velocity }}
-                />
-              )}
-
-              {/* Maneuver Indicator */}
-              {hasManeuver && (
-                <TimeSeriesChart
-                  id="maneuver"
-                  title="Maneuver Indicator"
-                  subtitle="ΔV residual and confidence"
-                  data={chartData}
-                  left={{ key: 'deltaV', label: 'ΔV Residual (m/s)', color: COLORS.deltaV }}
-                  right={{ key: 'manConf', label: 'Confidence', color: COLORS.manConf }}
-                  flags={{ key: 'manFlag', trueColor: '#ff6b6b', trueLabel: 'Maneuver detected', trueOnly: true, style: 'line' }}
-                />
-              )}
-
-              {/* Orbital Decay */}
-              {hasDecay && (
-                <TimeSeriesChart
-                  id="orbital-decay"
-                  title="Orbital Decay"
-                  subtitle="Perigee drift rate and estimated perigee altitude"
-                  data={chartData}
-                  left={{ key: 'drift', label: 'Perigee Drift (km/d)', color: COLORS.drift }}
-                  right={{ key: 'estimatedPerigee', label: 'Est. Perigee (km)', color: COLORS.perigee }}
-                />
-              )}
-
-              {/* Mass / Spin — supplemental chart */}
-              {chartData.some(d => d.mass != null || d.spin != null) && (
-                <TimeSeriesChart
-                  id="physical"
-                  title="Physical Properties"
-                  subtitle="Estimated mass and spin rate"
-                  data={chartData}
-                  left={{ key: 'mass', label: 'Mass (kg)', color: COLORS.mass }}
-                  right={{ key: 'spin', label: 'Spin Rate (rpm)', color: COLORS.spin }}
-                />
-              )}
+              {ANALYTICS_CONFIG
+                .filter(cfg => chartData.some(cfg.hasData))
+                .map(cfg => <TimeSeriesChart key={cfg.id} {...cfg} data={chartData} />)
+              }
             </div>
           </>
         )}
