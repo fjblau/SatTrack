@@ -866,24 +866,7 @@ export default function InsuranceAggregationView() {
 
   return (
     <div className="iagg-root">
-      <div className="iagg-controls-row">
-        <div className="iagg-card">
-          <ScenarioForm
-            shells={shells}
-            onResult={setScenarioResult}
-            onShellSelect={setHighlightShellId}
-          />
-        </div>
-
-        {!shellsLoading && shells.length > 0 && (
-          <div className="iagg-card">
-            <div className="iagg-panel-title">Book Exposure by Shell</div>
-            <ShellHeatmap shells={shells} />
-          </div>
-        )}
-      </div>
-
-      <div className="iagg-viz-row">
+      <div className="iagg-main-grid">
         <div className="iagg-viz-panel">
           <div className="iagg-panel-title">Orbital Shell Exposure</div>
           {shellsLoading && (
@@ -920,6 +903,23 @@ export default function InsuranceAggregationView() {
               <div className="iagg-globe-status">
                 Run a scenario to see the impact graph
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="iagg-sidebar-col">
+          <div className="iagg-card">
+            <ScenarioForm
+              shells={shells}
+              onResult={setScenarioResult}
+              onShellSelect={setHighlightShellId}
+            />
+          </div>
+
+          {!shellsLoading && shells.length > 0 && (
+            <div className="iagg-card">
+              <div className="iagg-panel-title">Book Exposure by Shell</div>
+              <ShellHeatmap shells={shells} />
             </div>
           )}
         </div>
