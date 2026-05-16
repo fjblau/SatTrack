@@ -12,7 +12,6 @@ const IH = SVG_H - P.top - P.bottom
 
 const COLORS = {
   health:       '#27ae60',
-  healthLow:    '#e74c3c',
   roll:         '#9b59b6',
   pitch:        '#3498db',
   yaw:          '#1abc9c',
@@ -55,11 +54,6 @@ function xPx(i, n) {
   return P.left + (i / (n - 1)) * IW
 }
 
-function yPx(val, min, max) {
-  if (max === min) return P.top + IH / 2
-  return P.top + IH - ((val - min) / (max - min)) * IH
-}
-
 function buildLinePath(data, keyFn, xFn, yFn) {
   let path = ''
   let started = false
@@ -91,6 +85,20 @@ function formatEpoch(epoch) {
 function formatEpochFull(epoch) {
   if (!epoch) return ''
   return epoch.substring(0, 16).replace('T', ' ')
+}
+
+function healthScoreColor(v) {
+  if (v == null) return '#7f8c8d'
+  if (v >= 80) return '#27ae60'
+  if (v >= 60) return '#f39c12'
+  if (v >= 40) return '#e67e22'
+  return '#e74c3c'
+}
+
+function flagColor(flag, v) {
+  if (v == null) return null
+  if (flag.trueOnly && v !== true) return null
+  return v ? flag.trueColor : (flag.falseColor || '#2ecc71')
 }
 
 // DRAW ORDER: metrics render in array order — first under, last on top.
@@ -383,10 +391,8 @@ function TimeSeriesChart({
         {/* Flag dots at bottom (dot mode only) */}
         {activeFlags.filter(f => f.style !== 'line').map((flag, fi) =>
           data.map((d, i) => {
-            const v = d[flag.key]
-            if (v == null) return null
-            if (flag.trueOnly && v !== true) return null
-            const col = v ? flag.trueColor : (flag.falseColor || '#2ecc71')
+            const col = flagColor(flag, d[flag.key])
+            if (!col) return null
             return (
               <circle
                 key={`${fi}-${i}`}
@@ -405,10 +411,8 @@ function TimeSeriesChart({
           {/* Flag vertical lines (line mode) — rendered first so they appear behind data */}
           {activeFlags.filter(f => f.style === 'line').map((flag, fi) =>
             data.map((d, i) => {
-              const v = d[flag.key]
-              if (v == null) return null
-              if (flag.trueOnly && v !== true) return null
-              const col = v ? flag.trueColor : (flag.falseColor || '#2ecc71')
+              const col = flagColor(flag, d[flag.key])
+              if (!col) return null
               const offset = fi * 1.5
               return (
                 <line
@@ -508,11 +512,7 @@ function TimeSeriesChart({
           const tooltipX = x > P.left + IW - 180 ? x - 170 : x + 10
           const lines = [
             { label: formatEpochFull(hovD.epoch), val: '', color: '#555', bold: true },
-            ...activeLeftMetrics.map(m => {
-              const v = hovD[m.key]
-              return v != null ? { label: m.label, val: (m.format || formatLabel)(v), color: m.color } : null
-            }).filter(Boolean),
-            ...activeRightMetrics.map(m => {
+            ...[...activeLeftMetrics, ...activeRightMetrics].map(m => {
               const v = hovD[m.key]
               return v != null ? { label: m.label, val: (m.format || formatLabel)(v), color: m.color } : null
             }).filter(Boolean),
@@ -717,14 +717,6 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
       last,
     }
   }, [chartData])
-
-  function healthScoreColor(v) {
-    if (v == null) return '#7f8c8d'
-    if (v >= 80) return '#27ae60'
-    if (v >= 60) return '#f39c12'
-    if (v >= 40) return '#e67e22'
-    return '#e74c3c'
-  }
 
   return (
     <div className="obs-dashboard">
