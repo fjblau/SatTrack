@@ -12,6 +12,7 @@ import AdminPage from './components/AdminPage'
 import ObservationsView from './components/ObservationsView'
 import ObservationGraphs from './components/ObservationGraphs'
 import ObservationDashboard from './components/ObservationDashboard'
+import AdHocAnalytics from './components/AdHocAnalytics'
 import LoginPage from './components/LoginPage'
 import AqlEditorPage from './components/AqlEditorPage'
 import HelpPage from './components/HelpPage'
@@ -527,6 +528,14 @@ function App() {
               Observation Dashboard
             </button>
           )}
+          {isSubtabVisible('observations', 'ad-hoc-analytics') && (
+            <button
+              className={activeObservationsSubTab === 'ad-hoc-analytics' ? 'active' : ''}
+              onClick={() => setActiveObservationsSubTab('ad-hoc-analytics')}
+            >
+              Ad Hoc Analytics
+            </button>
+          )}
         </nav>
       )}
       
@@ -591,6 +600,12 @@ function App() {
       {activeTab === 'observations' && isSubtabVisible('observations', 'observation-dashboard') && activeObservationsSubTab === 'observation-dashboard' && (
         <div className="analytics-view-container">
           <ObservationDashboard initialNoradId={observationInitialNoradId} onInitialNoradIdConsumed={() => setObservationInitialNoradId(null)} />
+        </div>
+      )}
+
+      {activeTab === 'observations' && isSubtabVisible('observations', 'ad-hoc-analytics') && activeObservationsSubTab === 'ad-hoc-analytics' && (
+        <div className="analytics-view-container">
+          <AdHocAnalytics />
         </div>
       )}
 

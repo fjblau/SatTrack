@@ -227,7 +227,7 @@ const ANALYTICS_CONFIG = [
   },
 ]
 
-function TimeSeriesChart({
+export function TimeSeriesChart({
   title, subtitle, data, id,
   left,           // { metrics: [{key, label, color, tbd?, format?}], fillUnder?: bool, fixedRange?: {min, max} }
   right,          // { metrics: [{key, label, color, tbd?, format?}] } | null/undefined
