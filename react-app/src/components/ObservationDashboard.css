@@ -119,6 +119,34 @@
   user-select: none;
 }
 
+.obs-sat-select {
+  width: 240px;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.6)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.obs-sat-select option {
+  background: #1a1f36;
+  color: white;
+}
+
+.obs-sat-select:focus {
+  border-color: rgba(255,255,255,0.5);
+  background-color: rgba(255,255,255,0.15);
+}
+
 /* Dropdown */
 .obs-dropdown {
   position: absolute;
@@ -297,6 +325,29 @@
   color: #495057;
   font-family: 'Monaco', 'Menlo', monospace;
   line-height: 1.5;
+}
+
+.obs-stat-card--deltatime {
+  min-width: 140px;
+  flex: 1.2;
+}
+
+.obs-deltatime-select {
+  width: 100%;
+  font-size: 0.82rem;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  color: #1a1f36;
+  background: #f8f9fa;
+  cursor: pointer;
+  margin-top: 0.1rem;
+}
+
+.obs-deltatime-select:focus {
+  outline: none;
+  border-color: #3498db;
+  background: #fff;
 }
 
 .obs-stat-card--daterange {
