@@ -70,6 +70,21 @@ const SECTION_COLUMNS = [
       { key: 'estimated_perigee_km', label: 'Est. Perigee (km)', sortKey: 'orbital_decay_indicator.estimated_perigee_km' },
     ],
   },
+  {
+    section: 'Location',
+    computed: true,
+    columns: [
+      { key: 'latitude', label: 'Latitude (°)' },
+      { key: 'longitude', label: 'Longitude (°)' },
+      { key: 'altitude_km', label: 'Altitude (km)' },
+      { key: 'inclination_degrees', label: 'Inclination (°)' },
+      { key: 'eccentricity', label: 'Eccentricity' },
+      { key: 'apogee_km', label: 'Apogee (km)' },
+      { key: 'perigee_km', label: 'Perigee (km)' },
+      { key: 'period_minutes', label: 'Period (min)' },
+      { key: 'tle_epoch', label: 'TLE Epoch' },
+    ],
+  },
 ]
 
 const SECTION_FIELD_KEYS = {
@@ -79,6 +94,7 @@ const SECTION_FIELD_KEYS = {
   'Proximity State': 'proximity_state',
   'Maneuver Indicator': 'maneuver_indicator',
   'Orbital Decay': 'orbital_decay_indicator',
+  'Location': 'location',
 }
 
 function formatCell(value) {
@@ -257,7 +273,13 @@ export default function ObservationsView() {
                       </th>
                     ))}
                     {SECTION_COLUMNS.map(sec => (
-                      <th key={sec.section} colSpan={sec.columns.length} className="th-section">{sec.section}</th>
+                      <th
+                        key={sec.section}
+                        colSpan={sec.columns.length}
+                        className={sec.computed ? 'th-section th-section-computed' : 'th-section'}
+                      >
+                        {sec.section}
+                      </th>
                     ))}
                   </tr>
                   <tr>
@@ -265,11 +287,15 @@ export default function ObservationsView() {
                       sec.columns.map((col, i) => (
                         <th
                           key={`${sec.section}-${col.key}-${i}`}
-                          className="th-sub th-sortable"
-                          onClick={() => handleSort(col.sortKey)}
+                          className={
+                            sec.computed
+                              ? 'th-sub th-sub-computed' + (col.sortKey ? ' th-sortable' : '')
+                              : 'th-sub th-sortable'
+                          }
+                          onClick={col.sortKey ? () => handleSort(col.sortKey) : undefined}
                         >
                           {col.label}
-                          <SortIndicator colSortKey={col.sortKey} />
+                          {col.sortKey && <SortIndicator colSortKey={col.sortKey} />}
                         </th>
                       ))
                     )}
@@ -291,7 +317,14 @@ export default function ObservationsView() {
                           const val = obs[col.key] !== undefined && obs[col.key] !== null
                             ? obs[col.key]
                             : nested[col.key]
-                          return <td key={`${sec.section}-${col.key}-${i}`}>{formatCell(val)}</td>
+                          return (
+                            <td
+                              key={`${sec.section}-${col.key}-${i}`}
+                              className={sec.computed ? 'td-computed' : undefined}
+                            >
+                              {formatCell(val)}
+                            </td>
+                          )
                         })
                       })}
                     </tr>

@@ -91,6 +91,20 @@
   color: #1a73e8;
 }
 
+.th-section-computed {
+  background-color: #dff0fb;
+  color: #1a6090;
+}
+
+.th-sub-computed {
+  background-color: #eaf6fd;
+  color: #1a6090;
+}
+
+.td-computed {
+  background-color: #f4fbff;
+}
+
 @media (max-width: 1200px) {
   .observations-view-container {
     flex-direction: column;
