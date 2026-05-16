@@ -525,6 +525,16 @@ function HealthScoreChart({ data }) {
   )
 }
 
+const DELTA_TIME_OPTIONS = [
+  { value: '1d',  label: '1 Day' },
+  { value: '1w',  label: '1 Week' },
+  { value: '1m',  label: '1 Month' },
+  { value: '3m',  label: '3 Months' },
+  { value: '6m',  label: '6 Months' },
+  { value: '1y',  label: '1 Year' },
+  { value: 'all', label: 'Show All' },
+]
+
 export default function ObservationDashboard({ initialNoradId, onInitialNoradIdConsumed }) {
   const [allowedSatellites, setAllowedSatellites] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -536,6 +546,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
   const [error, setError] = useState(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [deltaTime, setDeltaTime] = useState('')
   const dropdownRef = useRef(null)
 
   useEffect(() => {
@@ -583,6 +594,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     setLoading(true)
     setError(null)
     setObservations([])
+    setDeltaTime('')
     try {
       const res = await apiFetch(`${API_ENDPOINTS.OBSERVATIONS}/${noradId}?limit=5000`)
       if (!res.ok) throw new Error(res.statusText)
@@ -593,6 +605,30 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleDeltaTime = (delta) => {
+    setDeltaTime(delta)
+    if (!allChartData.length) return
+    const lastEpoch = allChartData[allChartData.length - 1]?.epoch
+    if (!lastEpoch) return
+    if (!delta || delta === 'all') {
+      setDateFrom(allChartData[0]?.epoch?.substring(0, 16) || '')
+      setDateTo(lastEpoch.substring(0, 16))
+      return
+    }
+    const last = new Date(lastEpoch)
+    const from = new Date(last)
+    switch (delta) {
+      case '1d': from.setDate(from.getDate() - 1); break
+      case '1w': from.setDate(from.getDate() - 7); break
+      case '1m': from.setMonth(from.getMonth() - 1); break
+      case '3m': from.setMonth(from.getMonth() - 3); break
+      case '6m': from.setMonth(from.getMonth() - 6); break
+      case '1y': from.setFullYear(from.getFullYear() - 1); break
+    }
+    setDateFrom(from.toISOString().substring(0, 16))
+    setDateTo(last.toISOString().substring(0, 16))
   }
 
   const handleSelectSat = (sat) => {
@@ -708,6 +744,31 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
         </div>
 
         <div className="obs-selector-area">
+          {/* Satellite dropdown */}
+          {allowedSatellites.length > 0 && (
+            <div className="obs-search-group">
+              <label>Select Satellite</label>
+              <select
+                className="obs-sat-select"
+                value={selectedSat?.norad_id || ''}
+                onChange={e => {
+                  const id = parseInt(e.target.value, 10)
+                  const sat = allowedSatellites.find(s => s.norad_id === id)
+                  if (sat) handleSelectSat(sat)
+                }}
+              >
+                <option value="">— Choose a satellite —</option>
+                {allowedSatellites.map(s => (
+                  <option key={s.norad_id} value={s.norad_id}>
+                    {s.norad_id} — {s.name || 'Unknown'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="obs-selector-divider">or</div>
+
           {/* Name/search selector */}
           <div className="obs-search-group" ref={dropdownRef}>
             <label>Search by Name</label>
@@ -823,6 +884,20 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   {summaryStats.maneuverCount}
                 </div>
               </div>
+              <div className="obs-stat-card obs-stat-card--deltatime">
+                <div className="obs-stat-label">Delta Time</div>
+                <select
+                  className="obs-deltatime-select"
+                  value={deltaTime}
+                  onChange={e => handleDeltaTime(e.target.value)}
+                >
+                  <option value="">— Select range —</option>
+                  {DELTA_TIME_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="obs-stat-card obs-stat-card--wide obs-stat-card--daterange">
                 <div className="obs-stat-label">Date Range</div>
                 <div className="obs-daterange-inputs">
@@ -830,14 +905,14 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                     type="datetime-local"
                     className="obs-date-input"
                     value={dateFrom}
-                    onChange={e => setDateFrom(e.target.value)}
+                    onChange={e => { setDateFrom(e.target.value); setDeltaTime('') }}
                   />
                   <span className="obs-date-arrow">→</span>
                   <input
                     type="datetime-local"
                     className="obs-date-input"
                     value={dateTo}
-                    onChange={e => setDateTo(e.target.value)}
+                    onChange={e => { setDateTo(e.target.value); setDeltaTime('') }}
                   />
                 </div>
               </div>
