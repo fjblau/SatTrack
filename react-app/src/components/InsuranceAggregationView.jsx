@@ -737,7 +737,6 @@ function ScenarioResult({ result }) {
   if (!result) return null
 
   const { affected_assets = [], kestrel_coverage_impact = [] } = result
-  const [view, setView] = useState('graph')
 
   return (
     <div className="iagg-result">
@@ -768,23 +767,9 @@ function ScenarioResult({ result }) {
 
       {(affected_assets.length > 0 || kestrel_coverage_impact.length > 0) && (
         <div className="iagg-result-section">
-          <div className="iagg-result-section-header">
-            <h4 className="iagg-result-subtitle">Impact Analysis</h4>
-            <div className="iagg-view-toggle">
-              <button
-                className={`iagg-view-btn${view === 'graph' ? ' iagg-view-btn-active' : ''}`}
-                onClick={() => setView('graph')}
-              >Graph</button>
-              <button
-                className={`iagg-view-btn${view === 'table' ? ' iagg-view-btn-active' : ''}`}
-                onClick={() => setView('table')}
-              >Table</button>
-            </div>
-          </div>
+          <h4 className="iagg-result-subtitle">Impact Analysis</h4>
 
-          {view === 'graph' && <ScenarioGraph result={result} />}
-
-          {view === 'table' && affected_assets.length > 0 && (
+          {affected_assets.length > 0 && (
             <>
               <h4 className="iagg-result-subtitle" style={{ marginTop: '1rem' }}>Affected Insured Assets</h4>
               <div className="iagg-result-table-wrap">
@@ -824,7 +809,7 @@ function ScenarioResult({ result }) {
             </>
           )}
 
-          {view === 'table' && kestrel_coverage_impact.length > 0 && (
+          {kestrel_coverage_impact.length > 0 && (
             <>
               <h4 className="iagg-result-subtitle" style={{ marginTop: '1.25rem' }}>Kestrel Coverage Impact</h4>
               <table className="iagg-table">
@@ -881,17 +866,39 @@ export default function InsuranceAggregationView() {
 
   return (
     <div className="iagg-root">
-      <div className="iagg-top">
-        <div className="iagg-globe-panel">
+      <div className="iagg-controls-row">
+        <div className="iagg-card">
+          <ScenarioForm
+            shells={shells}
+            onResult={setScenarioResult}
+            onShellSelect={setHighlightShellId}
+          />
+        </div>
+
+        {!shellsLoading && shells.length > 0 && (
+          <div className="iagg-card">
+            <div className="iagg-panel-title">Book Exposure by Shell</div>
+            <ShellHeatmap shells={shells} />
+          </div>
+        )}
+      </div>
+
+      <div className="iagg-viz-row">
+        <div className="iagg-viz-panel">
           <div className="iagg-panel-title">Orbital Shell Exposure</div>
           {shellsLoading && (
-            <div className="iagg-globe-placeholder">
-              <div className="iagg-spinner" /> Loading shell data…
+            <div className="iagg-globe-wrapper">
+              <div className="iagg-globe-status">
+                <div className="iagg-spinner" />
+                <span>Loading shell data…</span>
+              </div>
             </div>
           )}
           {shellsError && (
-            <div className="iagg-globe-placeholder iagg-error">
-              Failed to load shell data: {shellsError}
+            <div className="iagg-globe-wrapper">
+              <div className="iagg-globe-status iagg-globe-error">
+                Failed to load shell data: {shellsError}
+              </div>
             </div>
           )}
           {!shellsLoading && !shellsError && (
@@ -904,19 +911,15 @@ export default function InsuranceAggregationView() {
           )}
         </div>
 
-        <div className="iagg-sidebar">
-          <div className="iagg-card">
-            <ScenarioForm
-              shells={shells}
-              onResult={setScenarioResult}
-              onShellSelect={setHighlightShellId}
-            />
-          </div>
-
-          {!shellsLoading && shells.length > 0 && (
-            <div className="iagg-card">
-              <div className="iagg-panel-title">Book Exposure by Shell</div>
-              <ShellHeatmap shells={shells} />
+        <div className="iagg-viz-panel">
+          <div className="iagg-panel-title">Impact Graph</div>
+          {scenarioResult ? (
+            <ScenarioGraph result={scenarioResult} />
+          ) : (
+            <div className="iagg-globe-wrapper">
+              <div className="iagg-globe-status">
+                Run a scenario to see the impact graph
+              </div>
             </div>
           )}
         </div>
