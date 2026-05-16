@@ -40,6 +40,106 @@ function emptyBand() {
   return { _id: uid(), min: '', max: '', color: '#3498db26' }
 }
 
+const STARTER_COLLECTION = [
+  {
+    "epoch": "2025-01-15T08:00:00Z",
+    "signal_dbm": -68.2,
+    "noise_floor_dbm": -97.4,
+    "link_quality": 0.94,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T09:00:00Z",
+    "signal_dbm": -70.1,
+    "noise_floor_dbm": -96.8,
+    "link_quality": 0.91,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T10:00:00Z",
+    "signal_dbm": -73.6,
+    "noise_floor_dbm": -95.2,
+    "link_quality": 0.86,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T11:00:00Z",
+    "signal_dbm": -79.3,
+    "noise_floor_dbm": -93.7,
+    "link_quality": 0.72,
+    "anomaly_detected": true
+  },
+  {
+    "epoch": "2025-01-15T12:00:00Z",
+    "signal_dbm": -84.5,
+    "noise_floor_dbm": -92.1,
+    "link_quality": 0.61,
+    "anomaly_detected": true
+  },
+  {
+    "epoch": "2025-01-15T13:00:00Z",
+    "signal_dbm": -82.0,
+    "noise_floor_dbm": -93.5,
+    "link_quality": 0.65,
+    "anomaly_detected": true
+  },
+  {
+    "epoch": "2025-01-15T14:00:00Z",
+    "signal_dbm": -76.4,
+    "noise_floor_dbm": -95.0,
+    "link_quality": 0.78,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T15:00:00Z",
+    "signal_dbm": -71.8,
+    "noise_floor_dbm": -96.3,
+    "link_quality": 0.88,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T16:00:00Z",
+    "signal_dbm": -69.5,
+    "noise_floor_dbm": -97.1,
+    "link_quality": 0.93,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T17:00:00Z",
+    "signal_dbm": -67.9,
+    "noise_floor_dbm": -97.8,
+    "link_quality": 0.96,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T18:00:00Z",
+    "signal_dbm": -68.7,
+    "noise_floor_dbm": -97.5,
+    "link_quality": 0.95,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T19:00:00Z",
+    "signal_dbm": -70.3,
+    "noise_floor_dbm": -96.9,
+    "link_quality": 0.90,
+    "anomaly_detected": false
+  }
+]
+
+const STARTER_CONFIG_HINT = {
+  title: "Signal Monitor",
+  subtitle: "Signal strength and link quality over time",
+  left: {
+    metrics: [{ key: "signal_dbm", label: "Signal (dBm)", color: "#3498db" }],
+    fillUnder: true
+  },
+  right: {
+    metrics: [{ key: "link_quality", label: "Link Quality (0–1)", color: "#27ae60" }]
+  },
+  flags: [{ key: "anomaly_detected", trueLabel: "Anomaly", trueColor: "#e74c3c", trueOnly: true, style: "line" }]
+}
+
 function buildSampleRecords(activeLeft, activeRight, activeFlags, count = 3) {
   const base = Date.now() - (count - 1) * 3600 * 1000
   return Array.from({ length: count }, (_, i) => {
@@ -268,6 +368,20 @@ export default function AdHocAnalytics() {
     URL.revokeObjectURL(a.href)
   }
 
+  function downloadStarterTemplate() {
+    const blob = new Blob([JSON.stringify(STARTER_COLLECTION, null, 2)], { type: 'application/json' })
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: 'starter-collection.json',
+    })
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  function loadStarterTemplate() {
+    importCollection(STARTER_COLLECTION, 'starter template')
+  }
+
   function exportConfig() {
     if (!chartConfig) return
     const { hasData, ...exportable } = chartConfig
@@ -461,8 +575,34 @@ export default function AdHocAnalytics() {
             <h3 className="adhoc-section-title">Link a Collection</h3>
           </div>
 
+          {/* Starter template — always visible */}
+          <div className="adhoc-starter-block">
+            <div className="adhoc-starter-head">
+              <span className="adhoc-starter-title">Starter Template</span>
+              <span className="adhoc-starter-badge">example</span>
+            </div>
+            <p className="adhoc-starter-desc">
+              A 12-record signal-monitoring collection demonstrating all supported field types:
+              a numeric left-axis metric (<code>signal_dbm</code>), a numeric right-axis metric (<code>link_quality</code>),
+              and a boolean flag (<code>anomaly_detected</code>). To use it, configure the analytic with the matching
+              keys below, then click <strong>Load into table</strong>.
+            </p>
+            <div className="adhoc-starter-config-hint">
+              <span className="adhoc-starter-hint-label">Matching analytic config:</span>
+              <pre className="adhoc-starter-pre">{JSON.stringify(STARTER_CONFIG_HINT, null, 2)}</pre>
+            </div>
+            <div className="adhoc-starter-actions">
+              <button className="adhoc-starter-load-btn" onClick={loadStarterTemplate}>
+                Load into table
+              </button>
+              <button className="adhoc-schema-dl" onClick={downloadStarterTemplate}>
+                Download JSON
+              </button>
+            </div>
+          </div>
+
           {!hasActiveKeys ? (
-            <p className="adhoc-empty-note">Configure at least one left axis metric first so the schema is known.</p>
+            <p className="adhoc-empty-note" style={{ marginTop: '0.5rem' }}>Configure at least one left axis metric first so the schema is known.</p>
           ) : (
             <>
               {/* Schema reference */}

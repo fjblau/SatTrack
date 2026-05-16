@@ -646,6 +646,104 @@
 
 .adhoc-clear-btn:hover { background: #fee2e2; }
 
+/* ── Starter template ── */
+.adhoc-starter-block {
+  border: 1.5px solid #a5d8ff;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, #e7f5ff 0%, #f8fbff 100%);
+}
+
+.adhoc-starter-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.adhoc-starter-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1a1f36;
+}
+
+.adhoc-starter-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #3498db;
+  background: #d0ebff;
+  border: 1px solid #a5d8ff;
+  border-radius: 3px;
+  padding: 0.05rem 0.4rem;
+}
+
+.adhoc-starter-desc {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  color: #495057;
+  line-height: 1.55;
+}
+
+.adhoc-starter-desc code {
+  background: #d0ebff;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  color: #1864ab;
+}
+
+.adhoc-starter-config-hint {
+  margin-bottom: 0.7rem;
+}
+
+.adhoc-starter-hint-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #8e9aaf;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 0.3rem;
+}
+
+.adhoc-starter-pre {
+  background: #1a1f36;
+  color: #a8d8ea;
+  border-radius: 6px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.75rem;
+  font-family: 'Monaco', 'Menlo', monospace;
+  overflow-x: auto;
+  margin: 0;
+  line-height: 1.55;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.adhoc-starter-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.adhoc-starter-load-btn {
+  padding: 0.38rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+  background: #3498db;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.adhoc-starter-load-btn:hover { background: #2980b9; }
+
 /* ── Preview ── */
 .adhoc-preview-wrap {
   border: 1px solid #dee2e6;
