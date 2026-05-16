@@ -638,130 +638,87 @@ def get_anomaly_correlation_network(limit: int = 100):
 
 
 def get_anomaly_correlation_heatmap(norad_id: int, max_satellites: int = 15):
-    """Get anomaly correlation heatmap data for a specific satellite.
+    """Compute a pairwise Pearson correlation matrix between anomaly/health metrics
+    for all observations of a single satellite.
 
-    Returns a matrix where rows = anomaly type categories from the selected
-    satellite's observations, columns = other satellites that co-occurred,
-    and cell values = normalized co-occurrence counts.
+    Returns a symmetric matrix where both axes are the same metric labels and
+    cell values are Pearson r coefficients in [-1, 1].
     """
-    db = _get_db()
+    import math
 
-    ANOMALY_LABELS = [
-        "Thermal Anomaly",
-        "Critical Health",
-        "Low Health",
-        "High Temp Variance",
-    ]
+    db = _get_db()
 
     cursor = db.aql.execute(
         """
         FOR obs IN @@observations
             FILTER obs.norad_id == @norad_id
-            FILTER obs.thermal.anomaly_flag == true OR obs.derived_health_score < 60
             RETURN {
-                _id: obs._id,
-                derived_health_score: obs.derived_health_score,
-                thermal: obs.thermal
+                anomaly_flag: obs.thermal.anomaly_flag == true ? 1 : 0,
+                health_score: obs.derived_health_score,
+                surface_temp: obs.thermal.surface_temp_K,
+                temp_variance: obs.thermal.temp_variance_30d,
+                spin_rate: obs.spin_rate_rpm
             }
         """,
         bind_vars={"@observations": COLLECTION_OBSERVATIONS, "norad_id": norad_id},
     )
-    own_obs = list(cursor)
+    rows = list(cursor)
 
-    if not own_obs:
+    METRIC_KEYS = ["anomaly_flag", "health_score", "surface_temp", "temp_variance", "spin_rate"]
+    METRIC_LABELS = ["Thermal Anomaly", "Health Score", "Surface Temp (K)", "Temp Variance", "Spin Rate (rpm)"]
+
+    vectors = {k: [] for k in METRIC_KEYS}
+    for row in rows:
+        for k in METRIC_KEYS:
+            v = row.get(k)
+            vectors[k].append(v)
+
+    def _pearson(xs, ys):
+        pairs = [(x, y) for x, y in zip(xs, ys) if x is not None and y is not None]
+        n = len(pairs)
+        if n < 2:
+            return None
+        mx = sum(p[0] for p in pairs) / n
+        my = sum(p[1] for p in pairs) / n
+        num = sum((p[0] - mx) * (p[1] - my) for p in pairs)
+        dx = math.sqrt(sum((p[0] - mx) ** 2 for p in pairs))
+        dy = math.sqrt(sum((p[1] - my) ** 2 for p in pairs))
+        if dx == 0 or dy == 0:
+            return None
+        return round(num / (dx * dy), 3)
+
+    used_keys = []
+    used_labels = []
+    for k, label in zip(METRIC_KEYS, METRIC_LABELS):
+        vals = [v for v in vectors[k] if v is not None]
+        if len(vals) >= 2 and len(set(vals)) > 1:
+            used_keys.append(k)
+            used_labels.append(label)
+
+    if len(used_keys) < 2:
         return {
             "norad_id": norad_id,
-            "anomaly_labels": [],
-            "correlated_objects": [],
+            "metric_labels": [],
             "matrix": [],
-            "max_count": 0,
+            "observation_count": len(rows),
         }
-
-    def classify_anomalies(obs):
-        types = []
-        thermal = obs.get("thermal") or {}
-        if thermal.get("anomaly_flag"):
-            types.append("Thermal Anomaly")
-        score = obs.get("derived_health_score")
-        if score is not None:
-            if score < 30:
-                types.append("Critical Health")
-            elif score < 60:
-                types.append("Low Health")
-        temp_var = thermal.get("temp_variance_30d")
-        if temp_var is not None and temp_var > 20:
-            types.append("High Temp Variance")
-        return types or ["Thermal Anomaly"]
-
-    obs_anomaly_map = {o["_id"]: classify_anomalies(o) for o in own_obs}
-    own_obs_ids = list(obs_anomaly_map.keys())
-
-    cursor = db.aql.execute(
-        """
-        FOR e IN @@corr_edges
-            FILTER e._from IN @obs_ids OR e._to IN @obs_ids
-            LET own_id = (e._from IN @obs_ids) ? e._from : e._to
-            LET other_id = (e._from IN @obs_ids) ? e._to : e._from
-            LET other_obs = DOCUMENT(other_id)
-            FILTER other_obs != null
-            FILTER other_obs.norad_id != @norad_id
-            RETURN {
-                own_id: own_id,
-                other_norad: other_obs.norad_id,
-                other_name: other_obs.object_name
-            }
-        """,
-        bind_vars={
-            "@corr_edges": EDGE_COLLECTION_OBS_CORRELATION,
-            "obs_ids": own_obs_ids,
-            "norad_id": norad_id,
-        },
-    )
-    corr_rows = list(cursor)
-
-    counts = {}
-    sat_names = {}
-    for row in corr_rows:
-        own_id = row["own_id"]
-        other_norad = row["other_norad"]
-        other_name = row.get("other_name") or str(other_norad)
-        sat_names[other_norad] = other_name
-        for atype in obs_anomaly_map.get(own_id, []):
-            key = (atype, other_norad)
-            counts[key] = counts.get(key, 0) + 1
-
-    sat_totals = {}
-    for (atype, norad), count in counts.items():
-        sat_totals[norad] = sat_totals.get(norad, 0) + count
-
-    top_sats = sorted(sat_totals.keys(), key=lambda n: -sat_totals[n])[:max_satellites]
-    used_labels = [l for l in ANOMALY_LABELS if any((l, n) in counts for n in top_sats)]
-
-    if not used_labels or not top_sats:
-        return {
-            "norad_id": norad_id,
-            "anomaly_labels": [],
-            "correlated_objects": [],
-            "matrix": [],
-            "max_count": 0,
-        }
-
-    max_count = max(counts.values()) if counts else 1
 
     matrix = []
-    for atype in used_labels:
+    for ki in used_keys:
         row = []
-        for norad in top_sats:
-            val = counts.get((atype, norad), 0)
-            row.append(round(val / max_count, 3))
+        for kj in used_keys:
+            if ki == kj:
+                row.append(1.0)
+            else:
+                r = _pearson(vectors[ki], vectors[kj])
+                row.append(r if r is not None else 0.0)
         matrix.append(row)
 
     return {
         "norad_id": norad_id,
-        "anomaly_labels": used_labels,
-        "correlated_objects": [{"norad_id": n, "name": sat_names.get(n, str(n))} for n in top_sats],
+        "metric_labels": used_labels,
         "matrix": matrix,
-        "max_count": max_count,
+        "observation_count": len(rows),
     }
 
 
