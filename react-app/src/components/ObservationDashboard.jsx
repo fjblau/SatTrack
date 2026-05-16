@@ -747,7 +747,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
           {/* Satellite dropdown */}
           {allowedSatellites.length > 0 && (
             <div className="obs-search-group">
-              <label>Select Satellite</label>
+              <label>Select Object</label>
               <select
                 className="obs-sat-select"
                 value={selectedSat?.norad_id || ''}
@@ -757,7 +757,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   if (sat) handleSelectSat(sat)
                 }}
               >
-                <option value="">— Choose a satellite —</option>
+                <option value="">— Choose an object —</option>
                 {allowedSatellites.map(s => (
                   <option key={s.norad_id} value={s.norad_id}>
                     {s.norad_id} — {s.name || 'Unknown'}
