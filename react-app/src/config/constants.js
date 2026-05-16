@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
     ANOMALIES: '/v2/observations/analytics/anomaly-distribution',
     SOURCES: '/v2/observations/analytics/source-distribution',
     AQL: '/v2/observations/aql',
+    ALLOWED_OBJECTS: '/v2/observations/allowed-objects',
   },
   
   GRAPHS: {
@@ -66,6 +67,7 @@ export const API_ENDPOINTS = {
     OBSERVATION_SOURCE_NETWORK: '/v2/graphs/observations/source-network',
     OBSERVATION_TEMPORAL_CHAIN: '/v2/graphs/observations/temporal-chain',
     OBSERVATION_ANOMALY_CORRELATION: '/v2/graphs/observations/anomaly-correlation',
+    OBSERVATION_ANOMALY_HEATMAP: '/v2/graphs/observations/anomaly-heatmap',
     OBSERVATION_GRAPH_STATS: '/v2/graphs/observations/graph-stats',
     OBSERVATION_POPULATE_EDGES: '/v2/graphs/observations/populate-edges',
   },

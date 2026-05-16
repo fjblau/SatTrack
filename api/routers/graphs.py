@@ -37,6 +37,7 @@ from database.observation_graph_ops import (
     get_source_reliability_network,
     get_temporal_chain,
     get_anomaly_correlation_network,
+    get_anomaly_correlation_heatmap,
     get_observation_graph_stats,
     populate_all_observation_edges,
 )
@@ -761,6 +762,24 @@ def get_observation_anomaly_correlation(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error building anomaly correlation network: {str(e)}")
+
+
+@router.get("/observations/anomaly-heatmap")
+def get_observation_anomaly_heatmap(
+    norad_id: int = Query(..., description="NORAD ID of the satellite to analyze"),
+    max_satellites: int = Query(default=15, ge=1, le=50, description="Max correlated satellites to show"),
+):
+    """Anomaly correlation heatmap for a specific satellite."""
+    try:
+        data = get_anomaly_correlation_heatmap(norad_id=norad_id, max_satellites=max_satellites)
+        return {
+            "data": data,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error building anomaly heatmap: {str(e)}")
 
 
 @router.get("/observations/graph-stats")

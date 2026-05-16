@@ -557,3 +557,20 @@
   align-items: center;
   gap: 1rem;
 }
+
+/* Object selector dropdown */
+.object-selector {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  min-width: 240px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.object-selector:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
