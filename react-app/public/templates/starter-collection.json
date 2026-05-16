@@ -1,0 +1,95 @@
+[
+  {
+    "_schema": "ad-hoc-analytics-collection/v1",
+    "_notes": {
+      "epoch": "ISO 8601 timestamp — required on every record. Also accepted: observation_epoch, timestamp, time. Unix seconds or ms also valid.",
+      "numeric_fields": "Replace signal_dbm, noise_floor_dbm, link_quality with your own key names. Values must be numbers.",
+      "boolean_fields": "Replace anomaly_detected with your own key name. Values must be true or false.",
+      "this_record": "Delete this _schema and _notes record before loading. It will be skipped automatically (no valid epoch)."
+    }
+  },
+  {
+    "epoch": "2025-01-15T08:00:00Z",
+    "signal_dbm": -68.2,
+    "noise_floor_dbm": -97.4,
+    "link_quality": 0.94,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T09:00:00Z",
+    "signal_dbm": -70.1,
+    "noise_floor_dbm": -96.8,
+    "link_quality": 0.91,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T10:00:00Z",
+    "signal_dbm": -73.6,
+    "noise_floor_dbm": -95.2,
+    "link_quality": 0.86,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T11:00:00Z",
+    "signal_dbm": -79.3,
+    "noise_floor_dbm": -93.7,
+    "link_quality": 0.72,
+    "anomaly_detected": true
+  },
+  {
+    "epoch": "2025-01-15T12:00:00Z",
+    "signal_dbm": -84.5,
+    "noise_floor_dbm": -92.1,
+    "link_quality": 0.61,
+    "anomaly_detected": true
+  },
+  {
+    "epoch": "2025-01-15T13:00:00Z",
+    "signal_dbm": -82.0,
+    "noise_floor_dbm": -93.5,
+    "link_quality": 0.65,
+    "anomaly_detected": true
+  },
+  {
+    "epoch": "2025-01-15T14:00:00Z",
+    "signal_dbm": -76.4,
+    "noise_floor_dbm": -95.0,
+    "link_quality": 0.78,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T15:00:00Z",
+    "signal_dbm": -71.8,
+    "noise_floor_dbm": -96.3,
+    "link_quality": 0.88,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T16:00:00Z",
+    "signal_dbm": -69.5,
+    "noise_floor_dbm": -97.1,
+    "link_quality": 0.93,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T17:00:00Z",
+    "signal_dbm": -67.9,
+    "noise_floor_dbm": -97.8,
+    "link_quality": 0.96,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T18:00:00Z",
+    "signal_dbm": -68.7,
+    "noise_floor_dbm": -97.5,
+    "link_quality": 0.95,
+    "anomaly_detected": false
+  },
+  {
+    "epoch": "2025-01-15T19:00:00Z",
+    "signal_dbm": -70.3,
+    "noise_floor_dbm": -96.9,
+    "link_quality": 0.90,
+    "anomaly_detected": false
+  }
+]

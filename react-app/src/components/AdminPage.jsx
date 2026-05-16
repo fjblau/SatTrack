@@ -45,6 +45,7 @@ const DEMO_TABS = [
       { id: 'observations', label: 'Observations' },
       { id: 'observation-graphs', label: 'Observation Graphs' },
       { id: 'observation-dashboard', label: 'Observation Dashboard' },
+      { id: 'ad-hoc-analytics', label: 'Ad Hoc Analytics' },
     ]
   },
   {
