@@ -8,7 +8,7 @@ import threading
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 from api.services.tle_service import warm_tle_cache
@@ -63,7 +63,7 @@ _OPENAPI_TAGS = [
     },
     {
         "name": "tle",
-        "description": "Two-Line Element (TLE) retrieval, persistence, and SGP4 orbit propagation.",
+        "description": "Two-Line Element (TLE) retrieval, persistence, SGP4 orbit propagation, and rate-limit-safe historical TLE archive.",
     },
     {
         "name": "ephemeris",
@@ -155,6 +155,7 @@ app.include_router(kestrel.router)
 app.include_router(objects.router)
 app.include_router(provenance.router)
 app.include_router(insurance.router)
+app.include_router(tle_history.router)
 
 
 def custom_openapi():

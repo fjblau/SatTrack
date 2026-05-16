@@ -9,7 +9,7 @@ a given NORAD ID or international designator.
 Authentication uses SpaceTrack's session-based login. A single session is reused
 across requests within its lifetime to avoid repeated logins.
 """
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import logging
 import time
 import requests
@@ -22,6 +22,7 @@ _BASE_URL = config.external.SPACETRACK_BASE_URL
 _LOGIN_URL = f"{_BASE_URL}/ajaxauth/login"
 _GP_NORAD_URL = "{base}/basicspacedata/query/class/gp/NORAD_CAT_ID/{norad_id}/orderby/EPOCH desc/limit/1/format/json"
 _GP_INTLDES_URL = "{base}/basicspacedata/query/class/gp/INTLDES/{intl_des}/orderby/EPOCH desc/limit/10/format/json"
+_GP_HISTORY_URL = "{base}/basicspacedata/query/class/gp_history/NORAD_CAT_ID/{norad_id}/EPOCH/{from_date}--{to_date}/orderby/EPOCH asc/format/json"
 
 _SESSION_TTL = 7200
 
@@ -170,3 +171,53 @@ def fetch_tle_from_spacetrack_by_intl_des(intl_des: str) -> Optional[Dict]:
     if result:
         logger.info(f"Successfully fetched TLE for intl des {intl_des} from SpaceTrack")
     return result
+
+
+def fetch_tle_history_range(norad_id: str, from_date: str, to_date: str) -> List[Dict]:
+    """
+    Fetch all historical TLE records for a NORAD ID within a date range from SpaceTrack
+    gp_history. This is a single bulk API call — no per-TLE requests are made.
+
+    from_date / to_date: "YYYY-MM-DD" strings (inclusive on both ends).
+
+    Returns a list of dicts, each containing:
+        gp_id, tle_epoch, line1, line2, object_name
+
+    Returns an empty list if credentials are not configured or no data is found.
+    SpaceTrack counts this as one API request regardless of how many TLEs are returned.
+    """
+    if not _credentials_configured():
+        logger.debug("SpaceTrack credentials not configured, skipping history fetch")
+        return []
+
+    url = _GP_HISTORY_URL.format(
+        base=_BASE_URL,
+        norad_id=norad_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    data = _do_get(url)
+    if not data:
+        logger.info(f"No historical TLEs on SpaceTrack for NORAD {norad_id} [{from_date} – {to_date}]")
+        return []
+
+    results = []
+    for entry in data:
+        line1 = entry.get("TLE_LINE1", "")
+        line2 = entry.get("TLE_LINE2", "")
+        epoch = entry.get("EPOCH", "")
+        if not (line1 and line2 and epoch):
+            continue
+        results.append({
+            "gp_id": str(entry.get("GP_ID", "")),
+            "tle_epoch": epoch,
+            "line1": line1,
+            "line2": line2,
+            "object_name": entry.get("OBJECT_NAME", ""),
+        })
+
+    logger.info(
+        f"SpaceTrack gp_history returned {len(results)} TLEs for NORAD {norad_id} "
+        f"[{from_date} – {to_date}]"
+    )
+    return results
