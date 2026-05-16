@@ -7,7 +7,6 @@ export function buildChartData(observations) {
       roll: obs.attitude?.roll_deg,
       pitch: obs.attitude?.pitch_deg,
       yaw: obs.attitude?.yaw_deg,
-      stability: obs.attitude?.stability_flag,
       isUnstable: obs.attitude?.stability_flag != null ? obs.attitude.stability_flag !== 'nominal' : null,
       temp: obs.surface_temp_K ?? obs.thermal?.surface_temp_K,
       tempVariance: obs.surface_temp_variance_30d ?? obs.thermal?.temp_variance_30d,

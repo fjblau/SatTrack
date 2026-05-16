@@ -197,7 +197,7 @@ const ANALYTICS_CONFIG = [
     id: 'orbital-decay',
     title: 'Orbital Decay',
     subtitle: 'Perigee drift rate and estimated perigee altitude',
-    hasData: (d) => d.drift != null || d.estimatedPerigee != null,
+    hasData: (d) => d.drift != null,
     left: {
       metrics: [{ key: 'drift', label: 'Perigee Drift (km/d)', color: COLORS.drift }],
     },
@@ -209,7 +209,7 @@ const ANALYTICS_CONFIG = [
     id: 'physical',
     title: 'Physical Properties',
     subtitle: 'Estimated mass and spin rate',
-    hasData: (d) => d.mass != null || d.spin != null,
+    hasData: (d) => d.mass != null,
     left: {
       metrics: [{ key: 'mass', label: 'Mass (kg)', color: COLORS.mass }],
     },
@@ -704,7 +704,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     if (!chartData.length) return null
     const healthVals = chartData.map(d => d.health).filter(v => v != null && isFinite(v))
     const anomalyCount = chartData.filter(d => d.thermalAnomaly === true).length
-    const maneuverCount = chartData.filter(d => d.manFlag === true || d.manFlag === 'true').length
+    const maneuverCount = chartData.filter(d => d.manFlag === true).length
     const first = chartData[0]?.epoch
     const last = chartData[chartData.length - 1]?.epoch
     return {
