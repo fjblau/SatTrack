@@ -73,6 +73,13 @@ export default function ObservationGraphs() {
   const [sourceMinObs, setSourceMinObs] = useState(5)
   const [exportingFormat, setExportingFormat] = useState(null)
 
+  // Anomaly correlation heatmap states
+  const [corrObjectOptions, setCorrObjectOptions] = useState([])
+  const [corrSelectedNorad, setCorrSelectedNorad] = useState('')
+  const [anomalyHeatmapData, setAnomalyHeatmapData] = useState(null)
+  const [heatmapLoading, setHeatmapLoading] = useState(false)
+  const [heatmapError, setHeatmapError] = useState(null)
+
   const SAMPLE_QUERIES = [
     {
       label: 'Recent Observations',
@@ -122,6 +129,9 @@ export default function ObservationGraphs() {
     if (['source-network', 'temporal', 'anomaly-correlation'].includes(activeView) && !graphStats) {
       fetchGraphStats()
     }
+    if (activeView === 'anomaly-correlation' && corrObjectOptions.length === 0) {
+      fetchCorrObjectOptions()
+    }
   }, [activeView])
 
   const fetchGraphStats = async () => {
@@ -133,6 +143,44 @@ export default function ObservationGraphs() {
       }
     } catch (err) {
       console.error('Error fetching graph stats:', err)
+    }
+  }
+
+  const fetchCorrObjectOptions = async () => {
+    try {
+      const response = await apiFetch(API_ENDPOINTS.OBSERVATION_ANALYTICS.ALLOWED_OBJECTS)
+      if (response.ok) {
+        const result = await response.json()
+        setCorrObjectOptions(result.data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching object options:', err)
+    }
+  }
+
+  const fetchAnomalyHeatmap = async (noradId) => {
+    setHeatmapLoading(true)
+    setHeatmapError(null)
+    setAnomalyHeatmapData(null)
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.GRAPHS.OBSERVATION_ANOMALY_HEATMAP}?norad_id=${noradId}`)
+      if (!response.ok) throw new Error(`Failed to fetch heatmap: ${response.statusText}`)
+      const result = await response.json()
+      setAnomalyHeatmapData(result.data)
+    } catch (err) {
+      console.error('Error fetching anomaly heatmap:', err)
+      setHeatmapError(err.message)
+    } finally {
+      setHeatmapLoading(false)
+    }
+  }
+
+  const handleCorrObjectSelect = (noradId) => {
+    setCorrSelectedNorad(noradId)
+    setAnomalyHeatmapData(null)
+    setHeatmapError(null)
+    if (noradId) {
+      fetchAnomalyHeatmap(noradId)
     }
   }
 
@@ -875,11 +923,212 @@ export default function ObservationGraphs() {
     )
   }
 
+  const renderAnomalyHeatmap = () => {
+    if (heatmapLoading) {
+      return (
+        <div className="loading-container" style={{ height: '300px' }}>
+          <p>Loading heatmap data...</p>
+        </div>
+      )
+    }
+
+    if (heatmapError) {
+      return <div className="inline-error">{heatmapError}</div>
+    }
+
+    if (!anomalyHeatmapData) return null
+
+    const { anomaly_labels, correlated_objects, matrix, max_count } = anomalyHeatmapData
+
+    if (!anomaly_labels || anomaly_labels.length === 0 || !correlated_objects || correlated_objects.length === 0) {
+      return (
+        <div className="no-results" style={{ padding: '3rem' }}>
+          No anomaly correlation data found for this object. Make sure correlation edges have been populated.
+        </div>
+      )
+    }
+
+    const CELL_W = 90
+    const CELL_H = 48
+    const LEFT_MARGIN = 170
+    const TOP_MARGIN = 110
+    const BOTTOM_MARGIN = 40
+    const LEGEND_PADDING = 20
+    const LEGEND_W = 100
+
+    const rows = anomaly_labels.length
+    const cols = correlated_objects.length
+
+    const svgW = LEFT_MARGIN + cols * CELL_W + LEGEND_W + LEGEND_PADDING
+    const svgH = TOP_MARGIN + rows * CELL_H + BOTTOM_MARGIN
+
+    const getColor = (value) => {
+      if (value === 0) return '#f0f9ff'
+      const stops = [
+        { t: 0, r: 219, g: 234, b: 254 },
+        { t: 0.33, r: 96, g: 165, b: 250 },
+        { t: 0.66, r: 37, g: 99, b: 235 },
+        { t: 1, r: 30, g: 27, b: 75 },
+      ]
+      let lo = stops[0], hi = stops[stops.length - 1]
+      for (let i = 0; i < stops.length - 1; i++) {
+        if (value >= stops[i].t && value <= stops[i + 1].t) {
+          lo = stops[i]
+          hi = stops[i + 1]
+          break
+        }
+      }
+      const range = hi.t - lo.t || 1
+      const frac = (value - lo.t) / range
+      const r = Math.round(lo.r + frac * (hi.r - lo.r))
+      const g = Math.round(lo.g + frac * (hi.g - lo.g))
+      const b = Math.round(lo.b + frac * (hi.b - lo.b))
+      return `rgb(${r},${g},${b})`
+    }
+
+    const legendSteps = 5
+    const legendCellH = 20
+
+    return (
+      <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
+        <svg width={svgW} height={svgH} style={{ fontFamily: 'inherit' }}>
+          {correlated_objects.map((obj, colIdx) => {
+            const x = LEFT_MARGIN + colIdx * CELL_W + CELL_W / 2
+            const y = TOP_MARGIN - 12
+            return (
+              <text
+                key={colIdx}
+                x={x}
+                y={y}
+                textAnchor="start"
+                fontSize="11"
+                fill="#555"
+                transform={`rotate(-40, ${x}, ${y})`}
+              >
+                {obj.name || String(obj.norad_id)}
+              </text>
+            )
+          })}
+
+          {anomaly_labels.map((label, rowIdx) => (
+            <text
+              key={rowIdx}
+              x={LEFT_MARGIN - 12}
+              y={TOP_MARGIN + rowIdx * CELL_H + CELL_H / 2 + 4}
+              textAnchor="end"
+              fontSize="12"
+              fill="#333"
+              fontWeight="500"
+            >
+              {label}
+            </text>
+          ))}
+
+          {matrix.map((row, rowIdx) =>
+            row.map((value, colIdx) => {
+              const x = LEFT_MARGIN + colIdx * CELL_W
+              const y = TOP_MARGIN + rowIdx * CELL_H
+              const rawCount = Math.round(value * max_count)
+              return (
+                <g key={`${rowIdx}-${colIdx}`}>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={CELL_W}
+                    height={CELL_H}
+                    fill={getColor(value)}
+                    stroke="#fff"
+                    strokeWidth="2"
+                    rx="2"
+                  />
+                  {rawCount > 0 && (
+                    <text
+                      x={x + CELL_W / 2}
+                      y={y + CELL_H / 2 + 4}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fontWeight="600"
+                      fill={value > 0.5 ? '#fff' : '#1e3a5f'}
+                    >
+                      {rawCount}
+                    </text>
+                  )}
+                </g>
+              )
+            })
+          )}
+
+          <text
+            x={LEFT_MARGIN + cols * CELL_W + LEGEND_PADDING}
+            y={TOP_MARGIN - 8}
+            fontSize="10"
+            fill="#666"
+          >
+            Co-occurrences
+          </text>
+          {Array.from({ length: legendSteps }, (_, i) => {
+            const t = i / (legendSteps - 1)
+            const lx = LEFT_MARGIN + cols * CELL_W + LEGEND_PADDING
+            const ly = TOP_MARGIN + i * legendCellH
+            return (
+              <g key={i}>
+                <rect x={lx} y={ly} width={20} height={legendCellH} fill={getColor(t)} stroke="#ddd" strokeWidth="0.5" />
+                <text x={lx + 26} y={ly + legendCellH / 2 + 4} fontSize="10" fill="#555">
+                  {i === 0 ? '0' : i === legendSteps - 1 ? max_count : ''}
+                </text>
+              </g>
+            )
+          })}
+
+          <text
+            x={LEFT_MARGIN + cols * CELL_W / 2}
+            y={TOP_MARGIN + rows * CELL_H + 28}
+            textAnchor="middle"
+            fontSize="12"
+            fill="#666"
+          >
+            Correlated Objects
+          </text>
+          <text
+            x={LEFT_MARGIN - 120}
+            y={TOP_MARGIN + rows * CELL_H / 2}
+            textAnchor="middle"
+            fontSize="12"
+            fill="#666"
+            transform={`rotate(-90, ${LEFT_MARGIN - 120}, ${TOP_MARGIN + rows * CELL_H / 2})`}
+          >
+            Anomaly Type
+          </text>
+        </svg>
+      </div>
+    )
+  }
+
   const renderAnomalyCorrelation = () => {
     return (
       <div className="chart-card network-view">
-        <h2>Anomaly Correlation Network</h2>
-        <p className="chart-description">Satellites linked by simultaneous thermal anomaly detections. Edge weight shows number of co-occurrences.</p>
+        <div className="card-header-actions">
+          <h2>Anomaly Correlation</h2>
+          <div className="header-controls">
+            <label htmlFor="corr-object-select" style={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Object:</label>
+            <select
+              id="corr-object-select"
+              className="object-selector"
+              value={corrSelectedNorad}
+              onChange={(e) => handleCorrObjectSelect(e.target.value)}
+            >
+              <option value="">— Select an object —</option>
+              {corrObjectOptions.map((obj) => (
+                <option key={obj.norad_id} value={obj.norad_id}>
+                  {obj.name ? `${obj.name} (${obj.norad_id})` : String(obj.norad_id)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <p className="chart-description">
+          Select an object to view its anomaly correlation heatmap. Rows show anomaly categories, columns show co-occurring objects, and cell values indicate how many times those anomalies co-occurred.
+        </p>
 
         {graphStats && (
           <div className="graph-stats-bar">
@@ -888,26 +1137,13 @@ export default function ObservationGraphs() {
           </div>
         )}
 
-        <div className="chart-controls">
-          <button onClick={fetchAnomalyCorrelation} className="run-button" disabled={loading}>
-            {loading ? 'Loading...' : 'Load Correlation Network'}
-          </button>
-        </div>
-
-        <div className="graph-container-wrapper">
-          {anomalyCorrData ? (
-            <div style={{ height: 'calc(100vh - 320px)', minHeight: '500px', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
-              <GraphViewer
-                graphType="neighborhood"
-                neighborhoodData={anomalyCorrData}
-              />
-            </div>
-          ) : (
-            <div className="graph-placeholder" style={{ height: 'calc(100vh - 320px)', minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
-              <p>Click "Load Correlation Network" to see cross-satellite anomaly patterns</p>
-            </div>
-          )}
-        </div>
+        {corrSelectedNorad ? (
+          renderAnomalyHeatmap()
+        ) : (
+          <div className="graph-placeholder" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '4px', color: '#999', fontStyle: 'italic' }}>
+            <p>Select an object from the dropdown above to view its anomaly correlation heatmap</p>
+          </div>
+        )}
       </div>
     )
   }

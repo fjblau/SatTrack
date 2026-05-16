@@ -637,6 +637,134 @@ def get_anomaly_correlation_network(limit: int = 100):
     }
 
 
+def get_anomaly_correlation_heatmap(norad_id: int, max_satellites: int = 15):
+    """Get anomaly correlation heatmap data for a specific satellite.
+
+    Returns a matrix where rows = anomaly type categories from the selected
+    satellite's observations, columns = other satellites that co-occurred,
+    and cell values = normalized co-occurrence counts.
+    """
+    db = _get_db()
+
+    ANOMALY_LABELS = [
+        "Thermal Anomaly",
+        "Critical Health",
+        "Low Health",
+        "High Temp Variance",
+    ]
+
+    cursor = db.aql.execute(
+        """
+        FOR obs IN @@observations
+            FILTER obs.norad_id == @norad_id
+            FILTER obs.thermal.anomaly_flag == true OR obs.derived_health_score < 60
+            RETURN {
+                _id: obs._id,
+                derived_health_score: obs.derived_health_score,
+                thermal: obs.thermal
+            }
+        """,
+        bind_vars={"@observations": COLLECTION_OBSERVATIONS, "norad_id": norad_id},
+    )
+    own_obs = list(cursor)
+
+    if not own_obs:
+        return {
+            "norad_id": norad_id,
+            "anomaly_labels": [],
+            "correlated_objects": [],
+            "matrix": [],
+            "max_count": 0,
+        }
+
+    def classify_anomalies(obs):
+        types = []
+        thermal = obs.get("thermal") or {}
+        if thermal.get("anomaly_flag"):
+            types.append("Thermal Anomaly")
+        score = obs.get("derived_health_score")
+        if score is not None:
+            if score < 30:
+                types.append("Critical Health")
+            elif score < 60:
+                types.append("Low Health")
+        temp_var = thermal.get("temp_variance_30d")
+        if temp_var is not None and temp_var > 20:
+            types.append("High Temp Variance")
+        return types or ["Thermal Anomaly"]
+
+    obs_anomaly_map = {o["_id"]: classify_anomalies(o) for o in own_obs}
+    own_obs_ids = list(obs_anomaly_map.keys())
+
+    cursor = db.aql.execute(
+        """
+        FOR e IN @@corr_edges
+            FILTER e._from IN @obs_ids OR e._to IN @obs_ids
+            LET own_id = (e._from IN @obs_ids) ? e._from : e._to
+            LET other_id = (e._from IN @obs_ids) ? e._to : e._from
+            LET other_obs = DOCUMENT(other_id)
+            FILTER other_obs != null
+            FILTER other_obs.norad_id != @norad_id
+            RETURN {
+                own_id: own_id,
+                other_norad: other_obs.norad_id,
+                other_name: other_obs.object_name
+            }
+        """,
+        bind_vars={
+            "@corr_edges": EDGE_COLLECTION_OBS_CORRELATION,
+            "obs_ids": own_obs_ids,
+            "norad_id": norad_id,
+        },
+    )
+    corr_rows = list(cursor)
+
+    counts = {}
+    sat_names = {}
+    for row in corr_rows:
+        own_id = row["own_id"]
+        other_norad = row["other_norad"]
+        other_name = row.get("other_name") or str(other_norad)
+        sat_names[other_norad] = other_name
+        for atype in obs_anomaly_map.get(own_id, []):
+            key = (atype, other_norad)
+            counts[key] = counts.get(key, 0) + 1
+
+    sat_totals = {}
+    for (atype, norad), count in counts.items():
+        sat_totals[norad] = sat_totals.get(norad, 0) + count
+
+    top_sats = sorted(sat_totals.keys(), key=lambda n: -sat_totals[n])[:max_satellites]
+    used_labels = [l for l in ANOMALY_LABELS if any((l, n) in counts for n in top_sats)]
+
+    if not used_labels or not top_sats:
+        return {
+            "norad_id": norad_id,
+            "anomaly_labels": [],
+            "correlated_objects": [],
+            "matrix": [],
+            "max_count": 0,
+        }
+
+    max_count = max(counts.values()) if counts else 1
+
+    matrix = []
+    for atype in used_labels:
+        row = []
+        for norad in top_sats:
+            val = counts.get((atype, norad), 0)
+            row.append(round(val / max_count, 3))
+        matrix.append(row)
+
+    return {
+        "norad_id": norad_id,
+        "anomaly_labels": used_labels,
+        "correlated_objects": [{"norad_id": n, "name": sat_names.get(n, str(n))} for n in top_sats],
+        "matrix": matrix,
+        "max_count": max_count,
+    }
+
+
 def get_observation_graph_stats():
     """Return counts for all observation edge collections."""
     db = _get_db()
