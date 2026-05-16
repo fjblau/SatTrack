@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { TimeSeriesChart } from './ObservationDashboard'
+import apiFetch from '../utils/apiFetch'
 import './AdHocAnalytics.css'
 
 const PRESET_COLORS = [
@@ -39,6 +40,27 @@ function emptyBand() {
   return { _id: uid(), min: '', max: '', color: '#3498db26' }
 }
 
+function buildSampleRecords(activeLeft, activeRight, activeFlags, count = 3) {
+  const base = Date.now() - (count - 1) * 3600 * 1000
+  return Array.from({ length: count }, (_, i) => {
+    const rec = { epoch: new Date(base + i * 3600 * 1000).toISOString() }
+    activeLeft.forEach(m  => { rec[m.key]  = parseFloat((Math.random() * 100).toFixed(3)) })
+    activeRight.forEach(m => { rec[m.key]  = parseFloat((Math.random() * 1).toFixed(4)) })
+    activeFlags.forEach(f => { rec[f.key]  = Math.random() > 0.7 })
+    return rec
+  })
+}
+
+function schemaComment(activeLeft, activeRight, activeFlags) {
+  const fields = [
+    { key: 'epoch', type: 'string', note: 'ISO 8601 timestamp or Unix epoch (seconds or ms)  required' },
+    ...activeLeft.map(m  => ({ key: m.key,  type: 'number',  note: `left axis — ${m.label}` })),
+    ...activeRight.map(m => ({ key: m.key,  type: 'number',  note: `right axis — ${m.label}` })),
+    ...activeFlags.map(f => ({ key: f.key,  type: 'boolean', note: `flag — ${f.trueLabel}` })),
+  ]
+  return fields
+}
+
 export default function AdHocAnalytics() {
   const [chartId] = useState(() => uid())
   const [title, setTitle] = useState('')
@@ -56,7 +78,15 @@ export default function AdHocAnalytics() {
   const [newRow, setNewRow] = useState({})
   const [rowErrors, setRowErrors] = useState([])
 
+  const [collectionUrl, setCollectionUrl] = useState('')
+  const [collectionLoading, setCollectionLoading] = useState(false)
+  const [collectionError, setCollectionError] = useState(null)
+  const [collectionInfo, setCollectionInfo] = useState(null)
+  const [showSchema, setShowSchema] = useState(false)
+
   const [previewing, setPreviewing] = useState(false)
+
+  const fileInputRef = useRef(null)
 
   const activeLeft  = leftMetrics.filter(m => m.key.trim() && m.label.trim())
   const activeRight = rightMetrics.filter(m => m.key.trim() && m.label.trim())
@@ -69,6 +99,8 @@ export default function AdHocAnalytics() {
     rightMetrics.every(m => m.key.trim() && m.label.trim()) &&
     flags.every(f => f.key.trim() && f.trueLabel.trim())
   )
+
+  const hasActiveKeys = activeLeft.length > 0
 
   const chartConfig = useMemo(() => {
     if (!configValid) return null
@@ -121,11 +153,9 @@ export default function AdHocAnalytics() {
   function updateMetric(list, setList, id, field, val) {
     setList(list.map(m => m._id === id ? { ...m, [field]: val } : m))
   }
-
   function updateFlag(id, field, val) {
     setFlags(p => p.map(f => f._id === id ? { ...f, [field]: val } : f))
   }
-
   function updateBand(id, field, val) {
     setBands(p => p.map(b => b._id === id ? { ...b, [field]: val } : b))
   }
@@ -151,6 +181,93 @@ export default function AdHocAnalytics() {
     setNewRow({})
   }
 
+  function importCollection(arr, source) {
+    if (!Array.isArray(arr) || arr.length === 0) {
+      setCollectionError('Expected a non-empty JSON array.')
+      return
+    }
+    const allKeys = [...activeLeft, ...activeRight].map(m => m.key)
+    const flagKeys = activeFlags.map(f => f.key)
+    let imported = 0, skipped = 0
+    const rows = []
+    arr.forEach(item => {
+      const epochRaw = item.epoch ?? item.observation_epoch ?? item.timestamp ?? item.time
+      if (!isValidEpoch(epochRaw)) { skipped++; return }
+      const row = { _id: uid(), _epoch: String(epochRaw) }
+      allKeys.forEach(k => {
+        const v = item[k]
+        row[k] = (v != null && v !== '') ? String(v) : ''
+      })
+      flagKeys.forEach(k => {
+        const v = item[k]
+        row[k] = v == null ? '' : String(Boolean(v))
+      })
+      rows.push(row)
+      imported++
+    })
+    if (rows.length === 0) {
+      setCollectionError(`No valid records found. All ${arr.length} items were missing a valid epoch field.`)
+      return
+    }
+    setCollectionError(null)
+    setDataRows(prev => {
+      const existing = new Set(prev.map(r => r._epoch))
+      const fresh = rows.filter(r => !existing.has(r._epoch))
+      return [...prev, ...fresh]
+    })
+    setCollectionInfo(`Loaded ${imported} record${imported !== 1 ? 's' : ''} from ${source}${skipped ? ` (${skipped} skipped — missing epoch)` : ''}.`)
+  }
+
+  async function loadFromUrl() {
+    if (!collectionUrl.trim()) return
+    setCollectionLoading(true)
+    setCollectionError(null)
+    setCollectionInfo(null)
+    try {
+      const res = await apiFetch(collectionUrl.trim())
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      const json = await res.json()
+      const arr = Array.isArray(json) ? json : (json.data ?? json.results ?? json.records ?? json.items)
+      if (!Array.isArray(arr)) throw new Error('Response is not a JSON array and has no recognised array key (data, results, records, items).')
+      importCollection(arr, collectionUrl.trim())
+    } catch (e) {
+      setCollectionError(e.message)
+    } finally {
+      setCollectionLoading(false)
+    }
+  }
+
+  function loadFromFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCollectionError(null)
+    setCollectionInfo(null)
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target.result)
+        const arr = Array.isArray(json) ? json : (json.data ?? json.results ?? json.records ?? json.items)
+        if (!Array.isArray(arr)) throw new Error('File is not a JSON array and has no recognised array key (data, results, records, items).')
+        importCollection(arr, file.name)
+      } catch (err) {
+        setCollectionError(err.message)
+      }
+      e.target.value = ''
+    }
+    reader.readAsText(file)
+  }
+
+  function downloadSample() {
+    const sample = buildSampleRecords(activeLeft, activeRight, activeFlags, 3)
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: 'application/json' })
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `sample-collection-${title.trim().replace(/\s+/g, '-').toLowerCase() || 'adhoc'}.json`,
+    })
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   function exportConfig() {
     if (!chartConfig) return
     const { hasData, ...exportable } = chartConfig
@@ -163,11 +280,21 @@ export default function AdHocAnalytics() {
     URL.revokeObjectURL(a.href)
   }
 
+  const schemaFields = useMemo(
+    () => schemaComment(activeLeft, activeRight, activeFlags),
+    [activeLeft, activeRight, activeFlags]
+  )
+
+  const sampleJson = useMemo(
+    () => buildSampleRecords(activeLeft, activeRight, activeFlags, 2),
+    [activeLeft, activeRight, activeFlags]
+  )
+
   return (
     <div className="adhoc-root">
       <div className="adhoc-header">
         <h2 className="adhoc-heading">Ad Hoc Analytics</h2>
-        <p className="adhoc-desc">Build a custom analytic, populate it with data, and preview the chart. Export the config to add it to the dashboard.</p>
+        <p className="adhoc-desc">Build a custom analytic, link or upload a collection, and preview the chart. Export the config to add it to the dashboard.</p>
       </div>
 
       <div className="adhoc-body">
@@ -204,34 +331,17 @@ export default function AdHocAnalytics() {
           <div className="adhoc-axis-block">
             <div className="adhoc-axis-head">
               <span className="adhoc-axis-name">Left Axis Metrics <span className="adhoc-req">*</span></span>
-              <button
-                className="adhoc-add-btn"
-                onClick={() => setLeftMetrics(p => [...p, emptyMetric(p.length)])}
-              >+ metric</button>
+              <button className="adhoc-add-btn" onClick={() => setLeftMetrics(p => [...p, emptyMetric(p.length)])}>+ metric</button>
             </div>
-            <div className="adhoc-metric-header">
-              <span>Key</span><span>Label</span><span>Color</span>
-            </div>
+            <div className="adhoc-metric-header"><span>Key</span><span>Label</span><span>Color</span></div>
             {leftMetrics.map(m => (
               <div key={m._id} className="adhoc-metric-row">
-                <input
-                  className="adhoc-input adhoc-input--key"
-                  value={m.key}
-                  onChange={e => updateMetric(leftMetrics, setLeftMetrics, m._id, 'key', e.target.value)}
-                  placeholder="myField"
-                />
-                <input
-                  className="adhoc-input adhoc-input--label"
-                  value={m.label}
-                  onChange={e => updateMetric(leftMetrics, setLeftMetrics, m._id, 'label', e.target.value)}
-                  placeholder="My Field (unit)"
-                />
-                <input
-                  type="color"
-                  className="adhoc-color"
-                  value={m.color}
-                  onChange={e => updateMetric(leftMetrics, setLeftMetrics, m._id, 'color', e.target.value)}
-                />
+                <input className="adhoc-input adhoc-input--key" value={m.key}
+                  onChange={e => updateMetric(leftMetrics, setLeftMetrics, m._id, 'key', e.target.value)} placeholder="myField" />
+                <input className="adhoc-input adhoc-input--label" value={m.label}
+                  onChange={e => updateMetric(leftMetrics, setLeftMetrics, m._id, 'label', e.target.value)} placeholder="My Field (unit)" />
+                <input type="color" className="adhoc-color" value={m.color}
+                  onChange={e => updateMetric(leftMetrics, setLeftMetrics, m._id, 'color', e.target.value)} />
                 {leftMetrics.length > 1 && (
                   <button className="adhoc-rm-btn" onClick={() => setLeftMetrics(p => p.filter(x => x._id !== m._id))}>✕</button>
                 )}
@@ -248,21 +358,11 @@ export default function AdHocAnalytics() {
               </label>
               {useFixedRange && (
                 <span className="adhoc-range-group">
-                  <input
-                    className="adhoc-input adhoc-input--narrow"
-                    type="number"
-                    value={fixedMin}
-                    onChange={e => setFixedMin(e.target.value)}
-                    placeholder="min"
-                  />
+                  <input className="adhoc-input adhoc-input--narrow" type="number" value={fixedMin}
+                    onChange={e => setFixedMin(e.target.value)} placeholder="min" />
                   <span className="adhoc-range-sep">–</span>
-                  <input
-                    className="adhoc-input adhoc-input--narrow"
-                    type="number"
-                    value={fixedMax}
-                    onChange={e => setFixedMax(e.target.value)}
-                    placeholder="max"
-                  />
+                  <input className="adhoc-input adhoc-input--narrow" type="number" value={fixedMax}
+                    onChange={e => setFixedMax(e.target.value)} placeholder="max" />
                 </span>
               )}
             </div>
@@ -272,41 +372,24 @@ export default function AdHocAnalytics() {
           <div className="adhoc-axis-block">
             <div className="adhoc-axis-head">
               <span className="adhoc-axis-name">Right Axis Metrics</span>
-              <button
-                className="adhoc-add-btn"
-                onClick={() => setRightMetrics(p => [...p, emptyMetric(leftMetrics.length + p.length)])}
-              >+ metric</button>
+              <button className="adhoc-add-btn" onClick={() => setRightMetrics(p => [...p, emptyMetric(leftMetrics.length + p.length)])}>+ metric</button>
             </div>
             {rightMetrics.length === 0
               ? <p className="adhoc-empty-note">No right axis — it will be suppressed.</p>
-              : (
-                <>
+              : <>
                   <div className="adhoc-metric-header"><span>Key</span><span>Label</span><span>Color</span></div>
                   {rightMetrics.map(m => (
                     <div key={m._id} className="adhoc-metric-row">
-                      <input
-                        className="adhoc-input adhoc-input--key"
-                        value={m.key}
-                        onChange={e => updateMetric(rightMetrics, setRightMetrics, m._id, 'key', e.target.value)}
-                        placeholder="myField"
-                      />
-                      <input
-                        className="adhoc-input adhoc-input--label"
-                        value={m.label}
-                        onChange={e => updateMetric(rightMetrics, setRightMetrics, m._id, 'label', e.target.value)}
-                        placeholder="My Field (unit)"
-                      />
-                      <input
-                        type="color"
-                        className="adhoc-color"
-                        value={m.color}
-                        onChange={e => updateMetric(rightMetrics, setRightMetrics, m._id, 'color', e.target.value)}
-                      />
+                      <input className="adhoc-input adhoc-input--key" value={m.key}
+                        onChange={e => updateMetric(rightMetrics, setRightMetrics, m._id, 'key', e.target.value)} placeholder="myField" />
+                      <input className="adhoc-input adhoc-input--label" value={m.label}
+                        onChange={e => updateMetric(rightMetrics, setRightMetrics, m._id, 'label', e.target.value)} placeholder="My Field (unit)" />
+                      <input type="color" className="adhoc-color" value={m.color}
+                        onChange={e => updateMetric(rightMetrics, setRightMetrics, m._id, 'color', e.target.value)} />
                       <button className="adhoc-rm-btn" onClick={() => setRightMetrics(p => p.filter(x => x._id !== m._id))}>✕</button>
                     </div>
                   ))}
                 </>
-              )
             }
           </div>
 
@@ -318,49 +401,29 @@ export default function AdHocAnalytics() {
             </div>
             {flags.length === 0
               ? <p className="adhoc-empty-note">No flags configured.</p>
-              : (
-                <>
+              : <>
                   <div className="adhoc-metric-header">
                     <span>Key</span><span>Label (true)</span><span>Color</span><span>Style</span><span>True only</span>
                   </div>
                   {flags.map(f => (
                     <div key={f._id} className="adhoc-metric-row">
-                      <input
-                        className="adhoc-input adhoc-input--key"
-                        value={f.key}
-                        onChange={e => updateFlag(f._id, 'key', e.target.value)}
-                        placeholder="myFlag"
-                      />
-                      <input
-                        className="adhoc-input adhoc-input--label"
-                        value={f.trueLabel}
-                        onChange={e => updateFlag(f._id, 'trueLabel', e.target.value)}
-                        placeholder="Anomaly detected"
-                      />
-                      <input
-                        type="color"
-                        className="adhoc-color"
-                        value={f.trueColor}
-                        onChange={e => updateFlag(f._id, 'trueColor', e.target.value)}
-                      />
-                      <select
-                        className="adhoc-select"
-                        value={f.style}
-                        onChange={e => updateFlag(f._id, 'style', e.target.value)}
-                      >
+                      <input className="adhoc-input adhoc-input--key" value={f.key}
+                        onChange={e => updateFlag(f._id, 'key', e.target.value)} placeholder="myFlag" />
+                      <input className="adhoc-input adhoc-input--label" value={f.trueLabel}
+                        onChange={e => updateFlag(f._id, 'trueLabel', e.target.value)} placeholder="Anomaly detected" />
+                      <input type="color" className="adhoc-color" value={f.trueColor}
+                        onChange={e => updateFlag(f._id, 'trueColor', e.target.value)} />
+                      <select className="adhoc-select" value={f.style}
+                        onChange={e => updateFlag(f._id, 'style', e.target.value)}>
                         <option value="line">line</option>
                         <option value="dot">dot</option>
                       </select>
-                      <input
-                        type="checkbox"
-                        checked={f.trueOnly}
-                        onChange={e => updateFlag(f._id, 'trueOnly', e.target.checked)}
-                      />
+                      <input type="checkbox" checked={f.trueOnly}
+                        onChange={e => updateFlag(f._id, 'trueOnly', e.target.checked)} />
                       <button className="adhoc-rm-btn" onClick={() => setFlags(p => p.filter(x => x._id !== f._id))}>✕</button>
                     </div>
                   ))}
                 </>
-              )
             }
           </div>
 
@@ -372,48 +435,143 @@ export default function AdHocAnalytics() {
             </div>
             {bands.length === 0
               ? <p className="adhoc-empty-note">No threshold bands configured.</p>
-              : (
-                <>
+              : <>
                   <div className="adhoc-metric-header"><span>Min</span><span>Max</span><span>Color</span></div>
                   {bands.map(b => (
                     <div key={b._id} className="adhoc-metric-row">
-                      <input
-                        className="adhoc-input adhoc-input--narrow"
-                        type="number"
-                        value={b.min}
-                        onChange={e => updateBand(b._id, 'min', e.target.value)}
-                        placeholder="0"
-                      />
-                      <input
-                        className="adhoc-input adhoc-input--narrow"
-                        type="number"
-                        value={b.max}
-                        onChange={e => updateBand(b._id, 'max', e.target.value)}
-                        placeholder="100"
-                      />
-                      <input
-                        type="color"
-                        className="adhoc-color"
+                      <input className="adhoc-input adhoc-input--narrow" type="number" value={b.min}
+                        onChange={e => updateBand(b._id, 'min', e.target.value)} placeholder="0" />
+                      <input className="adhoc-input adhoc-input--narrow" type="number" value={b.max}
+                        onChange={e => updateBand(b._id, 'max', e.target.value)} placeholder="100" />
+                      <input type="color" className="adhoc-color"
                         value={b.color.length === 9 ? b.color.slice(0, 7) : b.color}
-                        onChange={e => updateBand(b._id, 'color', e.target.value + '26')}
-                      />
+                        onChange={e => updateBand(b._id, 'color', e.target.value + '26')} />
                       <button className="adhoc-rm-btn" onClick={() => setBands(p => p.filter(x => x._id !== b._id))}>✕</button>
                     </div>
                   ))}
                 </>
-              )
             }
           </div>
         </section>
 
-        {/* ── Step 2: Data ── */}
+        {/* ── Step 2: Link / Load Collection ── */}
         <section className="adhoc-section">
           <div className="adhoc-section-head">
             <span className="adhoc-step-badge">2</span>
-            <h3 className="adhoc-section-title">Enter Data Points</h3>
+            <h3 className="adhoc-section-title">Link a Collection</h3>
           </div>
 
-          {activeLeft.length === 0 ? (
+          {!hasActiveKeys ? (
+            <p className="adhoc-empty-note">Configure at least one left axis metric first so the schema is known.</p>
+          ) : (
+            <>
+              {/* Schema reference */}
+              <div className="adhoc-schema-bar">
+                <span className="adhoc-schema-label">Collection schema</span>
+                <button className="adhoc-schema-toggle" onClick={() => setShowSchema(p => !p)}>
+                  {showSchema ? 'Hide schema' : 'View schema'}
+                </button>
+                <button className="adhoc-schema-dl" onClick={downloadSample} title="Download a sample JSON file">
+                  Download sample
+                </button>
+              </div>
+
+              {showSchema && (
+                <div className="adhoc-schema-block">
+                  <div className="adhoc-schema-legend">
+                    <span>A collection is a <strong>JSON array</strong> of flat objects. Each object must have an <code>epoch</code> field plus numeric and boolean fields matching the metric/flag keys configured above.</span>
+                  </div>
+
+                  <div className="adhoc-schema-fields">
+                    <div className="adhoc-schema-field adhoc-schema-field--header">
+                      <span>Field</span><span>Type</span><span>Note</span>
+                    </div>
+                    {schemaFields.map(f => (
+                      <div key={f.key} className={`adhoc-schema-field ${f.key === 'epoch' ? 'adhoc-schema-field--epoch' : ''}`}>
+                        <code>{f.key}</code>
+                        <span className="adhoc-schema-type">{f.type}</span>
+                        <span className="adhoc-schema-note">{f.note}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="adhoc-schema-sample-label">Sample (2 records):</div>
+                  <pre className="adhoc-schema-pre">{JSON.stringify(sampleJson, null, 2)}</pre>
+
+                  <div className="adhoc-schema-note-block">
+                    <strong>Epoch field</strong> is detected from <code>epoch</code>, <code>observation_epoch</code>, <code>timestamp</code>, or <code>time</code> — whichever is present. Value may be an ISO 8601 string or a Unix timestamp in seconds or milliseconds.
+                    <br />
+                    <strong>Array envelope</strong> — the file or response may be a bare array <code>[ … ]</code> or an object with a top-level array key named <code>data</code>, <code>results</code>, <code>records</code>, or <code>items</code>.
+                    <br />
+                    <strong>Extra fields</strong> in a record are silently ignored.
+                  </div>
+                </div>
+              )}
+
+              {/* Load from URL */}
+              <div className="adhoc-load-block">
+                <div className="adhoc-load-title">Load from URL</div>
+                <div className="adhoc-load-row">
+                  <input
+                    className="adhoc-input adhoc-url-input"
+                    type="url"
+                    value={collectionUrl}
+                    onChange={e => setCollectionUrl(e.target.value)}
+                    placeholder="https://… or /api/observations/25544"
+                    onKeyDown={e => e.key === 'Enter' && loadFromUrl()}
+                  />
+                  <button
+                    className="adhoc-load-btn"
+                    disabled={!collectionUrl.trim() || collectionLoading}
+                    onClick={loadFromUrl}
+                  >
+                    {collectionLoading ? 'Loading…' : 'Fetch'}
+                  </button>
+                </div>
+                <p className="adhoc-load-hint">
+                  Same-origin requests include your session token automatically. The endpoint must return JSON matching the schema above.
+                </p>
+              </div>
+
+              {/* Upload file */}
+              <div className="adhoc-load-block">
+                <div className="adhoc-load-title">Upload JSON file</div>
+                <div className="adhoc-load-row">
+                  <button className="adhoc-file-btn" onClick={() => fileInputRef.current?.click()}>
+                    Choose file…
+                  </button>
+                  <input ref={fileInputRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={loadFromFile} />
+                  <span className="adhoc-load-hint" style={{ marginTop: 0 }}>
+                    Select a <code>.json</code> file matching the schema above. Records are merged with any existing data.
+                  </span>
+                </div>
+              </div>
+
+              {collectionError && (
+                <div className="adhoc-errors" style={{ marginTop: '0.5rem' }}>
+                  <div className="adhoc-error-item">{collectionError}</div>
+                </div>
+              )}
+              {collectionInfo && (
+                <div className="adhoc-collection-info">{collectionInfo}</div>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* ── Step 3: Manual Data Entry ── */}
+        <section className="adhoc-section">
+          <div className="adhoc-section-head">
+            <span className="adhoc-step-badge">3</span>
+            <h3 className="adhoc-section-title">Data Points</h3>
+            {dataRows.length > 0 && (
+              <button className="adhoc-clear-btn" onClick={() => { setDataRows([]); setCollectionInfo(null) }}>
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {!hasActiveKeys ? (
             <p className="adhoc-empty-note">Configure at least one left axis metric with a key and label first.</p>
           ) : (
             <>
@@ -421,27 +579,15 @@ export default function AdHocAnalytics() {
                 <table className="adhoc-table">
                   <thead>
                     <tr>
-                      <th>
-                        Epoch
-                        <span className="adhoc-th-hint"> ISO or Unix ts</span>
-                      </th>
+                      <th>Epoch <span className="adhoc-th-hint">ISO or Unix ts</span></th>
                       {activeLeft.map(m => (
-                        <th key={m._id} style={{ color: m.color }}>
-                          {m.key}
-                          <span className="adhoc-th-hint"> number</span>
-                        </th>
+                        <th key={m._id} style={{ color: m.color }}>{m.key} <span className="adhoc-th-hint">number</span></th>
                       ))}
                       {activeRight.map(m => (
-                        <th key={m._id} style={{ color: m.color }}>
-                          {m.key}
-                          <span className="adhoc-th-hint"> number</span>
-                        </th>
+                        <th key={m._id} style={{ color: m.color }}>{m.key} <span className="adhoc-th-hint">number</span></th>
                       ))}
                       {activeFlags.map(f => (
-                        <th key={f._id} style={{ color: f.trueColor }}>
-                          {f.key}
-                          <span className="adhoc-th-hint"> bool</span>
-                        </th>
+                        <th key={f._id} style={{ color: f.trueColor }}>{f.key} <span className="adhoc-th-hint">bool</span></th>
                       ))}
                       <th></th>
                     </tr>
@@ -463,7 +609,7 @@ export default function AdHocAnalytics() {
                       </tr>
                     ))}
 
-                    {/* Input row */}
+                    {/* Manual input row */}
                     <tr className="adhoc-input-row">
                       <td>
                         <input
@@ -476,35 +622,25 @@ export default function AdHocAnalytics() {
                       </td>
                       {activeLeft.map(m => (
                         <td key={m._id}>
-                          <input
-                            className="adhoc-input adhoc-input--cell"
-                            type="number"
-                            value={newRow[m.key] ?? ''}
+                          <input className="adhoc-input adhoc-input--cell" type="number"
+                            value={newRow[m.key] ?? ''} placeholder="0"
                             onChange={e => setNewRow(p => ({ ...p, [m.key]: e.target.value }))}
-                            placeholder="0"
-                            onKeyDown={e => e.key === 'Enter' && addRow()}
-                          />
+                            onKeyDown={e => e.key === 'Enter' && addRow()} />
                         </td>
                       ))}
                       {activeRight.map(m => (
                         <td key={m._id}>
-                          <input
-                            className="adhoc-input adhoc-input--cell"
-                            type="number"
-                            value={newRow[m.key] ?? ''}
+                          <input className="adhoc-input adhoc-input--cell" type="number"
+                            value={newRow[m.key] ?? ''} placeholder="0"
                             onChange={e => setNewRow(p => ({ ...p, [m.key]: e.target.value }))}
-                            placeholder="0"
-                            onKeyDown={e => e.key === 'Enter' && addRow()}
-                          />
+                            onKeyDown={e => e.key === 'Enter' && addRow()} />
                         </td>
                       ))}
                       {activeFlags.map(f => (
                         <td key={f._id}>
-                          <select
-                            className="adhoc-select adhoc-select--cell"
+                          <select className="adhoc-select adhoc-select--cell"
                             value={newRow[f.key] ?? ''}
-                            onChange={e => setNewRow(p => ({ ...p, [f.key]: e.target.value }))}
-                          >
+                            onChange={e => setNewRow(p => ({ ...p, [f.key]: e.target.value }))}>
                             <option value="">—</option>
                             <option value="true">true</option>
                             <option value="false">false</option>
@@ -529,26 +665,18 @@ export default function AdHocAnalytics() {
           )}
         </section>
 
-        {/* ── Step 3: Preview & Export ── */}
+        {/* ── Step 4: Preview & Export ── */}
         <section className="adhoc-section">
           <div className="adhoc-section-head">
-            <span className="adhoc-step-badge">3</span>
+            <span className="adhoc-step-badge">4</span>
             <h3 className="adhoc-section-title">Preview & Export</h3>
           </div>
 
           <div className="adhoc-actions">
-            <button
-              className="adhoc-preview-btn"
-              disabled={!canPreview}
-              onClick={() => setPreviewing(p => !p)}
-            >
+            <button className="adhoc-preview-btn" disabled={!canPreview} onClick={() => setPreviewing(p => !p)}>
               {previewing ? 'Hide Preview' : 'Preview Chart'}
             </button>
-            <button
-              className="adhoc-export-btn"
-              disabled={!configValid}
-              onClick={exportConfig}
-            >
+            <button className="adhoc-export-btn" disabled={!configValid} onClick={exportConfig}>
               Export Config JSON
             </button>
           </div>
