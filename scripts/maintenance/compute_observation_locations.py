@@ -259,14 +259,20 @@ def run(args):
             return
 
     batch_size = args.batch_size
+    # When filtering (location == null), successfully written records leave the
+    # filtered set, so the pool self-advances — always query at offset 0.
+    # When recomputing (no filter), the pool is stable so offset pagination is needed.
+    use_offset_pagination = args.recompute
     offset = 0
     total_written = 0
     total_dry = 0
     total_no_tle = 0
     total_no_prop = 0
     batch_num = 0
+    total_processed = 0
 
     while True:
+        query_offset = offset if use_offset_pagination else 0
         obs_cursor = db.aql.execute(
             f"""
             FOR obs IN @@col
@@ -275,7 +281,7 @@ def run(args):
                 RETURN {{ _key: obs._key, norad_id: obs.norad_id,
                           observation_epoch: obs.observation_epoch }}
             """,
-            bind_vars={"@col": COLLECTION_OBSERVATIONS, "offset": offset, "batch": batch_size},
+            bind_vars={"@col": COLLECTION_OBSERVATIONS, "offset": query_offset, "batch": batch_size},
         )
         obs_batch = list(obs_cursor)
         if not obs_batch:
@@ -289,17 +295,26 @@ def run(args):
         total_dry += result["dry_run_would_write"]
         total_no_tle += result["skipped_no_tle"]
         total_no_prop += result["skipped_no_propagation"]
+        total_processed += len(obs_batch)
 
         batch_num += 1
-        processed = min(offset + batch_size, total_pending)
         print(
             f"  Batch {batch_num}: {len(obs_batch)} obs | "
             f"written={result['written']} dry={result['dry_run_would_write']} "
             f"no_tle={result['skipped_no_tle']} no_prop={result['skipped_no_propagation']} "
-            f"({processed}/{total_pending})"
+            f"({total_processed}/{total_pending})"
         )
 
-        offset += batch_size
+        if use_offset_pagination:
+            offset += batch_size
+        else:
+            skipped_this_batch = result["skipped_no_tle"] + result["skipped_no_propagation"]
+            if skipped_this_batch == len(obs_batch):
+                # Every record in this batch was skipped (no TLE / no propagation).
+                # These records will never get a location node written, so they stay
+                # in the filtered set forever. Advance the offset past them to avoid
+                # an infinite loop.
+                offset += batch_size
 
     print()
     if args.dry_run:
