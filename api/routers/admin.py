@@ -162,6 +162,29 @@ SCRIPT_CATALOGUE = [
         "depends_on": ["import_kestrel_proxy_v2"],
     },
     {
+        "id": "compute_observation_locations",
+        "name": "Compute Observation Locations",
+        "description": (
+            "For every observation record, finds the closest previous TLE from tle_history "
+            "(matched by NORAD ID and observation epoch) and uses SGP4 propagation to compute "
+            "the satellite's geodetic position (latitude, longitude, altitude) at that moment. "
+            "Also extracts parsed TLE orbital parameters (inclination, eccentricity, apogee, "
+            "perigee, period, mean motion, semi-major axis) and stores everything in a 'location' "
+            "sub-document on each observation. "
+            "Runs in batches: one AQL query per page fetches all relevant TLEs for that page's "
+            "NORAD IDs, Python performs binary-search matching and SGP4, then a single AQL bulk "
+            "UPDATE writes the entire batch — minimising database round-trips. "
+            "Skips observations that already have a location node (use --recompute to override). "
+            "Run preload_tle_history first to ensure TLE coverage. "
+            "Idempotent — safe to re-run after importing new observations."
+        ),
+        "category": "population",
+        "path": "scripts/maintenance/compute_observation_locations.py",
+        "args": ["--yes"],
+        "estimated_duration": "< 1 minute per 1 000 observations",
+        "depends_on": ["preload_tle_history"],
+    },
+    {
         "id": "migrate_collection_rename",
         "name": "Migrate: Rename satellites → objects",
         "description": "Renames the ArangoDB 'satellites' collection to 'objects', recreates indexes, and ensures the satellite_relationships graph points at the objects collection.",
