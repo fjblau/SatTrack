@@ -144,6 +144,24 @@ SCRIPT_CATALOGUE = [
         "path": "scripts/population/populate_observation_edges.py",
     },
     {
+        "id": "preload_tle_history",
+        "name": "Preload TLE History",
+        "description": (
+            "Fetches historical TLEs from SpaceTrack for every satellite that appears in the "
+            "Observations collection, using each satellite's earliest and latest observation_epoch "
+            "as the date-range bounds. TLEs are stored permanently in the tle_history collection "
+            "so that observation positions can be computed without repeat API calls. "
+            "Already-cached satellites are skipped instantly — only new ranges hit SpaceTrack. "
+            "A 15-second delay is inserted between live SpaceTrack requests to stay within rate limits. "
+            "Requires SPACETRACK_USERNAME and SPACETRACK_PASSWORD to be configured. "
+            "Idempotent — safe to re-run after importing new observations."
+        ),
+        "category": "population",
+        "path": "scripts/population/preload_tle_history.py",
+        "estimated_duration": "varies — ~15s per satellite not yet cached",
+        "depends_on": ["import_kestrel_proxy_v2"],
+    },
+    {
         "id": "migrate_collection_rename",
         "name": "Migrate: Rename satellites → objects",
         "description": "Renames the ArangoDB 'satellites' collection to 'objects', recreates indexes, and ensures the satellite_relationships graph points at the objects collection.",

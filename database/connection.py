@@ -19,6 +19,8 @@ COLLECTION_OBSERVATIONS = "observations"
 COLLECTION_OBSERVATION_SOURCES = "observation_sources"
 COLLECTION_EPHEMERIS = "ephemeris_envelopes"
 COLLECTION_MANEUVER_PLANS = "kestrel_maneuver_plans"
+COLLECTION_TLE_HISTORY = "tle_history"
+COLLECTION_TLE_HISTORY_COVERAGE = "tle_history_coverage"
 
 OBSERVATION_GRAPH_NAME = "observation_relationships"
 EDGE_COLLECTION_OBS_SATELLITE = "observation_satellite_edges"
@@ -120,6 +122,16 @@ def connect_arangodb():
         mpln_col.add_persistent_index(fields=['kestrel_norad_id'], unique=False)
         mpln_col.add_persistent_index(fields=['target_norad_id'], unique=False)
         mpln_col.add_persistent_index(fields=['created_at'], unique=False)
+
+        if not db.has_collection(COLLECTION_TLE_HISTORY):
+            db.create_collection(COLLECTION_TLE_HISTORY)
+        th_col = db.collection(COLLECTION_TLE_HISTORY)
+        th_col.add_persistent_index(fields=['norad_id'], unique=False)
+        th_col.add_persistent_index(fields=['tle_epoch'], unique=False)
+        th_col.add_persistent_index(fields=['norad_id', 'tle_epoch'], unique=False)
+
+        if not db.has_collection(COLLECTION_TLE_HISTORY_COVERAGE):
+            db.create_collection(COLLECTION_TLE_HISTORY_COVERAGE)
 
         # Ensure observation edge collections exist
         obs_edge_collections = [
