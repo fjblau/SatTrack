@@ -938,79 +938,86 @@ export default function ObservationGraphs() {
 
     if (!anomalyHeatmapData) return null
 
-    const { anomaly_labels, correlated_objects, matrix, max_count } = anomalyHeatmapData
+    const { metric_labels, matrix, observation_count } = anomalyHeatmapData
 
-    if (!anomaly_labels || anomaly_labels.length === 0 || !correlated_objects || correlated_objects.length === 0) {
+    if (!metric_labels || metric_labels.length === 0) {
       return (
         <div className="no-results" style={{ padding: '3rem' }}>
-          No anomaly correlation data found for this object. Make sure correlation edges have been populated.
+          Not enough observation data to compute correlations for this object
+          {observation_count > 0 ? ` (${observation_count} observation${observation_count !== 1 ? 's' : ''} found, but metrics lack sufficient variance).` : ' — no observations found.'}
         </div>
       )
     }
 
-    const CELL_W = 90
-    const CELL_H = 48
-    const LEFT_MARGIN = 170
-    const TOP_MARGIN = 110
+    const CELL_W = 110
+    const CELL_H = 54
+    const LEFT_MARGIN = 180
+    const TOP_MARGIN = 130
     const BOTTOM_MARGIN = 40
-    const LEGEND_PADDING = 20
-    const LEGEND_W = 100
+    const LEGEND_PADDING = 24
+    const LEGEND_W = 80
 
-    const rows = anomaly_labels.length
-    const cols = correlated_objects.length
-
-    const svgW = LEFT_MARGIN + cols * CELL_W + LEGEND_W + LEGEND_PADDING
-    const svgH = TOP_MARGIN + rows * CELL_H + BOTTOM_MARGIN
+    const n = metric_labels.length
+    const svgW = LEFT_MARGIN + n * CELL_W + LEGEND_PADDING + LEGEND_W
+    const svgH = TOP_MARGIN + n * CELL_H + BOTTOM_MARGIN
 
     const getColor = (value) => {
-      if (value === 0) return '#f0f9ff'
-      const stops = [
-        { t: 0, r: 219, g: 234, b: 254 },
-        { t: 0.33, r: 96, g: 165, b: 250 },
-        { t: 0.66, r: 37, g: 99, b: 235 },
-        { t: 1, r: 30, g: 27, b: 75 },
-      ]
-      let lo = stops[0], hi = stops[stops.length - 1]
+      if (value >= 0.999) return '#1a237e'
+      const stops = value >= 0
+        ? [
+            { t: 0,   r: 255, g: 255, b: 255 },
+            { t: 0.5, r: 100, g: 149, b: 237 },
+            { t: 1,   r: 26,  g: 35,  b: 126 },
+          ]
+        : [
+            { t: -1,  r: 183, g: 28,  b: 28  },
+            { t: -0.5,r: 229, g: 115, b: 115 },
+            { t: 0,   r: 255, g: 255, b: 255 },
+          ]
+      const clipped = Math.max(-1, Math.min(1, value))
+      let lo, hi
       for (let i = 0; i < stops.length - 1; i++) {
-        if (value >= stops[i].t && value <= stops[i + 1].t) {
-          lo = stops[i]
-          hi = stops[i + 1]
-          break
+        if (clipped >= stops[i].t && clipped <= stops[i + 1].t) {
+          lo = stops[i]; hi = stops[i + 1]; break
         }
       }
+      if (!lo) { lo = stops[0]; hi = stops[1] }
       const range = hi.t - lo.t || 1
-      const frac = (value - lo.t) / range
-      const r = Math.round(lo.r + frac * (hi.r - lo.r))
-      const g = Math.round(lo.g + frac * (hi.g - lo.g))
-      const b = Math.round(lo.b + frac * (hi.b - lo.b))
-      return `rgb(${r},${g},${b})`
+      const frac = (clipped - lo.t) / range
+      return `rgb(${Math.round(lo.r + frac * (hi.r - lo.r))},${Math.round(lo.g + frac * (hi.g - lo.g))},${Math.round(lo.b + frac * (hi.b - lo.b))})`
     }
 
-    const legendSteps = 5
-    const legendCellH = 20
+    const isLight = (value) => Math.abs(value) < 0.45
+
+    const LEGEND_STEPS = 9
+    const legendCellH = 18
 
     return (
-      <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
+      <div style={{ overflowX: 'auto', marginTop: '1.5rem' }}>
+        <div style={{ fontSize: '0.82rem', color: '#888', marginBottom: '0.5rem' }}>
+          Based on {observation_count} observation{observation_count !== 1 ? 's' : ''}. Pearson correlation coefficients: +1 = perfect positive, −1 = perfect negative, 0 = no linear relationship.
+        </div>
         <svg width={svgW} height={svgH} style={{ fontFamily: 'inherit' }}>
-          {correlated_objects.map((obj, colIdx) => {
+          {metric_labels.map((label, colIdx) => {
             const x = LEFT_MARGIN + colIdx * CELL_W + CELL_W / 2
-            const y = TOP_MARGIN - 12
+            const y = TOP_MARGIN - 14
             return (
               <text
                 key={colIdx}
                 x={x}
                 y={y}
                 textAnchor="start"
-                fontSize="11"
-                fill="#555"
-                transform={`rotate(-40, ${x}, ${y})`}
+                fontSize="11.5"
+                fill="#444"
+                fontWeight="500"
+                transform={`rotate(-38, ${x}, ${y})`}
               >
-                {obj.name || String(obj.norad_id)}
+                {label}
               </text>
             )
           })}
 
-          {anomaly_labels.map((label, rowIdx) => (
+          {metric_labels.map((label, rowIdx) => (
             <text
               key={rowIdx}
               x={LEFT_MARGIN - 12}
@@ -1028,7 +1035,7 @@ export default function ObservationGraphs() {
             row.map((value, colIdx) => {
               const x = LEFT_MARGIN + colIdx * CELL_W
               const y = TOP_MARGIN + rowIdx * CELL_H
-              const rawCount = Math.round(value * max_count)
+              const isDiag = rowIdx === colIdx
               return (
                 <g key={`${rowIdx}-${colIdx}`}>
                   <rect
@@ -1036,69 +1043,42 @@ export default function ObservationGraphs() {
                     y={y}
                     width={CELL_W}
                     height={CELL_H}
-                    fill={getColor(value)}
+                    fill={isDiag ? '#e8eaf6' : getColor(value)}
                     stroke="#fff"
                     strokeWidth="2"
-                    rx="2"
+                    rx="3"
                   />
-                  {rawCount > 0 && (
-                    <text
-                      x={x + CELL_W / 2}
-                      y={y + CELL_H / 2 + 4}
-                      textAnchor="middle"
-                      fontSize="11"
-                      fontWeight="600"
-                      fill={value > 0.5 ? '#fff' : '#1e3a5f'}
-                    >
-                      {rawCount}
-                    </text>
-                  )}
+                  <text
+                    x={x + CELL_W / 2}
+                    y={y + CELL_H / 2 + 4}
+                    textAnchor="middle"
+                    fontSize={isDiag ? '10' : '12'}
+                    fontWeight={isDiag ? '400' : '600'}
+                    fill={isDiag ? '#7986cb' : isLight(value) ? '#333' : '#fff'}
+                  >
+                    {isDiag ? '—' : value.toFixed(2)}
+                  </text>
                 </g>
               )
             })
           )}
 
-          <text
-            x={LEFT_MARGIN + cols * CELL_W + LEGEND_PADDING}
-            y={TOP_MARGIN - 8}
-            fontSize="10"
-            fill="#666"
-          >
-            Co-occurrences
-          </text>
-          {Array.from({ length: legendSteps }, (_, i) => {
-            const t = i / (legendSteps - 1)
-            const lx = LEFT_MARGIN + cols * CELL_W + LEGEND_PADDING
+          <text x={LEFT_MARGIN + n * CELL_W + LEGEND_PADDING} y={TOP_MARGIN - 10} fontSize="10" fill="#666" fontWeight="600">r value</text>
+          {Array.from({ length: LEGEND_STEPS }, (_, i) => {
+            const t = -1 + (2 * i) / (LEGEND_STEPS - 1)
+            const lx = LEFT_MARGIN + n * CELL_W + LEGEND_PADDING
             const ly = TOP_MARGIN + i * legendCellH
             return (
               <g key={i}>
-                <rect x={lx} y={ly} width={20} height={legendCellH} fill={getColor(t)} stroke="#ddd" strokeWidth="0.5" />
-                <text x={lx + 26} y={ly + legendCellH / 2 + 4} fontSize="10" fill="#555">
-                  {i === 0 ? '0' : i === legendSteps - 1 ? max_count : ''}
-                </text>
+                <rect x={lx} y={ly} width={22} height={legendCellH} fill={getColor(t)} stroke="#ddd" strokeWidth="0.5" />
+                {(i === 0 || i === Math.floor(LEGEND_STEPS / 2) || i === LEGEND_STEPS - 1) && (
+                  <text x={lx + 28} y={ly + legendCellH / 2 + 4} fontSize="10" fill="#555">
+                    {t === 0 ? '0' : t > 0 ? `+${t.toFixed(1)}` : t.toFixed(1)}
+                  </text>
+                )}
               </g>
             )
           })}
-
-          <text
-            x={LEFT_MARGIN + cols * CELL_W / 2}
-            y={TOP_MARGIN + rows * CELL_H + 28}
-            textAnchor="middle"
-            fontSize="12"
-            fill="#666"
-          >
-            Correlated Objects
-          </text>
-          <text
-            x={LEFT_MARGIN - 120}
-            y={TOP_MARGIN + rows * CELL_H / 2}
-            textAnchor="middle"
-            fontSize="12"
-            fill="#666"
-            transform={`rotate(-90, ${LEFT_MARGIN - 120}, ${TOP_MARGIN + rows * CELL_H / 2})`}
-          >
-            Anomaly Type
-          </text>
         </svg>
       </div>
     )
@@ -1127,7 +1107,7 @@ export default function ObservationGraphs() {
           </div>
         </div>
         <p className="chart-description">
-          Select an object to view its anomaly correlation heatmap. Rows show anomaly categories, columns show co-occurring objects, and cell values indicate how many times those anomalies co-occurred.
+          Select an object to view a pairwise correlation matrix across its anomaly and health metrics. Each cell shows the Pearson correlation coefficient between two metrics computed over all of the object's observations.
         </p>
 
         {graphStats && (
