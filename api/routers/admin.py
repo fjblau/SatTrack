@@ -302,6 +302,20 @@ SCRIPT_CATALOGUE = [
         "path": "scripts/population/seed_insurance_demo.py",
     },
     {
+        "id": "generate_task_sla_alerts",
+        "name": "Generate Task SLA Alerts",
+        "description": (
+            "Scans all customer_tasks documents and writes task_sla_alerts rows for four "
+            "breach conditions: delivery_overdue, qa_overdue, quote_expiring_soon, and "
+            "quote_expired. De-duplicates against existing active alerts so running twice "
+            "does not create duplicate rows. Use --dry-run to preview alerts without writing "
+            "to the database. Designed to be run hourly."
+        ),
+        "category": "maintenance",
+        "path": "scripts/maintenance/generate_task_sla_alerts.py",
+        "depends_on": ["seed_customer_tasks"],
+    },
+    {
         "id": "seed_customer_tasks",
         "name": "Seed Customer Tasks Demo Data",
         "description": (
