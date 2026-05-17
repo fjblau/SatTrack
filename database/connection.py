@@ -66,6 +66,18 @@ EDGE_COLLECTION_LAUNCHED_BY = "launched_by"
 EDGE_COLLECTION_LAUNCHED_VIA = "launched_via"
 EDGE_COLLECTION_LAUNCHED_FROM = "launched_from"
 
+# Customer Tasks overlay
+COLLECTION_CUSTOMER_TASKS        = "customer_tasks"
+COLLECTION_CUSTOMER_TASK_TRANS   = "customer_task_transitions"
+COLLECTION_TASK_DELIVERABLES     = "task_deliverables"
+COLLECTION_TASK_SLA_ALERTS       = "task_sla_alerts"
+
+EDGE_TASK_REQUESTED_BY           = "task_requested_by"
+EDGE_TASK_TARGETS_OBJECT         = "task_targets_object"
+EDGE_TASK_RELATES_TO_POLICY      = "task_relates_to_policy"
+EDGE_TASK_RELATES_TO_LOSS_EVENT  = "task_relates_to_loss_event"
+EDGE_TASK_PRODUCED_DELIVERABLE   = "task_produced_deliverable"
+
 client = None
 db = None
 satellites_collection = None
