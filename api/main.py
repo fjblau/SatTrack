@@ -8,7 +8,7 @@ import threading
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history, customer_tasks
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 from api.services.tle_service import warm_tle_cache
@@ -102,6 +102,10 @@ _OPENAPI_TAGS = [
         "description": "Insurance overlay: book dashboard, insured asset detail, loss events, witness chain, evidence verification, coverage, and constellation status.",
     },
     {
+        "name": "customer_tasks",
+        "description": "Customer Tasks overlay: contracted observation tasks, lifecycle management, SLA alerts, and overlay queries against existing observations.",
+    },
+    {
         "name": "admin",
         "description": "Administrative operations: data import scripts, DISCOS enrichment, database backups, and GMAT smoke tests.",
     },
@@ -155,6 +159,7 @@ app.include_router(kestrel.router)
 app.include_router(objects.router)
 app.include_router(provenance.router)
 app.include_router(insurance.router)
+app.include_router(customer_tasks.router)
 app.include_router(tle_history.router)
 
 
