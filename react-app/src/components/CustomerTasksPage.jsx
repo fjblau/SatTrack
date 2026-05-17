@@ -115,11 +115,42 @@ function TransitionModal({ taskKey, toStatus, onClose, onSuccess }) {
   )
 }
 
+const REPORT_ELIGIBLE_STATUSES = new Set([
+  'completed', 'delivered', 'closed', 'qa_review', 'pending_review',
+])
+
 function TaskDetail({ taskKey, onBack, onNavigateToObservations }) {
   const [task, setTask] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [modalState, setModalState] = useState(null)
+  const [reportDownloading, setReportDownloading] = useState(false)
+  const [reportError, setReportError] = useState(null)
+
+  const handleDownloadReport = async () => {
+    setReportDownloading(true)
+    setReportError(null)
+    try {
+      const res = await apiFetch(`/v2/customer-tasks/${taskKey}/report.pdf`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `HTTP ${res.status}`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `observation-report-${taskKey}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setReportError(e.message)
+    } finally {
+      setReportDownloading(false)
+    }
+  }
 
   const fetchDetail = useCallback(() => {
     setLoading(true)
@@ -156,6 +187,8 @@ function TaskDetail({ taskKey, onBack, onNavigateToObservations }) {
   const activeAlerts = task.active_alerts || []
   const allowedNext = task.allowed_next_states || []
 
+  const canDownloadReport = REPORT_ELIGIBLE_STATUSES.has(task.status)
+
   return (
     <div className="ct-section">
       <div className="ct-detail-header">
@@ -163,7 +196,18 @@ function TaskDetail({ taskKey, onBack, onNavigateToObservations }) {
         <span className="ct-detail-task-number">{task.task_number || task._key}</span>
         <StatusBadge status={task.customer_status} />
         <PriorityBadge priority={task.priority} />
+        {canDownloadReport && (
+          <button
+            className="ct-btn ct-btn-report"
+            onClick={handleDownloadReport}
+            disabled={reportDownloading}
+            style={{ marginLeft: 'auto' }}
+          >
+            {reportDownloading ? 'Generating…' : '⬇ Observation Report'}
+          </button>
+        )}
       </div>
+      {reportError && <div className="ct-error" style={{ marginBottom: '0.75rem' }}>Report error: {reportError}</div>}
 
       <div className="ct-card">
         <div className="ct-card-title">Scope</div>

@@ -439,3 +439,22 @@
 .ct-muted { font-size: 0.8rem; color: #64748b; }
 .ct-small { font-size: 0.8rem; }
 .ct-code  { font-size: 0.78rem; font-family: monospace; }
+
+.ct-btn-report {
+  background: linear-gradient(135deg, #1a1f36 0%, #2c3e6b 100%);
+  color: #fff;
+  border-color: #1a1f36;
+  font-size: 0.82rem;
+  padding: 0.35rem 1rem;
+  letter-spacing: 0.02em;
+}
+
+.ct-btn-report:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2c3e6b 0%, #3a5298 100%);
+  border-color: #2c3e6b;
+}
+
+.ct-btn-report:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
