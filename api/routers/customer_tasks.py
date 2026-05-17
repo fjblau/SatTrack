@@ -159,15 +159,27 @@ def get_task(task_key: str):
 
     norad_id = doc.get("target_norad_id")
     if norad_id is not None:
-        obs_count_result = _aql(
-            """
+        scope = doc.get("scope") or {}
+        win_start = scope.get("time_window_start")
+        win_end = scope.get("time_window_end")
+
+        count_aql = """
             RETURN LENGTH(
                 FOR obs IN @@observations
                     FILTER obs.norad_id == @norad_id
+                    FILTER @win_start == null OR obs.observation_epoch >= @win_start
+                    FILTER @win_end   == null OR obs.observation_epoch <= @win_end
                     RETURN 1
             )
-            """,
-            {"@observations": COLLECTION_OBSERVATIONS, "norad_id": norad_id},
+        """
+        obs_count_result = _aql(
+            count_aql,
+            {
+                "@observations": COLLECTION_OBSERVATIONS,
+                "norad_id": norad_id,
+                "win_start": win_start,
+                "win_end": win_end,
+            },
         )
         doc["observation_count"] = obs_count_result[0] if obs_count_result else 0
 
@@ -175,6 +187,8 @@ def get_task(task_key: str):
             """
             FOR obs IN @@observations
                 FILTER obs.norad_id == @norad_id
+                FILTER @win_start == null OR obs.observation_epoch >= @win_start
+                FILTER @win_end   == null OR obs.observation_epoch <= @win_end
                 FILTER obs.pass_id != null
                 COLLECT pass_id = obs.pass_id, kestrel_id = obs.kestrel_id
                     AGGREGATE
@@ -193,7 +207,12 @@ def get_task(task_key: str):
                     sunlit_frames: sunlit_frames
                 }
             """,
-            {"@observations": COLLECTION_OBSERVATIONS, "norad_id": norad_id},
+            {
+                "@observations": COLLECTION_OBSERVATIONS,
+                "norad_id": norad_id,
+                "win_start": win_start,
+                "win_end": win_end,
+            },
         )
     else:
         doc["observation_count"] = 0
