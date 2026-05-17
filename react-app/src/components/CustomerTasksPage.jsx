@@ -115,7 +115,7 @@ function TransitionModal({ taskKey, toStatus, onClose, onSuccess }) {
   )
 }
 
-function TaskDetail({ taskKey, onBack }) {
+function TaskDetail({ taskKey, onBack, onNavigateToObservations }) {
   const [task, setTask] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -168,6 +168,14 @@ function TaskDetail({ taskKey, onBack }) {
       <div className="ct-card">
         <div className="ct-card-title">Scope</div>
         <div className="ct-detail-grid">
+          <div className="ct-detail-field">
+            <span className="ct-detail-field-label">Target Object</span>
+            <span className="ct-detail-field-value">
+              {task.target_norad_id != null
+                ? <code className="ct-code">NORAD {task.target_norad_id}</code>
+                : '—'}
+            </span>
+          </div>
           <div className="ct-detail-field">
             <span className="ct-detail-field-label">Time Window Start</span>
             <span className="ct-detail-field-value">{fmtDateTime(scope.time_window_start)}</span>
@@ -251,6 +259,15 @@ function TaskDetail({ taskKey, onBack }) {
             <strong>{obsCount}</strong> observations
             {obsMin != null && ` (promised ${obsMin}–${obsMax ?? '∞'})`}
           </span>
+          {task.target_norad_id != null && onNavigateToObservations && (
+            <button
+              className="ct-btn ct-btn-sm"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => onNavigateToObservations(task.target_norad_id)}
+            >
+              View Observations →
+            </button>
+          )}
         </div>
       </div>
 
@@ -284,31 +301,34 @@ function TaskDetail({ taskKey, onBack }) {
         </div>
       )}
 
-      {deliverables.length > 0 && (
-        <div className="ct-card">
-          <div className="ct-card-title">Deliverables</div>
-          <table className="ct-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Version</th>
-                <th>Produced At</th>
-                <th>Released To Customer</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deliverables.map((d, i) => (
-                <tr key={d._key || i}>
-                  <td>{d.type || '—'}</td>
-                  <td className="ct-muted">{d.version || '—'}</td>
-                  <td className="ct-small">{fmtDateTime(d.produced_at)}</td>
-                  <td>{d.released_to_customer ? 'Yes' : 'No'}</td>
+      <div className="ct-card">
+        <div className="ct-card-title">Deliverables</div>
+        {deliverables.length === 0
+          ? <div className="ct-muted">No deliverables produced yet.</div>
+          : (
+            <table className="ct-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Version</th>
+                  <th>Produced At</th>
+                  <th>Released To Customer</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {deliverables.map((d, i) => (
+                  <tr key={d._key || i}>
+                    <td>{d.type || '—'}</td>
+                    <td className="ct-muted">{d.version || '—'}</td>
+                    <td className="ct-small">{fmtDateTime(d.produced_at)}</td>
+                    <td>{d.released_to_customer ? 'Yes' : 'No'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        }
+      </div>
 
       <div className="ct-card">
         <div className="ct-card-title">Audit Log</div>
@@ -408,7 +428,7 @@ function AlertsFeed() {
   )
 }
 
-function CustomerTasksPage() {
+function CustomerTasksPage({ onNavigateToObservations }) {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -464,7 +484,11 @@ function CustomerTasksPage() {
   if (selectedTaskKey) {
     return (
       <div className="analytics-view-container">
-        <TaskDetail taskKey={selectedTaskKey} onBack={() => setSelectedTaskKey(null)} />
+        <TaskDetail
+          taskKey={selectedTaskKey}
+          onBack={() => setSelectedTaskKey(null)}
+          onNavigateToObservations={onNavigateToObservations}
+        />
       </div>
     )
   }

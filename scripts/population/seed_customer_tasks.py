@@ -40,6 +40,51 @@ def ts_past(days=0, hours=0) -> str:
     return ts(NOW - timedelta(days=days, hours=hours))
 
 
+OBS_EPOCH_RANGES: dict[int, dict] = {}
+
+
+def _load_obs_epoch_ranges(db_module):
+    from database.connection import COLLECTION_OBSERVATIONS
+    cursor = db_module.db.aql.execute(
+        """
+        FOR obs IN @@col
+            COLLECT norad_id = obs.norad_id
+            AGGREGATE min_epoch = MIN(obs.observation_epoch),
+                      max_epoch = MAX(obs.observation_epoch)
+            RETURN {norad_id, min_epoch, max_epoch}
+        """,
+        bind_vars={"@col": COLLECTION_OBSERVATIONS},
+    )
+    for row in cursor:
+        nid = row["norad_id"]
+        if nid is not None:
+            OBS_EPOCH_RANGES[int(nid)] = {
+                "min": row["min_epoch"],
+                "max": row["max_epoch"],
+            }
+    print(f"  observation epoch ranges loaded for NORAD IDs: {sorted(OBS_EPOCH_RANGES)}")
+
+
+def obs_win_start(norad_id: int) -> str | None:
+    return OBS_EPOCH_RANGES.get(norad_id, {}).get("min")
+
+
+def obs_win_end(norad_id: int) -> str | None:
+    return OBS_EPOCH_RANGES.get(norad_id, {}).get("max")
+
+
+def _apply_obs_windows(tasks: list) -> None:
+    for task in tasks:
+        norad_id = task.get("target_norad_id")
+        if norad_id is None:
+            continue
+        scope = task.get("scope")
+        if scope is None:
+            continue
+        scope["time_window_start"] = obs_win_start(norad_id)
+        scope["time_window_end"] = obs_win_end(norad_id)
+
+
 # ---------------------------------------------------------------------------
 # Fixture definitions
 # ---------------------------------------------------------------------------
@@ -68,7 +113,7 @@ PLACEHOLDER_PARTIES = [
     },
 ]
 
-NORAD_TARGETS = [25544, 49260, 55557, 55119]
+NORAD_TARGETS = [25400, 26536, 39091, 44548]
 
 POLICY_KEYS = ["POL-2026-001", "POL-2026-002", "POL-2026-003"]
 LOSS_EVENT_KEYS = ["LE-2026-001", "LE-2026-002"]
@@ -82,12 +127,12 @@ CUSTOMER_TASKS = [
         "description": "Full observational risk assessment for the International Space Station ahead of policy renewal.",
         "status": "closed",
         "requesting_party_id": "parties/party-cust-alpha",
-        "target_object_id": "observations/25544",
-        "target_norad_id": 25544,
+        "target_object_id": "observations/25400",
+        "target_norad_id": 25400,
         "trigger": {"type": "renewal_cycle", "policy_id": "POL-2026-001", "renewal_date": "2026-04-01"},
         "scope": {
-            "time_window_start": ts_past(days=91),
-            "time_window_end": ts_past(days=74),
+            "time_window_start": obs_win_start(25400),
+            "time_window_end": obs_win_end(25400),
             "observation_count_min": 28,
             "observation_count_max": 32,
             "required_sensor_types": ["optical", "radar"],
@@ -143,12 +188,12 @@ CUSTOMER_TASKS = [
         "description": "Observation campaign following reported close approach between Starlink units and debris field.",
         "status": "executing",
         "requesting_party_id": "parties/party-cust-bravo",
-        "target_object_id": "observations/49260",
-        "target_norad_id": 49260,
+        "target_object_id": "observations/26536",
+        "target_norad_id": 26536,
         "trigger": {"type": "loss_event", "loss_event_id": "LE-2026-001"},
         "scope": {
-            "time_window_start": ts_past(days=3),
-            "time_window_end": ts_future(days=12),
+            "time_window_start": obs_win_start(26536),
+            "time_window_end": obs_win_end(26536),
             "observation_count_min": 12,
             "observation_count_max": 18,
             "required_sensor_types": ["optical"],
@@ -196,15 +241,15 @@ CUSTOMER_TASKS = [
         "_key": "TSK-DRAFT-2026-0055",
         "task_ref": "TSK-DRAFT-2026-0055",
         "title": "Exploratory characterisation — TianHe-1 replacement orbit",
-        "description": "Customer preliminary inquiry for observation coverage of NORAD 55557 following reported manoeuvre.",
+        "description": "Customer preliminary inquiry for observation coverage of NORAD 39091 following reported manoeuvre.",
         "status": "drafted",
         "requesting_party_id": "parties/party-cust-charlie",
-        "target_object_id": "observations/55557",
-        "target_norad_id": 55557,
+        "target_object_id": "observations/39091",
+        "target_norad_id": 39091,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_future(days=14),
-            "time_window_end": ts_future(days=44),
+            "time_window_start": obs_win_start(39091),
+            "time_window_end": obs_win_end(39091),
             "observation_count_min": 10,
             "observation_count_max": 20,
             "required_sensor_types": ["optical", "radar"],
@@ -228,16 +273,16 @@ CUSTOMER_TASKS = [
     {
         "_key": "TSK-2026-0002",
         "task_ref": "TSK-2026-0002",
-        "title": "Routine health check — NORAD 55119",
+        "title": "Routine health check — NORAD 44548",
         "description": "Scheduled quarterly observation of debris object.",
         "status": "submitted",
         "requesting_party_id": "parties/party-cust-alpha",
-        "target_object_id": "observations/55119",
-        "target_norad_id": 55119,
+        "target_object_id": "observations/44548",
+        "target_norad_id": 44548,
         "trigger": {"type": "renewal_cycle", "policy_id": "POL-2026-002"},
         "scope": {
-            "time_window_start": ts_future(days=7),
-            "time_window_end": ts_future(days=28),
+            "time_window_start": obs_win_start(44548),
+            "time_window_end": obs_win_end(44548),
             "observation_count_min": 10,
             "observation_count_max": 15,
             "required_sensor_types": ["optical"],
@@ -265,12 +310,12 @@ CUSTOMER_TASKS = [
         "description": "Requirements scoping for multi-month ISS observation campaign.",
         "status": "scoping",
         "requesting_party_id": "parties/party-cust-bravo",
-        "target_object_id": "observations/25544",
-        "target_norad_id": 25544,
+        "target_object_id": "observations/25400",
+        "target_norad_id": 25400,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_future(days=30),
-            "time_window_end": ts_future(days=120),
+            "time_window_start": obs_win_start(25400),
+            "time_window_end": obs_win_end(25400),
             "observation_count_min": 60,
             "observation_count_max": 100,
             "required_sensor_types": ["optical", "radar"],
@@ -300,12 +345,12 @@ CUSTOMER_TASKS = [
         "description": "Quote awaiting customer acceptance for proximity survey.",
         "status": "quoted",
         "requesting_party_id": "parties/party-cust-charlie",
-        "target_object_id": "observations/49260",
-        "target_norad_id": 49260,
+        "target_object_id": "observations/26536",
+        "target_norad_id": 26536,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_future(days=10),
-            "time_window_end": ts_future(days=18),
+            "time_window_start": obs_win_start(26536),
+            "time_window_end": obs_win_end(26536),
             "observation_count_min": 15,
             "observation_count_max": 15,
             "required_sensor_types": ["optical"],
@@ -345,16 +390,16 @@ CUSTOMER_TASKS = [
     {
         "_key": "TSK-2026-0005",
         "task_ref": "TSK-2026-0005",
-        "title": "Accepted task — NORAD 55119 characterisation",
+        "title": "Accepted task — NORAD 44548 characterisation",
         "description": "Customer accepted quote; pending scheduling.",
         "status": "accepted",
         "requesting_party_id": "parties/party-cust-alpha",
-        "target_object_id": "observations/55119",
-        "target_norad_id": 55119,
+        "target_object_id": "observations/44548",
+        "target_norad_id": 44548,
         "trigger": {"type": "renewal_cycle", "policy_id": "POL-2026-003"},
         "scope": {
-            "time_window_start": ts_future(days=3),
-            "time_window_end": ts_future(days=18),
+            "time_window_start": obs_win_start(44548),
+            "time_window_end": obs_win_end(44548),
             "observation_count_min": 15,
             "observation_count_max": 15,
             "required_sensor_types": ["optical"],
@@ -399,12 +444,12 @@ CUSTOMER_TASKS = [
         "description": "RF signal characterisation campaign, slots reserved.",
         "status": "scheduled",
         "requesting_party_id": "parties/party-cust-bravo",
-        "target_object_id": "observations/25544",
-        "target_norad_id": 25544,
+        "target_object_id": "observations/25400",
+        "target_norad_id": 25400,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_past(days=2),
-            "time_window_end": ts_future(days=8),
+            "time_window_start": obs_win_start(25400),
+            "time_window_end": obs_win_end(25400),
             "observation_count_min": 15,
             "observation_count_max": 15,
             "required_sensor_types": ["optical", "radar", "rf"],
@@ -450,12 +495,12 @@ CUSTOMER_TASKS = [
         "description": "All observation passes completed; awaiting analysis.",
         "status": "observations_complete",
         "requesting_party_id": "parties/party-cust-charlie",
-        "target_object_id": "observations/49260",
-        "target_norad_id": 49260,
+        "target_object_id": "observations/26536",
+        "target_norad_id": 26536,
         "trigger": {"type": "loss_event", "loss_event_id": "LE-2026-002"},
         "scope": {
-            "time_window_start": ts_past(days=21),
-            "time_window_end": ts_past(days=4),
+            "time_window_start": obs_win_start(26536),
+            "time_window_end": obs_win_end(26536),
             "observation_count_min": 20,
             "observation_count_max": 25,
             "required_sensor_types": ["optical"],
@@ -500,16 +545,16 @@ CUSTOMER_TASKS = [
     {
         "_key": "TSK-2026-0008",
         "task_ref": "TSK-2026-0008",
-        "title": "Under review — NORAD 55557 manoeuvre report",
+        "title": "Under review — NORAD 39091 manoeuvre report",
         "description": "Analysis complete, report under QA review.",
         "status": "under_review",
         "requesting_party_id": "parties/party-cust-alpha",
-        "target_object_id": "observations/55557",
-        "target_norad_id": 55557,
+        "target_object_id": "observations/39091",
+        "target_norad_id": 39091,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_past(days=36),
-            "time_window_end": ts_past(days=14),
+            "time_window_start": obs_win_start(39091),
+            "time_window_end": obs_win_end(39091),
             "observation_count_min": 18,
             "observation_count_max": 20,
             "required_sensor_types": ["optical", "radar"],
@@ -559,12 +604,12 @@ CUSTOMER_TASKS = [
         "description": "Report delivered to customer pending acceptance.",
         "status": "delivered",
         "requesting_party_id": "parties/party-cust-bravo",
-        "target_object_id": "observations/25544",
-        "target_norad_id": 25544,
+        "target_object_id": "observations/25400",
+        "target_norad_id": 25400,
         "trigger": {"type": "renewal_cycle", "policy_id": "POL-2026-001"},
         "scope": {
-            "time_window_start": ts_past(days=81),
-            "time_window_end": ts_past(days=64),
+            "time_window_start": obs_win_start(25400),
+            "time_window_end": obs_win_end(25400),
             "observation_count_min": 35,
             "observation_count_max": 40,
             "required_sensor_types": ["optical", "radar"],
@@ -611,16 +656,16 @@ CUSTOMER_TASKS = [
     {
         "_key": "TSK-2026-0010",
         "task_ref": "TSK-2026-0010",
-        "title": "Accepted by customer — NORAD 55119 report",
+        "title": "Accepted by customer — NORAD 44548 report",
         "description": "Customer formally accepted the delivered report.",
         "status": "accepted_by_customer",
         "requesting_party_id": "parties/party-cust-charlie",
-        "target_object_id": "observations/55119",
-        "target_norad_id": 55119,
+        "target_object_id": "observations/44548",
+        "target_norad_id": 44548,
         "trigger": {"type": "renewal_cycle", "policy_id": "POL-2026-003"},
         "scope": {
-            "time_window_start": ts_past(days=91),
-            "time_window_end": ts_past(days=74),
+            "time_window_start": obs_win_start(44548),
+            "time_window_end": obs_win_end(44548),
             "observation_count_min": 20,
             "observation_count_max": 20,
             "required_sensor_types": ["optical"],
@@ -672,12 +717,12 @@ CUSTOMER_TASKS = [
         "description": "Customer disputes accuracy of delivered observations.",
         "status": "disputed",
         "requesting_party_id": "parties/party-cust-alpha",
-        "target_object_id": "observations/49260",
-        "target_norad_id": 49260,
+        "target_object_id": "observations/26536",
+        "target_norad_id": 26536,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_past(days=139),
-            "time_window_end": ts_past(days=119),
+            "time_window_start": obs_win_start(26536),
+            "time_window_end": obs_win_end(26536),
             "observation_count_min": 15,
             "observation_count_max": 20,
             "required_sensor_types": ["optical"],
@@ -713,12 +758,12 @@ CUSTOMER_TASKS = [
         "description": "Customer cancelled this task as scope was merged into TSK-2026-0028.",
         "status": "cancelled",
         "requesting_party_id": "parties/party-cust-bravo",
-        "target_object_id": "observations/49260",
-        "target_norad_id": 49260,
+        "target_object_id": "observations/26536",
+        "target_norad_id": 26536,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_future(days=5),
-            "time_window_end": ts_future(days=12),
+            "time_window_start": obs_win_start(26536),
+            "time_window_end": obs_win_end(26536),
             "observation_count_min": 10,
             "observation_count_max": 15,
             "required_sensor_types": ["optical"],
@@ -751,12 +796,12 @@ CUSTOMER_TASKS = [
         "description": "Intentionally breached: delivery_due is in the past while still executing.",
         "status": "executing",
         "requesting_party_id": "parties/party-cust-charlie",
-        "target_object_id": "observations/55119",
-        "target_norad_id": 55119,
+        "target_object_id": "observations/44548",
+        "target_norad_id": 44548,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_past(days=11),
-            "time_window_end": ts_future(days=5),
+            "time_window_start": obs_win_start(44548),
+            "time_window_end": obs_win_end(44548),
             "observation_count_min": 10,
             "observation_count_max": 15,
             "required_sensor_types": ["optical"],
@@ -791,12 +836,12 @@ CUSTOMER_TASKS = [
         "description": "Intentionally breached: quote_expires_at within 24 hours.",
         "status": "quoted",
         "requesting_party_id": "parties/party-cust-alpha",
-        "target_object_id": "observations/55557",
-        "target_norad_id": 55557,
+        "target_object_id": "observations/39091",
+        "target_norad_id": 39091,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_future(days=5),
-            "time_window_end": ts_future(days=18),
+            "time_window_start": obs_win_start(39091),
+            "time_window_end": obs_win_end(39091),
             "observation_count_min": 12,
             "observation_count_max": 15,
             "required_sensor_types": ["optical", "radar"],
@@ -842,12 +887,12 @@ CUSTOMER_TASKS = [
         "description": "Intentionally breached: quote_expires_at already past.",
         "status": "quoted",
         "requesting_party_id": "parties/party-cust-bravo",
-        "target_object_id": "observations/25544",
-        "target_norad_id": 25544,
+        "target_object_id": "observations/25400",
+        "target_norad_id": 25400,
         "trigger": {"type": "renewal_cycle", "policy_id": "POL-2026-002"},
         "scope": {
-            "time_window_start": ts_future(days=8),
-            "time_window_end": ts_future(days=25),
+            "time_window_start": obs_win_start(25400),
+            "time_window_end": obs_win_end(25400),
             "observation_count_min": 15,
             "observation_count_max": 20,
             "required_sensor_types": ["optical", "radar"],
@@ -893,12 +938,12 @@ CUSTOMER_TASKS = [
         "description": "Intentionally breached: updated_at more than qa_window_days ago while under_review.",
         "status": "under_review",
         "requesting_party_id": "parties/party-cust-charlie",
-        "target_object_id": "observations/49260",
-        "target_norad_id": 49260,
+        "target_object_id": "observations/26536",
+        "target_norad_id": 26536,
         "trigger": {"type": "customer_request"},
         "scope": {
-            "time_window_start": ts_past(days=51),
-            "time_window_end": ts_past(days=29),
+            "time_window_start": obs_win_start(26536),
+            "time_window_end": obs_win_end(26536),
             "observation_count_min": 15,
             "observation_count_max": 20,
             "required_sensor_types": ["optical"],
@@ -1167,14 +1212,6 @@ def main():
     )
     args = parser.parse_args()
 
-    docs = _collect_all_docs(CUSTOMER_TASKS)
-    edges = _build_edges(CUSTOMER_TASKS, docs["task_deliverables"])
-
-    if args.dry_run:
-        output = {"documents": docs, "edges": edges}
-        print(json.dumps(output, indent=2, default=str))
-        sys.exit(0)
-
     import database as db_module
     from database.connection import (
         connect_mongodb,
@@ -1197,6 +1234,18 @@ def main():
         sys.exit(1)
 
     print("=== TALON Customer Tasks Seed ===")
+
+    print("Loading observation epoch ranges from database...")
+    _load_obs_epoch_ranges(db_module)
+    _apply_obs_windows(CUSTOMER_TASKS)
+
+    docs = _collect_all_docs(CUSTOMER_TASKS)
+    edges = _build_edges(CUSTOMER_TASKS, docs["task_deliverables"])
+
+    if args.dry_run:
+        output = {"documents": docs, "edges": edges}
+        print(json.dumps(output, indent=2, default=str))
+        sys.exit(0)
 
     try:
         _ensure_collections(db_module)
