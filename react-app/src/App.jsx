@@ -727,7 +727,13 @@ function App() {
       )}
 
       {activeTab === 'customer-tasks' && isTabVisible('customer-tasks') && (
-        <CustomerTasksPage />
+        <CustomerTasksPage
+          onNavigateToObservations={(noradId) => {
+            setObservationInitialNoradId(noradId)
+            setActiveObservationsSubTab('observation-dashboard')
+            setActiveTab('observations')
+          }}
+        />
       )}
     </div>
   )
