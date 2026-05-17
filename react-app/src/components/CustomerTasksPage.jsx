@@ -143,7 +143,7 @@ function TaskDetail({ taskKey, onBack }) {
 
   const sla = task.sla || {}
   const scope = task.scope || {}
-  const commercial = task.commercial || {}
+  const commercial = task.commercial || (task.quote ? { fee_amount: task.quote.amount_usd, currency: 'USD' } : {})
   const deliveryDue = sla.delivery_due
   const isOverdue = deliveryDue && new Date(deliveryDue) < new Date()
   const obsMin = scope.observation_count_min
