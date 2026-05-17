@@ -302,6 +302,22 @@ SCRIPT_CATALOGUE = [
         "path": "scripts/population/seed_insurance_demo.py",
     },
     {
+        "id": "seed_customer_tasks",
+        "name": "Seed Customer Tasks Demo Data",
+        "description": (
+            "Populates all customer_tasks overlay collections (customer_tasks, customer_task_transitions, "
+            "task_deliverables, task_sla_alerts) and their graph edges (task_requested_by, "
+            "task_targets_object, task_relates_to_policy, task_relates_to_loss_event, "
+            "task_produced_deliverable) with realistic fixture data. "
+            "Covers all 14 task statuses, includes the three canonical spec examples "
+            "(TSK-2026-0001, TSK-2026-0028, TSK-DRAFT-2026-0055), and four intentionally "
+            "breached SLA demo rows (delivery_overdue, quote_expiring_soon, quote_expired, qa_overdue). "
+            "Idempotent — safe to re-run. Run this before using the Customer Tasks screens."
+        ),
+        "category": "population",
+        "path": "scripts/population/seed_customer_tasks.py",
+    },
+    {
         "id": "ingest_discos_entities",
         "name": "Ingest DISCOS Entities",
         "description": "Ingests ESA DISCOS entity records (operators, countries) into the entities vertex collection. Run first in the DISCOS ingestion sequence.",
