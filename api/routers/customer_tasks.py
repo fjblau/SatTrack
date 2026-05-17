@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi.responses import Response
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -22,6 +23,7 @@ from database.customer_task_ops import (
     get_allowed_next_states,
     transition_task,
 )
+from api.services.report_service import generate_task_report
 
 router = APIRouter(prefix="/v2/customer-tasks", tags=["customer_tasks"])
 
@@ -140,6 +142,121 @@ def list_tasks(
         except Exception:
             row["customer_status"] = None
     return rows
+
+
+# ---------------------------------------------------------------------------
+# GET /v2/customer-tasks/{task_key}/report.pdf  (must be declared before /{task_key})
+# ---------------------------------------------------------------------------
+
+@router.get("/{task_key}/report.pdf", summary="Download observation report as PDF")
+def download_report(task_key: str):
+    col = _col(COLLECTION_CUSTOMER_TASKS)
+    task = col.get(task_key)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task '{task_key}' not found")
+
+    task_status = task.get("status", "drafted")
+    task["customer_status"] = customer_status(task_status)
+    task["allowed_next_states"] = get_allowed_next_states(task_status)
+
+    norad_id = task.get("target_norad_id")
+    scope = task.get("scope") or {}
+    win_start = scope.get("time_window_start")
+    win_end = scope.get("time_window_end")
+
+    if norad_id is not None:
+        observations = _aql(
+            """
+            FOR obs IN @@observations
+                FILTER obs.norad_id == @norad_id
+                FILTER @win_start == null OR obs.observation_epoch >= @win_start
+                FILTER @win_end   == null OR obs.observation_epoch <= @win_end
+                SORT obs.observation_epoch ASC
+                LIMIT 5000
+                RETURN obs
+            """,
+            {
+                "@observations": COLLECTION_OBSERVATIONS,
+                "norad_id": norad_id,
+                "win_start": win_start,
+                "win_end": win_end,
+            },
+        )
+
+        task["passes"] = _aql(
+            """
+            FOR obs IN @@observations
+                FILTER obs.norad_id == @norad_id
+                FILTER @win_start == null OR obs.observation_epoch >= @win_start
+                FILTER @win_end   == null OR obs.observation_epoch <= @win_end
+                FILTER obs.pass_id != null
+                COLLECT pass_id = obs.pass_id, kestrel_id = obs.kestrel_id
+                    AGGREGATE
+                        frame_count    = LENGTH(1),
+                        sunlit_frames  = SUM(obs.illumination == "sunlit" ? 1 : 0),
+                        first_epoch    = MIN(obs.observation_epoch),
+                        last_epoch     = MAX(obs.observation_epoch)
+                SORT pass_id ASC
+                LIMIT 50
+                RETURN {
+                    pass_id: pass_id,
+                    kestrel_id: kestrel_id,
+                    first_epoch: first_epoch,
+                    last_epoch: last_epoch,
+                    frame_count: frame_count,
+                    sunlit_frames: sunlit_frames
+                }
+            """,
+            {
+                "@observations": COLLECTION_OBSERVATIONS,
+                "norad_id": norad_id,
+                "win_start": win_start,
+                "win_end": win_end,
+            },
+        )
+    else:
+        observations = []
+        task["passes"] = []
+
+    task_id = f"{COLLECTION_CUSTOMER_TASKS}/{task_key}"
+
+    task["deliverables"] = _aql(
+        """
+        FOR e IN @@edge
+            FILTER e._from == @task_id
+            FOR d IN @@deliverables
+                FILTER d._id == e._to
+                RETURN d
+        """,
+        {
+            "@edge": EDGE_TASK_PRODUCED_DELIVERABLE,
+            "@deliverables": COLLECTION_TASK_DELIVERABLES,
+            "task_id": task_id,
+        },
+    )
+
+    task["recent_transitions"] = _aql(
+        """
+        FOR tr IN @@transitions
+            FILTER tr.task_id == @task_id
+            SORT tr.occurred_at DESC
+            LIMIT 20
+            RETURN tr
+        """,
+        {"@transitions": COLLECTION_CUSTOMER_TASK_TRANS, "task_id": task_id},
+    )
+
+    try:
+        pdf_bytes = generate_task_report(task, observations)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}")
+
+    filename = f"observation-report-{task_key}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------
