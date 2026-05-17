@@ -24,6 +24,7 @@ import FragmentationEventsPage from './components/FragmentationEventsPage'
 import ObjectProvenancePage from './components/ObjectProvenancePage'
 import CatalogByClassPage from './components/CatalogByClassPage'
 import InsurancePage from './components/InsurancePage'
+import CustomerTasksPage from './components/CustomerTasksPage'
 import apiFetch from './utils/apiFetch'
 import { API_ENDPOINTS, PAGINATION, ORBITAL_RANGES, UI_TEXT } from './config/constants'
 
@@ -381,6 +382,14 @@ function App() {
               Insurance
             </button>
           )}
+          {isTabVisible('customer-tasks') && (
+            <button
+              className={activeTab === 'customer-tasks' ? 'active' : ''}
+              onClick={() => setActiveTab('customer-tasks')}
+            >
+              Customer Tasks
+            </button>
+          )}
           {isTabVisible('help') && (
             <button
               className={`help-button${activeTab === 'help' ? ' active' : ''}`}
@@ -715,6 +724,10 @@ function App() {
             }}
           />
         </div>
+      )}
+
+      {activeTab === 'customer-tasks' && isTabVisible('customer-tasks') && (
+        <CustomerTasksPage />
       )}
     </div>
   )
