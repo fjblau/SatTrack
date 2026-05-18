@@ -411,7 +411,7 @@ def _stat_table(pairs: list[tuple[str, str]], col_width: float = 85) -> Table:
         ('FONTSIZE', (3, 0), (3, -1), 8),
         ('FONTSIZE', (5, 0), (5, -1), 8),
     ])
-    col_widths = [col_width * 0.6, col_width * 1.1] * 3
+    col_widths = [col_width * 0.38, col_width * 0.62] * 3
     return Table(data, colWidths=col_widths[:col_count], style=style)
 
 
