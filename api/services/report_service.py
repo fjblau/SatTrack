@@ -375,44 +375,43 @@ class _SectionHeader(Flowable):
         c.drawString(4 * mm, 2.8 * mm, self.title.upper())
 
 
-def _stat_table(pairs: list[tuple[str, str]], col_width: float = 85) -> Table:
-    rows_per_col = 3
-    chunk_size = rows_per_col
+def _stat_table(pairs: list[tuple[str, str]], body_width: float = 494) -> Table:
+    lbl_style = ParagraphStyle(
+        'st_lbl', fontName='Helvetica-Bold', fontSize=7.5,
+        textColor=TEXT_LIGHT, leading=10,
+    )
+    val_style = ParagraphStyle(
+        'st_val', fontName='Helvetica', fontSize=8,
+        textColor=TEXT_DARK, leading=10,
+    )
+
+    chunk_size = 2
     data = []
     for i in range(0, len(pairs), chunk_size):
         chunk = pairs[i:i + chunk_size]
-        row_data = []
+        row = []
         for label, value in chunk:
-            row_data.extend([label, value])
-        while len(row_data) < chunk_size * 2:
-            row_data.extend(['', ''])
-        data.append(row_data[:chunk_size * 2])
+            row.append(Paragraph(label, lbl_style))
+            row.append(Paragraph(value, val_style))
+        while len(row) < chunk_size * 2:
+            row.extend([Paragraph('', lbl_style), Paragraph('', val_style)])
+        data.append(row)
 
-    col_count = chunk_size * 2
+    lw = body_width * 0.21
+    vw = body_width * 0.29
+    col_widths = [lw, vw, lw, vw]
+
     style = TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 7.5),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (4, 0), (4, -1), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (0, 0), (0, -1), TEXT_LIGHT),
-        ('TEXTCOLOR', (2, 0), (2, -1), TEXT_LIGHT),
-        ('TEXTCOLOR', (4, 0), (4, -1), TEXT_LIGHT),
-        ('TEXTCOLOR', (1, 0), (1, -1), TEXT_DARK),
-        ('TEXTCOLOR', (3, 0), (3, -1), TEXT_DARK),
-        ('TEXTCOLOR', (5, 0), (5, -1), TEXT_DARK),
         ('ROWBACKGROUNDS', (0, 0), (-1, -1), [BG_ROW, colors.white]),
-        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
         ('GRID', (0, 0), (-1, -1), 0.3, RULE_GRAY),
-        ('FONTSIZE', (1, 0), (1, -1), 8),
-        ('FONTSIZE', (3, 0), (3, -1), 8),
-        ('FONTSIZE', (5, 0), (5, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LINEAFTER', (1, 0), (1, -1), 0.8, RULE_GRAY),
     ])
-    col_widths = [col_width * 0.38, col_width * 0.62] * 3
-    return Table(data, colWidths=col_widths[:col_count], style=style)
+    return Table(data, colWidths=col_widths, style=style)
 
 
 def _make_table(headers: list[str], rows: list[list], col_widths: list[float] | None = None) -> Table:
@@ -505,7 +504,7 @@ def generate_task_report(task: dict, observations: list[dict]) -> bytes:
         ('Maneuver Flags', str(maneuver_count)),
     ]
 
-    story.append(_stat_table(summary_pairs, col_width=body_w / 3))
+    story.append(_stat_table(summary_pairs, body_width=body_w))
     story.append(Spacer(1, 5 * mm))
 
     story.append(_SectionHeader('Task Scope & Commercial Details', body_w))
@@ -523,7 +522,7 @@ def generate_task_report(task: dict, observations: list[dict]) -> bytes:
         ('Billing', str(commercial.get('billing') or '—')),
         ('PO Reference', str(commercial.get('po_reference') or '—')),
     ]
-    story.append(_stat_table(scope_pairs, col_width=body_w / 3))
+    story.append(_stat_table(scope_pairs, body_width=body_w))
     story.append(Spacer(1, 5 * mm))
 
     if chart_data:
