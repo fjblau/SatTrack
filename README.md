@@ -39,6 +39,9 @@ Kessler provides a comprehensive satellite tracking system combining:
 - 🤖 **AI Help Assistant**: LangGraph-powered chat that answers questions using RAG + live data tools
 - 💥 **Fragmentation Events**: DISCOS breakup/fragmentation event table with Comment column, fragment count derived from graph edges, 30 rows/page, and 1600px-wide layout
 - 🔑 **Authentication**: Bearer-token login with demo mode; **Demo Contents** checklist in Admin page controls which tabs are visible per demo session (persisted in the database and shared across all users)
+- 📋 **Customer Tasks**: End-to-end task management for satellite observation requests — 14-state workflow (drafted → closed), SLA alerts, deliverable tracking, and downloadable PDF observation reports
+- 🛡️ **Insurance Overlay**: Space insurance risk management — book-of-business dashboard, asset coverage detail, loss event triage, fragmentation scenario modeling, constellation surveillance status, and PDF evidence packages
+- 📅 **TLE History**: Persistent historical TLE storage fetched from Space-Track; enables position computation at any past observation epoch without repeat API calls
 
 ### Technical Features
 
@@ -151,21 +154,27 @@ kessler/
 │   ├── routers/                # API endpoints by domain
 │   │   ├── auth.py             # Login / logout
 │   │   ├── satellites.py       # Satellite search & retrieval
+│   │   ├── objects.py          # Space object search & retrieval
+│   │   ├── provenance.py       # Provenance graph traversal
 │   │   ├── metadata.py         # Countries, statuses, orbital bands, stats
 │   │   ├── graphs.py           # Graph visualization & analytics
 │   │   ├── documents.py        # UN document metadata
 │   │   ├── tle.py              # TLE data & orbit propagation
+│   │   ├── tle_history.py      # Historical TLE storage & position lookup
 │   │   ├── ephemeris.py        # Ephemeris generation (SGP4 + GMAT), CZML export
 │   │   ├── mqtt.py             # MQTT configuration & publishing
 │   │   ├── observations.py     # Observation import & analytics
 │   │   ├── admin.py            # Admin script runner, GMAT status
 │   │   ├── agent.py            # AI assistant (/v2/ask), AQL agent (/v2/aql)
 │   │   ├── kestrel.py          # Kestrel rendezvous maneuver planning
+│   │   ├── insurance.py        # Insurance overlay APIs (/v2/insurance/*)
+│   │   ├── customer_tasks.py   # Customer task management (/v2/customer-tasks/*)
 │   │   └── docs.py             # In-app HTML documentation viewer (/v2/docs)
 │   └── services/               # Business logic
 │       ├── cache_service.py    # LRU cache with TTL
 │       ├── orbital_service.py  # Orbital calculations from TLE
 │       ├── tle_service.py      # TLE fetching (CelesTrak / Space-Track)
+│       ├── tle_history_service.py # Historical TLE fetch & caching (Space-Track)
 │       ├── document_service.py # UN document metadata extraction
 │       ├── collision_service.py # Collision risk computation
 │       ├── lineage_service.py  # Satellite lineage traversal
@@ -173,6 +182,8 @@ kessler/
 │       ├── gmat_service.py     # GMAT high-fidelity propagation (RK89 + EGM96)
 │       ├── gmat_maneuver_service.py # Kestrel Hohmann + GMAT maneuver planning
 │       ├── spacetrack_service.py  # Space-Track API integration
+│       ├── discos_service.py   # ESA DISCOSweb API client
+│       ├── report_service.py   # ReportLab PDF report generation
 │       ├── index_service.py    # ChromaDB RAG vector store
 │       ├── agent_service.py    # LangGraph general assistant (/v2/ask)
 │       ├── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
@@ -186,6 +197,9 @@ kessler/
 │   ├── observation_graph_ops.py # Observation edge creation & traversal
 │   ├── ephemeris_ops.py        # Ephemeris envelope storage
 │   ├── maneuver_plan_ops.py    # Kestrel maneuver plan storage
+│   ├── customer_task_ops.py    # Customer task state machine & transitions
+│   ├── tle_history_ops.py      # TLE history storage & coverage queries
+│   ├── discos_object_operations.py # DISCOS object enrichment operations
 │   ├── transformations.py      # Data canonicalization
 │   └── mqtt_config.py          # MQTT configuration storage
 │
@@ -209,6 +223,11 @@ kessler/
 │       │   ├── EphemerisPage.jsx # Ephemeris generation & CZML export
 │       │   ├── KestrelMissionPage.jsx # Rendezvous mission planning
 │       │   ├── KestrelDataPage.jsx # Kestrel satellite data dashboard
+│       │   ├── CustomerTasksPage.jsx # Customer task management UI
+│       │   ├── InsurancePage.jsx # Insurance book-of-business overview
+│       │   ├── InsuranceAggregationView.jsx # Orbital shell exposure & scenario modeling
+│       │   ├── InsuranceConstellationView.jsx # Constellation surveillance status
+│       │   ├── InsuredAssetDetail.jsx # Per-asset coverage & risk detail
 │       │   └── ...             # Data, graph, observation, Cesium views
 │       ├── utils/apiFetch.js   # Authenticated fetch wrapper
 │       ├── utils/orbitUtils.js # Client-side orbital calculation utilities
