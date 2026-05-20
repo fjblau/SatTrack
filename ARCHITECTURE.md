@@ -64,17 +64,21 @@ kessler/
 │   │   ├── graphs.py            # Graph visualization & analytics endpoints
 │   │   ├── documents.py         # UN document metadata
 │   │   ├── tle.py               # TLE data endpoints & orbit propagation
+│   │   ├── tle_history.py       # Historical TLE storage & position lookup (/v2/tle-history/*)
 │   │   ├── ephemeris.py         # Ephemeris generation (SGP4 + GMAT HIFI), CZML export
 │   │   ├── mqtt.py              # MQTT configuration & publishing
 │   │   ├── observations.py      # Observation import, analytics, graph data
 │   │   ├── admin.py             # Admin script execution, run tracking, GMAT status
 │   │   ├── agent.py             # POST /v2/ask, POST /v2/aql, GET /v2/ask/status (AI agents)
 │   │   ├── kestrel.py           # POST /v2/kestrel/maneuver-plan, GET/DELETE /v2/kestrel/maneuver-plans
+│   │   ├── insurance.py         # Insurance overlay APIs (/v2/insurance/*)
+│   │   ├── customer_tasks.py    # Customer task management (/v2/customer-tasks/*)
 │   │   └── docs.py              # GET /v2/docs — HTML documentation viewer
 │   ├── services/                # Business logic services
 │   │   ├── cache_service.py     # Unified caching with LRU & TTL
 │   │   ├── orbital_service.py   # Orbital calculations from TLE
 │   │   ├── tle_service.py       # TLE fetching & parsing (CelesTrak / Space-Track)
+│   │   ├── tle_history_service.py # Historical TLE fetch & caching (Space-Track bulk requests)
 │   │   ├── document_service.py  # UN document metadata extraction
 │   │   ├── collision_service.py # Collision risk computation
 │   │   ├── lineage_service.py   # Satellite family-tree traversal
@@ -83,6 +87,7 @@ kessler/
 │   │   ├── gmat_maneuver_service.py # Kestrel Hohmann + GMAT rendezvous maneuver planning
 │   │   ├── spacetrack_service.py  # Space-Track API integration
 │   │   ├── discos_service.py    # ESA DISCOSweb v2 API client (objects, launches, fragmentations, entities)
+│   │   ├── report_service.py    # ReportLab PDF generation (observation reports, evidence packages)
 │   │   ├── index_service.py     # ChromaDB RAG vector store build & load
 │   │   ├── agent_service.py     # LangGraph general assistant (RAG + tools, /v2/ask)
 │   │   ├── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
@@ -99,6 +104,9 @@ kessler/
 │   ├── observation_graph_ops.py # Observation edge creation & graph traversal
 │   ├── ephemeris_ops.py         # Ephemeris envelope CRUD (ephemeris_envelopes collection)
 │   ├── maneuver_plan_ops.py     # Kestrel maneuver plan CRUD (kestrel_maneuver_plans collection)
+│   ├── customer_task_ops.py     # Customer task state machine, transitions, allowed-state map
+│   ├── tle_history_ops.py       # TLE history storage, coverage queries, nearest-TLE lookup
+│   ├── discos_object_operations.py # DISCOS object enrichment, surrogate cleanup, attribution ingest
 │   ├── transformations.py       # Data canonicalization & transformation
 │   ├── mqtt_config.py           # MQTT configuration storage
 │   ├── data/
@@ -147,6 +155,11 @@ kessler/
 │           ├── AqlEditorPage.jsx  # Interactive AQL query editor
 │           ├── HelpPage.jsx     # AI assistant chat interface
 │           ├── AdminPage.jsx    # Admin script runner + Demo Contents checklist (controls demo-mode tab/subtab visibility; persisted to ArangoDB app_settings collection via GET/PUT /v2/admin/demo-config, shared across all users)
+│           ├── CustomerTasksPage.jsx  # Customer task management — list, detail, state transitions
+│           ├── InsurancePage.jsx      # Insurance book-of-business overview (asset list, loss events)
+│           ├── InsuranceAggregationView.jsx  # Orbital shell exposure heatmap & fragmentation scenarios
+│           ├── InsuranceConstellationView.jsx # Kestrel surveillance constellation status & coverage
+│           ├── InsuredAssetDetail.jsx # Per-asset coverage windows, risk score history, anomaly predictions
 │           └── LoginPage.jsx    # Authentication
 │
 └── mqtt_publisher.py            # MQTT publishing service
@@ -182,19 +195,22 @@ kessler/
 │               │                              │
 │  ┌────────────▼─────────────────────────┐   │
 │  │  Routers (endpoints)                 │   │
-│  │  - auth, satellites, metadata        │   │
-│  │  - graphs, documents, tle, mqtt      │   │
-│  │  - observations, admin, agent        │   │
+│  │  - auth, satellites, objects         │   │
+│  │  - graphs, documents, tle            │   │
+│  │  - tle_history, observations, admin  │   │
+│  │  - agent, insurance, customer_tasks  │   │
 │  └────────────┬─────────────────────────┘   │
 │               │                              │
 │  ┌────────────▼─────────────────────────┐   │
 │  │  Services (business logic)           │   │
 │  │  - CacheService, OrbitalService      │   │
-│  │  - TLEService, DocumentService       │   │
+│  │  - TLEService, TLEHistoryService     │   │
+│  │  - DocumentService, ReportService    │   │
 │  │  - CollisionService, LineageService  │   │
 │  │  - PropagationService, GmatService   │   │
-│  │  - SpaceTrackService, IndexService   │   │
-│  │  - AgentService, AqlAgentService     │   │
+│  │  - SpaceTrackService, DiscosService  │   │
+│  │  - IndexService, AgentService        │   │
+│  │  - AqlAgentService, KestrelAgent     │   │
 │  └────────────┬─────────────────────────┘   │
 └───────────────┼──────────────────────────────┘
                 │
@@ -386,6 +402,22 @@ band = service.classify_orbital_band(altitude_km=500.0)
 | `launch_vehicles` | DISCOS launch vehicle records | — |
 | `launch_sites` | DISCOS launch site records | — |
 | `entities` | DISCOS operator/country entity records | — |
+| `tle_history` | Historical TLE records fetched from Space-Track; keyed by `{norad_id}_{epoch}`; used for position computation at past observation epochs | `norad_id`, `epoch` |
+| `customer_tasks` | Customer observation-task records; 14-state workflow (drafted → closed) with SLA tracking | `status`, `requesting_party_id` |
+| `customer_task_transitions` | Immutable audit log of every state transition for a customer task | `task_id` |
+| `task_deliverables` | Deliverable records attached to completed customer tasks (e.g. PDF report references) | `task_id` |
+| `task_sla_alerts` | Generated SLA breach alerts for overdue tasks | `status`, `task_id` |
+| `parties` | Insurance carrier and policyholder party records | — |
+| `policies` | Satellite insurance policy records | — |
+| `insured_interests` | Per-satellite insured interest records linked to a policy | — |
+| `loss_events` | Detected or reported loss/anomaly events for insured assets | — |
+| `claims` | Insurance claim records linked to loss events | — |
+| `risk_scores` | Computed risk scores for insured assets | — |
+| `anomaly_predictions` | ML anomaly prediction horizons for insured assets | — |
+| `shells` | Orbital shell definitions used for exposure aggregation | — |
+| `kestrels` | Kestrel surveillance satellite records (constellation members) | — |
+| `kestrel_tasks` | Tasking records that assign a Kestrel to observe an insured asset | — |
+| `coverage_windows` | Time-windows during which a Kestrel covers an insured asset | — |
 
 #### Object Document Structure
 
@@ -452,6 +484,16 @@ Each document in the `objects` collection follows a multi-source canonical model
 | `launched_by` | `objects` | `entities` | Object → operator/country entity |
 | `launched_via` | `objects` | `launch_vehicles` | Object → launch vehicle used |
 | `launched_from` | `objects` | `launch_sites` | Object → launch site |
+| `task_requested_by` | `customer_tasks` | `parties` | Task → requesting party |
+| `task_targets_object` | `customer_tasks` | `objects` | Task → space object being observed |
+| `task_relates_to_policy` | `customer_tasks` | `policies` | Task → insurance policy that triggered the task |
+| `task_relates_to_loss_event` | `customer_tasks` | `loss_events` | Task → loss event that triggered the task |
+| `task_produced_deliverable` | `customer_tasks` | `task_deliverables` | Task → deliverable produced upon completion |
+| `insurance_policy_covers_sat` | `policies` | `objects` | Insurance policy → covered satellite |
+| `insurance_event_witnessed_by` | `loss_events` | `kestrels` | Loss event → Kestrel that witnessed it |
+| `insurance_risk_score_for` | `risk_scores` | `objects` | Risk score → insured object |
+| `insurance_prediction_for` | `anomaly_predictions` | `objects` | Anomaly prediction → object |
+| `insurance_kestrel_can_see` | `kestrels` | `objects` | Kestrel → observable object within FOV |
 
 #### Named Graphs
 
@@ -890,6 +932,78 @@ Authenticates with Space-Track.org and fetches historical TLE data as a fallback
 **Architecture**: ReAct agent with tools for TLE lookup, maneuver computation, and AQL queries. Maintains session state for multi-turn mission planning conversations.
 
 **Initialization**: Called once at startup. Requires `OPENAI_API_KEY`.
+
+---
+
+### TLEHistoryService (`api/services/tle_history_service.py`)
+
+**Purpose**: Fetches and persists historical TLEs from Space-Track for the date ranges covered by observations. Used by the observation location computation pipeline to reconstruct satellite positions at past epochs without repeat Space-Track API calls.
+
+**Key behaviour**:
+- Calls `ensure_tle_history(norad_id, from_date, to_date)` which checks coverage in `tle_history` before hitting Space-Track
+- Inserts a 15-second delay between live Space-Track requests to stay within rate limits
+- Idempotent: already-cached ranges are skipped instantly
+- `get_position_at(norad_id, epoch)` propagates the nearest stored TLE to the requested epoch using SGP4
+
+**API endpoints** (`/v2/tle-history/*`):
+- `POST /{norad_id}/fetch?from_date=&to_date=` — ensure coverage for a date range
+- `GET /{norad_id}/coverage` — return stored date range and record count
+- `GET /{norad_id}/position-at?epoch=` — compute geodetic position at a specific epoch
+- `POST /observations/positions` — batch-compute positions for all observations of a NORAD ID
+
+---
+
+### ReportService (`api/services/report_service.py`)
+
+**Purpose**: Generates professional A4 PDF documents using ReportLab. Serves two use cases:
+1. **Observation Report** — downloadable PDF for a completed customer task, containing observation analytics charts, summary statistics, provenance data, and a per-pass breakdown
+2. **Insurance Evidence Package** — structured PDF exported via `POST /v2/insurance/export/evidence/{loss_event_id}`, containing loss event metadata, satellite telemetry, witness chain, and cryptographic hash
+
+**Key design**:
+- Pure Python, no external server or browser rendering
+- ReportLab Platypus flowable pipeline: `Paragraph`, `Table`, `HRFlowable`, `PageBreak`, `KeepTogether`
+- Custom canvas hooks for page headers and footers on every page
+- Chart data derived entirely from stored observation documents; no live API calls during rendering
+
+---
+
+### Customer Task State Machine (`database/customer_task_ops.py`)
+
+**Purpose**: Encapsulates the 14-state workflow for customer observation tasks and provides the `transition_task()` function used by `POST /v2/customer-tasks/{task_key}/transition`.
+
+**States and allowed transitions**:
+
+| From | Allowed next states |
+|------|-------------------|
+| `drafted` | `submitted`, `cancelled` |
+| `submitted` | `scoping`, `cancelled` |
+| `scoping` | `quoted`, `cancelled` |
+| `quoted` | `accepted`, `cancelled` |
+| `accepted` | `scheduled` |
+| `scheduled` | `executing` |
+| `executing` | `observations_complete` |
+| `observations_complete` | `under_review` |
+| `under_review` | `delivered` |
+| `delivered` | `accepted_by_customer`, `disputed` |
+| `disputed` | `under_review`, `cancelled` |
+| `accepted_by_customer` | `closed` |
+| `closed` | *(terminal)* |
+| `cancelled` | *(terminal)* |
+
+Each transition is recorded as an immutable document in `customer_task_transitions`. When a task moves to `quoted`, the quote expiry timestamp (14 days) is automatically written to `timestamps.quote_expires_at`.
+
+The **customer-facing status** (a simplified label shown in the portal) is derived from the internal status via `CUSTOMER_STATUS_MAP`:
+
+| Internal status | Customer label |
+|----------------|---------------|
+| `drafted`, `submitted` | Requested |
+| `scoping` | Under review by TALON |
+| `quoted` | Quoted |
+| `accepted` – `under_review` | In progress |
+| `delivered` | Delivered |
+| `accepted_by_customer`, `closed` | Complete |
+| `disputed` | Dispute open |
+| `cancelled` | Cancelled |
 
 ---
 
