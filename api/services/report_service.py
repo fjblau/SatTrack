@@ -561,6 +561,7 @@ def generate_task_report(task: dict, observations: list[dict]) -> bytes:
         story.append(Spacer(1, 5 * mm))
 
     if chart_data:
+        story.append(PageBreak())
         story.append(_SectionHeader('Observation Analytics', body_w))
         story.append(Spacer(1, 3 * mm))
 
