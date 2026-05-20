@@ -17,6 +17,7 @@ from database.connection import (
     EDGE_TASK_RELATES_TO_LOSS_EVENT,
     EDGE_TASK_PRODUCED_DELIVERABLE,
     COLLECTION_OBSERVATIONS,
+    COLLECTION_NAME as COLLECTION_OBJECTS,
 )
 from database.customer_task_ops import (
     customer_status,
@@ -245,6 +246,21 @@ def download_report(task_key: str):
         """,
         {"@transitions": COLLECTION_CUSTOMER_TASK_TRANS, "task_id": task_id},
     )
+
+    if norad_id is not None:
+        prov_results = _aql(
+            """
+            FOR doc IN @@objects
+                FILTER TO_STRING(doc.canonical.norad_cat_id) == @norad_id
+                    OR doc.identifier_aliases.norad == @norad_id
+                LIMIT 1
+                RETURN doc.canonical
+            """,
+            {"@objects": COLLECTION_OBJECTS, "norad_id": str(norad_id)},
+        )
+        task["provenance"] = prov_results[0] if prov_results else None
+    else:
+        task["provenance"] = None
 
     try:
         pdf_bytes = generate_task_report(task, observations)

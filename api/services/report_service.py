@@ -525,6 +525,41 @@ def generate_task_report(task: dict, observations: list[dict]) -> bytes:
     story.append(_stat_table(scope_pairs, body_width=body_w))
     story.append(Spacer(1, 5 * mm))
 
+    provenance = task.get('provenance') or {}
+    if provenance:
+        story.append(_SectionHeader('Object Provenance', body_w))
+        story.append(Spacer(1, 3 * mm))
+
+        orbit = provenance.get('orbit') or {}
+        orbit_parts = []
+        if orbit.get('apogee_km') is not None:
+            orbit_parts.append(f"{_fmt_val(orbit['apogee_km'])} km apogee")
+        if orbit.get('perigee_km') is not None:
+            orbit_parts.append(f"{_fmt_val(orbit['perigee_km'])} km perigee")
+        if orbit.get('inclination_degrees') is not None:
+            orbit_parts.append(f"{_fmt_val(orbit['inclination_degrees'])}° inc")
+        if orbit.get('period_minutes') is not None:
+            orbit_parts.append(f"{_fmt_val(orbit['period_minutes'])} min period")
+        orbit_str = ', '.join(orbit_parts) if orbit_parts else '—'
+
+        prov_pairs = [
+            ('Name', str(provenance.get('name') or provenance.get('object_name') or '—')),
+            ('NORAD ID', str(provenance.get('norad_cat_id') or norad_id or '—')),
+            ('COSPAR / Int\'l Designator', str(provenance.get('international_designator') or '—')),
+            ('Status', str(provenance.get('status') or '—')),
+            ('Object Class', str(provenance.get('object_class') or provenance.get('object_type') or '—')),
+            ('Country of Origin', str(provenance.get('country_of_origin') or '—')),
+            ('Launch Date', _fmt_date(provenance.get('launch_date') or provenance.get('date_of_launch'))),
+            ('Launch Site', str(provenance.get('place_of_launch') or '—')),
+            ('Orbit', orbit_str),
+            ('Orbital Band', str(provenance.get('orbital_band') or '—')),
+            ('UN Registered', 'Yes' if provenance.get('un_registered') is True else 'No' if provenance.get('un_registered') is False else str(provenance.get('un_registered') or '—')),
+            ('Registration Number', str(provenance.get('registration_number') or '—')),
+            ('Function', str(provenance.get('function') or '—')),
+        ]
+        story.append(_stat_table(prov_pairs, body_width=body_w))
+        story.append(Spacer(1, 5 * mm))
+
     if chart_data:
         story.append(_SectionHeader('Observation Analytics', body_w))
         story.append(Spacer(1, 3 * mm))
