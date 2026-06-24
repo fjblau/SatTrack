@@ -66,6 +66,8 @@ EDGE_COLLECTION_LAUNCHED_BY = "launched_by"
 EDGE_COLLECTION_LAUNCHED_VIA = "launched_via"
 EDGE_COLLECTION_LAUNCHED_FROM = "launched_from"
 
+COLLECTION_RSO_SUMMARY = "rso_summary"
+
 # Customer Tasks overlay
 COLLECTION_CUSTOMER_TASKS        = "customer_tasks"
 COLLECTION_CUSTOMER_TASK_TRANS   = "customer_task_transitions"
@@ -144,6 +146,13 @@ def connect_arangodb():
 
         if not db.has_collection(COLLECTION_TLE_HISTORY_COVERAGE):
             db.create_collection(COLLECTION_TLE_HISTORY_COVERAGE)
+
+        if not db.has_collection(COLLECTION_RSO_SUMMARY):
+            db.create_collection(COLLECTION_RSO_SUMMARY)
+        rso_col = db.collection(COLLECTION_RSO_SUMMARY)
+        rso_col.add_persistent_index(fields=['norad_id'], unique=True)
+        rso_col.add_persistent_index(fields=['updated_at'], unique=False)
+        rso_col.add_persistent_index(fields=['health_score'], unique=False)
 
         # Ensure observation edge collections exist
         obs_edge_collections = [
