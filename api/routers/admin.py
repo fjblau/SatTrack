@@ -873,3 +873,86 @@ def merge_objects_endpoint(body: MergeObjectsRequest):
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Merge failed: {exc}")
+
+
+_analytics_batch_lock = threading.Lock()
+_analytics_batch_status: dict = {"running": False, "last_result": None, "started_at": None}
+
+
+class AnalyticsPrecomputeRequest(BaseModel):
+    norad_ids: list = []
+    max_objects: int = 1000
+    background: bool = True
+
+
+@router.post("/analytics/precompute")
+def trigger_analytics_precompute(body: AnalyticsPrecomputeRequest):
+    """
+    Trigger the ML precomputation batch pipeline for RSO analytics.
+
+    When *background* is True (default), the job is launched in a background thread
+    and the endpoint returns immediately with a ``202 Accepted`` response.
+
+    When *background* is False, the job runs synchronously and returns the full
+    result (may take several minutes for large catalogs).
+
+    Optionally pass *norad_ids* to limit processing to specific satellites.
+    When *norad_ids* is empty all NORAD IDs with stored TLE history are processed
+    (up to *max_objects*).
+    """
+    from api.services.rso_summary_service import run_batch_precomputation
+
+    if not _analytics_batch_lock.acquire(blocking=False):
+        return {
+            "status": "already_running",
+            "message": "A precomputation batch is already in progress.",
+            "started_at": _analytics_batch_status.get("started_at"),
+        }
+
+    norad_ids = body.norad_ids if body.norad_ids else None
+
+    if not body.background:
+        try:
+            result = run_batch_precomputation(
+                norad_ids=norad_ids,
+                max_objects=body.max_objects,
+            )
+            _analytics_batch_status["last_result"] = result
+            return {"status": "completed", **result}
+        finally:
+            _analytics_batch_lock.release()
+
+    def _run():
+        try:
+            started = datetime.utcnow().isoformat() + "Z"
+            _analytics_batch_status["running"] = True
+            _analytics_batch_status["started_at"] = started
+            result = run_batch_precomputation(
+                norad_ids=norad_ids,
+                max_objects=body.max_objects,
+            )
+            _analytics_batch_status["last_result"] = result
+        finally:
+            _analytics_batch_status["running"] = False
+            _analytics_batch_lock.release()
+
+    t = threading.Thread(target=_run, daemon=True, name="analytics-precompute")
+    t.start()
+
+    return {
+        "status": "accepted",
+        "message": "Precomputation batch started in the background.",
+        "started_at": _analytics_batch_status.get("started_at"),
+    }
+
+
+@router.get("/analytics/precompute/status")
+def get_analytics_precompute_status():
+    """
+    Return the status of the most recent analytics precomputation batch run.
+    """
+    return {
+        "running": _analytics_batch_status["running"],
+        "started_at": _analytics_batch_status.get("started_at"),
+        "last_result": _analytics_batch_status.get("last_result"),
+    }

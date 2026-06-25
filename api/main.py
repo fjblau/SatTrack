@@ -8,7 +8,7 @@ import threading
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history, customer_tasks
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history, customer_tasks, analytics
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 from api.services.tle_service import warm_tle_cache
@@ -106,6 +106,10 @@ _OPENAPI_TAGS = [
         "description": "Customer Tasks overlay: contracted observation tasks, lifecycle management, SLA alerts, and overlay queries against existing observations.",
     },
     {
+        "name": "analytics",
+        "description": "ML-powered RSO analytics: health scoring, anomaly detection, maneuver detection, re-entry estimation, similarity search, and precomputed batch summaries.",
+    },
+    {
         "name": "admin",
         "description": "Administrative operations: data import scripts, DISCOS enrichment, database backups, and GMAT smoke tests.",
     },
@@ -161,6 +165,7 @@ app.include_router(provenance.router)
 app.include_router(insurance.router)
 app.include_router(customer_tasks.router)
 app.include_router(tle_history.router)
+app.include_router(analytics.router)
 
 
 def custom_openapi():
