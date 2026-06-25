@@ -441,6 +441,11 @@
   background: linear-gradient(135deg, #f8fff8 0%, #fff 100%);
 }
 
+.obs-chart-card--ml {
+  border-top: 2px solid #6c3483;
+  background: linear-gradient(135deg, #fdf8ff 0%, #fff 100%);
+}
+
 .obs-chart-header {
   display: flex;
   align-items: baseline;
