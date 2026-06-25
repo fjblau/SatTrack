@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
 import { parseTLE, parseTLEEpoch, propagateOrbit, generateCZML, orbitalPeriod } from '../utils/orbitUtils'
@@ -186,6 +186,10 @@ export default function KestrelDataPage({ allowedSubtabs }) {
   const [globeWindowStart, setGlobeWindowStart] = useState(null)
   const [globeWindowEnd, setGlobeWindowEnd] = useState(null)
   const [currentSimTime, setCurrentSimTime] = useState(null)
+  const [analyticsHealth, setAnalyticsHealth] = useState(null)
+  const [analyticsSummary, setAnalyticsSummary] = useState(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const analyticsAbortRef = useRef(null)
 
   useEffect(() => {
     const fetchObs = async () => {
@@ -265,6 +269,43 @@ export default function KestrelDataPage({ allowedSubtabs }) {
 
     return () => { controller.abort(); clearTimeout(timeoutId) }
   }, [selectedSat?.key])
+
+  useEffect(() => {
+    if (analyticsAbortRef.current) {
+      analyticsAbortRef.current.abort()
+      analyticsAbortRef.current = null
+    }
+
+    const norad = selectedSat?.norad_id
+    if (!norad) {
+      setAnalyticsHealth(null)
+      setAnalyticsSummary(null)
+      return
+    }
+
+    const controller = new AbortController()
+    analyticsAbortRef.current = controller
+
+    setAnalyticsLoading(true)
+    setAnalyticsHealth(null)
+    setAnalyticsSummary(null)
+
+    Promise.all([
+      apiFetch(API_ENDPOINTS.ANALYTICS.HEALTH(norad), { signal: controller.signal })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+      apiFetch(API_ENDPOINTS.ANALYTICS.SUMMARY(norad), { signal: controller.signal })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+    ]).then(([health, summary]) => {
+      setAnalyticsHealth(health)
+      setAnalyticsSummary(summary)
+    }).finally(() => {
+      setAnalyticsLoading(false)
+    })
+
+    return () => { controller.abort() }
+  }, [selectedSat?.norad_id])
 
   const filteredSats = useMemo(() => {
     if (!searchQuery.trim()) return satellites
@@ -368,6 +409,9 @@ export default function KestrelDataPage({ allowedSubtabs }) {
                 currentSimTime={currentSimTime}
                 obsWindowStart={obsWindowStart}
                 obsWindowEnd={obsWindowEnd}
+                analyticsHealth={analyticsHealth}
+                analyticsSummary={analyticsSummary}
+                analyticsLoading={analyticsLoading}
               />
               <KestrelDataGlobe
                 czmlData={czmlData}

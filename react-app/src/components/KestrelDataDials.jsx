@@ -67,7 +67,212 @@ function StatusCard({ label, value }) {
 
 const CYCLE_MS = 3000
 
-export default function KestrelDataDials({ observations, satelliteName, currentSimTime, obsWindowStart, obsWindowEnd }) {
+const FACTOR_LABELS = {
+  tle_age_days: 'TLE Age',
+  eccentricity: 'Eccentricity',
+  perigee_altitude_km: 'Perigee Alt',
+  bstar_drag: 'BSTAR Drag',
+  anomaly_count: 'Anomalies',
+  maneuver_recency_days: 'Mnv Recency',
+}
+
+const SEVERITY_COLORS = {
+  none: '#27ae60',
+  low: '#f1c40f',
+  medium: '#e67e22',
+  high: '#e74c3c',
+}
+
+function FactorBar({ name, factor }) {
+  const pct = Math.round((factor.sub_score ?? 0) * 100)
+  const color = pct >= 70 ? '#27ae60' : pct >= 40 ? '#f39c12' : '#e74c3c'
+  const label = FACTOR_LABELS[name] || name.replace(/_/g, ' ')
+  const rawVal = factor.raw_value
+  const rawDisplay = rawVal == null ? '—'
+    : typeof rawVal === 'number' ? rawVal.toFixed(Math.abs(rawVal) < 0.01 ? 5 : 2)
+    : String(rawVal)
+  return (
+    <div className="kdd-factor-row">
+      <div className="kdd-factor-label">{label}</div>
+      <div className="kdd-factor-bar-track">
+        <div className="kdd-factor-bar-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <div className="kdd-factor-pct" style={{ color }}>{pct}%</div>
+      <div className="kdd-factor-raw">{rawDisplay}</div>
+    </div>
+  )
+}
+
+function HealthGauge({ score }) {
+  const pct = score ?? 0
+  const color = pct >= 70 ? '#27ae60' : pct >= 40 ? '#f39c12' : '#e74c3c'
+  const r = 28
+  const cx = 36
+  const cy = 36
+  const strokeWidth = 6
+  const circumference = Math.PI * r
+  const dash = (pct / 100) * circumference
+  return (
+    <div className="kdd-gauge-wrap">
+      <svg width="72" height="44" viewBox="0 0 72 44">
+        <path
+          d={`M ${cx - r},${cy} A ${r},${r} 0 0 1 ${cx + r},${cy}`}
+          fill="none"
+          stroke="#e9ecef"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+        <path
+          d={`M ${cx - r},${cy} A ${r},${r} 0 0 1 ${cx + r},${cy}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${circumference}`}
+          style={{ transition: 'stroke-dasharray 0.5s ease' }}
+        />
+      </svg>
+      <div className="kdd-gauge-value" style={{ color }}>{score != null ? score.toFixed(1) : '—'}</div>
+      <div className="kdd-gauge-label">ML HEALTH</div>
+    </div>
+  )
+}
+
+function SimilarityProfile({ profile }) {
+  if (!profile) return null
+  const dims = [
+    { key: 'inclination_deg', label: 'Inclination', max: 180, unit: '°' },
+    { key: 'eccentricity', label: 'Eccentricity', max: 0.3 },
+    { key: 'mean_altitude_km', label: 'Alt (km)', max: 40000 },
+    { key: 'decay_rate_km_day', label: 'Decay/day', max: 2 },
+    { key: 'maneuvers_per_year', label: 'Mnv/yr', max: 20 },
+    { key: 'orbital_period_min', label: 'Period (min)', max: 1440 },
+  ]
+  return (
+    <div className="kdd-similarity-wrap">
+      <div className="kdd-analytics-section-title">SIMILARITY PROFILE</div>
+      <div className="kdd-similarity-dims">
+        {dims.map(d => {
+          const val = profile[d.key]
+          if (val == null) return null
+          const pct = Math.min(100, Math.round((val / d.max) * 100))
+          return (
+            <div key={d.key} className="kdd-factor-row">
+              <div className="kdd-factor-label">{d.label}</div>
+              <div className="kdd-factor-bar-track">
+                <div className="kdd-factor-bar-fill kdd-sim-bar" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="kdd-factor-raw">{typeof val === 'number' ? val.toFixed(2) : val}{d.unit || ''}</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SummaryStats({ summary }) {
+  if (!summary) return null
+  const {
+    anomaly_severity,
+    maneuver_count,
+    maneuvers_per_year,
+    reentry_predicted_date,
+    decay_rate_km_day,
+    tle_history_count,
+    orbital,
+  } = summary
+
+  return (
+    <div className="kdd-summary-stats">
+      {anomaly_severity && (
+        <div className="kdd-summary-badge" style={{ background: SEVERITY_COLORS[anomaly_severity] || '#adb5bd' }}>
+          ANOMALY: {anomaly_severity.toUpperCase()}
+        </div>
+      )}
+      {maneuver_count != null && (
+        <div className="kdd-summary-stat">
+          <span className="kdd-summary-stat-label">MANEUVERS</span>
+          <span className="kdd-summary-stat-value">{maneuver_count}</span>
+          {maneuvers_per_year != null && (
+            <span className="kdd-summary-stat-sub">({maneuvers_per_year.toFixed(1)}/yr)</span>
+          )}
+        </div>
+      )}
+      {decay_rate_km_day != null && decay_rate_km_day !== 0 && (
+        <div className="kdd-summary-stat">
+          <span className="kdd-summary-stat-label">DECAY</span>
+          <span className="kdd-summary-stat-value" style={{ color: decay_rate_km_day < -0.01 ? '#e74c3c' : '#27ae60' }}>
+            {decay_rate_km_day >= 0 ? '+' : ''}{decay_rate_km_day.toFixed(4)} km/d
+          </span>
+        </div>
+      )}
+      {reentry_predicted_date && (
+        <div className="kdd-summary-stat">
+          <span className="kdd-summary-stat-label">REENTRY EST</span>
+          <span className="kdd-summary-stat-value kdd-reentry-date">
+            {reentry_predicted_date.slice(0, 10)}
+          </span>
+        </div>
+      )}
+      {orbital?.perigee_km != null && (
+        <div className="kdd-summary-stat">
+          <span className="kdd-summary-stat-label">PERIGEE</span>
+          <span className="kdd-summary-stat-value">{orbital.perigee_km.toFixed(0)} km</span>
+        </div>
+      )}
+      {orbital?.apogee_km != null && (
+        <div className="kdd-summary-stat">
+          <span className="kdd-summary-stat-label">APOGEE</span>
+          <span className="kdd-summary-stat-value">{orbital.apogee_km.toFixed(0)} km</span>
+        </div>
+      )}
+      {tle_history_count != null && (
+        <div className="kdd-summary-stat">
+          <span className="kdd-summary-stat-label">TLE HISTORY</span>
+          <span className="kdd-summary-stat-value">{tle_history_count} records</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AnalyticsPanel({ analyticsHealth, analyticsSummary, analyticsLoading }) {
+  if (analyticsLoading) {
+    return (
+      <div className="kdd-analytics-panel kdd-analytics-loading">
+        <span className="kdd-analytics-loading-text">Loading ML analytics…</span>
+      </div>
+    )
+  }
+  if (!analyticsHealth && !analyticsSummary) return null
+
+  const health = analyticsHealth
+  const summary = analyticsSummary
+  const factors = health?.factors || summary?.health_factors
+
+  return (
+    <div className="kdd-analytics-panel">
+      <div className="kdd-analytics-top">
+        {(health?.health_score != null || summary?.health_score != null) && (
+          <HealthGauge score={health?.health_score ?? summary?.health_score} />
+        )}
+        <SummaryStats summary={summary} />
+      </div>
+      {factors && (
+        <div className="kdd-analytics-factors">
+          <div className="kdd-analytics-section-title">EXPLAINABLE FACTORS</div>
+          {Object.entries(factors).map(([name, factor]) => (
+            <FactorBar key={name} name={name} factor={factor} />
+          ))}
+        </div>
+      )}
+      <SimilarityProfile profile={summary?.similarity_profile} />
+    </div>
+  )
+}
+
+export default function KestrelDataDials({ observations, satelliteName, currentSimTime, obsWindowStart, obsWindowEnd, analyticsHealth, analyticsSummary, analyticsLoading }) {
   const sorted = useMemo(() => {
     if (!observations || !observations.length) return []
     return [...observations].sort((a, b) => {
@@ -113,7 +318,17 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
 
   const activeIdx = simDrivenIdx != null ? simDrivenIdx : idx
 
-  if (!sorted.length) return null
+  if (!sorted.length) {
+    return (
+      <div className="kdd-strip">
+        <AnalyticsPanel
+          analyticsHealth={analyticsHealth}
+          analyticsSummary={analyticsSummary}
+          analyticsLoading={analyticsLoading}
+        />
+      </div>
+    )
+  }
 
   const latest = sorted[activeIdx]
 
@@ -321,6 +536,11 @@ export default function KestrelDataDials({ observations, satelliteName, currentS
           </div>
         )}
       </div>
+      <AnalyticsPanel
+        analyticsHealth={analyticsHealth}
+        analyticsSummary={analyticsSummary}
+        analyticsLoading={analyticsLoading}
+      />
     </div>
   )
 }
