@@ -565,6 +565,178 @@ const DELTA_TIME_OPTIONS = [
   { value: 'all', label: 'Show All' },
 ]
 
+const FACTOR_LABELS = {
+  tle_age_days:         'TLE Age',
+  eccentricity:         'Eccentricity',
+  perigee_altitude_km:  'Perigee Alt',
+  bstar_drag:           'BSTAR Drag',
+  anomaly_count:        'Anomalies',
+  maneuver_recency_days:'Mnv Recency',
+}
+
+const SEVERITY_COLORS = {
+  none:   '#27ae60',
+  low:    '#f1c40f',
+  medium: '#e67e22',
+  high:   '#e74c3c',
+}
+
+function MlHealthGauge({ score }) {
+  if (score == null) return null
+  const pct = score
+  const color = pct >= 70 ? '#27ae60' : pct >= 40 ? '#f39c12' : '#e74c3c'
+  const r = 34, cx = 42, cy = 42, sw = 7
+  const circ = Math.PI * r
+  const dash = (pct / 100) * circ
+  return (
+    <div className="obs-ml-gauge-wrap">
+      <svg width="84" height="50" viewBox="0 0 84 50">
+        <path d={`M ${cx - r},${cy} A ${r},${r} 0 0 1 ${cx + r},${cy}`}
+          fill="none" stroke="#e9ecef" strokeWidth={sw} strokeLinecap="round" />
+        <path d={`M ${cx - r},${cy} A ${r},${r} 0 0 1 ${cx + r},${cy}`}
+          fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"
+          strokeDasharray={`${dash} ${circ}`}
+          style={{ transition: 'stroke-dasharray 0.5s ease' }} />
+      </svg>
+      <div className="obs-ml-gauge-val" style={{ color }}>{score.toFixed(1)}</div>
+      <div className="obs-ml-gauge-label">ML SCORE</div>
+    </div>
+  )
+}
+
+function MlFactorBar({ name, factor }) {
+  const pct = Math.round((factor.sub_score ?? 0) * 100)
+  const color = pct >= 70 ? '#27ae60' : pct >= 40 ? '#f39c12' : '#e74c3c'
+  const label = FACTOR_LABELS[name] || name.replace(/_/g, ' ')
+  const rawVal = factor.raw_value
+  const rawStr = rawVal == null ? '—'
+    : typeof rawVal === 'number'
+      ? rawVal.toFixed(Math.abs(rawVal) > 0 && Math.abs(rawVal) < 0.01 ? 5 : 2)
+      : String(rawVal)
+  return (
+    <div className="obs-ml-factor-row">
+      <span className="obs-ml-factor-label">{label}</span>
+      <div className="obs-ml-factor-track">
+        <div className="obs-ml-factor-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="obs-ml-factor-pct" style={{ color }}>{pct}%</span>
+      <span className="obs-ml-factor-raw">{rawStr}</span>
+    </div>
+  )
+}
+
+function MlSimilarityRow({ label, val, max, unit }) {
+  if (val == null) return null
+  const pct = Math.min(100, Math.round((val / max) * 100))
+  return (
+    <div className="obs-ml-factor-row">
+      <span className="obs-ml-factor-label">{label}</span>
+      <div className="obs-ml-factor-track">
+        <div className="obs-ml-factor-fill obs-ml-sim-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="obs-ml-factor-raw">{typeof val === 'number' ? val.toFixed(2) : val}{unit || ''}</span>
+    </div>
+  )
+}
+
+function MlAnalyticsPanel({ analyticsHealth, analyticsSummary, analyticsLoading }) {
+  if (analyticsLoading) {
+    return (
+      <div className="obs-ml-panel obs-ml-panel--loading">
+        <span>Loading ML analytics…</span>
+      </div>
+    )
+  }
+  if (!analyticsHealth && !analyticsSummary) return null
+
+  const mlScore = analyticsHealth?.health_score ?? analyticsSummary?.health_score
+  const factors = analyticsHealth?.factors ?? analyticsSummary?.health_factors
+  const summary = analyticsSummary
+
+  return (
+    <div className="obs-ml-panel">
+      <div className="obs-ml-panel-header">ML Analytics</div>
+      <div className="obs-ml-panel-body">
+        <div className="obs-ml-left">
+          <MlHealthGauge score={mlScore} />
+          {summary && (
+            <div className="obs-ml-summary-stats">
+              {summary.anomaly_severity && (
+                <div className="obs-ml-badge" style={{ background: SEVERITY_COLORS[summary.anomaly_severity] || '#adb5bd' }}>
+                  ANOMALY: {summary.anomaly_severity.toUpperCase()}
+                </div>
+              )}
+              {summary.maneuver_count != null && (
+                <div className="obs-ml-kv">
+                  <span className="obs-ml-kv-label">MANEUVERS</span>
+                  <span className="obs-ml-kv-val">{summary.maneuver_count}
+                    {summary.maneuvers_per_year != null && (
+                      <span className="obs-ml-kv-sub"> ({summary.maneuvers_per_year.toFixed(1)}/yr)</span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {summary.decay_rate_km_day != null && summary.decay_rate_km_day !== 0 && (
+                <div className="obs-ml-kv">
+                  <span className="obs-ml-kv-label">DECAY</span>
+                  <span className="obs-ml-kv-val" style={{ color: summary.decay_rate_km_day < -0.01 ? '#e74c3c' : '#27ae60' }}>
+                    {summary.decay_rate_km_day >= 0 ? '+' : ''}{summary.decay_rate_km_day.toFixed(4)} km/d
+                  </span>
+                </div>
+              )}
+              {summary.reentry_predicted_date && (
+                <div className="obs-ml-kv">
+                  <span className="obs-ml-kv-label">REENTRY EST</span>
+                  <span className="obs-ml-kv-val obs-ml-reentry">{summary.reentry_predicted_date.slice(0, 10)}</span>
+                </div>
+              )}
+              {summary.orbital?.perigee_km != null && (
+                <div className="obs-ml-kv">
+                  <span className="obs-ml-kv-label">PERIGEE</span>
+                  <span className="obs-ml-kv-val">{summary.orbital.perigee_km.toFixed(0)} km</span>
+                </div>
+              )}
+              {summary.orbital?.apogee_km != null && (
+                <div className="obs-ml-kv">
+                  <span className="obs-ml-kv-label">APOGEE</span>
+                  <span className="obs-ml-kv-val">{summary.orbital.apogee_km.toFixed(0)} km</span>
+                </div>
+              )}
+              {summary.tle_history_count != null && (
+                <div className="obs-ml-kv">
+                  <span className="obs-ml-kv-label">TLE RECORDS</span>
+                  <span className="obs-ml-kv-val">{summary.tle_history_count}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {factors && (
+          <div className="obs-ml-right">
+            <div className="obs-ml-section-title">EXPLAINABLE FACTORS</div>
+            {Object.entries(factors).map(([name, factor]) => (
+              <MlFactorBar key={name} name={name} factor={factor} />
+            ))}
+
+            {summary?.similarity_profile && (
+              <>
+                <div className="obs-ml-section-title" style={{ marginTop: '0.75rem' }}>SIMILARITY PROFILE</div>
+                <MlSimilarityRow label="Inclination"   val={summary.similarity_profile.inclination_deg}   max={180} unit="°" />
+                <MlSimilarityRow label="Eccentricity"  val={summary.similarity_profile.eccentricity}      max={0.3} />
+                <MlSimilarityRow label="Alt (km)"      val={summary.similarity_profile.mean_altitude_km}  max={40000} />
+                <MlSimilarityRow label="Decay/day"     val={summary.similarity_profile.decay_rate_km_day} max={2} />
+                <MlSimilarityRow label="Mnv/yr"        val={summary.similarity_profile.maneuvers_per_year} max={20} />
+                <MlSimilarityRow label="Period (min)"  val={summary.similarity_profile.orbital_period_min} max={1440} />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function ObservationDashboard({ initialNoradId, onInitialNoradIdConsumed }) {
   const [allowedSatellites, setAllowedSatellites] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -578,6 +750,10 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
   const [dateTo, setDateTo] = useState('')
   const [deltaTime, setDeltaTime] = useState('')
   const dropdownRef = useRef(null)
+  const analyticsAbortRef = useRef(null)
+  const [analyticsHealth, setAnalyticsHealth] = useState(null)
+  const [analyticsSummary, setAnalyticsSummary] = useState(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
 
   useEffect(() => {
     apiFetch(API_ENDPOINTS.OBSERVATIONS + '/allowed-objects')
@@ -595,6 +771,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     setNoradInput(String(id))
     setSearchTerm(match?.name ? `${id} — ${match.name}` : String(id))
     loadObservations(id)
+    loadAnalytics(id)
     if (onInitialNoradIdConsumed) onInitialNoradIdConsumed()
   }, [initialNoradId, allowedSatellites])
 
@@ -635,6 +812,32 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadAnalytics = (noradId) => {
+    if (analyticsAbortRef.current) {
+      analyticsAbortRef.current.abort()
+      analyticsAbortRef.current = null
+    }
+    if (!noradId) {
+      setAnalyticsHealth(null)
+      setAnalyticsSummary(null)
+      return
+    }
+    const controller = new AbortController()
+    analyticsAbortRef.current = controller
+    setAnalyticsLoading(true)
+    setAnalyticsHealth(null)
+    setAnalyticsSummary(null)
+    Promise.all([
+      apiFetch(API_ENDPOINTS.ANALYTICS.HEALTH(noradId), { signal: controller.signal })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      apiFetch(API_ENDPOINTS.ANALYTICS.SUMMARY(noradId), { signal: controller.signal })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([health, summary]) => {
+      setAnalyticsHealth(health)
+      setAnalyticsSummary(summary)
+    }).finally(() => setAnalyticsLoading(false))
   }
 
   const allChartData = useMemo(() => buildChartData(observations), [observations])
@@ -689,6 +892,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     setNoradInput(String(sat.norad_id))
     setShowDropdown(false)
     loadObservations(sat.norad_id)
+    loadAnalytics(sat.norad_id)
   }
 
   const handleNoradSearch = () => {
@@ -697,6 +901,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
       const match = allowedSatellites.find(s => s.norad_id === id)
       setSelectedSat(match || { norad_id: id, name: null })
       loadObservations(id)
+      loadAnalytics(id)
     }
   }
 
@@ -856,6 +1061,34 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   {summaryStats.minHealth != null ? summaryStats.minHealth.toFixed(1) : '—'}
                 </div>
               </div>
+              {(analyticsHealth?.health_score != null || analyticsSummary?.health_score != null) && (
+                <div className="obs-stat-card obs-stat-card--ml">
+                  <div className="obs-stat-label">ML Health Score</div>
+                  <div className="obs-stat-value" style={{ color: healthScoreColor(analyticsHealth?.health_score ?? analyticsSummary?.health_score) }}>
+                    {(analyticsHealth?.health_score ?? analyticsSummary?.health_score).toFixed(1)}
+                  </div>
+                  <div className="obs-stat-sublabel">computed from TLE</div>
+                </div>
+              )}
+              {analyticsSummary?.anomaly_severity && (
+                <div className="obs-stat-card obs-stat-card--ml">
+                  <div className="obs-stat-label">ML Anomaly Severity</div>
+                  <div className="obs-stat-value" style={{ color: SEVERITY_COLORS[analyticsSummary.anomaly_severity] || '#adb5bd', fontSize: '0.95rem' }}>
+                    {analyticsSummary.anomaly_severity.toUpperCase()}
+                  </div>
+                </div>
+              )}
+              {analyticsSummary?.maneuver_count != null && (
+                <div className="obs-stat-card obs-stat-card--ml">
+                  <div className="obs-stat-label">ML Maneuvers</div>
+                  <div className="obs-stat-value" style={{ color: analyticsSummary.maneuver_count > 0 ? '#e67e22' : '#27ae60' }}>
+                    {analyticsSummary.maneuver_count}
+                  </div>
+                  {analyticsSummary.maneuvers_per_year != null && (
+                    <div className="obs-stat-sublabel">{analyticsSummary.maneuvers_per_year.toFixed(1)}/yr</div>
+                  )}
+                </div>
+              )}
               <div className="obs-stat-card">
                 <div className="obs-stat-label">Thermal Anomalies</div>
                 <div className="obs-stat-value" style={{ color: summaryStats.anomalyCount > 0 ? '#e74c3c' : '#27ae60' }}>
@@ -938,6 +1171,13 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                 </div>
               )
             })()}
+
+            {/* ML Analytics Panel */}
+            <MlAnalyticsPanel
+              analyticsHealth={analyticsHealth}
+              analyticsSummary={analyticsSummary}
+              analyticsLoading={analyticsLoading}
+            />
 
             {/* Charts grid */}
             <div className="obs-charts-grid">
