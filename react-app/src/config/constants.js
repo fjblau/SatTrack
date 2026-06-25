@@ -100,6 +100,12 @@ export const API_ENDPOINTS = {
     DELETE: (id) => `/v2/ephemeris/${id}`,
   },
 
+  ANALYTICS: {
+    HEALTH: (norad_id) => `/v2/analytics/health/${encodeURIComponent(norad_id)}`,
+    SUMMARY: (norad_id) => `/v2/analytics/summary/${encodeURIComponent(norad_id)}`,
+    SIMILAR: (norad_id) => `/v2/analytics/similar/${encodeURIComponent(norad_id)}`,
+  },
+
   INSURANCE: {
     DASHBOARD: (carrierId = 'acme_re') => `/v2/insurance/book/dashboard?carrier_id=${carrierId}`,
     ASSETS: (carrierId = 'acme_re', page = 0, limit = 20, shell = '', riskBand = '') => {
