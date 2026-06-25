@@ -545,6 +545,198 @@
   opacity: 0.8;
 }
 
+/* ── ML stat card variant ────────────────────────────── */
+
+.obs-stat-card--ml {
+  border-top: 2px solid #3498db;
+}
+
+.obs-stat-sublabel {
+  font-size: 0.65rem;
+  color: #adb5bd;
+  margin-top: 0.15rem;
+}
+
+/* ── ML Analytics Panel ──────────────────────────────── */
+
+.obs-ml-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  margin: 0 0 1rem;
+  overflow: hidden;
+}
+
+.obs-ml-panel--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  color: #adb5bd;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.obs-ml-panel-header {
+  background: linear-gradient(90deg, #1a1f36 0%, #2c3e6b 100%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.45rem 1rem;
+}
+
+.obs-ml-panel-body {
+  display: flex;
+  gap: 2rem;
+  padding: 0.75rem 1rem 0.9rem;
+  flex-wrap: wrap;
+}
+
+.obs-ml-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.obs-ml-gauge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.obs-ml-gauge-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: 'Monaco', 'Menlo', monospace;
+  margin-top: -8px;
+}
+
+.obs-ml-gauge-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #8e9aaf;
+  text-transform: uppercase;
+}
+
+.obs-ml-summary-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.obs-ml-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.obs-ml-kv {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.obs-ml-kv-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8e9aaf;
+  white-space: nowrap;
+}
+
+.obs-ml-kv-val {
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: 'Monaco', 'Menlo', monospace;
+  color: #1a1f36;
+}
+
+.obs-ml-kv-sub {
+  font-size: 0.65rem;
+  color: #adb5bd;
+}
+
+.obs-ml-reentry {
+  color: #e74c3c !important;
+}
+
+.obs-ml-right {
+  flex: 1;
+  min-width: 280px;
+  max-width: 560px;
+}
+
+.obs-ml-section-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8e9aaf;
+  margin-bottom: 0.4rem;
+}
+
+.obs-ml-factor-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 38px 80px;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 4px;
+}
+
+.obs-ml-factor-label {
+  font-size: 0.65rem;
+  color: #495057;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.obs-ml-factor-track {
+  height: 7px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.obs-ml-factor-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.obs-ml-sim-fill {
+  background: #3498db;
+}
+
+.obs-ml-factor-pct {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: 'Monaco', 'Menlo', monospace;
+  text-align: right;
+}
+
+.obs-ml-factor-raw {
+  font-size: 0.62rem;
+  color: #8e9aaf;
+  font-family: 'Monaco', 'Menlo', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 700px) {
   .obs-charts-grid {
