@@ -626,10 +626,18 @@ function MlSimilarityRow({ label, val, max, unit }) {
 
 const MANEUVER_THRESHOLD_M_S = 1.0
 
-function MlManeuverChart({ allPairs, detectedEvents }) {
+function MlManeuverChart({ allPairs, detectedEvents, dateFrom, dateTo }) {
   if (!allPairs || allPairs.length === 0) return null
 
-  const sorted = [...allPairs].sort((a, b) => (a.epoch_after > b.epoch_after ? 1 : -1))
+  const filtered = allPairs.filter(e => {
+    if (!e.epoch_after) return true
+    const ep = e.epoch_after.substring(0, 16)
+    if (dateFrom && ep < dateFrom) return false
+    if (dateTo && ep > dateTo) return false
+    return true
+  })
+
+  const sorted = (filtered.length > 0 ? filtered : allPairs).sort((a, b) => (a.epoch_after > b.epoch_after ? 1 : -1))
   const n = sorted.length
   const dvVals = sorted.map(e => e.delta_v_m_s).filter(v => v != null && isFinite(v))
   if (!dvVals.length) return null
@@ -1283,6 +1291,8 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                 <MlManeuverChart
                   allPairs={analyticsManeuvers.maneuver_events}
                   detectedEvents={analyticsSummary?.maneuver_events}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
                 />
               )}
             </div>
