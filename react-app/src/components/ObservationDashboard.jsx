@@ -624,28 +624,30 @@ function MlSimilarityRow({ label, val, max, unit }) {
   )
 }
 
-function MlManeuverChart({ events }) {
-  if (!events || events.length === 0) return null
+const MANEUVER_THRESHOLD_M_S = 1.0
 
-  const sorted = [...events].sort((a, b) => (a.epoch_after > b.epoch_after ? 1 : -1))
+function MlManeuverChart({ allPairs, detectedEvents }) {
+  if (!allPairs || allPairs.length === 0) return null
+
+  const sorted = [...allPairs].sort((a, b) => (a.epoch_after > b.epoch_after ? 1 : -1))
   const n = sorted.length
   const dvVals = sorted.map(e => e.delta_v_m_s).filter(v => v != null && isFinite(v))
-  const drVals = sorted.map(e => e.delta_r_km).filter(v => v != null && isFinite(v))
   if (!dvVals.length) return null
 
-  const dvRange = niceRange(dvVals)
-  const drRange = drVals.length ? niceRange(drVals) : null
+  const detectedEpochs = new Set((detectedEvents || []).map(e => e.epoch_after))
+  const detectedCount = (detectedEvents || []).length
+
+  const dvRange = niceRange([...dvVals, MANEUVER_THRESHOLD_M_S])
   const dvTicks = niceTicks(dvRange.min, dvRange.max)
-  const drTicks = drRange ? niceTicks(drRange.min, drRange.max) : []
 
   const innerH = SVG_H - P.top - P.bottom
   const innerW = IW
   function yDV(v) { return P.top + innerH - ((v - dvRange.min) / (dvRange.max - dvRange.min)) * innerH }
-  function yDR(v) { return P.top + innerH - ((v - drRange.min) / (drRange.max - drRange.min)) * innerH }
   function xAt(i) { return n <= 1 ? P.left + innerW / 2 : P.left + (i / (n - 1)) * innerW }
 
-  const dvColor = '#6c3483'
-  const drColor = '#2980b9'
+  const baseColor = '#8e9aaf'
+  const eventColor = '#e74c3c'
+  const threshColor = '#e67e22'
 
   const dvPath = sorted.reduce((acc, e, i) => {
     if (e.delta_v_m_s == null || !isFinite(e.delta_v_m_s)) return acc
@@ -654,30 +656,30 @@ function MlManeuverChart({ events }) {
     return acc + (acc === '' ? `M${x},${y}` : ` L${x},${y}`)
   }, '')
 
-  const drPath = drRange ? sorted.reduce((acc, e, i) => {
-    if (e.delta_r_km == null || !isFinite(e.delta_r_km)) return acc
-    const x = xAt(i).toFixed(1)
-    const y = yDR(e.delta_r_km).toFixed(1)
-    return acc + (acc === '' ? `M${x},${y}` : ` L${x},${y}`)
-  }, '') : ''
-
   const labelStep = n > 20 ? Math.ceil(n / 12) : n > 10 ? 2 : 1
+  const threshY = yDV(MANEUVER_THRESHOLD_M_S).toFixed(1)
 
   return (
     <div className="obs-chart-card obs-chart-card--ml">
       <div className="obs-chart-header">
-        <h3>ML Maneuver Events</h3>
-        <span className="obs-chart-subtitle">Delta-V residuals from SGP4 TLE-pair analysis · {n} event{n !== 1 ? 's' : ''} detected</span>
+        <h3>ML Maneuver Analysis</h3>
+        <span className="obs-chart-subtitle">
+          SGP4 ΔV residuals across {n} TLE pair{n !== 1 ? 's' : ''} · {detectedCount} maneuver{detectedCount !== 1 ? 's' : ''} detected above {MANEUVER_THRESHOLD_M_S} m/s
+        </span>
       </div>
       <div className="obs-chart-legend">
-        <span className="obs-legend-item" style={{ color: dvColor }}>
-          <span className="obs-legend-dot" style={{ background: dvColor }} />
+        <span className="obs-legend-item" style={{ color: baseColor }}>
+          <span className="obs-legend-dot" style={{ background: baseColor }} />
           ΔV Residual (m/s)
         </span>
-        {drRange && (
-          <span className="obs-legend-item obs-legend-right" style={{ color: drColor }}>
-            <span className="obs-legend-dot obs-legend-dot-dashed" style={{ background: drColor }} />
-            Δr Position (km) (→)
+        <span className="obs-legend-item" style={{ color: threshColor }}>
+          <span className="obs-legend-dot obs-legend-dot-dashed" style={{ background: threshColor }} />
+          Threshold ({MANEUVER_THRESHOLD_M_S} m/s)
+        </span>
+        {detectedCount > 0 && (
+          <span className="obs-legend-item" style={{ color: eventColor }}>
+            <span className="obs-legend-dot" style={{ background: eventColor }} />
+            Detected maneuver
           </span>
         )}
       </div>
@@ -689,16 +691,9 @@ function MlManeuverChart({ events }) {
           <line key={ti} x1={P.left} y1={yDV(t).toFixed(1)} x2={P.left + innerW} y2={yDV(t).toFixed(1)} stroke="#eef0f3" strokeWidth="1" />
         ))}
         {dvTicks.map((t, ti) => (
-          <text key={ti} x={P.left - 8} y={yDV(t) + 4} textAnchor="end" fontSize="11" fill={dvColor}>{formatLabel(t)}</text>
+          <text key={ti} x={P.left - 8} y={yDV(t) + 4} textAnchor="end" fontSize="11" fill={baseColor}>{formatLabel(t)}</text>
         ))}
-        <text x={20} y={P.top + innerH / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill={dvColor} transform={`rotate(-90, 20, ${P.top + innerH / 2})`}>ΔV (m/s)</text>
-        {drRange && <>
-          {drTicks.map((t, ti) => (
-            <text key={ti} x={P.left + innerW + 8} y={yDR(t) + 4} textAnchor="start" fontSize="11" fill={drColor}>{formatLabel(t)}</text>
-          ))}
-          <line x1={P.left + innerW} y1={P.top} x2={P.left + innerW} y2={P.top + innerH} stroke="#dee2e6" strokeWidth="1" />
-          <text x={SVG_W - 14} y={P.top + innerH / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill={drColor} transform={`rotate(90, ${SVG_W - 14}, ${P.top + innerH / 2})`}>Δr (km)</text>
-        </>}
+        <text x={20} y={P.top + innerH / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill={baseColor} transform={`rotate(-90, 20, ${P.top + innerH / 2})`}>ΔV (m/s)</text>
         {sorted.map((e, i) => {
           if (i % labelStep !== 0 && i !== n - 1) return null
           return (
@@ -710,14 +705,23 @@ function MlManeuverChart({ events }) {
         <line x1={P.left} y1={P.top} x2={P.left} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
         <line x1={P.left} y1={P.top + innerH} x2={P.left + innerW} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
         <g clipPath="url(#clip-ml-mnv)">
-          {sorted.map((e, i) => (
-            <line key={i} x1={xAt(i).toFixed(1)} y1={P.top} x2={xAt(i).toFixed(1)} y2={P.top + innerH} stroke="#ff6b6b" strokeWidth="1.5" opacity="0.25" />
-          ))}
-          {dvPath && <path d={dvPath} fill="none" stroke={dvColor} strokeWidth="2" strokeLinejoin="round" />}
-          {drPath && <path d={drPath} fill="none" stroke={drColor} strokeWidth="2" strokeLinejoin="round" strokeDasharray="5 3" />}
-          {sorted.map((e, i) => e.delta_v_m_s != null && isFinite(e.delta_v_m_s) ? (
-            <circle key={i} cx={xAt(i)} cy={yDV(e.delta_v_m_s)} r="4" fill={dvColor} opacity="0.85" />
-          ) : null)}
+          <line x1={P.left} y1={threshY} x2={P.left + innerW} y2={threshY} stroke={threshColor} strokeWidth="1.5" strokeDasharray="6 3" opacity="0.7" />
+          {dvPath && <path d={dvPath} fill="none" stroke={baseColor} strokeWidth="1.5" strokeLinejoin="round" opacity="0.7" />}
+          {sorted.map((e, i) => {
+            if (e.delta_v_m_s == null || !isFinite(e.delta_v_m_s)) return null
+            const isDetected = detectedEpochs.has(e.epoch_after)
+            return isDetected ? (
+              <g key={i}>
+                <line x1={xAt(i).toFixed(1)} y1={P.top} x2={xAt(i).toFixed(1)} y2={P.top + innerH} stroke={eventColor} strokeWidth="1.5" opacity="0.3" />
+                <circle cx={xAt(i)} cy={yDV(e.delta_v_m_s)} r="6" fill={eventColor} opacity="0.9" />
+                <text x={xAt(i)} y={yDV(e.delta_v_m_s) - 10} textAnchor="middle" fontSize="9" fontWeight="700" fill={eventColor}>
+                  {e.delta_v_m_s.toFixed(1)}
+                </text>
+              </g>
+            ) : (
+              <circle key={i} cx={xAt(i)} cy={yDV(e.delta_v_m_s)} r="2.5" fill={baseColor} opacity="0.5" />
+            )
+          })}
         </g>
       </svg>
     </div>
@@ -838,6 +842,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
   const analyticsAbortRef = useRef(null)
   const [analyticsHealth, setAnalyticsHealth] = useState(null)
   const [analyticsSummary, setAnalyticsSummary] = useState(null)
+  const [analyticsManeuvers, setAnalyticsManeuvers] = useState(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
 
   useEffect(() => {
@@ -914,14 +919,18 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     setAnalyticsLoading(true)
     setAnalyticsHealth(null)
     setAnalyticsSummary(null)
+    setAnalyticsManeuvers(null)
     Promise.all([
       apiFetch(API_ENDPOINTS.ANALYTICS.HEALTH(noradId), { signal: controller.signal })
         .then(r => r.ok ? r.json() : null).catch(() => null),
       apiFetch(API_ENDPOINTS.ANALYTICS.SUMMARY(noradId), { signal: controller.signal })
         .then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([health, summary]) => {
+      apiFetch(API_ENDPOINTS.ANALYTICS.MANEUVERS(noradId, 0.001), { signal: controller.signal })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([health, summary, maneuvers]) => {
       setAnalyticsHealth(health)
       setAnalyticsSummary(summary)
+      setAnalyticsManeuvers(maneuvers)
     }).finally(() => setAnalyticsLoading(false))
   }
 
@@ -1270,8 +1279,11 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                 .filter(cfg => chartData.some(cfg.hasData))
                 .map(cfg => <TimeSeriesChart key={cfg.id} {...cfg} data={chartData} />)
               }
-              {analyticsSummary?.maneuver_events?.length > 0 && (
-                <MlManeuverChart events={analyticsSummary.maneuver_events} />
+              {analyticsManeuvers?.maneuver_events?.length > 0 && (
+                <MlManeuverChart
+                  allPairs={analyticsManeuvers.maneuver_events}
+                  detectedEvents={analyticsSummary?.maneuver_events}
+                />
               )}
             </div>
           </>
