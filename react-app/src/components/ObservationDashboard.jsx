@@ -626,15 +626,16 @@ function MlSimilarityRow({ label, val, max, unit }) {
 
 const MANEUVER_THRESHOLD_M_S = 1.0
 
-function MlManeuverChart({ allPairs, detectedEvents, dateFrom, dateTo }) {
+function MlManeuverChart({ allPairs, dateFrom, dateTo }) {
   if (!allPairs || allPairs.length === 0) return null
 
   const sorted = [...allPairs].sort((a, b) => (a.epoch_after > b.epoch_after ? 1 : -1))
   const dvVals = sorted.map(e => e.delta_v_m_s).filter(v => v != null && isFinite(v))
   if (!dvVals.length) return null
 
-  const detectedEpochs = new Set((detectedEvents || []).map(e => e.epoch_after))
-  const detectedCount = (detectedEvents || []).length
+  const detected = sorted.filter(e => e.delta_v_m_s != null && e.delta_v_m_s >= MANEUVER_THRESHOLD_M_S)
+  const detectedEpochs = new Set(detected.map(e => e.epoch_after))
+  const detectedCount = detected.length
 
   const dvRange = niceRange([...dvVals, MANEUVER_THRESHOLD_M_S])
   const dvTicks = niceTicks(dvRange.min, dvRange.max)
@@ -933,7 +934,7 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
     Promise.all([
       apiFetch(API_ENDPOINTS.ANALYTICS.HEALTH(noradId), { signal: controller.signal })
         .then(r => r.ok ? r.json() : null).catch(() => null),
-      apiFetch(API_ENDPOINTS.ANALYTICS.SUMMARY(noradId), { signal: controller.signal })
+      apiFetch(API_ENDPOINTS.ANALYTICS.SUMMARY(noradId, true), { signal: controller.signal })
         .then(r => r.ok ? r.json() : null).catch(() => null),
       apiFetch(API_ENDPOINTS.ANALYTICS.MANEUVERS(noradId, 0.001), { signal: controller.signal })
         .then(r => r.ok ? r.json() : null).catch(() => null),
@@ -1292,7 +1293,6 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
               {analyticsManeuvers?.maneuver_events?.length > 0 && (
                 <MlManeuverChart
                   allPairs={analyticsManeuvers.maneuver_events}
-                  detectedEvents={analyticsSummary?.maneuver_events}
                   dateFrom={dateFrom}
                   dateTo={dateTo}
                 />
