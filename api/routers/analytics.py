@@ -31,7 +31,7 @@ _batch_lock = threading.Lock()
 _batch_status: Dict[str, Any] = {"running": False, "last_result": None}
 
 
-def _get_tle_history(norad_id: str, limit: int = 90) -> List[Dict[str, Any]]:
+def _get_tle_history(norad_id: str, limit: int = 5000) -> List[Dict[str, Any]]:
     return rso_summary_service._fetch_tle_history_for_norad(str(norad_id), limit=limit)
 
 

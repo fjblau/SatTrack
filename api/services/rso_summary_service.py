@@ -155,7 +155,7 @@ def compute_summary_for_norad(norad_id: str) -> Dict[str, Any]:
     norad_id = str(norad_id)
     now = datetime.now(timezone.utc)
 
-    history = _fetch_tle_history_for_norad(norad_id, limit=90)
+    history = _fetch_tle_history_for_norad(norad_id, limit=5000)
     if not history:
         return {
             "norad_id": norad_id,
