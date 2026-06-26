@@ -104,6 +104,7 @@ export const API_ENDPOINTS = {
     HEALTH: (norad_id) => `/v2/analytics/health/${encodeURIComponent(norad_id)}`,
     SUMMARY: (norad_id) => `/v2/analytics/summary/${encodeURIComponent(norad_id)}`,
     SIMILAR: (norad_id) => `/v2/analytics/similar/${encodeURIComponent(norad_id)}`,
+    MANEUVERS: (norad_id, threshold = 0.001) => `/v2/analytics/maneuvers/${encodeURIComponent(norad_id)}?dv_threshold_m_s=${threshold}`,
   },
 
   INSURANCE: {
