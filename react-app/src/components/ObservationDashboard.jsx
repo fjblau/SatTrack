@@ -640,38 +640,26 @@ function MlManeuverChart({ allPairs, dateFrom, dateTo }) {
   const dvRange = niceRange([...dvVals, MANEUVER_THRESHOLD_M_S])
   const dvTicks = niceTicks(dvRange.min, dvRange.max)
 
+  const n = sorted.length
   const innerH = SVG_H - P.top - P.bottom
   const innerW = IW
 
-  const tFrom = dateFrom ? new Date(dateFrom).getTime() : new Date(sorted[0].epoch_after).getTime()
-  const tTo = dateTo ? new Date(dateTo).getTime() : new Date(sorted[sorted.length - 1].epoch_after).getTime()
-  const tSpan = tTo - tFrom || 1
-
-  function xAt(epoch) {
-    const t = new Date(epoch).getTime()
-    return P.left + Math.max(0, Math.min(1, (t - tFrom) / tSpan)) * innerW
-  }
+  function xAt(i) { return n <= 1 ? P.left + innerW / 2 : P.left + (i / (n - 1)) * innerW }
   function yDV(v) { return P.top + innerH - ((v - dvRange.min) / (dvRange.max - dvRange.min)) * innerH }
 
   const baseColor = '#8e9aaf'
   const eventColor = '#e74c3c'
   const threshColor = '#e67e22'
 
-  const dvPath = sorted.reduce((acc, e) => {
-    if (e.delta_v_m_s == null || !isFinite(e.delta_v_m_s) || !e.epoch_after) return acc
-    const x = xAt(e.epoch_after).toFixed(1)
+  const dvPath = sorted.reduce((acc, e, i) => {
+    if (e.delta_v_m_s == null || !isFinite(e.delta_v_m_s)) return acc
+    const x = xAt(i).toFixed(1)
     const y = yDV(e.delta_v_m_s).toFixed(1)
     return acc + (acc === '' ? `M${x},${y}` : ` L${x},${y}`)
   }, '')
 
-  const xTicks = niceTicks(0, 1, 7).map(frac => ({
-    frac,
-    x: (P.left + frac * innerW).toFixed(1),
-    label: formatEpoch(new Date(tFrom + frac * tSpan).toISOString()),
-  }))
-
+  const labelStep = n > 20 ? Math.ceil(n / 12) : n > 10 ? 2 : 1
   const threshY = yDV(MANEUVER_THRESHOLD_M_S).toFixed(1)
-  const n = sorted.length
 
   return (
     <div className="obs-chart-card obs-chart-card--ml">
@@ -708,17 +696,22 @@ function MlManeuverChart({ allPairs, dateFrom, dateTo }) {
           <text key={ti} x={P.left - 8} y={yDV(t) + 4} textAnchor="end" fontSize="11" fill={baseColor}>{formatLabel(t)}</text>
         ))}
         <text x={20} y={P.top + innerH / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill={baseColor} transform={`rotate(-90, 20, ${P.top + innerH / 2})`}>ΔV (m/s)</text>
-        {xTicks.map(({ x, label }, ti) => (
-          <text key={ti} x={x} y={P.top + innerH + 18} textAnchor="middle" fontSize="10" fill="#888">{label}</text>
-        ))}
+        {sorted.map((e, i) => {
+          if (i % labelStep !== 0 && i !== n - 1) return null
+          return (
+            <text key={i} x={xAt(i).toFixed(1)} y={P.top + innerH + 18} textAnchor="middle" fontSize="10" fill="#888">
+              {formatEpoch(e.epoch_after)}
+            </text>
+          )
+        })}
         <line x1={P.left} y1={P.top} x2={P.left} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
         <line x1={P.left} y1={P.top + innerH} x2={P.left + innerW} y2={P.top + innerH} stroke="#bdc3c7" strokeWidth="1.5" />
         <g clipPath="url(#clip-ml-mnv)">
           <line x1={P.left} y1={threshY} x2={P.left + innerW} y2={threshY} stroke={threshColor} strokeWidth="1.5" strokeDasharray="6 3" opacity="0.7" />
           {dvPath && <path d={dvPath} fill="none" stroke={baseColor} strokeWidth="1.5" strokeLinejoin="round" opacity="0.7" />}
           {sorted.map((e, i) => {
-            if (e.delta_v_m_s == null || !isFinite(e.delta_v_m_s) || !e.epoch_after) return null
-            const cx = xAt(e.epoch_after)
+            if (e.delta_v_m_s == null || !isFinite(e.delta_v_m_s)) return null
+            const cx = xAt(i)
             const cy = yDV(e.delta_v_m_s)
             const isDetected = detectedEpochs.has(e.epoch_after)
             return isDetected ? (
