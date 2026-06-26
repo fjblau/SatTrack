@@ -1183,17 +1183,25 @@ export default function ObservationDashboard({ initialNoradId, onInitialNoradIdC
                   </div>
                 </div>
               )}
-              {analyticsSummary?.maneuver_count != null && (
-                <div className="obs-stat-card obs-stat-card--ml">
-                  <div className="obs-stat-label">ML Maneuvers</div>
-                  <div className="obs-stat-value" style={{ color: analyticsSummary.maneuver_count > 0 ? '#e67e22' : '#27ae60' }}>
-                    {analyticsSummary.maneuver_count}
+              {analyticsManeuvers?.maneuver_events != null && (() => {
+                const pairs = analyticsManeuvers.maneuver_events
+                const detected = pairs.filter(e => e.delta_v_m_s != null && e.delta_v_m_s >= MANEUVER_THRESHOLD_M_S)
+                const count = detected.length
+                const sorted = [...pairs].sort((a, b) => (a.epoch_after > b.epoch_after ? 1 : -1))
+                const spanYears = sorted.length >= 2
+                  ? Math.max((new Date(sorted[sorted.length - 1].epoch_after) - new Date(sorted[0].epoch_after)) / (365.25 * 86400 * 1000), 1 / 365)
+                  : 1
+                const perYear = count / spanYears
+                return (
+                  <div className="obs-stat-card obs-stat-card--ml">
+                    <div className="obs-stat-label">ML Maneuvers</div>
+                    <div className="obs-stat-value" style={{ color: count > 0 ? '#e67e22' : '#27ae60' }}>
+                      {count}
+                    </div>
+                    <div className="obs-stat-sublabel">{perYear.toFixed(1)}/yr</div>
                   </div>
-                  {analyticsSummary.maneuvers_per_year != null && (
-                    <div className="obs-stat-sublabel">{analyticsSummary.maneuvers_per_year.toFixed(1)}/yr</div>
-                  )}
-                </div>
-              )}
+                )
+              })()}
               <div className="obs-stat-card">
                 <div className="obs-stat-label">Thermal Anomalies</div>
                 <div className="obs-stat-value" style={{ color: summaryStats.anomalyCount > 0 ? '#e74c3c' : '#27ae60' }}>
