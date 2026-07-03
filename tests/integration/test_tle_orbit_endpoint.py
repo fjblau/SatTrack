@@ -30,6 +30,17 @@ def client():
 
 
 @pytest.fixture
+def authed_client():
+    """FastAPI test client with a pre-seeded auth token."""
+    from api.routers.auth import _token_store
+    test_token = "test-integration-token"
+    _token_store.add(test_token)
+    c = TestClient(app, headers={"Authorization": f"Bearer {test_token}"})
+    yield c
+    _token_store.discard(test_token)
+
+
+@pytest.fixture
 def sample_tle_iss():
     """Sample TLE data for ISS (NORAD 25544)."""
     return {
@@ -314,3 +325,105 @@ class TestOrbitCalculationEndpoint:
         assert data1["satellite"]["norad_id"] == "25544"
         assert data2["satellite"]["norad_id"] == "25544"
         assert data1["orbital_parameters"]["period_minutes"] == data2["orbital_parameters"]["period_minutes"]
+
+
+class TestPassesEndpoint:
+    """Test cases for GET /v2/tle/{norad_id}/passes endpoint."""
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_tle_not_found(self, mock_fetch, authed_client):
+        mock_fetch.return_value = None
+        response = authed_client.get("/v2/tle/99999/passes?lat=48.85&lon=2.35")
+        assert response.status_code == 404
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_missing_lat_lon(self, mock_fetch, authed_client, sample_tle_iss):
+        mock_fetch.return_value = sample_tle_iss
+        response = authed_client.get("/v2/tle/25544/passes")
+        assert response.status_code == 422
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_invalid_lat(self, mock_fetch, authed_client, sample_tle_iss):
+        mock_fetch.return_value = sample_tle_iss
+        response = authed_client.get("/v2/tle/25544/passes?lat=999&lon=2.35")
+        assert response.status_code == 422
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_hours_ahead_too_large(self, mock_fetch, authed_client, sample_tle_iss):
+        mock_fetch.return_value = sample_tle_iss
+        response = authed_client.get("/v2/tle/25544/passes?lat=48.85&lon=2.35&hours_ahead=999")
+        assert response.status_code == 422
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_response_structure(self, mock_fetch, authed_client, sample_tle_iss):
+        mock_fetch.return_value = sample_tle_iss
+        response = authed_client.get("/v2/tle/25544/passes?lat=48.85&lon=2.35&hours_ahead=72&num_passes=3")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "norad_id" in data
+        assert "satellite_name" in data
+        assert "observer" in data
+        assert "passes" in data
+        assert "num_passes" in data
+        assert "tle_age_hours" in data
+        assert "search_window_hours" in data
+
+        assert data["observer"]["latitude"] == 48.85
+        assert data["observer"]["longitude"] == 2.35
+        assert isinstance(data["passes"], list)
+        assert data["num_passes"] == len(data["passes"])
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_pass_structure(self, mock_fetch, authed_client, sample_tle_iss):
+        mock_fetch.return_value = sample_tle_iss
+        response = authed_client.get("/v2/tle/25544/passes?lat=48.85&lon=2.35&hours_ahead=72&num_passes=5")
+        assert response.status_code == 200
+        data = response.json()
+
+        for p in data["passes"]:
+            assert "rise" in p
+            assert "culmination" in p
+            assert "set" in p
+            assert "duration_seconds" in p
+            assert "max_elevation_deg" in p
+            assert "visibility_stars" in p
+            assert "optically_visible" in p
+
+            assert "time" in p["rise"]
+            assert "azimuth_deg" in p["rise"]
+            assert "time" in p["culmination"]
+            assert "azimuth_deg" in p["culmination"]
+            assert "elevation_deg" in p["culmination"]
+            assert "time" in p["set"]
+            assert "azimuth_deg" in p["set"]
+
+            assert p["visibility_stars"] in [1, 2, 3]
+            assert p["max_elevation_deg"] >= 10.0
+            assert p["duration_seconds"] > 0
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_num_passes_respected(self, mock_fetch, authed_client, sample_tle_iss):
+        mock_fetch.return_value = sample_tle_iss
+        response = authed_client.get("/v2/tle/25544/passes?lat=48.85&lon=2.35&hours_ahead=168&num_passes=2")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["passes"]) <= 2
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_geo_returns_empty_list(self, mock_fetch, authed_client, sample_tle_geo):
+        mock_fetch.return_value = sample_tle_geo
+        response = authed_client.get("/v2/tle/41866/passes?lat=48.85&lon=2.35&hours_ahead=24")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["passes"], list)
+
+    @patch('api.routers.tle.fetch_tle_by_norad_id')
+    def test_passes_tle_age_in_response(self, mock_fetch, authed_client, sample_tle_iss):
+        mock_fetch.return_value = sample_tle_iss
+        response = authed_client.get("/v2/tle/25544/passes?lat=48.85&lon=2.35")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["tle_age_hours"] is not None
+        assert isinstance(data["tle_age_hours"], (int, float))
+        assert data["tle_age_hours"] > 0
