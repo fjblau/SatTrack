@@ -10,6 +10,8 @@ from api.services.orbital_service import OrbitalService
 
 logger = logging.getLogger(__name__)
 
+PASS_SCORE_THRESHOLDS = [(60, 3), (30, 2), (0, 1)]
+
 
 class PropagationError(Exception):
     """Exception raised when orbit propagation fails"""
@@ -26,7 +28,24 @@ class PropagationService:
     
     EARTH_RADIUS_KM = 6371.0
     _timescale = None
-    
+    _planets = None
+
+    @staticmethod
+    def _score_pass(max_elevation_deg: float) -> int:
+        for threshold, stars in PASS_SCORE_THRESHOLDS:
+            if max_elevation_deg >= threshold:
+                return stars
+        return 1
+
+    @classmethod
+    def _get_planets(cls):
+        if cls._planets is None:
+            try:
+                cls._planets = load('de421.bsp')
+            except Exception as e:
+                logger.warning(f"Could not load de421.bsp for optical visibility: {e}")
+        return cls._planets
+
     @classmethod
     def _get_timescale(cls):
         """Get or create Skyfield timescale (lazy loading)"""
@@ -332,6 +351,101 @@ class PropagationService:
             'num_positions': len(future_positions),
             'tle_epoch': tle_epoch.isoformat()
         }
+
+
+    @classmethod
+    def find_passes(
+        cls,
+        line1: str,
+        line2: str,
+        satellite_name: str,
+        lat: float,
+        lon: float,
+        elevation_m: float = 0.0,
+        min_elevation_deg: float = 10.0,
+        hours_ahead: float = 24.0,
+        num_passes: int = 5,
+    ) -> List[Dict[str, Any]]:
+        ts = cls._get_timescale()
+
+        try:
+            satellite = EarthSatellite(line1, line2, satellite_name, ts)
+        except Exception as e:
+            raise PropagationError(f"Invalid TLE: {e}")
+
+        observer = wgs84.latlon(lat, lon, elevation_m=elevation_m)
+
+        t0 = ts.now()
+        t1 = ts.tt_jd(t0.tt + hours_ahead / 24.0)
+
+        try:
+            times, events = satellite.find_events(observer, t0, t1, altitude_degrees=min_elevation_deg)
+        except Exception as e:
+            raise PropagationError(f"Failed to find passes: {e}")
+
+        passes_raw = []
+        current = {}
+        for t, event in zip(times, events):
+            if event == 0:
+                current = {'rise_t': t}
+            elif event == 1 and 'rise_t' in current:
+                current['culmination_t'] = t
+            elif event == 2 and 'culmination_t' in current:
+                current['set_t'] = t
+                passes_raw.append(current)
+                current = {}
+                if len(passes_raw) >= num_passes:
+                    break
+
+        planets = cls._get_planets()
+        diff = satellite - observer
+
+        result = []
+        for p in passes_raw:
+            rise_t = p['rise_t']
+            culm_t = p['culmination_t']
+            set_t = p['set_t']
+
+            _, rise_az, _ = diff.at(rise_t).altaz()
+            culm_alt, culm_az, _ = diff.at(culm_t).altaz()
+            _, set_az, _ = diff.at(set_t).altaz()
+
+            max_el = round(culm_alt.degrees, 1)
+            duration_sec = round((set_t.tt - rise_t.tt) * 86400)
+
+            optically_visible = None
+            if planets is not None:
+                try:
+                    earth = planets['earth']
+                    sun = planets['sun']
+                    sat_sunlit = satellite.at(culm_t).is_sunlit(planets)
+                    sun_apparent = (earth + observer).at(culm_t).observe(sun).apparent()
+                    sun_alt, _, _ = sun_apparent.altaz()
+                    optically_visible = bool(sat_sunlit and sun_alt.degrees < -6.0)
+                except Exception as e:
+                    logger.warning(f"Optical visibility check failed: {e}")
+
+            result.append({
+                'rise': {
+                    'time': rise_t.utc_iso(),
+                    'azimuth_deg': round(rise_az.degrees, 1),
+                },
+                'culmination': {
+                    'time': culm_t.utc_iso(),
+                    'azimuth_deg': round(culm_az.degrees, 1),
+                    'elevation_deg': max_el,
+                },
+                'set': {
+                    'time': set_t.utc_iso(),
+                    'azimuth_deg': round(set_az.degrees, 1),
+                },
+                'duration_seconds': duration_sec,
+                'max_elevation_deg': max_el,
+                'visibility_stars': cls._score_pass(max_el),
+                'optically_visible': optically_visible,
+            })
+
+        return result
 
 
 propagation_service = PropagationService()

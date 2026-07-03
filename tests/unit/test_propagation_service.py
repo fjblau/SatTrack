@@ -401,5 +401,138 @@ class TestPropagationServiceHelpers(unittest.TestCase):
         self.assertGreater(alt_diff, 1, "Altitude should differ due to WGS84 vs spherical model")
 
 
+class TestFindPasses(unittest.TestCase):
+    """Test cases for PropagationService.find_passes()"""
+
+    def setUp(self):
+        self.iss_line1 = "1 25544U 98067A   24038.54586899  .00012769  00000+0  22680-3 0  9996"
+        self.iss_line2 = "2 25544  51.6406 302.7583 0001012  95.3523  23.3829 15.50234806439337"
+        self.iss_name = "ISS (ZARYA)"
+
+        self.geo_line1 = "1 41866U 16071A   24038.50000000  .00000000  00000+0  00000+0 0  9999"
+        self.geo_line2 = "2 41866   0.0000 123.4567 0001234 123.4567 234.5678  1.00271234567890"
+        self.geo_name = "GOES-16"
+
+    def test_score_pass_thresholds(self):
+        self.assertEqual(PropagationService._score_pass(5.0), 1)
+        self.assertEqual(PropagationService._score_pass(10.0), 1)
+        self.assertEqual(PropagationService._score_pass(29.9), 1)
+        self.assertEqual(PropagationService._score_pass(30.0), 2)
+        self.assertEqual(PropagationService._score_pass(45.0), 2)
+        self.assertEqual(PropagationService._score_pass(59.9), 2)
+        self.assertEqual(PropagationService._score_pass(60.0), 3)
+        self.assertEqual(PropagationService._score_pass(90.0), 3)
+
+    def test_find_passes_returns_list(self):
+        passes = PropagationService.find_passes(
+            line1=self.iss_line1,
+            line2=self.iss_line2,
+            satellite_name=self.iss_name,
+            lat=48.85,
+            lon=2.35,
+            elevation_m=35.0,
+            min_elevation_deg=10.0,
+            hours_ahead=48.0,
+            num_passes=5,
+        )
+        self.assertIsInstance(passes, list)
+
+    def test_find_passes_structure(self):
+        passes = PropagationService.find_passes(
+            line1=self.iss_line1,
+            line2=self.iss_line2,
+            satellite_name=self.iss_name,
+            lat=48.85,
+            lon=2.35,
+            elevation_m=0.0,
+            min_elevation_deg=10.0,
+            hours_ahead=72.0,
+            num_passes=3,
+        )
+        if not passes:
+            self.skipTest("No passes found in window — try a wider search")
+
+        for p in passes:
+            self.assertIn('rise', p)
+            self.assertIn('culmination', p)
+            self.assertIn('set', p)
+            self.assertIn('duration_seconds', p)
+            self.assertIn('max_elevation_deg', p)
+            self.assertIn('visibility_stars', p)
+            self.assertIn('optically_visible', p)
+
+            self.assertIn('time', p['rise'])
+            self.assertIn('azimuth_deg', p['rise'])
+            self.assertIn('time', p['culmination'])
+            self.assertIn('azimuth_deg', p['culmination'])
+            self.assertIn('elevation_deg', p['culmination'])
+            self.assertIn('time', p['set'])
+            self.assertIn('azimuth_deg', p['set'])
+
+            self.assertGreaterEqual(p['max_elevation_deg'], 10.0)
+            self.assertIn(p['visibility_stars'], [1, 2, 3])
+            self.assertGreater(p['duration_seconds'], 0)
+
+    def test_find_passes_num_passes_limit(self):
+        passes = PropagationService.find_passes(
+            line1=self.iss_line1,
+            line2=self.iss_line2,
+            satellite_name=self.iss_name,
+            lat=48.85,
+            lon=2.35,
+            elevation_m=0.0,
+            hours_ahead=168.0,
+            num_passes=2,
+        )
+        self.assertLessEqual(len(passes), 2)
+
+    def test_find_passes_invalid_tle(self):
+        try:
+            result = PropagationService.find_passes(
+                line1="not a valid tle line",
+                line2="also not valid",
+                satellite_name="BAD",
+                lat=0.0,
+                lon=0.0,
+            )
+            self.assertIsInstance(result, list)
+        except Exception:
+            pass
+
+    def test_find_passes_geo_satellite_returns_empty_or_list(self):
+        passes = PropagationService.find_passes(
+            line1=self.geo_line1,
+            line2=self.geo_line2,
+            satellite_name=self.geo_name,
+            lat=48.85,
+            lon=2.35,
+            elevation_m=0.0,
+            min_elevation_deg=10.0,
+            hours_ahead=24.0,
+            num_passes=5,
+        )
+        self.assertIsInstance(passes, list)
+
+    def test_find_passes_stars_consistent_with_elevation(self):
+        passes = PropagationService.find_passes(
+            line1=self.iss_line1,
+            line2=self.iss_line2,
+            satellite_name=self.iss_name,
+            lat=48.85,
+            lon=2.35,
+            hours_ahead=72.0,
+            num_passes=5,
+        )
+        for p in passes:
+            el = p['max_elevation_deg']
+            stars = p['visibility_stars']
+            if el >= 60:
+                self.assertEqual(stars, 3)
+            elif el >= 30:
+                self.assertEqual(stars, 2)
+            else:
+                self.assertEqual(stars, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

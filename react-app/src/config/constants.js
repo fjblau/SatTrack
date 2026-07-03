@@ -29,6 +29,7 @@ export const API_ENDPOINTS = {
   },
   TLE: '/v2/tle',
   TLE_INTLDES: '/v2/tle/intldes',
+  TLE_PASSES: (noradId) => `/v2/tle/${noradId}/passes`,
   OBSERVATIONS: '/v2/observations',
   OBSERVATION_ANALYTICS: {
     HEALTH: '/v2/observations/analytics/health-over-time',

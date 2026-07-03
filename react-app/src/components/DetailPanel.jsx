@@ -4,6 +4,7 @@ import './DetailPanel.css'
 import DataRecordModal from './DataRecordModal'
 import MqttConfigModal from './MqttConfigModal'
 import OrbitCalculationModal from './OrbitCalculationModal'
+import NextPassModal from './NextPassModal'
 import ObservationsModal from './ObservationsModal'
 import { API_ENDPOINTS, EXTERNAL_URLS, UI_TEXT, NUMBER_FORMATS } from '../config/constants'
 
@@ -90,6 +91,7 @@ export default function DetailPanel({ object, isDemo = false }) {
   const [tleLoading, setTleLoading] = useState(false)
   const [showMqttConfig, setShowMqttConfig] = useState(false)
   const [showOrbitCalculation, setShowOrbitCalculation] = useState(false)
+  const [showNextPass, setShowNextPass] = useState(false)
   const [showObservations, setShowObservations] = useState(false)
 
   useEffect(() => {
@@ -106,6 +108,7 @@ export default function DetailPanel({ object, isDemo = false }) {
       setTleLoading(false)
       setShowMqttConfig(false)
       setShowOrbitCalculation(false)
+      setShowNextPass(false)
       setShowObservations(false)
       return
     }
@@ -347,6 +350,14 @@ export default function DetailPanel({ object, isDemo = false }) {
               onClick={() => setShowOrbitCalculation(true)}
             >
               Calculate Orbit
+            </button>
+          )}
+          {currentTle && !currentTle._notFound && (currentTle.line1 || currentTle.line2) && (
+            <button
+              className="next-pass-button"
+              onClick={() => setShowNextPass(true)}
+            >
+              Next Pass
             </button>
           )}
         </div>
@@ -666,6 +677,14 @@ export default function DetailPanel({ object, isDemo = false }) {
           satellite={fullDocument || object}
           tleData={currentTle}
           onClose={() => setShowOrbitCalculation(false)}
+        />
+      )}
+
+      {showNextPass && (
+        <NextPassModal
+          satellite={fullDocument || object}
+          noradId={fullDocument?.canonical?.norad_cat_id || object?.['NORAD Cat ID']}
+          onClose={() => setShowNextPass(false)}
         />
       )}
 
