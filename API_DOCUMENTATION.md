@@ -1565,6 +1565,144 @@ curl "http://localhost:8000/v2/tle/25544"
 
 ---
 
+#### Calculate Orbit
+
+```http
+GET /v2/tle/{norad_id}/orbit
+```
+
+Propagate a satellite's TLE and return a ground track (geodetic positions) for one complete orbit.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `norad_id` | string | Yes | NORAD catalog number |
+
+**Response:**
+
+```json
+{
+  "satellite": {
+    "norad_id": "25544",
+    "name": "ISS (ZARYA)"
+  },
+  "orbital_period_minutes": 92.7,
+  "ground_track": [
+    {
+      "timestamp": "2026-02-06T12:00:00Z",
+      "latitude": 51.6,
+      "longitude": -10.5,
+      "altitude_km": 420.3
+    }
+  ]
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/tle/25544/orbit"
+```
+
+**Notes:**
+
+- Returns 404 if NORAD ID not found
+- Uses SGP4 propagation via the `sgp4` library
+- Positions are computed at uniform intervals for one full orbital period
+
+---
+
+#### Get Next Passes
+
+```http
+GET /v2/tle/{norad_id}/passes
+```
+
+Find upcoming passes of a satellite over a ground observer location. Returns each pass with rise/culmination/set times, azimuths, duration, max elevation, a 1–3 star visibility quality score, and an optical visibility flag.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `norad_id` | string | Yes | NORAD catalog number |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `lat` | float | Yes | — | Observer latitude (degrees, −90 to 90) |
+| `lon` | float | Yes | — | Observer longitude (degrees, −180 to 180) |
+| `elevation_m` | float | No | 0 | Observer elevation above sea level (meters) |
+| `min_elevation_deg` | float | No | 10.0 | Minimum elevation angle for a pass to count (degrees, 0–90) |
+| `hours_ahead` | float | No | 24.0 | Search window in hours (max 168) |
+| `num_passes` | int | No | 5 | Maximum number of passes to return (max 20) |
+
+**Response:**
+
+```json
+{
+  "norad_id": "25544",
+  "satellite_name": "ISS (ZARYA)",
+  "observer": {
+    "latitude": 48.8566,
+    "longitude": 2.3522,
+    "elevation_m": 35.0,
+    "min_elevation_deg": 10.0
+  },
+  "search_window_hours": 24.0,
+  "tle_age_hours": 3.2,
+  "num_passes": 3,
+  "passes": [
+    {
+      "rise": {
+        "time": "2026-02-06T13:22:05Z",
+        "azimuth_deg": 312.4
+      },
+      "culmination": {
+        "time": "2026-02-06T13:27:18Z",
+        "azimuth_deg": 42.1,
+        "elevation_deg": 67.3
+      },
+      "set": {
+        "time": "2026-02-06T13:32:31Z",
+        "azimuth_deg": 130.8
+      },
+      "duration_seconds": 626,
+      "max_elevation_deg": 67.3,
+      "visibility_stars": 3,
+      "optically_visible": true
+    }
+  ]
+}
+```
+
+**Visibility Scoring:**
+
+| Stars | Max Elevation |
+|-------|--------------|
+| ★☆☆ (1) | < 30° |
+| ★★☆ (2) | 30° – 59.9° |
+| ★★★ (3) | ≥ 60° |
+
+`optically_visible` is `true` when the satellite is sunlit and the observer is in astronomical/civil twilight or full darkness (sun elevation < −6°). It is `null` if the planetary ephemeris data could not be loaded.
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v2/tle/25544/passes?lat=48.8566&lon=2.3522&elevation_m=35&hours_ahead=48&num_passes=5"
+```
+
+**Notes:**
+
+- Returns 404 if NORAD ID not found
+- Passes are sorted chronologically
+- Geostationary satellites typically return an empty `passes` list (they do not rise and set)
+- `tle_age_hours` reflects how stale the TLE is; values above 168 hours may reduce accuracy
+- Uses Skyfield's `EarthSatellite.find_events()` + `de421.bsp` planetary ephemeris (auto-downloaded ~17 MB on first use)
+
+---
+
 ### Ephemeris
 
 High-fidelity ephemeris generation and storage. Supports two propagators:
