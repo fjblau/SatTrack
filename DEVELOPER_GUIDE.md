@@ -54,20 +54,33 @@ nano .env
 
 ```bash
 # .env file
-ARANGO_HOST=localhost
-ARANGO_PORT=8529
-ARANGO_DATABASE=kessler
-ARANGO_USER=root
-ARANGO_PASSWORD=
 
+# ArangoDB — host must include scheme (http:// or https://)
+ARANGO_HOST=http://localhost:8529
+ARANGO_USER=root
+ARANGO_PASSWORD=kessler_dev_password
+
+# API server
 API_HOST=127.0.0.1
 API_PORT=8000
 LOG_LEVEL=info
 CORS_ORIGINS=http://localhost:3000
 
+# Authentication
+APP_USERNAME=admin
+APP_PASSWORD=changeme
+
+# TLE caching
 TLE_CACHE_TTL=3600
-DOCUMENT_CACHE_TTL=86400
-MAX_CACHE_SIZE=10000
+MAX_CACHE_SIZE=1000
+
+# AI agent (required for /v2/ask)
+OPENAI_API_KEY=your_openai_api_key
+AGENT_MODEL=gpt-4o-mini
+
+# Space-Track (optional TLE fallback)
+SPACETRACK_USERNAME=your_email@example.com
+SPACETRACK_PASSWORD=your_password
 ```
 
 ### Running the Application
@@ -103,33 +116,77 @@ open http://localhost:3000
 ```
 kessler/
 ├── api/                        # API layer
-│   ├── main.py                 # FastAPI app entry point
-│   ├── routers/                # API endpoints
-│   │   ├── satellites.py       # Satellite search endpoints
-│   │   ├── metadata.py         # Metadata endpoints
-│   │   ├── graphs.py           # Graph endpoints
-│   │   ├── documents.py        # Document endpoints
-│   │   ├── tle.py              # TLE endpoints
-│   │   └── mqtt.py             # MQTT endpoints
+│   ├── main.py                 # FastAPI app entry point & lifespan
+│   ├── middleware/auth.py       # Bearer-token authentication middleware
+│   ├── routers/                # API endpoints (one file per domain)
+│   │   ├── auth.py             # POST /v2/auth/login, POST /v2/auth/logout
+│   │   ├── satellites.py       # Legacy satellite endpoints (deprecated → use objects.py)
+│   │   ├── objects.py          # Space-object lookup (/v2/objects/*)
+│   │   ├── provenance.py       # Provenance graph (/v2/provenance/*)
+│   │   ├── inference.py        # ML inference stubs (/v2/inference/*)
+│   │   ├── metadata.py         # Filter values (countries, statuses, orbital bands)
+│   │   ├── graphs.py           # Graph analytics endpoints
+│   │   ├── documents.py        # UN document metadata
+│   │   ├── tle.py              # TLE retrieval & propagation
+│   │   ├── tle_history.py      # Historical TLE archive (/v2/tle-history/*)
+│   │   ├── ephemeris.py        # Ephemeris generation & CZML export
+│   │   ├── mqtt.py             # MQTT configuration & publishing
+│   │   ├── observations.py     # Observation ingestion & analytics
+│   │   ├── admin.py            # Admin script runner & GMAT status
+│   │   ├── agent.py            # AI assistants (/v2/ask, /v2/aql)
+│   │   ├── kestrel.py          # Rendezvous maneuver planning
+│   │   ├── insurance.py        # Insurance overlay (/v2/insurance/*)
+│   │   ├── customer_tasks.py   # Customer task management (/v2/customer-tasks/*)
+│   │   ├── analytics.py        # ML analytics: health, anomaly, maneuver, re-entry (/v2/analytics/*)
+│   │   └── docs.py             # HTML documentation viewer (/v2/docs)
 │   ├── services/               # Business logic
-│   │   ├── cache_service.py    # Caching service
-│   │   ├── orbital_service.py  # Orbital calculations
-│   │   ├── tle_service.py      # TLE fetching
-│   │   └── document_service.py # Document metadata
+│   │   ├── cache_service.py    # LRU + TTL caching
+│   │   ├── orbital_service.py  # Orbital calculations from TLE
+│   │   ├── tle_service.py      # TLE fetching (CelesTrak / Space-Track)
+│   │   ├── tle_history_service.py # Historical TLE fetch & caching
+│   │   ├── document_service.py # UN document metadata extraction
+│   │   ├── collision_service.py # Collision risk computation
+│   │   ├── lineage_service.py  # Satellite family-tree traversal
+│   │   ├── propagation_service.py # SGP4/Skyfield orbit propagation
+│   │   ├── gmat_service.py     # GMAT high-fidelity propagation
+│   │   ├── gmat_maneuver_service.py # Kestrel Hohmann + GMAT maneuver planning
+│   │   ├── spacetrack_service.py # Space-Track API integration
+│   │   ├── discos_service.py   # ESA DISCOSweb v2 API client
+│   │   ├── report_service.py   # PDF report generation (ReportLab)
+│   │   ├── health_score_service.py # RSO health score (0–100)
+│   │   ├── anomaly_detection_service.py # Attitude-anomaly detection
+│   │   ├── maneuver_detection_service.py # Maneuver-event extraction
+│   │   ├── reentry_estimation_service.py # Re-entry epoch estimation
+│   │   ├── rso_summary_service.py # Precomputed RSO summary cache
+│   │   ├── similarity_search_service.py  # Orbital-profile similarity search
+│   │   ├── index_service.py    # ChromaDB RAG vector store
+│   │   ├── agent_service.py    # LangGraph general assistant
+│   │   ├── aql_agent_service.py # LangGraph AQL translation agent
+│   │   └── kestrel_agent_service.py # LangGraph Kestrel mission agent
 │   └── utils/                  # Utilities
 │       └── converters.py       # Format converters
 │
 ├── database/                   # Data layer
-│   ├── connection.py           # Database connection
-│   ├── operations.py           # CRUD operations
-│   ├── graph_operations.py     # Graph queries
-│   ├── transformations.py      # Data transformations
+│   ├── connection.py           # ArangoDB connection & schema init
+│   ├── operations.py           # CRUD (objects collection)
+│   ├── identifier_operations.py # Alias-based lookups
+│   ├── graph_operations.py     # Edge CRUD & index management
+│   ├── graph_analytics.py      # AQL graph analytics
+│   ├── observation_graph_ops.py # Observation edge creation & traversal
+│   ├── ephemeris_ops.py        # Ephemeris envelope CRUD
+│   ├── maneuver_plan_ops.py    # Kestrel maneuver plan CRUD
+│   ├── customer_task_ops.py    # Customer task state machine
+│   ├── tle_history_ops.py      # TLE history storage & queries
+│   ├── discos_object_operations.py # DISCOS enrichment & attribution
+│   ├── merge_operations.py     # Object de-duplication utilities
+│   ├── demo_config.py          # Demo-mode settings (ArangoDB-backed)
+│   ├── transformations.py      # Data canonicalization
 │   ├── mqtt_config.py          # MQTT config storage
 │   ├── data/                   # Static data
 │   │   └── country_codes.json  # Country mappings
 │   └── utils/                  # Database utilities
-│       ├── normalization.py    # Data normalization
-│       └── field_utils.py      # Field manipulation
+│       ├── normalization.py    # Country code normalization
+│       └── field_utils.py      # Nested field manipulation
 │
 ├── scripts/                    # Utility scripts
 │   ├── import/                 # Data import scripts
@@ -142,16 +199,19 @@ kessler/
 │   ├── integration/            # Integration tests
 │   └── e2e/                    # End-to-end tests
 │
-├── react-app/                  # Frontend
+├── react-app/                  # Frontend (React 19 + Vite)
 │   └── src/
 │       ├── components/         # React components
+│       ├── utils/
+│       │   ├── apiFetch.js     # Authenticated fetch wrapper
+│       │   └── orbitUtils.js   # Client-side orbital utilities
 │       └── config/
-│           └── constants.js    # Frontend config
+│           └── constants.js    # API endpoint constants
 │
 ├── config.py                   # Centralized configuration
 ├── mqtt_publisher.py           # MQTT publishing service
 ├── mqtt_scheduler.py           # MQTT scheduling service
-└── start.sh                    # Startup script
+└── start.sh                    # Startup script (API + frontend)
 ```
 
 ---

@@ -27,22 +27,30 @@ root/
 │   ├── middleware/auth.py         # Bearer-token authentication middleware
 │   ├── routers/                  # API endpoints by domain
 │   │   ├── auth.py               # POST /v2/auth/login, POST /v2/auth/logout
-│   │   ├── satellites.py         # Satellite search & retrieval
+│   │   ├── satellites.py         # Satellite search & retrieval (legacy /v2/satellite/* — deprecated)
+│   │   ├── objects.py            # Space-object lookup by NORAD/COSPAR/alias (/v2/objects/*)
+│   │   ├── provenance.py         # Provenance graph traversal (/v2/provenance/*)
+│   │   ├── inference.py          # ML inference stubs (/v2/inference/*; not yet implemented)
 │   │   ├── metadata.py           # Countries, statuses, orbital bands, stats
 │   │   ├── graphs.py             # Graph visualization & analytics
 │   │   ├── documents.py          # UN document metadata
 │   │   ├── tle.py                # TLE data & orbit propagation
-│   │   ├── ephemeris.py          # Ephemeris generation (SGP4 + GMAT), CZML export
+│   │   ├── tle_history.py        # Historical TLE storage & position lookup (/v2/tle-history/*)
+│   │   ├── ephemeris.py          # Ephemeris generation (SGP4 + GMAT HIFI), CZML export
 │   │   ├── mqtt.py               # MQTT configuration & publishing
-│   │   ├── observations.py       # Observation import & analytics
-│   │   ├── admin.py              # Admin script execution, GMAT status
-│   │   ├── agent.py              # AI assistant (/v2/ask), AQL agent (/v2/aql)
+│   │   ├── observations.py       # Observation import, analytics, graph data
+│   │   ├── admin.py              # Admin script execution, run tracking, GMAT status
+│   │   ├── agent.py              # POST /v2/ask, POST /v2/aql, GET /v2/ask/status (AI agents)
 │   │   ├── kestrel.py            # Kestrel rendezvous maneuver planning
+│   │   ├── insurance.py          # Insurance overlay APIs (/v2/insurance/*)
+│   │   ├── customer_tasks.py     # Customer task management (/v2/customer-tasks/*)
+│   │   ├── analytics.py          # ML-powered RSO analytics: health, anomaly, maneuver, re-entry (/v2/analytics/*)
 │   │   └── docs.py               # In-app HTML documentation viewer (/v2/docs)
 │   └── services/                 # Business logic
 │       ├── cache_service.py      # LRU cache with TTL
 │       ├── orbital_service.py    # Orbital calculations from TLE
 │       ├── tle_service.py        # TLE fetching (CelesTrak / Space-Track)
+│       ├── tle_history_service.py # Historical TLE fetch & caching (Space-Track bulk requests)
 │       ├── document_service.py   # UN document metadata extraction
 │       ├── collision_service.py  # Collision risk computation
 │       ├── lineage_service.py    # Satellite lineage traversal
@@ -50,19 +58,33 @@ root/
 │       ├── gmat_service.py       # GMAT high-fidelity propagation (RK89 + EGM96)
 │       ├── gmat_maneuver_service.py # Kestrel Hohmann + GMAT maneuver planning
 │       ├── spacetrack_service.py  # Space-Track API integration
+│       ├── discos_service.py     # ESA DISCOSweb v2 API client (objects, launches, fragmentations, entities)
+│       ├── report_service.py     # ReportLab PDF generation (observation reports, evidence packages)
+│       ├── health_score_service.py # Calibrated RSO health score (0–100) from TLE BSTAR/perigee/eccentricity
+│       ├── anomaly_detection_service.py # Attitude-anomaly detection and severity scoring from TLE history
+│       ├── maneuver_detection_service.py # Maneuver-event extraction from TLE history delta-v series
+│       ├── reentry_estimation_service.py # Re-entry epoch estimation from perigee decay series
+│       ├── rso_summary_service.py # Precomputed per-object RSO summary cache (rso_summary collection)
+│       ├── similarity_search_service.py  # Orbital-profile similarity search across the objects catalog
 │       ├── index_service.py      # ChromaDB RAG vector store build & load
 │       ├── agent_service.py      # LangGraph general assistant (/v2/ask)
 │       ├── aql_agent_service.py  # LangGraph AQL translation agent (/v2/aql)
 │       └── kestrel_agent_service.py # LangGraph Kestrel mission agent
 │
 ├── database/                     # Data layer
-│   ├── connection.py             # ArangoDB connection & schema init
-│   ├── operations.py             # Satellite CRUD operations
+│   ├── connection.py             # ArangoDB connection & schema init (all collections & named graphs)
+│   ├── operations.py             # CRUD operations (objects collection)
+│   ├── identifier_operations.py  # Alias-based lookups (norad, cospar, discos, vimpel, kestrel)
 │   ├── graph_operations.py       # Edge CRUD & index management
 │   ├── graph_analytics.py        # AQL analytics (centrality, communities)
 │   ├── observation_graph_ops.py  # Observation edge creation & traversal
 │   ├── ephemeris_ops.py          # Ephemeris envelope storage
 │   ├── maneuver_plan_ops.py      # Kestrel maneuver plan storage
+│   ├── customer_task_ops.py      # Customer task state machine, transitions, allowed-state map
+│   ├── tle_history_ops.py        # TLE history storage, coverage queries, nearest-TLE lookup
+│   ├── discos_object_operations.py # DISCOS object enrichment, surrogate cleanup, attribution ingest
+│   ├── merge_operations.py       # Object de-duplication and merge utilities
+│   ├── demo_config.py            # Demo-mode app_settings (tab/subtab visibility) stored in ArangoDB
 │   ├── transformations.py        # Data canonicalization
 │   ├── mqtt_config.py            # MQTT configuration storage
 │   ├── data/country_codes.json   # ISO 3166-1 alpha-3 mappings
@@ -231,13 +253,37 @@ npm run preview    # Preview production build
 ### Vertex Collections
 | Collection | Description |
 |---|---|
-| `satellites` | Primary satellite registry (UNOOSA + NORAD) |
+| `objects` | Primary space-object registry (UNOOSA + NORAD + DISCOS); `satellites` is a legacy alias |
 | `registration_documents` | UN registration document metadata |
 | `observations` | Observational data records (health, mass, thermal, spin) |
 | `observation_sources` | Observation data source metadata |
 | `ephemeris_envelopes` | Stored ephemeris envelopes (SGP4 / GMAT) |
 | `kestrel_maneuver_plans` | Kestrel rendezvous maneuver plans |
 | `mqtt_configurations` | MQTT broker configurations |
+| `tle_history` | Per-NORAD historical TLE archive (epoch, line1, line2) |
+| `tle_history_coverage` | Coverage metadata per NORAD ID (date ranges fetched) |
+| `rso_summary` | Precomputed ML summary per NORAD ID (health, anomaly, maneuver, re-entry) |
+| `fragmentation_events` | Fragmentation/breakup event records (from DISCOS) |
+| `entities` | Launch entities (operators, manufacturers) from DISCOS |
+| `launch_events` | Individual launch records |
+| `launch_vehicles` | Launch vehicle definitions |
+| `launch_sites` | Launch site definitions |
+| `parties` | Insurance parties (operators, underwriters) |
+| `policies` | Insurance policies |
+| `insured_interests` | Insured interest records per satellite |
+| `loss_events` | Loss event records |
+| `claims` | Insurance claims |
+| `risk_scores` | Per-satellite risk score records |
+| `anomaly_predictions` | ML-predicted anomaly records |
+| `shells` | Orbital-shell definitions (insurance exposure bucketing) |
+| `kestrels` | Kestrel surveillance satellites |
+| `kestrel_tasks` | Kestrel observation tasks |
+| `coverage_windows` | Computed coverage windows (Kestrel → target) |
+| `customer_tasks` | Customer-contracted observation tasks |
+| `customer_task_transitions` | State-machine transition log per customer task |
+| `task_deliverables` | Deliverable artefacts produced by customer tasks |
+| `task_sla_alerts` | SLA breach alert records per customer task |
+| `app_settings` | Application-level settings (e.g. demo-mode tab visibility) |
 
 ### Edge Collections & Named Graphs
 **`satellite_relationships`** graph:
@@ -252,6 +298,34 @@ npm run preview    # Preview production build
 - `observation_source_edges` — observation → source
 - `observation_correlation_edges` — correlated observations
 - `observation_temporal_edges` — sequential observation chain per NORAD ID
+
+**`provenance_relationships`** graph:
+- `fragmented_from` — object → fragmentation event
+- `caused_by` — fragmentation event → parent object
+- `launched_by` — object → launch entity
+- `launched_via` — object → launch vehicle
+- `launched_from` — object → launch site
+
+**`insurance`** graph:
+- `policy_covers_satellite` — policy → satellite
+- `policy_has_interest` — policy → insured interest
+- `interest_held_by` — insured interest → party
+- `claim_arises_from` — claim → loss event
+- `loss_event_involves` — loss event → satellite
+- `satellite_in_shell` — satellite → orbital shell
+- `risk_score_for` — risk score → satellite
+- `prediction_for` — anomaly prediction → satellite
+- `kestrel_observed` — Kestrel task → observed satellite
+- `kestrel_can_see` — Kestrel satellite → coverage window
+- `task_targets` — Kestrel task → target satellite
+- `event_witnessed_by` — loss event → Kestrel satellite
+
+**Customer-task edges** (flat collections, not a named graph):
+- `task_requested_by` — customer task → requesting party
+- `task_targets_object` — customer task → target space object
+- `task_relates_to_policy` — customer task → insurance policy
+- `task_relates_to_loss_event` — customer task → loss event
+- `task_produced_deliverable` — customer task → deliverable
 
 ## Configuration (`config.py`)
 ```
