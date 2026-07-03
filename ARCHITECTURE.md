@@ -73,6 +73,7 @@ kessler/
 │   │   ├── kestrel.py           # POST /v2/kestrel/maneuver-plan, GET/DELETE /v2/kestrel/maneuver-plans
 │   │   ├── insurance.py         # Insurance overlay APIs (/v2/insurance/*)
 │   │   ├── customer_tasks.py    # Customer task management (/v2/customer-tasks/*)
+│   │   ├── analytics.py         # ML-powered RSO analytics: health, anomaly, maneuver, re-entry (/v2/analytics/*)
 │   │   └── docs.py              # GET /v2/docs — HTML documentation viewer
 │   ├── services/                # Business logic services
 │   │   ├── cache_service.py     # Unified caching with LRU & TTL
@@ -88,6 +89,12 @@ kessler/
 │   │   ├── spacetrack_service.py  # Space-Track API integration
 │   │   ├── discos_service.py    # ESA DISCOSweb v2 API client (objects, launches, fragmentations, entities)
 │   │   ├── report_service.py    # ReportLab PDF generation (observation reports, evidence packages)
+│   │   ├── health_score_service.py # Calibrated RSO health score (0–100) from TLE BSTAR/perigee/eccentricity
+│   │   ├── anomaly_detection_service.py # Attitude-anomaly detection and severity scoring from TLE history
+│   │   ├── maneuver_detection_service.py # Maneuver-event extraction from TLE history delta-v series
+│   │   ├── reentry_estimation_service.py # Re-entry epoch estimation from perigee decay series
+│   │   ├── rso_summary_service.py # Precomputed per-object RSO summary cache (rso_summary collection)
+│   │   ├── similarity_search_service.py  # Orbital-profile similarity search across the objects catalog
 │   │   ├── index_service.py     # ChromaDB RAG vector store build & load
 │   │   ├── agent_service.py     # LangGraph general assistant (RAG + tools, /v2/ask)
 │   │   ├── aql_agent_service.py # LangGraph AQL translation agent (/v2/aql)
@@ -107,6 +114,8 @@ kessler/
 │   ├── customer_task_ops.py     # Customer task state machine, transitions, allowed-state map
 │   ├── tle_history_ops.py       # TLE history storage, coverage queries, nearest-TLE lookup
 │   ├── discos_object_operations.py # DISCOS object enrichment, surrogate cleanup, attribution ingest
+│   ├── merge_operations.py      # Object de-duplication and merge utilities
+│   ├── demo_config.py           # Demo-mode app_settings (tab/subtab visibility) stored in ArangoDB
 │   ├── transformations.py       # Data canonicalization & transformation
 │   ├── mqtt_config.py           # MQTT configuration storage
 │   ├── data/
@@ -199,6 +208,7 @@ kessler/
 │  │  - graphs, documents, tle            │   │
 │  │  - tle_history, observations, admin  │   │
 │  │  - agent, insurance, customer_tasks  │   │
+│  │  - analytics, provenance, inference  │   │
 │  └────────────┬─────────────────────────┘   │
 │               │                              │
 │  ┌────────────▼─────────────────────────┐   │
@@ -209,6 +219,9 @@ kessler/
 │  │  - CollisionService, LineageService  │   │
 │  │  - PropagationService, GmatService   │   │
 │  │  - SpaceTrackService, DiscosService  │   │
+│  │  - HealthScoreService, AnomalyDetectionService │   │
+│  │  - ManeuverDetectionService, ReentryEstimationService │   │
+│  │  - RsoSummaryService, SimilaritySearchService │   │
 │  │  - IndexService, AgentService        │   │
 │  │  - AqlAgentService, KestrelAgent     │   │
 │  └────────────┬─────────────────────────┘   │
