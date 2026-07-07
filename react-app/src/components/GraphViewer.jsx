@@ -1976,13 +1976,18 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         
         cyRef.current.elements().remove()
         cyRef.current.add(elements)
-        applyLayout('cola')
+        if (edges.length > 0) {
+          applyLayout('cola')
+        } else {
+          cyRef.current.fit(null, 80)
+        }
         
         setStats({
           root_satellite: data.data.root.name || data.data.root.identifier,
           total_ancestors: data.data.stats?.total_ancestors || 0,
           total_descendants: data.data.stats?.total_descendants || 0,
-          family: data.data.root.family || 'Unknown'
+          family: data.data.root.family || 'Unknown',
+          ...(edges.length === 0 && { message: 'No known lineage connections for this satellite' })
         })
         console.log('[GraphViewer] Lineage graph rendered successfully')
       }
