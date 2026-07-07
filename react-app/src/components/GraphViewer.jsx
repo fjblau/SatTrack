@@ -2002,7 +2002,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         cyRef.current.elements().remove()
         cyRef.current.add(elements)
         if (edges.length > 0) {
-          applyLayout('cola')
+          applyLayout('breadthfirst')
         } else {
           cyRef.current.fit(null, 80)
         }
@@ -2041,6 +2041,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         nodeSpacing: isFunctionGraph ? 100 : 50,
         edgeLength: isFunctionGraph ? 180 : 100
       },
+      breadthfirst: {
+        name: 'breadthfirst',
+        directed: true,
+        animate: true,
+        spacingFactor: 1.75,
+        padding: 30
+      },
       circle: {
         name: 'circle',
         animate: true
@@ -2057,8 +2064,13 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       }
     }
     
-    const layout = cyRef.current.layout(layoutOptions[layoutName] || layoutOptions.cola)
-    layout.run()
+    try {
+      const layout = cyRef.current.layout(layoutOptions[layoutName] || layoutOptions.cola)
+      layout.run()
+    } catch (err) {
+      console.warn('[GraphViewer] Layout failed, falling back to breadthfirst:', err)
+      cyRef.current.layout(layoutOptions.breadthfirst).run()
+    }
   }
 
   const handleLayoutChange = (newLayout) => {
