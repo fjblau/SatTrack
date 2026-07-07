@@ -1878,6 +1878,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
       if (data.data && data.data.root) {
         const nodes = []
         const edges = []
+        const seenNodeIds = new Set()
+        const seenEdgeIds = new Set()
         const nodeColors = {
           root: '#e74c3c',
           ancestor: '#3498db',
@@ -1885,6 +1887,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         }
         
         const rootId = normalizeId(data.data.root._id)
+        seenNodeIds.add(rootId)
         nodes.push({
           data: {
             id: rootId,
@@ -1902,56 +1905,70 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         (data.data.ancestors || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
           const satId = normalizeId(sat._id)
-          nodes.push({
-            data: {
-              id: satId,
-              label: sat.name || sat.identifier,
-              node_type: 'ancestor',
-              generation: item.generation,
-              node_size: 30
-            },
-            style: {
-              'background-color': nodeColors.ancestor
-            }
-          })
-          
-          if (item.edge) {
-            edges.push({
+          if (!seenNodeIds.has(satId)) {
+            seenNodeIds.add(satId)
+            nodes.push({
               data: {
-                id: `${satId}_to_${rootId}`,
-                source: satId,
-                target: rootId,
-                relationship: item.edge.relationship_type
+                id: satId,
+                label: sat.name || sat.identifier,
+                node_type: 'ancestor',
+                generation: item.generation,
+                node_size: 30
+              },
+              style: {
+                'background-color': nodeColors.ancestor
               }
             })
+          }
+          
+          if (item.edge) {
+            const edgeId = `${satId}_to_${rootId}`
+            if (!seenEdgeIds.has(edgeId)) {
+              seenEdgeIds.add(edgeId)
+              edges.push({
+                data: {
+                  id: edgeId,
+                  source: satId,
+                  target: rootId,
+                  relationship: item.edge.relationship_type
+                }
+              })
+            }
           }
         })
         
         (data.data.descendants || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
           const satId = normalizeId(sat._id)
-          nodes.push({
-            data: {
-              id: satId,
-              label: sat.name || sat.identifier,
-              node_type: 'descendant',
-              generation: item.generation,
-              node_size: 30
-            },
-            style: {
-              'background-color': nodeColors.descendant
-            }
-          })
-          
-          if (item.edge) {
-            edges.push({
+          if (!seenNodeIds.has(satId)) {
+            seenNodeIds.add(satId)
+            nodes.push({
               data: {
-                id: `${rootId}_to_${satId}`,
-                source: rootId,
-                target: satId,
-                relationship: item.edge.relationship_type
+                id: satId,
+                label: sat.name || sat.identifier,
+                node_type: 'descendant',
+                generation: item.generation,
+                node_size: 30
+              },
+              style: {
+                'background-color': nodeColors.descendant
               }
             })
+          }
+          
+          if (item.edge) {
+            const edgeId = `${rootId}_to_${satId}`
+            if (!seenEdgeIds.has(edgeId)) {
+              seenEdgeIds.add(edgeId)
+              edges.push({
+                data: {
+                  id: edgeId,
+                  source: rootId,
+                  target: satId,
+                  relationship: item.edge.relationship_type
+                }
+              })
+            }
           }
         })
         
