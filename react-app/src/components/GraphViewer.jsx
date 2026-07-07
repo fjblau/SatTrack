@@ -1856,6 +1856,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         hasRoot: !!data.data?.root,
         ancestorsCount: data.data?.ancestors?.length || 0,
         descendantsCount: data.data?.descendants?.length || 0,
+        siblingsCount: data.data?.siblings?.length || 0,
         dataStructure: data.data ? Object.keys(data.data) : []
       })
       
@@ -1883,7 +1884,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         const nodeColors = {
           root: '#e74c3c',
           ancestor: '#3498db',
-          descendant: '#2ecc71'
+          descendant: '#2ecc71',
+          sibling: '#9b59b6'
         }
         
         const rootId = normalizeId(data.data.root._id)
@@ -1972,6 +1974,37 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           }
         })
         
+        ;(data.data.siblings || []).filter(item => item.satellite?._id != null).forEach(item => {
+          const sat = item.satellite
+          const satId = normalizeId(sat._id)
+          if (!seenNodeIds.has(satId)) {
+            seenNodeIds.add(satId)
+            nodes.push({
+              data: {
+                id: satId,
+                label: sat.name || sat.identifier,
+                node_type: 'sibling',
+                node_size: 25
+              },
+              style: {
+                'background-color': nodeColors.sibling
+              }
+            })
+          }
+          const edgeId = `${rootId}_sibling_${satId}`
+          if (!seenEdgeIds.has(edgeId)) {
+            seenEdgeIds.add(edgeId)
+            edges.push({
+              data: {
+                id: edgeId,
+                source: rootId,
+                target: satId,
+                relationship: item.edge?.relationship_type || 'co_passenger'
+              }
+            })
+          }
+        })
+        
         const elements = { nodes, edges }
         
         cyRef.current.elements().remove()
@@ -1986,6 +2019,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           root_satellite: data.data.root.name || data.data.root.identifier,
           total_ancestors: data.data.stats?.total_ancestors || 0,
           total_descendants: data.data.stats?.total_descendants || 0,
+          total_siblings: data.data.stats?.total_siblings || 0,
           family: data.data.root.family || 'Unknown',
           ...(edges.length === 0 && { message: 'No known lineage connections for this satellite' })
         })
@@ -2377,10 +2411,14 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             </div>
             <div className="legend-item">
               <span className="legend-node" style={{backgroundColor: '#2ecc71'}}></span>
-              <span>Descendant</span>
+              <span>Descendant / Fragment</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-node" style={{backgroundColor: '#9b59b6'}}></span>
+              <span>Co-passenger (same launch)</span>
             </div>
             <div className="legend-note">
-              Lineage shows family relationships and generations
+              Lineage shows family relationships, fragments, and co-passengers
             </div>
           </>
         ) : graphType === 'communities' ? (

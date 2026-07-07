@@ -246,6 +246,26 @@ def get_satellite_lineage(
         if direction in ["descendants", "both"]:
             descendants = _traverse_lineage(satellite_id, "OUTBOUND", max_depth)
         
+        provenance = _find_provenance_relatives(satellite_id)
+        
+        prov_ancestors = provenance.get("ancestors", [])
+        prov_descendants = provenance.get("descendants", [])
+        siblings = provenance.get("siblings", [])
+        
+        seen_ancestors = {item["satellite"]["_id"] for item in ancestors if item.get("satellite", {}).get("_id")}
+        seen_ancestors.add(satellite_id)
+        for item in prov_ancestors:
+            if item.get("satellite", {}).get("_id") not in seen_ancestors:
+                ancestors.append(item)
+                seen_ancestors.add(item["satellite"]["_id"])
+        
+        seen_descendants = {item["satellite"]["_id"] for item in descendants if item.get("satellite", {}).get("_id")}
+        seen_descendants.add(satellite_id)
+        for item in prov_descendants:
+            if item.get("satellite", {}).get("_id") not in seen_descendants:
+                descendants.append(item)
+                seen_descendants.add(item["satellite"]["_id"])
+        
         family_info = detect_satellite_family(root.get("canonical", {}).get("name", ""))
         
         return {
@@ -258,9 +278,11 @@ def get_satellite_lineage(
             },
             "ancestors": ancestors,
             "descendants": descendants,
+            "siblings": siblings,
             "stats": {
                 "total_ancestors": len(ancestors),
                 "total_descendants": len(descendants),
+                "total_siblings": len(siblings),
                 "max_depth": max_depth,
                 "direction": direction
             }
@@ -329,6 +351,99 @@ def _traverse_lineage(
     except Exception as e:
         print(f"Error traversing lineage: {e}")
         return []
+
+
+def _find_provenance_relatives(satellite_id: str) -> Dict[str, Any]:
+    """
+    Query provenance graph edges to find parent objects (fragmented_from),
+    child fragments (reverse fragmented_from), and co-passengers (same launch event).
+
+    Returns a dict with 'ancestors', 'descendants', and 'siblings' lists,
+    each item shaped like _traverse_lineage results for easy merging.
+    """
+    try:
+        query = """
+        LET sat_id = @start_id
+
+        LET parent_edges = (
+            FOR e IN fragmented_from
+                FILTER e._from == sat_id
+                LET parent = DOCUMENT(e._to)
+                FILTER parent != null AND IS_SAME_COLLECTION(@collection, parent._id)
+                RETURN {
+                    satellite: {
+                        _id: parent._id,
+                        identifier: parent.identifier,
+                        name: parent.canonical.name,
+                        manufacturer: parent.canonical.manufacturer,
+                        launch_date: parent.canonical.date_of_launch
+                    },
+                    edge: { relationship_type: "parent_object" },
+                    depth: 1
+                }
+        )
+
+        LET child_edges = (
+            FOR e IN fragmented_from
+                FILTER e._to == sat_id
+                LET child = DOCUMENT(e._from)
+                FILTER child != null AND IS_SAME_COLLECTION(@collection, child._id)
+                RETURN {
+                    satellite: {
+                        _id: child._id,
+                        identifier: child.identifier,
+                        name: child.canonical.name,
+                        manufacturer: child.canonical.manufacturer,
+                        launch_date: child.canonical.date_of_launch
+                    },
+                    edge: { relationship_type: "fragment" },
+                    depth: 1
+                }
+        )
+
+        LET launch_targets = (
+            FOR e IN launched_by
+                FILTER e._from == sat_id
+                RETURN e._to
+        )
+
+        LET sibling_edges = (
+            FOR launch_to IN launch_targets
+                FOR e2 IN launched_by
+                    FILTER e2._to == launch_to AND e2._from != sat_id
+                    LET sibling = DOCUMENT(e2._from)
+                    FILTER sibling != null AND IS_SAME_COLLECTION(@collection, sibling._id)
+                    RETURN DISTINCT {
+                        satellite: {
+                            _id: sibling._id,
+                            identifier: sibling.identifier,
+                            name: sibling.canonical.name,
+                            manufacturer: sibling.canonical.manufacturer,
+                            launch_date: sibling.canonical.date_of_launch
+                        },
+                        edge: { relationship_type: "co_passenger" },
+                        depth: 1
+                    }
+        )
+
+        RETURN { ancestors: parent_edges, descendants: child_edges, siblings: sibling_edges }
+        """
+
+        cursor = db_conn.db.aql.execute(
+            query,
+            bind_vars={
+                "start_id": satellite_id,
+                "collection": COLLECTION_NAME
+            }
+        )
+        results = list(cursor)
+        if results:
+            return results[0]
+        return {"ancestors": [], "descendants": [], "siblings": []}
+
+    except Exception as e:
+        print(f"Error finding provenance relatives: {e}")
+        return {"ancestors": [], "descendants": [], "siblings": []}
 
 
 def get_lineage_statistics() -> Dict[str, Any]:
