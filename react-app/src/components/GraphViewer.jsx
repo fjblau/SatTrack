@@ -1897,10 +1897,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
             node_type: 'root',
             family: data.data.root.family,
             generation: data.data.root.generation,
-            node_size: 40
-          },
-          style: {
-            'background-color': nodeColors.root
+            node_size: 40,
+            background_color: nodeColors.root
           }
         })
         
@@ -1915,10 +1913,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
                 label: sat.name || sat.identifier,
                 node_type: 'ancestor',
                 generation: item.generation,
-                node_size: 30
-              },
-              style: {
-                'background-color': nodeColors.ancestor
+                node_size: 30,
+                background_color: nodeColors.ancestor
               }
             })
           }
@@ -1950,10 +1946,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
                 label: sat.name || sat.identifier,
                 node_type: 'descendant',
                 generation: item.generation,
-                node_size: 30
-              },
-              style: {
-                'background-color': nodeColors.descendant
+                node_size: 30,
+                background_color: nodeColors.descendant
               }
             })
           }
@@ -1984,10 +1978,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
                 id: satId,
                 label: sat.name || sat.identifier,
                 node_type: 'sibling',
-                node_size: 25
-              },
-              style: {
-                'background-color': nodeColors.sibling
+                node_size: 25,
+                background_color: nodeColors.sibling
               }
             })
           }
