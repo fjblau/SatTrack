@@ -11,6 +11,7 @@ const normalizeId = (id) => (id && typeof id === 'string') ? id.replace(/^satell
 function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, selectedFunctionCategories, selectedOrbitalBands, selectedCountries, pathData, centralityData, centralityMetric, collisionRiskData, collisionViewType, selectedSatellite, communityAlgorithm, communityMinSize, constellationBrowserData, neighborhoodData, functionClusters }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
+  const layoutRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState(null)
   const [error, setError] = useState(null)
@@ -1777,10 +1778,8 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
               community_id: communityId,
               orbital_band: member.orbital_band,
               country: member.country,
-              node_size: 25
-            },
-            style: {
-              'background-color': communityColors[communityId]
+              node_size: 25,
+              background_color: communityColors[communityId]
             }
           })
         })
@@ -1810,6 +1809,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         colorsUsed: colorIndex
       })
       
+      if (layoutRef.current) {
+        try { layoutRef.current.stop() } catch (e) {}
+        layoutRef.current = null
+      }
       cyRef.current.elements().remove()
       cyRef.current.add(elements)
       applyLayout(layout)
@@ -1902,7 +1905,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           }
         })
         
-        (data.data.ancestors || []).filter(item => item.satellite?._id != null).forEach(item => {
+        ;(data.data.ancestors || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
           const satId = normalizeId(sat._id)
           if (!seenNodeIds.has(satId)) {
@@ -1935,7 +1938,7 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
           }
         })
         
-        (data.data.descendants || []).filter(item => item.satellite?._id != null).forEach(item => {
+        ;(data.data.descendants || []).filter(item => item.satellite?._id != null).forEach(item => {
           const sat = item.satellite
           const satId = normalizeId(sat._id)
           if (!seenNodeIds.has(satId)) {
@@ -1999,6 +2002,10 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
         
         const elements = { nodes, edges }
         
+        if (layoutRef.current) {
+          try { layoutRef.current.stop() } catch (e) {}
+          layoutRef.current = null
+        }
         cyRef.current.elements().remove()
         cyRef.current.add(elements)
         if (edges.length > 0) {
@@ -2065,11 +2072,20 @@ function GraphViewer({ graphType, selectedConstellation, selectedOrbitalBand, se
     }
     
     try {
-      const layout = cyRef.current.layout(layoutOptions[layoutName] || layoutOptions.cola)
-      layout.run()
+      if (layoutRef.current) {
+        try { layoutRef.current.stop() } catch (e) {}
+        layoutRef.current = null
+      }
+      const newLayout = cyRef.current.layout(layoutOptions[layoutName] || layoutOptions.cola)
+      layoutRef.current = newLayout
+      newLayout.run()
     } catch (err) {
       console.warn('[GraphViewer] Layout failed, falling back to breadthfirst:', err)
-      cyRef.current.layout(layoutOptions.breadthfirst).run()
+      try {
+        const fallback = cyRef.current.layout(layoutOptions.breadthfirst)
+        layoutRef.current = fallback
+        fallback.run()
+      } catch (e2) {}
     }
   }
 
