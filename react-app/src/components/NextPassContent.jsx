@@ -469,9 +469,9 @@ export default function NextPassContent({ resolvedTarget }) {
           <button
             className={`np-toggle-btn ${visibilityMode === 'consumer' ? 'active' : ''}`}
             onClick={() => setVisibilityMode('consumer')}
-            title="Consumer: higher elevation = more stars (clearer sightline)"
+            title="Visual: higher elevation = more stars (clearer sightline)"
           >
-            Consumer
+            Visual
           </button>
           <button
             className={`np-toggle-btn ${visibilityMode === 'technical' ? 'active' : ''}`}
@@ -525,7 +525,7 @@ export default function NextPassContent({ resolvedTarget }) {
               <table className="np-table">
                 <thead>
                   <tr>
-                    <th title={visibilityMode === 'technical' ? 'Technical RF score: 30–60° optimal' : 'Consumer score: higher = better'}>
+                    <th title={visibilityMode === 'technical' ? 'Technical RF score: 30–60° optimal' : 'Visual score: higher = better'}>
                       {visibilityMode === 'technical' ? 'RF Quality' : 'Visibility'}
                     </th>
                     <th>Rise (local)</th>
