@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import apiFetch from '../utils/apiFetch'
 import { API_ENDPOINTS } from '../config/constants'
 import './NextPassModal.css'
@@ -83,6 +83,12 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
   const [newSiteName, setNewSiteName] = useState('')
   const [showManageSites, setShowManageSites] = useState(false)
 
+  const [geoQuery, setGeoQuery] = useState('')
+  const [geoResults, setGeoResults] = useState([])
+  const [geoLoading, setGeoLoading] = useState(false)
+  const [geoError, setGeoError] = useState(null)
+  const geoDebounceRef = useRef(null)
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
@@ -161,6 +167,43 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
     setSites(updated)
     persistSites(updated)
     if (selectedSiteId === id) setSelectedSiteId('')
+  }
+
+  const handleGeoQueryChange = (e) => {
+    const q = e.target.value
+    setGeoQuery(q)
+    setGeoResults([])
+    setGeoError(null)
+    if (geoDebounceRef.current) clearTimeout(geoDebounceRef.current)
+    if (q.trim().length < 2) return
+    geoDebounceRef.current = setTimeout(() => runGeoSearch(q.trim()), 400)
+  }
+
+  const runGeoSearch = async (q) => {
+    setGeoLoading(true)
+    setGeoError(null)
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=1`
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+      if (!res.ok) throw new Error(`Geocoder error ${res.status}`)
+      const data = await res.json()
+      setGeoResults(data)
+      if (data.length === 0) setGeoError('No results found')
+    } catch (err) {
+      setGeoError(err.message || 'Search failed')
+    } finally {
+      setGeoLoading(false)
+    }
+  }
+
+  const handleGeoSelect = (item) => {
+    setLat(parseFloat(item.lat).toFixed(6))
+    setLon(parseFloat(item.lon).toFixed(6))
+    setElevationM('0')
+    setSelectedSiteId('')
+    setGeoQuery('')
+    setGeoResults([])
+    setGeoError(null)
   }
 
   const fetchPasses = useCallback(async () => {
@@ -309,6 +352,46 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
                 ))}
               </div>
             )}
+
+            <div className="np-geo-search">
+              <div className="np-geo-search-row">
+                <label className="np-label" style={{ flex: 1 }}>
+                  Search by place name
+                  <div className="np-geo-search-input-wrap">
+                    <input
+                      className="np-input np-geo-search-input"
+                      type="text"
+                      placeholder="e.g. Goldstone, ESA ESOC, Sydney"
+                      value={geoQuery}
+                      onChange={handleGeoQueryChange}
+                      autoComplete="off"
+                    />
+                    {geoLoading && <span className="np-geo-spinner">…</span>}
+                  </div>
+                </label>
+              </div>
+              {(geoResults.length > 0 || geoError) && (
+                <div className="np-geo-results">
+                  {geoError && <div className="np-geo-no-results">{geoError}</div>}
+                  {geoResults.map((item) => (
+                    <button
+                      key={item.place_id}
+                      className="np-geo-result-item"
+                      onClick={() => handleGeoSelect(item)}
+                      type="button"
+                    >
+                      <span className="np-geo-result-name">
+                        {item.address?.city || item.address?.town || item.address?.village || item.address?.county || item.name || item.display_name.split(',')[0]}
+                      </span>
+                      <span className="np-geo-result-detail">
+                        {[item.address?.state, item.address?.country].filter(Boolean).join(', ')}
+                        {' '}<span className="np-geo-result-coords">{parseFloat(item.lat).toFixed(3)}°, {parseFloat(item.lon).toFixed(3)}°</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="np-inputs">
               <label className="np-label">
