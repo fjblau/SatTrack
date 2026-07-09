@@ -216,8 +216,8 @@ def get_passes(
     lon: float = Query(..., ge=-180, le=180, description="Observer longitude (degrees)"),
     elevation_m: float = Query(0.0, ge=0, description="Observer elevation above sea level (meters)"),
     min_elevation_deg: float = Query(10.0, ge=0, le=90, description="Minimum elevation angle for a pass (degrees)"),
-    hours_ahead: float = Query(24.0, gt=0, le=168, description="Search window in hours (max 168)"),
-    num_passes: int = Query(5, ge=1, le=20, description="Maximum number of passes to return"),
+    hours_ahead: float = Query(24.0, gt=0, le=336, description="Search window in hours (max 336, 2 weeks)"),
+    num_passes: int = Query(10, ge=1, le=50, description="Maximum number of passes to return"),
 ):
     """
     Find upcoming passes of a satellite over a ground observer location.

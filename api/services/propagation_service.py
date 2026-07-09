@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 
 PASS_SCORE_THRESHOLDS = [(60, 3), (30, 2), (0, 1)]
 
+TECHNICAL_PASS_SCORE_THRESHOLDS = [
+    (30, 60, 3),
+    (15, 80, 2),
+    (0, 90, 1),
+]
+
 
 class PropagationError(Exception):
     """Exception raised when orbit propagation fails"""
@@ -34,6 +40,13 @@ class PropagationService:
     def _score_pass(max_elevation_deg: float) -> int:
         for threshold, stars in PASS_SCORE_THRESHOLDS:
             if max_elevation_deg >= threshold:
+                return stars
+        return 1
+
+    @staticmethod
+    def _score_pass_technical(max_elevation_deg: float) -> int:
+        for low, high, stars in TECHNICAL_PASS_SCORE_THRESHOLDS:
+            if low <= max_elevation_deg <= high:
                 return stars
         return 1
 
@@ -442,6 +455,7 @@ class PropagationService:
                 'duration_seconds': duration_sec,
                 'max_elevation_deg': max_el,
                 'visibility_stars': cls._score_pass(max_el),
+                'technical_stars': cls._score_pass_technical(max_el),
                 'optically_visible': optically_visible,
             })
 
