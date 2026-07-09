@@ -8,7 +8,7 @@ import threading
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history, customer_tasks, analytics
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history, customer_tasks, analytics, public_api
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 from api.services.tle_service import warm_tle_cache
@@ -166,6 +166,7 @@ app.include_router(insurance.router)
 app.include_router(customer_tasks.router)
 app.include_router(tle_history.router)
 app.include_router(analytics.router)
+app.include_router(public_api.router)
 
 
 def custom_openapi():
