@@ -8,7 +8,7 @@ from starlette.responses import Response
 from api.routers.auth import _token_store, get_user_from_token
 
 _LOGIN_PATH = "/v2/auth/login"
-_PUBLIC_PREFIXES = ("/v2/docs", "/docs", "/redoc", "/openapi.json")
+_PUBLIC_PREFIXES = ("/v2/docs", "/docs", "/redoc", "/openapi.json", "/v2/public/")
 
 
 async def get_current_user(request: Request) -> str | None:
