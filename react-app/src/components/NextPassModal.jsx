@@ -9,7 +9,30 @@ const HOURS_OPTIONS = [
   { label: '24 h', value: 24 },
   { label: '48 h', value: 48 },
   { label: '72 h', value: 72 },
+  { label: '4 days', value: 96 },
+  { label: '5 days', value: 120 },
+  { label: '1 week', value: 168 },
+  { label: '10 days', value: 240 },
+  { label: '2 weeks', value: 336 },
 ]
+
+const SITES_STORAGE_KEY = 'kessler_ground_sites'
+
+function loadSites() {
+  try {
+    return JSON.parse(localStorage.getItem(SITES_STORAGE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+function persistSites(sites) {
+  localStorage.setItem(SITES_STORAGE_KEY, JSON.stringify(sites))
+}
+
+function genId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+}
 
 function Stars({ count }) {
   return (
@@ -50,8 +73,15 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
   const [elevationM, setElevationM] = useState('0')
   const [minElevDeg, setMinElevDeg] = useState('10')
   const [hoursAhead, setHoursAhead] = useState(24)
+  const [visibilityMode, setVisibilityMode] = useState('consumer')
   const [locating, setLocating] = useState(false)
   const [locError, setLocError] = useState(null)
+
+  const [sites, setSites] = useState(loadSites)
+  const [selectedSiteId, setSelectedSiteId] = useState('')
+  const [showSaveForm, setShowSaveForm] = useState(false)
+  const [newSiteName, setNewSiteName] = useState('')
+  const [showManageSites, setShowManageSites] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -83,6 +113,7 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
         if (pos.coords.altitude != null) {
           setElevationM(Math.round(pos.coords.altitude).toString())
         }
+        setSelectedSiteId('')
         setLocating(false)
       },
       (err) => {
@@ -90,6 +121,46 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
         setLocating(false)
       }
     )
+  }
+
+  const handleSiteSelect = (e) => {
+    const id = e.target.value
+    setSelectedSiteId(id)
+    if (!id) return
+    const site = sites.find(s => s.id === id)
+    if (site) {
+      setLat(site.lat.toString())
+      setLon(site.lon.toString())
+      setElevationM(site.elevationM.toString())
+    }
+  }
+
+  const handleSaveSite = () => {
+    const name = newSiteName.trim()
+    if (!name) return
+    const parsedLat = parseFloat(lat)
+    const parsedLon = parseFloat(lon)
+    if (isNaN(parsedLat) || isNaN(parsedLon)) return
+    const newSite = {
+      id: genId(),
+      name,
+      lat: parsedLat,
+      lon: parsedLon,
+      elevationM: parseFloat(elevationM) || 0,
+    }
+    const updated = [...sites, newSite]
+    setSites(updated)
+    persistSites(updated)
+    setSelectedSiteId(newSite.id)
+    setNewSiteName('')
+    setShowSaveForm(false)
+  }
+
+  const handleDeleteSite = (id) => {
+    const updated = sites.filter(s => s.id !== id)
+    setSites(updated)
+    persistSites(updated)
+    if (selectedSiteId === id) setSelectedSiteId('')
   }
 
   const fetchPasses = useCallback(async () => {
@@ -111,7 +182,7 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
         elevation_m: parseFloat(elevationM) || 0,
         min_elevation_deg: parseFloat(minElevDeg) || 10,
         hours_ahead: hoursAhead,
-        num_passes: 10,
+        num_passes: 30,
       })
       const res = await apiFetch(`${API_ENDPOINTS.TLE_PASSES(noradId)}?${params}`)
       if (!res.ok) {
@@ -129,6 +200,9 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
 
   const canSearch = lat !== '' && lon !== '' && !loading
 
+  const getStars = (pass) =>
+    visibilityMode === 'technical' ? pass.technical_stars : pass.visibility_stars
+
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-content next-pass-modal">
@@ -142,16 +216,99 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
 
         <div className="modal-body">
           <div className="np-controls">
-            <div className="np-location-row">
-              <button
-                className="np-geo-button"
-                onClick={useMyLocation}
-                disabled={locating}
-              >
-                {locating ? 'Locating…' : '📍 Use my location'}
-              </button>
-              {locError && <span className="np-loc-error">{locError}</span>}
+            <div className="np-sites-row">
+              <div className="np-sites-select-group">
+                <label className="np-label">
+                  Saved Sites
+                  <select
+                    className="np-select np-sites-select"
+                    value={selectedSiteId}
+                    onChange={handleSiteSelect}
+                  >
+                    <option value="">— Custom —</option>
+                    {sites.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="np-sites-actions">
+                <button
+                  className="np-geo-button"
+                  onClick={useMyLocation}
+                  disabled={locating}
+                >
+                  {locating ? 'Locating…' : '📍 My location'}
+                </button>
+                {lat !== '' && lon !== '' && (
+                  <button
+                    className="np-save-site-button"
+                    onClick={() => setShowSaveForm(v => !v)}
+                    title="Save current coordinates as a named site"
+                  >
+                    💾 Save site
+                  </button>
+                )}
+                {sites.length > 0 && (
+                  <button
+                    className="np-manage-button"
+                    onClick={() => setShowManageSites(v => !v)}
+                  >
+                    Manage sites
+                  </button>
+                )}
+              </div>
+              {locError && <span className="np-loc-error np-loc-error-inline">{locError}</span>}
             </div>
+
+            {showSaveForm && (
+              <div className="np-save-form">
+                <input
+                  className="np-input np-site-name-input"
+                  type="text"
+                  placeholder="Site name (e.g. Berlin HQ)"
+                  value={newSiteName}
+                  onChange={e => setNewSiteName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveSite() }}
+                  autoFocus
+                />
+                <button
+                  className="np-save-confirm-button"
+                  onClick={handleSaveSite}
+                  disabled={!newSiteName.trim()}
+                >
+                  Save
+                </button>
+                <button
+                  className="np-cancel-button"
+                  onClick={() => { setShowSaveForm(false); setNewSiteName('') }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {showManageSites && sites.length > 0 && (
+              <div className="np-manage-sites">
+                <div className="np-manage-title">Saved Sites</div>
+                {sites.map(s => (
+                  <div key={s.id} className="np-site-item">
+                    <span className="np-site-item-name">{s.name}</span>
+                    <span className="np-site-item-coords">
+                      {s.lat.toFixed(4)}°, {s.lon.toFixed(4)}° · {s.elevationM} m
+                    </span>
+                    <button
+                      className="np-site-delete"
+                      onClick={() => handleDeleteSite(s.id)}
+                      title="Delete site"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="np-inputs">
               <label className="np-label">
@@ -164,7 +321,7 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
                   max="90"
                   placeholder="e.g. 48.8566"
                   value={lat}
-                  onChange={(e) => setLat(e.target.value)}
+                  onChange={(e) => { setLat(e.target.value); setSelectedSiteId('') }}
                 />
               </label>
               <label className="np-label">
@@ -177,7 +334,7 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
                   max="180"
                   placeholder="e.g. 2.3522"
                   value={lon}
-                  onChange={(e) => setLon(e.target.value)}
+                  onChange={(e) => { setLon(e.target.value); setSelectedSiteId('') }}
                 />
               </label>
               <label className="np-label">
@@ -225,6 +382,27 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
                 Find Passes
               </button>
             </div>
+
+            <div className="np-visibility-toggle">
+              <span className="np-toggle-label">Visibility scoring:</span>
+              <button
+                className={`np-toggle-btn ${visibilityMode === 'consumer' ? 'active' : ''}`}
+                onClick={() => setVisibilityMode('consumer')}
+                title="Consumer: higher elevation = more stars (clearer sightline)"
+              >
+                Consumer
+              </button>
+              <button
+                className={`np-toggle-btn ${visibilityMode === 'technical' ? 'active' : ''}`}
+                onClick={() => setVisibilityMode('technical')}
+                title="Technical: 30–60° elevation is optimal (best RF link margin + manageable tracking rate)"
+              >
+                Technical RF
+              </button>
+              {visibilityMode === 'technical' && (
+                <span className="np-toggle-hint">★★★ = 30–60° · ★★ = 15–29° or 61–80° · ★ = &lt;15° or &gt;80°</span>
+              )}
+            </div>
           </div>
 
           {loading && (
@@ -242,7 +420,12 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
             <div className="np-results">
               <div className="np-results-meta">
                 <span>
-                  Observer: <strong>{result.observer?.latitude}°, {result.observer?.longitude}°</strong>
+                  Observer: <strong>
+                    {selectedSiteId
+                      ? sites.find(s => s.id === selectedSiteId)?.name + ' — '
+                      : ''}
+                    {result.observer?.latitude}°, {result.observer?.longitude}°
+                  </strong>
                 </span>
                 {result.tle_age_hours != null && (
                   <span className={result.tle_age_hours > 168 ? 'np-stale-tle' : 'np-tle-age'}>
@@ -261,7 +444,9 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
                   <table className="np-table">
                     <thead>
                       <tr>
-                        <th>Visibility</th>
+                        <th title={visibilityMode === 'technical' ? 'Technical RF score: 30–60° optimal' : 'Consumer score: higher = better'}>
+                          {visibilityMode === 'technical' ? 'RF Quality' : 'Visibility'}
+                        </th>
                         <th>Rise (local)</th>
                         <th className="numeric">Max El°</th>
                         <th className="numeric">Duration</th>
@@ -273,7 +458,7 @@ export default function NextPassModal({ satellite, noradId, onClose }) {
                     <tbody>
                       {result.passes.map((p, idx) => (
                         <tr key={idx} className={p.optically_visible ? 'np-row-optical' : ''}>
-                          <td><Stars count={p.visibility_stars} /></td>
+                          <td><Stars count={getStars(p)} /></td>
                           <td className="np-time">{formatLocalTime(p.rise?.time)}</td>
                           <td className="numeric np-elevation">{p.max_elevation_deg}°</td>
                           <td className="numeric">{formatDuration(p.duration_seconds)}</td>
