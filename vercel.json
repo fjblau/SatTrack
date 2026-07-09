@@ -12,6 +12,10 @@
     {
       "source": "/v2/:path*",
       "destination": "https://web-production-e283.up.railway.app/v2/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
