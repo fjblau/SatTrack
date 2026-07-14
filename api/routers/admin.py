@@ -106,6 +106,18 @@ SCRIPT_CATALOGUE = [
         "path": "scripts/maintenance/clear_observations.py",
     },
     {
+        "id": "import_gcat_bulk",
+        "name": "Import GCAT Satellite Catalog",
+        "description": "Bulk-imports the GCAT satellite catalog (gcat_satcat.tsv) into the objects collection. New objects are inserted; existing objects are enriched with GCAT source data. Upload the latest gcat_satcat.tsv from planet4589.org/space/gcat before running. Safe to re-run — existing records are only updated, never deleted.",
+        "category": "import",
+        "path": "scripts/import/import_gcat_bulk.py",
+        "requires_file": True,
+        "file_arg": "--file",
+        "accepted_extensions": [".tsv"],
+        "estimated_duration": "2-10 minutes",
+        "reversibility": "reversible (new records can be deleted; updates are enrichment-only)",
+    },
+    {
         "id": "import_kestrel_proxy_v2",
         "name": "Import Kestrel Proxy v2 Observations",
         "description": "Imports Kestrel Proxy Observational Data v2 records (source: kestrel_proxy_v2) for 11 satellites across a 180-day window. Enables observations tracking and creates graph edges. Upload the .xlsx file before running.",

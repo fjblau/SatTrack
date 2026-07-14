@@ -361,8 +361,20 @@ def import_gcat_bulk(tsv_path, cutoff_date="1957-01-01", dry_run=False):
 
 
 if __name__ == "__main__":
-    tsv_path    = sys.argv[1] if len(sys.argv) > 1 else "gcat_satcat.tsv"
-    cutoff_date = sys.argv[2] if len(sys.argv) > 2 else "1957-01-01"
-    dry_run     = "--dry-run" in sys.argv
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Bulk GCAT import into ArangoDB")
+    parser.add_argument("--file", dest="file_flag", default=None, help="Path to gcat_satcat.tsv (alternative to positional arg)")
+    parser.add_argument("tsv_positional", nargs="?", default=None, help="Path to gcat_satcat.tsv")
+    parser.add_argument("cutoff_positional", nargs="?", default=None, help="Cutoff date (YYYY-MM-DD)")
+    parser.add_argument("--cutoff-date", dest="cutoff_flag", default=None)
+    parser.add_argument("--dry-run", action="store_true")
+
+    args = parser.parse_args()
+
+    tsv_path    = args.file_flag or args.tsv_positional or "gcat_satcat.tsv"
+    cutoff_date = args.cutoff_flag or args.cutoff_positional or "1957-01-01"
+    dry_run     = args.dry_run
+
     success = import_gcat_bulk(tsv_path, cutoff_date, dry_run)
     sys.exit(0 if success else 1)
