@@ -1,8 +1,13 @@
+import re
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 from database.connection import get_satellites_collection, COLLECTION_NAME
 import database.connection as db_conn
 from database.transformations import update_canonical
+
+
+def _normalize_query(q: str) -> str:
+    return re.sub(r'[^a-z0-9]', '', q.lower())
 
 
 def create_satellite_document(
@@ -169,10 +174,13 @@ def search_satellites(
              LIKE(doc.canonical.object_name, @query_pattern, true) OR
              LIKE(doc.canonical.international_designator, @query_pattern, true) OR
              LIKE(doc.canonical.registration_number, @query_pattern, true) OR
-             TO_STRING(doc.canonical.norad_cat_id) == @query_exact)
+             TO_STRING(doc.canonical.norad_cat_id) == @query_exact OR
+             CONTAINS(REGEX_REPLACE(LOWER(doc.canonical.name || ''), '[^a-z0-9]', ''), @query_normalized) OR
+             CONTAINS(REGEX_REPLACE(LOWER(doc.canonical.object_name || ''), '[^a-z0-9]', ''), @query_normalized))
         """)
         bind_vars['query_pattern'] = f'%{query}%'
         bind_vars['query_exact'] = str(query).strip()
+        bind_vars['query_normalized'] = _normalize_query(query)
 
     if country:
         filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
@@ -240,9 +248,12 @@ def count_satellites(
             (LIKE(doc.canonical.name, @query_pattern, true) OR
              LIKE(doc.canonical.object_name, @query_pattern, true) OR
              LIKE(doc.canonical.international_designator, @query_pattern, true) OR
-             LIKE(doc.canonical.registration_number, @query_pattern, true))
+             LIKE(doc.canonical.registration_number, @query_pattern, true) OR
+             CONTAINS(REGEX_REPLACE(LOWER(doc.canonical.name || ''), '[^a-z0-9]', ''), @query_normalized) OR
+             CONTAINS(REGEX_REPLACE(LOWER(doc.canonical.object_name || ''), '[^a-z0-9]', ''), @query_normalized))
         """)
         bind_vars['query_pattern'] = f'%{query}%'
+        bind_vars['query_normalized'] = _normalize_query(query)
     
     if country:
         filters.append("LIKE(doc.canonical.country_of_origin, @country_pattern, true)")
