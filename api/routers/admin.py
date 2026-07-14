@@ -498,6 +498,18 @@ SCRIPT_CATALOGUE = [
         "reversibility": "reversible (TLE re-fetched on next page load)",
     },
     {
+        "id": "promote_gcat_attributes",
+        "name": "Promote GCAT Attributes to Canonical",
+        "description": "Promotes rich GCAT source data (NORAD ID, COSPAR designator, country, status, orbital band, perigee/apogee, inclination, mass, and more) from sources.gcat into canonical fields. Run this after every GCAT import — without it, newly imported objects have only name/launch_date/object_type in canonical and will not appear in search filters or graph analytics. Safe to re-run; only fills missing canonical fields.",
+        "category": "maintenance",
+        "path": "scripts/maintenance/promote_gcat_attributes.py",
+        "args": ["--yes"],
+        "order_hint": 26,
+        "depends_on": ["import_gcat_bulk"],
+        "estimated_duration": "5-15 minutes",
+        "reversibility": "reversible",
+    },
+    {
         "id": "promote_gcat_parent_edges",
         "name": "Promote GCAT Parent Edges",
         "description": "Promotes sources.gcat.parent to canonical.parent_gcat_id and creates fragmented_from edges so parent objects appear in the Object Provenance graph. Safe to re-run; supports --dry-run.",
