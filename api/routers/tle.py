@@ -83,7 +83,7 @@ def get_current_tle(norad_id: str):
             "data": None,
             "message": f"TLE data not found for NORAD ID {norad_id}.",
             "timestamp": datetime.now(timezone.utc).isoformat()
-        }, 200
+        }
 
 
 @router.get("/tle/intldes/{intl_des:path}")

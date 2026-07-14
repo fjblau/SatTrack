@@ -26,6 +26,7 @@ _CELESTRAK_BATCH_GROUPS = [
     "resource",          # Earth observation (inc varies)
     "sarsat",            # Search and rescue (inc varies)
     "dmc",               # Disaster monitoring (inc ≈ 98°)
+    "amateur",           # Amateur satellites including FossaSat, PocketQube, CubeSat
 ]
 
 _CELESTRAK_BATCH_URLS = [
@@ -87,7 +88,7 @@ def _fetch_from_celestrak_by_norad(norad_id: str) -> Optional[Dict]:
     for fmt in ("TLE", "JSON"):
         params = {"CATNR": norad_id, "FORMAT": fmt}
         try:
-            response = requests.get(CELESTRAK_GP_URL, params=params, timeout=3)
+            response = requests.get(CELESTRAK_GP_URL, params=params, timeout=10)
             if response.status_code == 200:
                 if fmt == "TLE":
                     entries = _parse_tle_text(response.text)
