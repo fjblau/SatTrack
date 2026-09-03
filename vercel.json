@@ -14,6 +14,18 @@
       "destination": "https://web-production-e283.up.railway.app/v2/:path*"
     },
     {
+      "source": "/docs",
+      "destination": "https://web-production-e283.up.railway.app/docs"
+    },
+    {
+      "source": "/redoc",
+      "destination": "https://web-production-e283.up.railway.app/redoc"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "https://web-production-e283.up.railway.app/openapi.json"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
