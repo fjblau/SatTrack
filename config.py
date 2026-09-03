@@ -103,6 +103,8 @@ class AuthConfig:
         password = os.getenv("APP_PASSWORD", "")
         shantanu_username = os.getenv("SHANTANU_USERNAME", "shantanu")
         shantanu_password = os.getenv("SHANTANU_PASSWORD", "")
+        ashutosh_username = os.getenv("ASHUTOSH_USERNAME", "ashutosh")
+        ashutosh_password = os.getenv("ASHUTOSH_PASSWORD", "")
 
         import logging
         if not password:
@@ -115,6 +117,8 @@ class AuthConfig:
             users[username] = password
         if shantanu_username and shantanu_password:
             users[shantanu_username] = shantanu_password
+        if ashutosh_username and ashutosh_password:
+            users[ashutosh_username] = ashutosh_password
         return users
 
 
