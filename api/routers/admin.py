@@ -579,6 +579,13 @@ def _stream_output(run_id: str, proc: subprocess.Popen) -> None:
 
 @router.get("/gmat-status")
 def gmat_status():
+    """Report GMAT high-fidelity propagation readiness.
+
+    Inspects the GMAT installation (binary presence/executability, version
+    output, required data files, EGM96 gravity model) and runs a smoke test to
+    derive an overall status: `ready`, `installed`, `installed_but_broken`, or
+    `not_installed`.
+    """
     gmat_home = os.environ.get("GMAT_HOME", "")
     binary_candidates = [
         os.path.join(gmat_home, "bin", "GmatConsole-R2022a"),
@@ -638,6 +645,12 @@ def gmat_status():
 
 @router.get("/discos-status")
 def discos_status():
+    """Report ESA DISCOSweb API integration status.
+
+    Indicates whether the DISCOS API token is configured and, when it is,
+    performs a health check against the configured base URL. Returns an overall
+    status of `ready`, `error`, or `not_configured`.
+    """
     token_configured = bool(_discos_svc.config.external.DISCOS_API_TOKEN)
     base_url = _discos_svc.config.external.DISCOS_BASE_URL
 
@@ -662,6 +675,11 @@ def discos_status():
 
 @router.get("/demo-config")
 def get_demo_config():
+    """Retrieve the demo-mode application settings.
+
+    Returns the stored demo configuration (e.g. tab/subtab visibility) used to
+    drive the frontend in demonstration mode.
+    """
     config = _demo_config_db.get_demo_config()
     return {"config": config}
 
@@ -672,6 +690,11 @@ class DemoConfigBody(BaseModel):
 
 @router.put("/demo-config")
 def save_demo_config(body: DemoConfigBody):
+    """Persist the demo-mode application settings.
+
+    Replaces the stored demo configuration (e.g. tab/subtab visibility) with
+    the supplied config object. Returns 500 if the save fails.
+    """
     ok = _demo_config_db.save_demo_config(body.config)
     if not ok:
         raise HTTPException(status_code=500, detail="Failed to save demo config")
@@ -680,6 +703,12 @@ def save_demo_config(body: DemoConfigBody):
 
 @router.get("/scripts")
 def list_scripts():
+    """List runnable admin scripts from the catalogue.
+
+    Returns metadata for each registered script (id, name, description,
+    category, file-upload requirements, dependencies, estimated duration, and
+    reversibility) for display in the Admin UI.
+    """
     return {
         "scripts": [
             {
@@ -701,6 +730,13 @@ def list_scripts():
 
 @router.post("/scripts/{script_id}/upload")
 async def upload_script_file(script_id: str, file: UploadFile = File(...)):
+    """Upload an input file required by a script.
+
+    Accepts a multipart file upload for scripts that declare `requires_file`,
+    validates the extension against the script's `accepted_extensions`, and
+    stages the file on disk so a subsequent run can consume it. Returns the
+    filename and size.
+    """
     script = _CATALOGUE_BY_ID.get(script_id)
     if not script:
         raise HTTPException(status_code=404, detail=f"Script '{script_id}' not found")
@@ -733,6 +769,13 @@ async def upload_script_file(script_id: str, file: UploadFile = File(...)):
 
 @router.post("/scripts/{script_id}/run")
 def run_script(script_id: str):
+    """Execute an admin script asynchronously.
+
+    Launches the catalogue script as a subprocess (attaching any previously
+    uploaded input file) and returns a `run_id` immediately. Streamed output
+    and status are polled via the run endpoints. Returns 404 for an unknown
+    script or 400 if a required file has not been uploaded.
+    """
     script = _CATALOGUE_BY_ID.get(script_id)
     if not script:
         raise HTTPException(status_code=404, detail=f"Script '{script_id}' not found")
@@ -776,6 +819,12 @@ def run_script(script_id: str):
 
 @router.get("/runs/{run_id}")
 def get_run(run_id: str):
+    """Poll the status and output of a script run.
+
+    Returns the run's current status (`running`/`completed`/`failed`), streamed
+    output, start/finish timestamps, and any produced backup directory.
+    Returns 404 if the run ID is unknown.
+    """
     with _runs_lock:
         run = _runs.get(run_id)
         if not run:
@@ -793,6 +842,11 @@ def get_run(run_id: str):
 
 @router.get("/runs/{run_id}/download")
 def download_run_backup(run_id: str):
+    """Download a script run's backup artifact as a ZIP.
+
+    If the run produced a backup directory, streams it as a downloadable ZIP
+    archive. Returns 404 if the run ID is unknown or has no backup directory.
+    """
     with _runs_lock:
         run = _runs.get(run_id)
     if not run:
@@ -821,6 +875,12 @@ def download_run_backup(run_id: str):
 
 @router.get("/backups")
 def list_backups():
+    """List available database backup directories.
+
+    Returns each backup folder under the backups root, enriched with metadata
+    (total documents, export timestamp, collection list) from its
+    `metadata.json` when present, sorted newest-first.
+    """
     if not _BACKUPS_ROOT.is_dir():
         return {"backups": []}
     entries = []
@@ -846,6 +906,12 @@ def list_backups():
 
 @router.get("/backups/{dir_name}/download")
 def download_backup_by_name(dir_name: str):
+    """Download a named database backup as a ZIP archive.
+
+    Streams the contents of the requested backup directory as a downloadable
+    ZIP. Rejects path-traversal attempts in the directory name; returns 404 if
+    the backup does not exist on the server.
+    """
     if ".." in dir_name or "/" in dir_name or "\\" in dir_name:
         raise HTTPException(status_code=400, detail="Invalid backup name")
     backup_dir = _BACKUPS_ROOT / dir_name

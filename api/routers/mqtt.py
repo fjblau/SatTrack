@@ -56,6 +56,12 @@ def redact_password(config: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.get("/config/{satellite_id:path}")
 def get_mqtt_config(satellite_id: str):
+    """Retrieve the MQTT publishing configuration for a satellite.
+
+    Returns the stored broker settings, topic, publishing frequency, and
+    enabled flag for the given satellite document ID. The broker password is
+    redacted in the response.
+    """
     config = get_mqtt_configuration(satellite_id)
     if not config:
         raise HTTPException(status_code=404, detail="MQTT configuration not found")
@@ -65,6 +71,13 @@ def get_mqtt_config(satellite_id: str):
 
 @router.post("/config")
 def create_or_update_mqtt_config(config: MqttConfiguration):
+    """Create or update an MQTT publishing configuration for a satellite.
+
+    Persists broker credentials, topic, and publishing frequency (8 or 24
+    hours). When enabled, schedules recurring TLE publishing and sends an
+    immediate publish; when disabled, removes any scheduled job. Returns the
+    saved configuration with the broker password redacted.
+    """
     logging.info(f"Saving MQTT config for satellite_id: {config.satellite_id}, norad_id: {config.norad_id}")
     
     if config.frequency_hours not in [8, 24]:
@@ -145,6 +158,11 @@ def create_or_update_mqtt_config(config: MqttConfiguration):
 
 @router.delete("/config/{satellite_id:path}")
 def delete_mqtt_config(satellite_id: str):
+    """Delete the MQTT publishing configuration for a satellite.
+
+    Removes the stored configuration and cancels any scheduled publishing job
+    for the given satellite document ID.
+    """
     success = delete_mqtt_configuration(satellite_id)
     if not success:
         raise HTTPException(status_code=404, detail="MQTT configuration not found")
@@ -157,6 +175,12 @@ def delete_mqtt_config(satellite_id: str):
 
 @router.post("/test-connection")
 def test_mqtt_connection(request: MqttTestConnectionRequest):
+    """Test connectivity to an MQTT broker.
+
+    Attempts a one-off connection to the supplied broker host/port with the
+    optional credentials without persisting any configuration. Returns whether
+    the connection succeeded and, on failure, an error description.
+    """
     if not request.host:
         raise HTTPException(status_code=400, detail="Host is required")
     
@@ -205,6 +229,12 @@ def debug_mqtt_config(satellite_id: str):
 
 @router.post("/publish-now/{satellite_id:path}")
 def publish_now(satellite_id: str):
+    """Immediately publish the latest TLE for a satellite to its MQTT broker.
+
+    Looks up the satellite's stored MQTT configuration, fetches the current TLE
+    by NORAD ID, and publishes it to the configured topic. Requires the feed to
+    be enabled. Returns the topic and the published payload on success.
+    """
     logging.info(f"=== PUBLISH NOW START === satellite_id: {satellite_id}")
     
     config = get_mqtt_configuration(satellite_id)

@@ -8,7 +8,7 @@ import threading
 from database import connect_mongodb, disconnect_mongodb
 import mqtt_scheduler
 
-from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, insurance, tle_history, customer_tasks, analytics, public_api
+from api.routers import satellites, metadata, graphs, documents, tle, mqtt, admin, observations, auth, agent, docs, ephemeris, kestrel, objects, provenance, inference, insurance, tle_history, customer_tasks, analytics, public_api
 from api.middleware.auth import AuthMiddleware
 from api.services import index_service, agent_service, aql_agent_service, kestrel_agent_service
 from api.services.tle_service import warm_tle_cache
@@ -114,8 +114,12 @@ _OPENAPI_TAGS = [
         "description": "Administrative operations: data import scripts, DISCOS enrichment, database backups, and GMAT smoke tests.",
     },
     {
-        "name": "docs",
-        "description": "Human-readable HTML documentation pages served from project Markdown files.",
+        "name": "inference",
+        "description": "ML inference stubs for provenance attribution (not yet implemented; returns 501).",
+    },
+    {
+        "name": "public",
+        "description": "Unauthenticated public endpoints: minimal object search and satellite pass predictions.",
     },
 ]
 
@@ -162,6 +166,7 @@ app.include_router(ephemeris.router)
 app.include_router(kestrel.router)
 app.include_router(objects.router)
 app.include_router(provenance.router)
+app.include_router(inference.router)
 app.include_router(insurance.router)
 app.include_router(customer_tasks.router)
 app.include_router(tle_history.router)

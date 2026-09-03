@@ -102,6 +102,14 @@ def _build_czml(envelope: dict) -> list:
 
 @router.post("/generate")
 def generate_ephemeris(body: GenerateEphemerisRequest):
+    """Generate and store an ephemeris envelope for a satellite.
+
+    Fetches the current TLE for the given NORAD ID and propagates it over the
+    requested duration and step size using SGP4 (default) or GMAT high-fidelity
+    (`HIFI`) propagation. The resulting ephemeris envelope is persisted and a
+    summary (envelope ID, validity window, point count, orbital period) is
+    returned.
+    """
     if body.duration_hours <= 0 or body.duration_hours > MAX_DURATION_HOURS:
         raise HTTPException(
             status_code=400,
@@ -188,6 +196,11 @@ def list_envelopes(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
+    """List stored ephemeris envelopes.
+
+    Returns a paginated list of ephemeris envelopes, optionally filtered by
+    NORAD ID, along with the total count matching the filter.
+    """
     envelopes = list_ephemeris_envelopes(norad_id=norad_id, limit=limit, offset=offset)
     total = count_ephemeris_envelopes(norad_id=norad_id)
 
@@ -201,6 +214,11 @@ def list_envelopes(
 
 @router.get("/{envelope_id}/czml")
 def get_czml(envelope_id: str):
+    """Export an ephemeris envelope as CZML for CesiumJS visualization.
+
+    Returns a CZML document array (preamble + satellite packet) derived from
+    the stored ephemeris points, suitable for ingestion by a Cesium viewer.
+    """
     envelope = get_ephemeris_envelope(envelope_id)
     if not envelope:
         raise HTTPException(status_code=404, detail=f"Ephemeris envelope '{envelope_id}' not found")
@@ -211,6 +229,11 @@ def get_czml(envelope_id: str):
 
 @router.get("/{envelope_id}")
 def get_envelope(envelope_id: str):
+    """Retrieve a stored ephemeris envelope by ID.
+
+    Returns the full envelope document, including propagation metadata and the
+    ephemeris points within its validity window.
+    """
     envelope = get_ephemeris_envelope(envelope_id)
     if not envelope:
         raise HTTPException(status_code=404, detail=f"Ephemeris envelope '{envelope_id}' not found")
@@ -219,6 +242,11 @@ def get_envelope(envelope_id: str):
 
 @router.delete("/{envelope_id}")
 def delete_envelope(envelope_id: str):
+    """Delete a stored ephemeris envelope by ID.
+
+    Permanently removes the envelope and its ephemeris points from the
+    database.
+    """
     ok = delete_ephemeris_envelope(envelope_id)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Ephemeris envelope '{envelope_id}' not found")

@@ -113,6 +113,14 @@ class ObservationImportRequest(BaseModel):
 
 @router.post("/import")
 def import_observations(body: ObservationImportRequest):
+    """Bulk import observation records.
+
+    Validates and inserts a batch of observations, restricting ingestion to
+    NORAD IDs on the allowed tracking list and skipping exact duplicates (by
+    norad_id + observation_epoch + source). Graph edges are created
+    best-effort for each inserted observation. Returns counts of inserted,
+    skipped, and errored records.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -211,6 +219,11 @@ def import_observations(body: ObservationImportRequest):
 
 @router.get("/allowed-objects")
 def get_allowed_objects():
+    """List objects allowed to receive observations.
+
+    Returns the NORAD IDs and names of all satellites with
+    `observations_enabled` set to true in their canonical record.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -231,6 +244,12 @@ def get_allowed_objects():
 
 @router.put("/allowed-objects/{norad_id}")
 def enable_observations_for_object(norad_id: int):
+    """Enable observation ingestion for a satellite.
+
+    Sets `observations_enabled` to true on the satellite's canonical record so
+    that future observation imports for this NORAD ID are accepted. Returns
+    404 if no satellite matches the NORAD ID.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -261,6 +280,12 @@ def enable_observations_for_object(norad_id: int):
 
 @router.delete("/allowed-objects/{norad_id}")
 def disable_observations_for_object(norad_id: int):
+    """Disable observation ingestion for a satellite.
+
+    Sets `observations_enabled` to false on the satellite's canonical record so
+    that future observation imports for this NORAD ID are rejected. Returns
+    404 if no satellite matches the NORAD ID.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -291,6 +316,11 @@ def disable_observations_for_object(norad_id: int):
 
 @router.get("/filter-options")
 def get_observation_filter_options():
+    """Enumerate available observation filter values.
+
+    Returns the distinct sources, object types, and origin countries present
+    across stored observations, for populating frontend filter controls.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -322,6 +352,13 @@ def get_all_observations(
     sort_by: str = 'observation_epoch',
     sort_order: str = 'DESC',
 ):
+    """List observations with filtering, sorting, and pagination.
+
+    Supports filtering by source, object type, origin country, name search,
+    anomaly flag, health-score range, and observation-epoch window. Results are
+    sorted by an allowed field (default `observation_epoch` DESC) and returned
+    as a paginated envelope with the total matching count.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -400,6 +437,12 @@ class AqlQueryRequest(BaseModel):
 
 @router.get("/analytics/health-over-time")
 def get_health_over_time(granularity: Optional[str] = "daily"):
+    """Aggregate derived health scores over time.
+
+    Returns the average `derived_health_score` grouped by period — daily
+    (default) or weekly — across all observations that carry a health score.
+    Results are ordered chronologically.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -426,6 +469,12 @@ def get_health_over_time(granularity: Optional[str] = "daily"):
 
 @router.get("/analytics/anomaly-distribution")
 def get_anomaly_distribution(by: Optional[str] = None):
+    """Distribution of thermal-anomaly observations.
+
+    When `by` is `source` or `object_type`, returns anomaly counts grouped by
+    that dimension. Otherwise returns a two-bucket split of anomaly vs. normal
+    observations.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -452,6 +501,11 @@ def get_anomaly_distribution(by: Optional[str] = None):
 
 @router.get("/analytics/source-distribution")
 def get_source_distribution():
+    """Observation counts grouped by source.
+
+    Returns the number of observations contributed by each source, sorted by
+    count descending.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -470,6 +524,12 @@ def get_source_distribution():
 
 @router.post("/aql")
 def execute_custom_aql(request: AqlQueryRequest):
+    """Execute a custom AQL query against the database.
+
+    Runs the supplied AQL statement with optional bind variables and returns
+    the results as JSON. Supports `format=csv` and `format=json_file` to
+    stream the results as downloadable files. Returns 400 on query errors.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -501,6 +561,11 @@ def execute_custom_aql(request: AqlQueryRequest):
 
 @router.get("/{norad_id}")
 def get_observations(norad_id: int, limit: Optional[int] = 100, offset: Optional[int] = 0):
+    """List observations for a single NORAD ID.
+
+    Returns a paginated slice of observations for the given object, sorted by
+    observation epoch descending, along with the total count for that NORAD ID.
+    """
     db = db_module.db
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
