@@ -65,6 +65,12 @@ def list_alerts(
     status: str = Query(default="active"),
     carrier_id: Optional[str] = Query(default=None),
 ):
+    """List SLA alerts for customer tasks.
+
+    Returns SLA alert records filtered by status (default `active`), optionally
+    restricted to a requesting carrier (insurance party). Results are ordered
+    most-recent-first.
+    """
     bind_vars: dict = {"@alerts": COLLECTION_TASK_SLA_ALERTS, "status": status}
 
     if carrier_id:
@@ -99,6 +105,12 @@ def list_tasks(
     limit: int = Query(default=50),
     offset: int = Query(default=0),
 ):
+    """List customer tasks with optional filters.
+
+    Returns a paginated summary of customer tasks, optionally filtered by
+    requesting carrier, status, and priority. Each row includes the
+    customer-facing status derived from the internal lifecycle state.
+    """
     bind_vars: dict = {
         "@tasks": COLLECTION_CUSTOMER_TASKS,
         "limit": limit,
@@ -151,6 +163,12 @@ def list_tasks(
 
 @router.get("/{task_key}/report.pdf", summary="Download observation report as PDF")
 def download_report(task_key: str):
+    """Generate and download a task's observation report as a PDF.
+
+    Assembles the task, its in-window observations, per-pass breakdown,
+    deliverables, recent transitions, and target provenance into a formatted
+    PDF evidence report. Returns the PDF as a downloadable attachment.
+    """
     col = _col(COLLECTION_CUSTOMER_TASKS)
     task = col.get(task_key)
     if task is None:
@@ -281,6 +299,12 @@ def download_report(task_key: str):
 
 @router.get("/{task_key}", summary="Task detail")
 def get_task(task_key: str):
+    """Retrieve full detail for a customer task.
+
+    Returns the task document enriched with customer-facing status, allowed
+    next lifecycle states, in-window observation count, per-pass breakdown,
+    linked deliverables, recent transitions, and any active SLA alerts.
+    """
     col = _col(COLLECTION_CUSTOMER_TASKS)
     doc = col.get(task_key)
     if doc is None:
@@ -397,6 +421,13 @@ def get_task(task_key: str):
 
 @router.post("", summary="Create a new task", status_code=201)
 def create_task(body: dict = Body(...)):
+    """Create a new customer task.
+
+    Generates a sequential task key (TSK-YYYY-NNNN), persists the task body
+    with an initial `drafted` status, records the creation transition, and
+    wires relationship edges to the requesting party, target object, and any
+    triggering policy or loss event. Returns the created task document.
+    """
     _col(COLLECTION_CUSTOMER_TASKS)
 
     year = datetime.now(timezone.utc).year
@@ -496,6 +527,12 @@ def create_task(body: dict = Body(...)):
 
 @router.post("/{task_key}/transition", summary="State transition")
 def transition(task_key: str, body: TransitionBody):
+    """Transition a customer task to a new lifecycle state.
+
+    Applies a state-machine transition (e.g. drafted → assigned → in_progress)
+    on behalf of an actor, recording a transition log entry. Returns the
+    updated task document, or 400 if the requested transition is not allowed.
+    """
     db = _db()
     try:
         updated = transition_task(
@@ -517,6 +554,12 @@ def transition(task_key: str, body: TransitionBody):
 
 @router.get("/{task_key}/observations", summary="Overlay observation query")
 def get_observations(task_key: str, limit: int = Query(default=100)):
+    """Overlay query: list observations for a task's target object.
+
+    Returns the most recent observations matching the task's target NORAD ID,
+    up to the requested limit. Returns an empty list if the task has no target
+    NORAD ID.
+    """
     col = _col(COLLECTION_CUSTOMER_TASKS)
     task = col.get(task_key)
     if task is None:
@@ -544,6 +587,12 @@ def get_observations(task_key: str, limit: int = Query(default=100)):
 
 @router.get("/{task_key}/passes", summary="Per-pass breakdown")
 def get_passes(task_key: str):
+    """Per-pass breakdown of observations for a task's target object.
+
+    Aggregates the task's target-NORAD observations by pass ID, returning frame
+    counts, sunlit-frame counts, and the first/last epoch of each pass. Returns
+    an empty list if the task has no target NORAD ID.
+    """
     col = _col(COLLECTION_CUSTOMER_TASKS)
     task = col.get(task_key)
     if task is None:

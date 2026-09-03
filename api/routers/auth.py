@@ -21,6 +21,13 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 def login(body: LoginRequest):
+    """Authenticate a user and issue a session bearer token.
+
+    Accepts username/password credentials. Valid app users (from configuration)
+    or the `demo`/`demo` demo-mode account receive a token for use in the
+    `Authorization: Bearer <token>` header. Returns the token and whether the
+    session is a demo session.
+    """
     is_demo = body.username == DEMO_USERNAME and body.password == DEMO_PASSWORD
     valid_users = config.auth.valid_users()
     if not is_demo and valid_users.get(body.username) != body.password:
@@ -35,6 +42,12 @@ def login(body: LoginRequest):
 
 @router.post("/logout")
 def logout(body: dict):
+    """Revoke a session bearer token.
+
+    Accepts a JSON body containing the token to invalidate. The token is
+    removed from the active session store so subsequent requests carrying it
+    are rejected.
+    """
     token = body.get("token", "")
     _token_store.discard(token)
     _demo_token_store.discard(token)
